@@ -7,32 +7,97 @@ use crate::descriptor::{onion_skin_composite_layout_spec, ReflectedSetLayout};
 use crate::pipeline::RRPipeline;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 
-pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+pub(crate) const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
 #[derive(Clone, Debug, Default)]
 pub struct OnionSkinPassResources {
-    pub ghost_image: vk::Image,
-    pub ghost_image_memory: vk::DeviceMemory,
-    pub ghost_image_view: vk::ImageView,
-    pub ghost_sampler: vk::Sampler,
+    pub(crate) ghost_image: vk::Image,
+    pub(crate) ghost_image_memory: vk::DeviceMemory,
+    pub(crate) ghost_image_view: vk::ImageView,
+    pub(crate) ghost_sampler: vk::Sampler,
 
-    pub ghost_render_pass: vk::RenderPass,
-    pub ghost_framebuffer: vk::Framebuffer,
+    pub(crate) ghost_render_pass: vk::RenderPass,
+    pub(crate) ghost_framebuffer: vk::Framebuffer,
     pub ghost_pipeline: RRPipeline,
 
-    pub composite_render_pass: vk::RenderPass,
-    pub composite_framebuffer: vk::Framebuffer,
+    pub(crate) composite_render_pass: vk::RenderPass,
+    pub(crate) composite_framebuffer: vk::Framebuffer,
     pub composite_pipeline: RRPipeline,
     pub composite_descriptor_layout: ReflectedSetLayout,
-    pub composite_descriptor_set: vk::DescriptorSet,
+    pub(crate) composite_descriptor_set: vk::DescriptorSet,
 
     pub width: u32,
     pub height: u32,
 }
 
 impl OnionSkinPassResources {
-    pub unsafe fn create_ghost_buffer(
+    #[inline]
+    pub fn ghost_image(&self) -> crate::types::Image {
+        crate::types::Image(self.ghost_image)
+    }
+
+    #[inline]
+    pub fn ghost_render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.ghost_render_pass)
+    }
+
+    #[inline]
+    pub fn composite_render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.composite_render_pass)
+    }
+
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        offscreen_resolve_image_view: crate::types::ImageView,
+        offscreen_format: crate::types::Format,
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        let offscreen_format = offscreen_format.raw();
+        let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
+            Self::create_ghost_buffer(instance, rrdevice, width, height)?;
+        let ghost_render_pass = Self::create_ghost_render_pass(rrdevice)?;
+        let ghost_framebuffer = Self::create_single_framebuffer(
+            rrdevice,
+            ghost_render_pass,
+            ghost_image_view,
+            width,
+            height,
+        )?;
+
+        let composite_render_pass = Self::create_composite_render_pass(rrdevice, offscreen_format)?;
+        let (composite_descriptor_layout, composite_descriptor_set) =
+            Self::create_composite_descriptor(rrdevice, ghost_image_view, ghost_sampler)?;
+        let composite_framebuffer = Self::create_single_framebuffer(
+            rrdevice,
+            composite_render_pass,
+            offscreen_resolve_image_view.raw(),
+            width,
+            height,
+        )?;
+
+        Ok(Self {
+            ghost_image,
+            ghost_image_memory,
+            ghost_image_view,
+            ghost_sampler,
+            ghost_render_pass,
+            ghost_framebuffer,
+            ghost_pipeline: RRPipeline::default(),
+            composite_render_pass,
+            composite_framebuffer,
+            composite_pipeline: RRPipeline::default(),
+            composite_descriptor_layout,
+            composite_descriptor_set,
+            width,
+            height,
+        })
+    }
+
+    pub(crate) unsafe fn create_ghost_buffer(
         instance: &Instance,
         rrdevice: &RRDevice,
         width: u32,
@@ -59,7 +124,7 @@ impl OnionSkinPassResources {
             1,
         )?;
 
-        let sampler = Self::create_ghost_sampler(&rrdevice.device)?;
+        let sampler = Self::create_ghost_sampler(&rrdevice.device())?;
 
         Ok((image, memory, image_view, sampler))
     }
@@ -84,7 +149,7 @@ impl OnionSkinPassResources {
         Ok(sampler)
     }
 
-    pub unsafe fn create_ghost_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
+    pub(crate) unsafe fn create_ghost_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(GHOST_BUFFER_FORMAT)
             .samples(vk::SampleCountFlags::_1)
@@ -138,11 +203,11 @@ impl OnionSkinPassResources {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
-    pub unsafe fn create_composite_render_pass(
+    pub(crate) unsafe fn create_composite_render_pass(
         rrdevice: &RRDevice,
         offscreen_format: vk::Format,
     ) -> Result<vk::RenderPass> {
@@ -199,11 +264,11 @@ impl OnionSkinPassResources {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
-    pub unsafe fn create_composite_descriptor(
+    pub(crate) unsafe fn create_composite_descriptor(
         rrdevice: &RRDevice,
         ghost_image_view: vk::ImageView,
         ghost_sampler: vk::Sampler,
@@ -222,7 +287,7 @@ impl OnionSkinPassResources {
         Ok((layout, descriptor_set))
     }
 
-    pub unsafe fn update_composite_descriptor(
+    pub(crate) unsafe fn update_composite_descriptor(
         rrdevice: &RRDevice,
         layout: &ReflectedSetLayout,
         descriptor_set: vk::DescriptorSet,
@@ -241,7 +306,7 @@ impl OnionSkinPassResources {
         Ok(())
     }
 
-    pub unsafe fn create_single_framebuffer(
+    pub(crate) unsafe fn create_single_framebuffer(
         rrdevice: &RRDevice,
         render_pass: vk::RenderPass,
         image_view: vk::ImageView,
@@ -257,11 +322,11 @@ impl OnionSkinPassResources {
             .height(height)
             .layers(1);
 
-        let framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+        let framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         Ok(framebuffer)
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         device.destroy_framebuffer(self.composite_framebuffer, None);
         self.composite_pipeline.destroy(device);
         device.destroy_render_pass(self.composite_render_pass, None);
@@ -283,23 +348,23 @@ impl OnionSkinPassResources {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        offscreen_resolve_image_view: vk::ImageView,
+        offscreen_resolve_image_view: crate::types::ImageView,
         width: u32,
         height: u32,
     ) -> Result<()> {
         rrdevice
-            .device
+            .device()
             .destroy_framebuffer(self.ghost_framebuffer, None);
         rrdevice
-            .device
+            .device()
             .destroy_framebuffer(self.composite_framebuffer, None);
 
-        rrdevice.device.destroy_sampler(self.ghost_sampler, None);
+        rrdevice.device().destroy_sampler(self.ghost_sampler, None);
         rrdevice
-            .device
+            .device()
             .destroy_image_view(self.ghost_image_view, None);
-        rrdevice.device.destroy_image(self.ghost_image, None);
-        rrdevice.device.free_memory(self.ghost_image_memory, None);
+        rrdevice.device().destroy_image(self.ghost_image, None);
+        rrdevice.device().free_memory(self.ghost_image_memory, None);
 
         let (image, memory, view, sampler) =
             Self::create_ghost_buffer(instance, rrdevice, width, height)?;
@@ -314,7 +379,7 @@ impl OnionSkinPassResources {
         self.composite_framebuffer = Self::create_single_framebuffer(
             rrdevice,
             self.composite_render_pass,
-            offscreen_resolve_image_view,
+            offscreen_resolve_image_view.raw(),
             width,
             height,
         )?;
@@ -337,7 +402,7 @@ impl OnionSkinPassResources {
 
 impl GpuResource for OnionSkinPassResources {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.ghost_image = vk::Image::null();
         self.ghost_render_pass = vk::RenderPass::null();

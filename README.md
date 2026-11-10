@@ -167,7 +167,7 @@ Key dependencies used in this project:
 | [gltf](https://crates.io/crates/gltf)             | glTF model loading          |
 | [ufbx](https://crates.io/crates/ufbx)             | FBX model loading           |
 | [dear-imgui-rs](https://github.com/Latias94/dear-imgui-rs) | Immediate mode GUI |
-| [cgmath](https://crates.io/crates/cgmath)         | Linear algebra              |
+| [glam](https://crates.io/crates/glam)             | Linear algebra              |
 | [ort](https://crates.io/crates/ort)               | ONNX Runtime (ML inference) |
 
 ## Supported Platforms

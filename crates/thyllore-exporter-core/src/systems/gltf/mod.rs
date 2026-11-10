@@ -1,8 +1,10 @@
 pub(crate) mod accessors;
 pub(crate) mod channels;
+pub(crate) mod extensions;
 pub(crate) mod glb;
 pub(crate) mod minimal_json;
-pub(crate) mod vrm_humanoid;
+mod vrm;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -11,11 +13,15 @@ use gltf::binary::Glb;
 use gltf::json::{self};
 
 use thyllore_anim_core::editable::{clip_to_animation, EditableAnimationClip};
-use thyllore_anim_core::Skeleton;
+use thyllore_anim_core::{BoneId, Skeleton};
+use thyllore_avatar_core::vrm::{build_vrmc_vrm_humanoid, VRMC_VRM};
 
 use crate::systems::gltf::channels::{replace_animations, write_animation_channels};
+use crate::systems::gltf::extensions::merge_extension;
 use crate::systems::gltf::glb::write_glb;
 use crate::systems::gltf::minimal_json::build_minimal_gltf_json;
+
+pub use vrm::write_vrm;
 
 pub fn export_gltf_animation(
     source_glb_path: &Path,
@@ -48,7 +54,7 @@ pub fn export_gltf_animation_from_bytes(
     replace_animations(&mut root, &mut bin, &baked_clip, skeleton)?;
 
     let bone_to_node = accessors::build_bone_to_node_map(skeleton, &root.nodes);
-    vrm_humanoid::write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
+    write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
 
     write_glb(&root, bin, output_path)?;
 
@@ -69,12 +75,30 @@ pub fn export_gltf_animation_only(
     write_animation_channels(&mut root, &mut bin, &baked_clip, skeleton)?;
 
     let bone_to_node = accessors::build_bone_to_node_map(skeleton, &root.nodes);
-    vrm_humanoid::write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
+    write_vrm_humanoid(&mut root, vrm_humanoid_bones, &bone_to_node);
 
     write_glb(&root, bin, output_path)?;
 
     log!("Animation-only glTF exported to {:?}", output_path);
     Ok(())
+}
+
+fn write_vrm_humanoid(
+    root: &mut json::Root,
+    humanoid_bones: &[(String, usize)],
+    bone_to_node: &HashMap<BoneId, u32>,
+) {
+    if humanoid_bones.is_empty() {
+        return;
+    }
+    let human_bones: Vec<(String, u32)> = humanoid_bones
+        .iter()
+        .filter_map(|(vrm_name, bone_index)| {
+            let node = bone_to_node.get(&(*bone_index as BoneId))?;
+            Some((vrm_name.clone(), *node))
+        })
+        .collect();
+    merge_extension(root, VRMC_VRM, build_vrmc_vrm_humanoid(&human_bones));
 }
 
 #[cfg(test)]
@@ -84,7 +108,7 @@ mod tests {
         append_f32_data, build_bone_to_node_map, compute_min_max_scalar, compute_min_max_vec3,
         pad_to_4byte_alignment, quaternion_to_gltf_array,
     };
-    use cgmath::Quaternion;
+    use glam::Quat;
     use gltf::json::Index;
     use thyllore_anim_core::editable::{curve_add_keyframe, PropertyType};
     use thyllore_anim_core::Skeleton;
@@ -147,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_quaternion_to_gltf_array() {
-        let q = Quaternion::new(1.0, 0.2, 0.3, 0.4);
+        let q = Quat::from_xyzw(0.2, 0.3, 0.4, 1.0);
         let arr = quaternion_to_gltf_array(q);
 
         assert_eq!(arr[0], 0.2);
@@ -158,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_quaternion_identity() {
-        let q = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+        let q = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
         let arr = quaternion_to_gltf_array(q);
 
         assert_eq!(arr, [0.0, 0.0, 0.0, 1.0]);

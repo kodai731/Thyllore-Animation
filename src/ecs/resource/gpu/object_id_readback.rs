@@ -1,9 +1,10 @@
+use glam::Vec3;
 /// World-space ray through the clicked pixel, kept so picking can depth-order candidates that
 /// never reach the object-id buffer.
 #[derive(Clone, Copy, Debug)]
 pub struct PickRay {
-    pub origin: cgmath::Vector3<f32>,
-    pub direction: cgmath::Vector3<f32>,
+    pub origin: Vec3,
+    pub direction: Vec3,
 }
 
 /// What the picked pixel is for once its object id and world position come back.

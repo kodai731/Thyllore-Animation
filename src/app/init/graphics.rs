@@ -14,28 +14,29 @@ use crate::vulkanr::context::{
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, RRPipeline, VertexInputConfig,
+    BlendConfig, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder, RRPipeline, SampleCount,
+    Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
-use crate::vulkanr::vulkan::*;
 
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;
+use thyllore_vulkan_core::types::{DebugMessenger, Fence, Instance, Semaphore, Surface};
 
 pub(super) struct VulkanResources {
-    pub(super) messenger: vk::DebugUtilsMessengerEXT,
-    pub(super) surface: vk::SurfaceKHR,
+    pub(super) messenger: DebugMessenger,
+    pub(super) surface: Surface,
     pub(super) rrswapchain: RRSwapchain,
     pub(super) rrrender: RRRender,
     pub(super) rrcommand_pool: Rc<RRCommandPool>,
     pub(super) rrcommand_buffer: RRCommandBuffer,
     pub(super) model_pipeline: RRPipeline,
-    pub(super) image_available_semaphores: Vec<vk::Semaphore>,
-    pub(super) render_finish_semaphores: Vec<vk::Semaphore>,
-    pub(super) in_flight_fences: Vec<vk::Fence>,
+    pub(super) image_available_semaphores: Vec<Semaphore>,
+    pub(super) render_finish_semaphores: Vec<Semaphore>,
+    pub(super) in_flight_fences: Vec<Fence>,
 }
 
 impl App {
@@ -47,7 +48,7 @@ impl App {
         rrrender: &RRRender,
         data: &mut AppData,
     ) -> Result<()> {
-        let swapchain_image_count = rrswapchain.swapchain_images.len();
+        let swapchain_image_count = rrswapchain.swapchain_images().len();
         data.graphics_resources =
             GraphicsResources::new(instance, rrdevice, swapchain_image_count, 64)
                 .context("Failed to create render resources")?;
@@ -64,16 +65,16 @@ impl App {
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
 
-        let viewport_width = rrswapchain.swapchain_extent.width;
-        let viewport_height = rrswapchain.swapchain_extent.height;
+        let viewport_width = rrswapchain.swapchain_extent().width;
+        let viewport_height = rrswapchain.swapchain_extent().height;
         data.viewport = crate::app::viewport::ViewportState::new(
             instance,
             rrdevice,
-            rrcommand_pool.command_pool,
+            rrcommand_pool.command_pool(),
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format,
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format(),
         )
         .context("Failed to create viewport state")?;
 
@@ -81,37 +82,25 @@ impl App {
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
             viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format
+            rrdevice.msaa_samples(),
+            rrswapchain.swapchain_format()
         );
 
         let render_layouts = data.graphics_resources.get_layouts();
         if let Some(ref hdr_buffer) = data.viewport.hdr_buffer {
             let hdr_grid = PipelineBuilder::from_pass(&GRID)
                 .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::LINE_LIST)
-                .polygon_mode(vk::PolygonMode::LINE)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: true,
-                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-                })
-                .custom_render_pass(hdr_buffer.render_pass)
-                .msaa_samples(vk::SampleCountFlags::_1)
+                .topology(Topology::LineList)
+                .polygon_mode(FillMode::Line)
+                .depth_test(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual))
+                .custom_render_pass(hdr_buffer.render_pass())
+                .msaa_samples(SampleCount::One)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully
                 // covered", which the tonemap needs to keep the grid color. Effects
                 // composite over it afterwards with premultiplied blending.
-                .blend(BlendConfig {
-                    enable: true,
-                    src_color_factor: vk::BlendFactor::SRC_ALPHA,
-                    dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                    color_op: vk::BlendOp::ADD,
-                    src_alpha_factor: vk::BlendFactor::ONE,
-                    dst_alpha_factor: vk::BlendFactor::ZERO,
-                    alpha_op: vk::BlendOp::ADD,
-                })
-                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .blend(BlendConfig::default())
+                .build(rrdevice, &rrrender, Some(rrswapchain.swapchain_extent()))
                 .context("Failed to create HDR grid pipeline")?;
             let hdr_grid_id = data.pipeline_storage.register(hdr_grid);
             data.viewport.hdr_grid_pipeline_id = Some(hdr_grid_id);
@@ -158,16 +147,15 @@ impl App {
         let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
-        grid_mesh.vertex_buffer_handles[0] = data.buffer_registry.create_vertex_buffer(
+        grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             instance,
             rrdevice,
             rrcommand_pool,
             &grid_mesh.vertices,
-            crate::render::BufferMemoryType::DeviceLocal,
+            thyllore_render_core::BufferMemoryType::DeviceLocal,
         )?;
-        grid_mesh.last_written_slot = 0;
 
-        grid_mesh.index_buffer_handles[0] = data.buffer_registry.create_index_buffer(
+        grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
             instance,
             rrdevice,
             rrcommand_pool,
@@ -187,7 +175,7 @@ impl App {
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         data.ecs_world.insert_resource(FrameSync::new(
             resources.image_available_semaphores.clone(),
@@ -197,7 +185,7 @@ impl App {
 
         data.ecs_world.insert_resource(SwapchainState::new(
             resources.rrswapchain.clone(),
-            resources.rrswapchain.swapchain_images.len(),
+            resources.rrswapchain.swapchain_images().len(),
         ));
 
         data.ecs_world

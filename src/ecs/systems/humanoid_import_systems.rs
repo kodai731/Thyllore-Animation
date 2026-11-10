@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::components::track::BoneTrack;
 use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
@@ -51,8 +51,8 @@ pub fn local_pose_to_standard(
     rig: &HumanoidRig,
     skeleton: &Skeleton,
     bone_id: BoneId,
-    local_rotation: Quaternion<f32>,
-    local_translation: Vector3<f32>,
+    local_rotation: Quat,
+    local_translation: Vec3,
 ) -> Option<StandardBoneKey> {
     let (&role, &bone_index) = rig
         .mapping
@@ -64,7 +64,7 @@ pub fn local_pose_to_standard(
     let hips_offset = if is_hips {
         hips_world_offset(skeleton, bone_index, local_translation)
     } else {
-        Vector3::new(0.0, 0.0, 0.0)
+        Vec3::new(0.0, 0.0, 0.0)
     };
     let local_rotations = BTreeMap::from([(bone_index, local_rotation)]);
     let pose = retarget_from_bones(&rig.context, &local_rotations, hips_offset);
@@ -97,7 +97,7 @@ pub fn convert_clip_to_standard_space(
     }
 
     let frame_count = (clip.duration * fps as f32).round() as usize + 1;
-    let mut previous_eulers: BTreeMap<HumanoidRole, Vector3<f32>> = BTreeMap::new();
+    let mut previous_eulers: BTreeMap<HumanoidRole, Vec3> = BTreeMap::new();
     for frame in 0..frame_count {
         let time = frame as f32 / fps as f32;
         let local_rotations = sample_local_rotations(clip, skeleton, rig, time);
@@ -121,7 +121,7 @@ fn sample_local_rotations(
     skeleton: &Skeleton,
     rig: &HumanoidRig,
     time: f32,
-) -> BTreeMap<usize, Quaternion<f32>> {
+) -> BTreeMap<usize, Quat> {
     rig.mapping
         .by_role
         .values()
@@ -135,8 +135,8 @@ fn sample_local_rotations(
         .collect()
 }
 
-fn sample_track_rotation(track: &BoneTrack, time: f32) -> Quaternion<f32> {
-    let euler_degrees = Vector3::new(
+fn sample_track_rotation(track: &BoneTrack, time: f32) -> Quat {
+    let euler_degrees = Vec3::new(
         curve_sample(&track.rotation_x, time).unwrap_or(0.0),
         curve_sample(&track.rotation_y, time).unwrap_or(0.0),
         curve_sample(&track.rotation_z, time).unwrap_or(0.0),
@@ -149,9 +149,9 @@ fn sample_hips_offset(
     skeleton: &Skeleton,
     rig: &HumanoidRig,
     time: f32,
-) -> Vector3<f32> {
-    let zero = Vector3::new(0.0, 0.0, 0.0);
-    let Some(&hips_bone) = rig.mapping.by_role.get(&HumanoidRole::Hips) else {
+) -> Vec3 {
+    let zero = Vec3::new(0.0, 0.0, 0.0);
+    let Some(hips_bone) = rig.mapping.bone_of(HumanoidRole::Hips) else {
         return zero;
     };
     let Some(track) = clip
@@ -162,8 +162,8 @@ fn sample_hips_offset(
         return zero;
     };
 
-    let bind_translation = skeleton.bones[hips_bone].local_transform.w.truncate();
-    let translation = Vector3::new(
+    let bind_translation = skeleton.bones[hips_bone].local_transform.w_axis.truncate();
+    let translation = Vec3::new(
         curve_sample(&track.translation_x, time).unwrap_or(bind_translation.x),
         curve_sample(&track.translation_y, time).unwrap_or(bind_translation.y),
         curve_sample(&track.translation_z, time).unwrap_or(bind_translation.z),
@@ -171,18 +171,14 @@ fn sample_hips_offset(
     hips_world_offset(skeleton, hips_bone, translation)
 }
 
-fn hips_world_offset(
-    skeleton: &Skeleton,
-    hips_bone: usize,
-    local_translation: Vector3<f32>,
-) -> Vector3<f32> {
+fn hips_world_offset(skeleton: &Skeleton, hips_bone: usize, local_translation: Vec3) -> Vec3 {
     let hips = &skeleton.bones[hips_bone];
-    let bind_translation = hips.local_transform.w.truncate();
+    let bind_translation = hips.local_transform.w_axis.truncate();
     let parent_world_rotation = match hips.parent_id {
         Some(parent_id) => {
             decompose(&compute_bone_global_transform(skeleton, parent_id as usize)).1
         }
-        None => Quaternion::new(1.0, 0.0, 0.0, 0.0),
+        None => Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
     };
     parent_world_rotation * (local_translation - bind_translation)
 }
@@ -192,17 +188,17 @@ fn key_standard_pose(
     rig: &HumanoidRig,
     pose: &SampledPose,
     time: f32,
-    previous_eulers: &mut BTreeMap<HumanoidRole, Vector3<f32>>,
+    previous_eulers: &mut BTreeMap<HumanoidRole, Vec3>,
 ) {
     for (&role, &rotation) in &pose.rotations {
-        let Some(&bone_index) = rig.mapping.by_role.get(&role) else {
+        let Some(bone_index) = rig.mapping.bone_of(role) else {
             continue;
         };
         let Some(track) = standard.tracks.get_mut(&(bone_index as BoneId)) else {
             continue;
         };
 
-        let euler = continuous_euler(Vector3::from(rotation), previous_eulers.get(&role).copied());
+        let euler = continuous_euler(Vec3::from(rotation), previous_eulers.get(&role).copied());
         previous_eulers.insert(role, euler);
         curve_add_keyframe(&mut track.rotation_x, time, euler.x);
         curve_add_keyframe(&mut track.rotation_y, time, euler.y);
@@ -343,17 +339,17 @@ mod tests {
             std::collections::HashMap::new();
 
         let left_upper_arm_pose = crate::animation::BoneLocalPose {
-            translation: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
             rotation: role_rotation_to_thyllore(&rig.context.frame, [0.0, 0.0, -40.0]),
-            scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
         };
         overrides.insert(left_upper_arm_bone, left_upper_arm_pose);
 
         let skirt_bone_id: BoneId = rig.track_bones["Skirt_Front_1"];
         let skirt_pose = crate::animation::BoneLocalPose {
-            translation: cgmath::Vector3::new(0.0, 0.0, 0.0),
-            rotation: euler_degrees_to_quaternion(&cgmath::Vector3::new(30.0, 0.0, 0.0)),
-            scale: cgmath::Vector3::new(1.0, 1.0, 1.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            rotation: euler_degrees_to_quaternion(&Vec3::new(30.0, 0.0, 0.0)),
+            scale: Vec3::new(1.0, 1.0, 1.0),
         };
         overrides.insert(skirt_bone_id, skirt_pose);
 

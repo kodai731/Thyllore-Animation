@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector2};
+use glam::{Mat4, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DistanceAttenuation {
@@ -21,8 +21,8 @@ impl DistanceAttenuation {
 }
 
 pub struct ProjectionData {
-    pub view: Matrix4<f32>,
-    pub proj: Matrix4<f32>,
-    pub screen_size: Vector2<f32>,
+    pub view: Mat4,
+    pub proj: Mat4,
+    pub screen_size: Vec2,
     pub aspect: f32,
 }

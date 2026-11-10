@@ -7,7 +7,10 @@ pub(crate) mod file_identity;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;
+pub mod skin_clusters;
 pub(crate) mod writer;
+
+pub use skin_clusters::clusters_from_skin_data;
 
 use std::path::Path;
 
@@ -46,7 +49,8 @@ mod tests {
         convert_positions_to_fbx, convert_uvs_to_fbx, encode_triangle_polygon_indices,
     };
     use crate::systems::fbx::skin::matrix4_to_flat_f64_scaled;
-    use cgmath::Matrix4;
+    use glam::Mat4;
+    use glam::Vec3;
     use std::path::PathBuf;
     use thyllore_file_format_core::fbx::FbxData;
 
@@ -75,8 +79,7 @@ mod tests {
 
     #[test]
     fn test_matrix4_to_flat_f64_scaled() {
-        use cgmath::SquareMatrix;
-        let identity = Matrix4::<f32>::identity();
+        let identity = Mat4::IDENTITY;
         let flat = matrix4_to_flat_f64_scaled(&identity, 2.0);
         assert!((flat[0] - 1.0).abs() < 1e-8);
         assert!((flat[5] - 1.0).abs() < 1e-8);
@@ -88,7 +91,7 @@ mod tests {
     #[test]
     fn test_convert_positions_to_fbx_no_scale() {
         let mut fbx_data = FbxData::new();
-        fbx_data.positions = vec![cgmath::Vector3::new(0.01, 0.02, 0.03)];
+        fbx_data.positions = vec![Vec3::new(0.01, 0.02, 0.03)];
         fbx_data.local_positions = vec![];
 
         let positions = convert_positions_to_fbx(&fbx_data, 1.0);
@@ -131,22 +134,20 @@ mod tests {
             ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
                 .expect("Failed to load exported with ufbx");
 
-        let orig_axes = &original_scene.settings.axes;
         let exp_axes = &exported_scene.settings.axes;
         assert_eq!(
-            orig_axes.up as i32, exp_axes.up as i32,
-            "UpAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.up, exp_axes.up
-        );
-        assert_eq!(
-            orig_axes.front as i32, exp_axes.front as i32,
-            "FrontAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.front, exp_axes.front
-        );
-        assert_eq!(
-            orig_axes.right as i32, exp_axes.right as i32,
-            "CoordAxis mismatch: original={:?}, exported={:?}",
-            orig_axes.right, exp_axes.right
+            (
+                exp_axes.up as i32,
+                exp_axes.front as i32,
+                exp_axes.right as i32
+            ),
+            (
+                ufbx::CoordinateAxis::PositiveY as i32,
+                ufbx::CoordinateAxis::PositiveZ as i32,
+                ufbx::CoordinateAxis::PositiveX as i32
+            ),
+            "the export always writes the engine's Y-up axes, got {:?}",
+            exp_axes
         );
 
         let orig_non_root_nodes: Vec<_> =

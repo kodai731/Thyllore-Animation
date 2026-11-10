@@ -1,9 +1,11 @@
 use std::io::{Seek, Write};
 use std::path::Path;
 
-use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
+use glam::{Mat4, Vec3};
+
+use crate::systems::fbx::writer::ARRAY_ENCODING;
 
 use crate::systems::fbx::file_identity::{FileIdentity, CREATOR, DEFAULT_CREATION_TIME};
 
@@ -157,28 +159,28 @@ pub(crate) fn convert_tangent_to_fbx_slope_weight(
     (slope, weight)
 }
 
-pub(crate) fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], [f64; 3]) {
-    let tx = m[3][0] as f64;
-    let ty = m[3][1] as f64;
-    let tz = m[3][2] as f64;
+pub(crate) fn decompose_matrix_to_trs(m: &Mat4) -> ([f64; 3], [f64; 3], [f64; 3]) {
+    let tx = m.col(3)[0] as f64;
+    let ty = m.col(3)[1] as f64;
+    let tz = m.col(3)[2] as f64;
 
-    let sx = Vector3::new(m[0][0], m[0][1], m[0][2]).magnitude() as f64;
-    let sy = Vector3::new(m[1][0], m[1][1], m[1][2]).magnitude() as f64;
-    let sz = Vector3::new(m[2][0], m[2][1], m[2][2]).magnitude() as f64;
+    let sx = Vec3::new(m.col(0)[0], m.col(0)[1], m.col(0)[2]).length() as f64;
+    let sy = Vec3::new(m.col(1)[0], m.col(1)[1], m.col(1)[2]).length() as f64;
+    let sz = Vec3::new(m.col(2)[0], m.col(2)[1], m.col(2)[2]).length() as f64;
 
     let sx_safe = if sx > 1e-8 { sx } else { 1.0 };
     let sy_safe = if sy > 1e-8 { sy } else { 1.0 };
     let sz_safe = if sz > 1e-8 { sz } else { 1.0 };
 
-    let r00 = m[0][0] as f64 / sx_safe;
-    let r01 = m[0][1] as f64 / sx_safe;
-    let r02 = m[0][2] as f64 / sx_safe;
-    let _r10 = m[1][0] as f64 / sy_safe;
-    let r11 = m[1][1] as f64 / sy_safe;
-    let r12 = m[1][2] as f64 / sy_safe;
-    let _r20 = m[2][0] as f64 / sz_safe;
-    let r21 = m[2][1] as f64 / sz_safe;
-    let r22 = m[2][2] as f64 / sz_safe;
+    let r00 = m.col(0)[0] as f64 / sx_safe;
+    let r01 = m.col(0)[1] as f64 / sx_safe;
+    let r02 = m.col(0)[2] as f64 / sx_safe;
+    let _r10 = m.col(1)[0] as f64 / sy_safe;
+    let r11 = m.col(1)[1] as f64 / sy_safe;
+    let r12 = m.col(1)[2] as f64 / sy_safe;
+    let _r20 = m.col(2)[0] as f64 / sz_safe;
+    let r21 = m.col(2)[1] as f64 / sz_safe;
+    let r22 = m.col(2)[2] as f64 / sz_safe;
 
     let ry = (-r02).asin();
     let (rx, rz) = if ry.cos().abs() > 1e-6 {
@@ -260,9 +262,7 @@ fn attach_root_transform_node(
     uid_alloc: &mut UidAllocator,
     inv_unit_scale: f32,
 ) {
-    use cgmath::SquareMatrix;
-
-    if skeleton.root_transform == Matrix4::identity() {
+    if skeleton.root_transform == Mat4::IDENTITY {
         return;
     }
 
@@ -1114,35 +1114,35 @@ pub(crate) fn write_anim_curve<W: Write + Seek>(
 
     {
         let mut ta = writer.new_node("KeyTime")?;
-        ta.append_arr_i64_from_iter(None, curve.key_times.iter().copied())?;
+        ta.append_arr_i64_from_iter(ARRAY_ENCODING, curve.key_times.iter().copied())?;
         drop(ta);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("KeyValueFloat")?;
-        va.append_arr_f32_from_iter(None, curve.key_values.iter().copied())?;
+        va.append_arr_f32_from_iter(ARRAY_ENCODING, curve.key_values.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut fa = writer.new_node("KeyAttrFlags")?;
-        fa.append_arr_i32_from_iter(None, curve.key_attr_flags.iter().copied())?;
+        fa.append_arr_i32_from_iter(ARRAY_ENCODING, curve.key_attr_flags.iter().copied())?;
         drop(fa);
         writer.close_node()?;
     }
 
     {
         let mut da = writer.new_node("KeyAttrDataFloat")?;
-        da.append_arr_f32_from_iter(None, curve.key_attr_data.iter().copied())?;
+        da.append_arr_f32_from_iter(ARRAY_ENCODING, curve.key_attr_data.iter().copied())?;
         drop(da);
         writer.close_node()?;
     }
 
     {
         let mut ra = writer.new_node("KeyAttrRefCount")?;
-        ra.append_arr_i32_from_iter(None, curve.key_attr_ref_count.iter().copied())?;
+        ra.append_arr_i32_from_iter(ARRAY_ENCODING, curve.key_attr_ref_count.iter().copied())?;
         drop(ra);
         writer.close_node()?;
     }

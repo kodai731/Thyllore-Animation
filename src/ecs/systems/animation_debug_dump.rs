@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use serde::Serialize;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
@@ -232,7 +232,7 @@ fn build_skeleton_dump(skeleton: &Skeleton) -> SkeletonDump {
                 parent_id: bone.parent_id,
                 rest_local_matrix: matrix4_to_arrays(&bone.local_transform),
                 rest_translation: [t.x, t.y, t.z],
-                rest_rotation_quaternion: [r.s, r.v.x, r.v.y, r.v.z],
+                rest_rotation_quaternion: [r.w, r.x, r.y, r.z],
                 rest_scale: [s.x, s.y, s.z],
             }
         })
@@ -265,16 +265,16 @@ fn build_pose_dump(
         .map(|(idx, bone)| {
             let bp = &pose.bone_poses[idx];
             let global = global_transforms[idx];
-            let world_position: Vector3<f32> = global.w.truncate();
+            let world_position: Vec3 = global.w_axis.truncate();
             PoseBoneDump {
                 id: bone.id,
                 name: bone.name.clone(),
                 local_translation: [bp.translation.x, bp.translation.y, bp.translation.z],
                 local_rotation_quaternion: [
-                    bp.rotation.s,
-                    bp.rotation.v.x,
-                    bp.rotation.v.y,
-                    bp.rotation.v.z,
+                    bp.rotation.w,
+                    bp.rotation.x,
+                    bp.rotation.y,
+                    bp.rotation.z,
                 ],
                 local_scale: [bp.scale.x, bp.scale.y, bp.scale.z],
                 global_matrix: matrix4_to_arrays(&global),
@@ -316,7 +316,7 @@ fn build_clip_channels_dump(
                 translation_keyframes: ch.translation.len(),
                 rotation_keyframes: ch.rotation.len(),
                 scale_keyframes: ch.scale.len(),
-                rotation_at_0: ch.sample_rotation(0.0).map(|q| [q.s, q.v.x, q.v.y, q.v.z]),
+                rotation_at_0: ch.sample_rotation(0.0).map(|q| [q.w, q.x, q.y, q.z]),
                 translation_at_0: ch.sample_translation(0.0).map(|v| [v.x, v.y, v.z]),
             }
         })
@@ -330,12 +330,12 @@ fn build_clip_channels_dump(
     }
 }
 
-fn matrix4_to_arrays(m: &Matrix4<f32>) -> [[f32; 4]; 4] {
+fn matrix4_to_arrays(m: &Mat4) -> [[f32; 4]; 4] {
     [
-        [m.x.x, m.x.y, m.x.z, m.x.w],
-        [m.y.x, m.y.y, m.y.z, m.y.w],
-        [m.z.x, m.z.y, m.z.z, m.z.w],
-        [m.w.x, m.w.y, m.w.z, m.w.w],
+        [m.x_axis.x, m.x_axis.y, m.x_axis.z, m.x_axis.w],
+        [m.y_axis.x, m.y_axis.y, m.y_axis.z, m.y_axis.w],
+        [m.z_axis.x, m.z_axis.y, m.z_axis.z, m.z_axis.w],
+        [m.w_axis.x, m.w_axis.y, m.w_axis.z, m.w_axis.w],
     ]
 }
 
@@ -349,11 +349,11 @@ mod tests {
         let spine = skeleton.add_bone("Spine", Some(root));
         let chest = skeleton.add_bone("Chest", Some(spine));
         skeleton.bones[root as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.bones[spine as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.5, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0));
         skeleton.bones[chest as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.25, 0.1));
+            Mat4::from_translation(Vec3::new(0.0, 0.25, 0.1));
         skeleton
     }
 

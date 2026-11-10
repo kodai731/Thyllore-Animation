@@ -69,7 +69,7 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{Quaternion, Vector3};
+    use glam::{Quat, Vec3};
 
     #[test]
     fn test_all_presets_apply_and_are_idempotent() {
@@ -86,14 +86,14 @@ mod tests {
     #[test]
     fn test_preset_preserves_runtime_state() {
         let mut effect = LightningEffect::default();
-        effect.position = Vector3::new(1.0, 2.0, 3.0);
-        effect.rotation = Quaternion::new(0.99, 0.1, 0.0, 0.0);
+        effect.position = Vec3::new(1.0, 2.0, 3.0);
+        effect.rotation = Quat::from_xyzw(0.1, 0.0, 0.0, 0.99);
         effect.time = 5.0;
 
         apply_lightning_preset(&mut effect, "bolt");
 
-        assert_eq!(effect.position, Vector3::new(1.0, 2.0, 3.0));
-        assert_eq!(effect.rotation, Quaternion::new(0.99, 0.1, 0.0, 0.0));
+        assert_eq!(effect.position, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(effect.rotation, Quat::from_xyzw(0.1, 0.0, 0.0, 0.99));
         assert_eq!(effect.time, 5.0);
         assert_eq!(effect.shape.end_offset, [0.0, -8.5, 0.0]);
     }

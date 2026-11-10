@@ -1,6 +1,6 @@
 use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use crate::volume::slang;
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::{
     biweight, biweight_poly, one_minus_smootherstep_poly, poly_from_quadratic,
     poly_linear_weighted_moments, poly_moments, poly_mul, poly_scale, poly_zero, Poly,
@@ -36,8 +36,8 @@ pub fn clamp_ray_to_cone_frustum(
     radius_base: f32,
     radius_top: f32,
     top_y: f32,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     bounds: (f32, f32),
 ) -> Option<(f32, f32)> {
     let (mut t_near, mut t_far) = bounds;
@@ -125,12 +125,12 @@ impl VolumeShell {
         self.strength * biweight((q - self.wall_radius_sq(h)) / self.width_q)
     }
 
-    pub fn density_at(&self, local: Vector3<f32>) -> f32 {
+    pub fn density_at(&self, local: Vec3) -> f32 {
         slang::shell_density_at(self, local)
     }
 
     #[cfg(test)]
-    pub(crate) fn density_at_mirror(&self, local: Vector3<f32>) -> f32 {
+    pub(crate) fn density_at_mirror(&self, local: Vec3) -> f32 {
         let h = local.y / self.height;
         let envelope = self.envelope_height(h);
         if envelope <= 0.0 {
@@ -144,8 +144,8 @@ impl VolumeShell {
     /// height slab; `None` when the ray misses it.
     pub fn clamp_ray_to_cone(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         bounds: (f32, f32),
     ) -> Option<(f32, f32)> {
         clamp_ray_to_cone_frustum(
@@ -161,8 +161,8 @@ impl VolumeShell {
     /// Wall support boundaries and the envelope break of the ray, appended unsorted.
     pub fn collect_knots(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
         knots: &mut RayKnots,
@@ -187,13 +187,7 @@ impl VolumeShell {
         }
     }
 
-    pub fn knots(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        t_near: f32,
-        t_far: f32,
-    ) -> RayKnots {
+    pub fn knots(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> RayKnots {
         let mut knots = RayKnots::begin(t_near, t_far);
         self.collect_knots(origin, direction, t_near, t_far, &mut knots);
         knots.sort();
@@ -210,13 +204,7 @@ impl VolumeShell {
         one_minus_smootherstep_poly((h0 - fade_start) / self.top_fade, h1 / self.top_fade)
     }
 
-    fn piece_distance_at_mid(
-        &self,
-        start: Vector3<f32>,
-        direction: Vector3<f32>,
-        length: f32,
-        h_mid: f32,
-    ) -> f32 {
+    fn piece_distance_at_mid(&self, start: Vec3, direction: Vec3, length: f32, h_mid: f32) -> f32 {
         let mid = start + direction * (0.5 * length);
         let radius_mid = self.wall_radius(h_mid);
         (mid.x * mid.x + mid.z * mid.z - radius_mid * radius_mid - self.radius_offset_q)
@@ -224,13 +212,7 @@ impl VolumeShell {
     }
 
     /// True when the piece [s0, s1], which must not cross a knot, lies inside the wall support.
-    pub fn piece_holds(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        s0: f32,
-        s1: f32,
-    ) -> bool {
+    pub fn piece_holds(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> bool {
         let length = s1 - s0;
         if length <= EMPTY_INTERVAL_EPSILON {
             return false;
@@ -246,13 +228,7 @@ impl VolumeShell {
     }
 
     /// Envelope times wall on the piece as a polynomial in sigma; `None` when the piece holds no wall.
-    pub fn piece_poly(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        s0: f32,
-        s1: f32,
-    ) -> Option<Poly> {
+    pub fn piece_poly(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> Option<Poly> {
         if !self.piece_holds(origin, direction, s0, s1) {
             return None;
         }
@@ -284,13 +260,7 @@ impl VolumeShell {
         Some(density)
     }
 
-    pub fn piece_optical_depth(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        s0: f32,
-        s1: f32,
-    ) -> f32 {
+    pub fn piece_optical_depth(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> f32 {
         let Some(density) = self.piece_poly(origin, direction, s0, s1) else {
             return 0.0;
         };
@@ -300,8 +270,8 @@ impl VolumeShell {
     /// A multiplicative modulation linear on the piece between the given end values.
     pub fn piece_optical_depth_modulated(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         s0: f32,
         s1: f32,
         modulation: (f32, f32),
@@ -314,30 +284,19 @@ impl VolumeShell {
         ((s1 - s0) * self.sigma_t * total).max(0.0)
     }
 
-    pub fn optical_depth(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        t_near: f32,
-        t_far: f32,
-    ) -> f32 {
+    pub fn optical_depth(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> f32 {
         slang::shell_optical_depth(self, origin, direction, t_near, t_far)
     }
 
-    pub fn optical_depth_toward(
-        &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        t_max: f32,
-    ) -> f32 {
+    pub fn optical_depth_toward(&self, origin: Vec3, direction: Vec3, t_max: f32) -> f32 {
         slang::shell_optical_depth_toward(self, origin, direction, t_max)
     }
 
     #[cfg(test)]
     pub(crate) fn optical_depth_mirror(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
     ) -> f32 {
@@ -353,8 +312,8 @@ impl VolumeShell {
     #[cfg(test)]
     pub(crate) fn optical_depth_toward_mirror(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_max: f32,
     ) -> f32 {
         let Some((t_near, t_far)) = self.clamp_ray_to_cone(origin, direction, (0.0, t_max)) else {

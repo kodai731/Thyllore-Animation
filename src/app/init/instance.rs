@@ -7,46 +7,24 @@ use crate::ecs::PipelineManager;
 use crate::hooks::startup::{run_startup_phase, StartupPhase};
 use crate::vulkanr::command::*;
 use crate::vulkanr::descriptor::*;
-use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::pipeline::{CullFace, FillMode, RRPipeline, Topology};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
-use crate::vulkanr::vulkan::*;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::rc::Rc;
 use std::time::Instant;
 
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
-use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use winit::window::Window;
 
-// Constants
-pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
-pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-pub const VALIDATION_MODE: crate::vulkanr::core::device::ValidationMode = if cfg!(debug_assertions)
-{
-    crate::vulkanr::core::device::ValidationMode::Enabled
-} else {
-    crate::vulkanr::core::device::ValidationMode::Disabled
-};
-pub use crate::vulkanr::core::device::VALIDATION_LAYER;
-pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
-    vk::KHR_SWAPCHAIN_EXTENSION.name,
-    vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
-    vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
-    vk::KHR_RAY_QUERY_EXTENSION.name,
-    vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
-    vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
-];
+use thyllore_vulkan_core::core::instance::create_sync_objects;
 
 impl App {
     pub unsafe fn create(
         window: &Window,
         #[cfg(feature = "ml")] curve_copilot_mode: crate::ml::CurveCopilotMode,
     ) -> Result<Self> {
-        let loader = LibloadingLoader::new(LIBRARY)?;
-        let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
         crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
@@ -57,17 +35,12 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
 
-        let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
-        let surface = vk_window::create_surface(&instance, &window, &window)?;
-        let rrdevice = RRDevice::new(
-            &entry,
-            &instance,
-            &surface,
-            VALIDATION_MODE,
-            VALIDATION_LAYER,
-            DEVICE_EXTENSIONS,
-            PORTABILITY_MACOS_VERSION,
-        )?;
+        let vulkan_context = thyllore_vulkan_core::create_vulkan_context(window)?;
+        let messenger = vulkan_context.messenger();
+        let surface = vulkan_context.surface();
+        let entry = vulkan_context.entry;
+        let instance = vulkan_context.instance;
+        let rrdevice = vulkan_context.rrdevice;
         let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
@@ -90,9 +63,9 @@ impl App {
             &rrrender,
             &render_layouts,
             &MODEL,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            vk::CullModeFlags::BACK,
+            Topology::TriangleList,
+            FillMode::Fill,
+            CullFace::Back,
         )
         .context("Failed to create model pipeline")?;
         data.pipeline_storage.register(model_pipeline.clone());
@@ -133,22 +106,13 @@ impl App {
         )?;
 
         let (model_path, loaded_scene) = Self::determine_startup_model();
-        // Self::load_startup_model(
-        //     &instance,
-        //     &rrdevice,
-        //     &rrcommand_pool,
-        //     &rrswapchain,
-        //     &mut data,
-        //     &model_path,
-        //     loaded_scene.is_some(),
-        //     );
 
         // The scene restores timeline, panel, curve editor and post-processing state, so those
         // resources must exist before it is applied. Registration is idempotent and runs again below.
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
         Self::apply_loaded_scene(&mut data, loaded_scene)?;
-        data.raytracing.command_pool = rrcommand_pool.command_pool;
+        data.raytracing.set_command_pool(&rrcommand_pool);
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
             &rrdevice,
@@ -185,7 +149,7 @@ impl App {
         }
 
         let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
-            Self::create_sync_objects(&rrdevice.device)?;
+            create_sync_objects(&rrdevice, MAX_FRAMES_IN_FLIGHT)?;
 
         let vulkan_resources = VulkanResources {
             messenger,
@@ -204,7 +168,7 @@ impl App {
             &mut data,
             &vulkan_resources,
             &model_path,
-            rrdevice.msaa_samples,
+            rrdevice.msaa_samples(),
         );
 
         let grid_scale = create_default_grid_scale();
@@ -212,9 +176,9 @@ impl App {
         data.ecs_world.insert_resource(grid_scale);
 
         let gpu_timestamp_profiler = thyllore_vulkan_core::GpuTimestampProfiler::new(
-            &rrdevice.device,
+            &rrdevice,
             rrdevice.timestamp_period,
-            vulkan_resources.rrswapchain.swapchain_images.len(),
+            vulkan_resources.rrswapchain.swapchain_images().len(),
         );
 
         Ok(Self {
@@ -259,7 +223,7 @@ impl App {
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,
-        msaa_samples: vk::SampleCountFlags,
+        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
         Self::register_editor_resources(data);

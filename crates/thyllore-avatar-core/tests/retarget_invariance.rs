@@ -1,7 +1,7 @@
 #![cfg(test)]
 use std::collections::HashMap;
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 
 mod support;
@@ -84,12 +84,12 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
                 (ref_pos[2] - canonical_hips[2]) / canonical_hips_height,
             ];
 
-            let diff = Vector3::new(
+            let diff = Vec3::new(
                 normalized[0] - expected_diff[0],
                 normalized[1] - expected_diff[1],
                 normalized[2] - expected_diff[2],
             );
-            let err = diff.magnitude();
+            let err = diff.length();
             assert!(
                 err < 1e-3,
                 "convention {} frame {} time {:.2} role {:?} error {:.6} (got [{:.4},{:.4},{:.4}], expected [{:.4},{:.4},{:.4}])",

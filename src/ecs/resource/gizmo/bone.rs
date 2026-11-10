@@ -1,1 +1,1 @@
-pub use thyllore_render_core::{BoneDisplayStyle, BoneGizmoData};
+pub use thyllore_render_core::{BoneDisplayStyle, BoneDrawMode, BoneGizmoData};

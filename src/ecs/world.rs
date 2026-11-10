@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
 use crate::asset::AssetId;
 use crate::ecs::component::{
@@ -110,36 +110,36 @@ pub struct Name(pub String);
 
 #[derive(Clone, Debug)]
 pub struct Transform {
-    pub translation: Vector3<f32>,
-    pub rotation: cgmath::Quaternion<f32>,
-    pub scale: Vector3<f32>,
+    pub translation: Vec3,
+    pub rotation: Quat,
+    pub scale: Vec3,
 }
 
 impl Default for Transform {
     fn default() -> Self {
         Self {
-            translation: Vector3::new(0.0, 0.0, 0.0),
-            rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            scale: Vector3::new(1.0, 1.0, 1.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
         }
     }
 }
 
 impl Transform {
-    pub fn to_matrix(&self) -> Matrix4<f32> {
-        let translation = Matrix4::from_translation(self.translation);
-        let rotation = Matrix4::from(self.rotation);
-        let scale = Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, self.scale.z);
+    pub fn to_matrix(&self) -> Mat4 {
+        let translation = Mat4::from_translation(self.translation);
+        let rotation = Mat4::from_quat(self.rotation);
+        let scale = Mat4::from_scale(Vec3::new(self.scale.x, self.scale.y, self.scale.z));
         translation * rotation * scale
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct GlobalTransform(pub Matrix4<f32>);
+pub struct GlobalTransform(pub Mat4);
 
 impl Default for GlobalTransform {
     fn default() -> Self {
-        Self(Matrix4::identity())
+        Self(Mat4::IDENTITY)
     }
 }
 
@@ -246,7 +246,7 @@ pub struct NodeRef(pub AssetId);
 pub struct SkinRef {
     pub skeleton_asset_id: AssetId,
     pub joint_indices: Vec<u32>,
-    pub inverse_bind_matrices: Vec<Matrix4<f32>>,
+    pub inverse_bind_matrices: Vec<Mat4>,
 }
 
 pub struct World {
@@ -638,7 +638,7 @@ impl<'a> EntityBuilder<'a> {
         self,
         skeleton_asset_id: AssetId,
         joint_indices: Vec<u32>,
-        inverse_bind_matrices: Vec<Matrix4<f32>>,
+        inverse_bind_matrices: Vec<Mat4>,
     ) -> Self {
         self.world.insert_component(
             self.entity,

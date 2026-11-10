@@ -3,26 +3,59 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
+use crate::types::HDR_FORMAT;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BloomMipTarget {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
-    pub framebuffer: vk::Framebuffer,
-    pub extent: vk::Extent2D,
+    pub(crate) view: vk::ImageView,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) extent: vk::Extent2D,
+}
+
+impl BloomMipTarget {
+    pub fn new(
+        view: crate::types::ImageView,
+        framebuffer: crate::types::Framebuffer,
+        extent: crate::types::Extent2D,
+    ) -> Self {
+        Self {
+            view: view.raw(),
+            framebuffer: framebuffer.raw(),
+            extent: extent.raw(),
+        }
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct BloomChain {
-    pub mip_extents: Vec<vk::Extent2D>,
-    pub downsample_render_pass: vk::RenderPass,
-    pub upsample_render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) mip_extents: Vec<vk::Extent2D>,
+    pub(crate) downsample_render_pass: vk::RenderPass,
+    pub(crate) upsample_render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
 }
 
 impl BloomChain {
+    #[inline]
+    pub fn downsample_render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.downsample_render_pass)
+    }
+
+    #[inline]
+    pub fn upsample_render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.upsample_render_pass)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub unsafe fn new(
         rrdevice: &RRDevice,
         base_width: u32,
@@ -32,7 +65,7 @@ impl BloomChain {
         let downsample_render_pass =
             Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::DONT_CARE)?;
         let upsample_render_pass = Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::LOAD)?;
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         let mip_extents = compute_mip_extents(base_width, base_height, mip_count);
         for (index, extent) in mip_extents.iter().enumerate() {
@@ -55,7 +88,7 @@ impl BloomChain {
         self.mip_extents.get(mip_index).map(|extent| TransientDesc {
             width: extent.width,
             height: extent.height,
-            format: HDR_FORMAT,
+            format: HDR_FORMAT.raw(),
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
         })
     }
@@ -71,7 +104,7 @@ impl BloomChain {
         };
 
         let color_attachment = vk::AttachmentDescription::builder()
-            .format(HDR_FORMAT)
+            .format(HDR_FORMAT.raw())
             .samples(vk::SampleCountFlags::_1)
             .load_op(load_op)
             .store_op(vk::AttachmentStoreOp::STORE)
@@ -117,7 +150,7 @@ impl BloomChain {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -147,7 +180,7 @@ impl BloomChain {
         log!("Resized bloom chain for {}x{}", new_width, new_height);
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         device.destroy_sampler(self.sampler, None);
         device.destroy_render_pass(self.downsample_render_pass, None);
         device.destroy_render_pass(self.upsample_render_pass, None);
@@ -173,7 +206,7 @@ fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec
 
 impl GpuResource for BloomChain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.sampler = vk::Sampler::null();
         self.downsample_render_pass = vk::RenderPass::null();

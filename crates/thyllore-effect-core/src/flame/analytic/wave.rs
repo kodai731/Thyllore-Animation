@@ -73,6 +73,8 @@ pub const WAVE_K_RATIO: f32 = 8.0;
 /// Tanh shaping scale factor: s = WAVE_TANH_SCALE * WAVE_NOISE_STD.
 pub const WAVE_TANH_SCALE: f32 = 0.6;
 
+// std's f64::consts::GOLDEN_RATIO is unstable (more_float_constants).
+#[allow(clippy::approx_constant)]
 const GOLDEN_RATIO: f64 = 1.618033988749895;
 /// Plastic-constant streams decorrelate magnitude and phase from the
 /// direction index (a monotone magnitude over the Fibonacci spiral would

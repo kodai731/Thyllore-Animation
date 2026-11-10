@@ -1,41 +1,43 @@
-use crate::vulkanr::core::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{DescriptorKind, ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::{GpuResource, UniformBuffer};
 use thyllore_effect_core::FlameUBO;
-use thyllore_vulkan_core::vulkan::*;
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 const FLAME_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlameImageBindings {
-    pub history_image_views: [vk::ImageView; FLAME_HISTORY_SET_COUNT],
-    pub flame_sampler: vk::Sampler,
-    pub sdf_image_view: vk::ImageView,
-    pub sdf_sampler: vk::Sampler,
-    pub scene_depth_view: vk::ImageView,
+    pub history_image_views: [thyllore_vulkan_core::types::ImageView; FLAME_HISTORY_SET_COUNT],
+    pub flame_sampler: thyllore_vulkan_core::types::Sampler,
+    pub sdf_image_view: thyllore_vulkan_core::types::ImageView,
+    pub sdf_sampler: thyllore_vulkan_core::types::Sampler,
+    pub scene_depth_view: thyllore_vulkan_core::types::ImageView,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRFlameDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
-    pub scene_depth_sampler: vk::Sampler,
+    pub(crate) descriptor_sets:
+        [thyllore_vulkan_core::types::DescriptorSet; FLAME_HISTORY_SET_COUNT],
+    pub scene_depth_sampler: thyllore_vulkan_core::types::Sampler,
 }
 
 impl RRFlameDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&FLAME_RESOLVE).with_override(
-            flame_resolve::FLAME,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
+        ReflectedLayoutSpec::local(&FLAME_RESOLVE)
+            .with_override(flame_resolve::FLAME, DescriptorKind::UniformBufferDynamic)
     }
 
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let sets = layout.allocate_sets(rrdevice, FLAME_HISTORY_SET_COUNT)?;
+        let sets: Vec<_> = (0..FLAME_HISTORY_SET_COUNT)
+            .map(|_| layout.allocate_descriptor_set(rrdevice))
+            .collect::<Result<_>>()?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
@@ -43,6 +45,13 @@ impl RRFlameDescriptorSet {
             descriptor_sets: [sets[0], sets[1]],
             scene_depth_sampler,
         })
+    }
+
+    pub fn descriptor_set(
+        &self,
+        history_index: usize,
+    ) -> thyllore_vulkan_core::types::DescriptorSet {
+        self.descriptor_sets[history_index]
     }
 
     pub unsafe fn write_all(
@@ -53,7 +62,7 @@ impl RRFlameDescriptorSet {
     ) -> Result<()> {
         for descriptor_set in self.descriptor_sets {
             self.layout
-                .writer(descriptor_set)
+                .descriptor_writer(descriptor_set)
                 .uniform_dynamic(flame_resolve::FLAME, flame_ubo)?
                 .apply(rrdevice);
         }
@@ -68,24 +77,21 @@ impl RRFlameDescriptorSet {
         for (history_index, descriptor_set) in self.descriptor_sets.into_iter().enumerate() {
             let previous_history_view = images.history_image_views[1 - history_index];
             self.layout
-                .writer(descriptor_set)
-                .image(
+                .descriptor_writer(descriptor_set)
+                .sampled_image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
                     previous_history_view,
                     images.flame_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_SDF_SAMPLER,
                     images.sdf_image_view,
                     images.sdf_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_depth(
                     flame_resolve::SCENE_DEPTH_SAMPLER,
                     images.scene_depth_view,
                     self.scene_depth_sampler,
-                    vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 )?
                 .apply(rrdevice);
         }

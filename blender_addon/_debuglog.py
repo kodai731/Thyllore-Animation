@@ -1,16 +1,16 @@
-"""Developer debug logging for the Thyllore Animation addon.
+"""Developer debug switches for the Thyllore Animation addon.
 
-Caller layer: the actual file output lives in the Rust wheel
-(``thyllore_ml_core.debug_log`` / ``debug_log_init``), compiled only under the
-wheel's ``debug-log`` feature. Production wheels omit those functions, so
-``_rust_log`` is ``None`` here and logging is impossible regardless of any env
-var or config — the build-time switch is the Rust feature, mirroring the
-``#[cfg(feature = "python")]`` pattern used elsewhere.
+``is_debug_build()`` is the Blender-side switch for the debug tools (debug RPC,
+viewport recording); file logging additionally requires the Rust logger, which
+the shipped wheel (``thyllore_ml_core`` or ``thyllore_avatar_api``) exports as
+``debug_log`` / ``debug_log_init`` only when built with the ``debug-log``
+feature. Production wheels omit those functions, so file logging is impossible
+regardless of any env var or config.
 
 This module only does the Blender-side glue: decide whether to log, resolve the
 log file path, and format messages before handing them to Rust.
 
-Activation requires the debug-log wheel AND one of:
+A debug build is one of:
 1. ``THYLLORE_DEBUG`` environment variable is truthy — dev override.
 2. A ``_debug_config.py`` baked into the addon by ``build_blender_addon.sh
    --debug`` sets ``DEBUG_BUILD = True``.
@@ -21,20 +21,29 @@ tree.
 """
 from __future__ import annotations
 
+import importlib
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
-try:
-    import thyllore_ml_core as _tml  # type: ignore
-
-    _rust_log_init = getattr(_tml, "debug_log_init", None)
-    _rust_log = getattr(_tml, "debug_log", None)
-except ImportError:
-    _rust_log_init = None
-    _rust_log = None
-
+_WHEEL_MODULES = ("thyllore_avatar_api", "thyllore_ml_core")
 _TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _resolve_rust_logger() -> Tuple[Optional[Callable], Optional[Callable]]:
+    for module_name in _WHEEL_MODULES:
+        try:
+            wheel = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        log_init = getattr(wheel, "debug_log_init", None)
+        log = getattr(wheel, "debug_log", None)
+        if log_init is not None and log is not None:
+            return log_init, log
+    return None, None
+
+
+_rust_log_init, _rust_log = _resolve_rust_logger()
 
 
 def _baked_config() -> Tuple[bool, str]:
@@ -45,11 +54,8 @@ def _baked_config() -> Tuple[bool, str]:
     return bool(getattr(config, "DEBUG_BUILD", False)), str(getattr(config, "LOG_PATH", ""))
 
 
-def is_debug_enabled() -> bool:
-    # The Rust output methods are the hard build-time gate: a production wheel
-    # has none, so logging can never activate.
-    if _rust_log is None or _rust_log_init is None:
-        return False
+def is_debug_build() -> bool:
+    """True in a ``--debug`` addon build or under ``THYLLORE_DEBUG``; enables the debug tools."""
     if os.environ.get("THYLLORE_DEBUG", "").strip().lower() in _TRUTHY:
         return True
     baked_on, _ = _baked_config()
@@ -98,7 +104,7 @@ def get_logger() -> Optional[_RustLogger]:
         return _logger
 
     _initialized = True
-    if not is_debug_enabled():
+    if not is_debug_build() or _rust_log is None or _rust_log_init is None:
         return None
 
     log_path = _resolve_log_path()
@@ -130,8 +136,8 @@ def log_exception(message: str) -> None:
         logger.exception(f"ERROR {message}")
 
 
-def log_error(message: str) -> None:
-    """Record an error shown to the user (``Operator.report``) in the debug log."""
+def log_report(level: str, source: str, message: str) -> None:
+    """Record a message shown to the user (``Operator.report``) in the debug log."""
     logger = get_logger()
     if logger is not None:
-        logger.info(f"ERROR {message}")
+        logger.info(f"{level} {source}: {message}")

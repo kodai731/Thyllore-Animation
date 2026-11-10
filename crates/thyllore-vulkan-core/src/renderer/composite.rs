@@ -13,13 +13,15 @@ pub const BACKGROUND_RADIANCE: f32 = 0.067;
 
 pub unsafe fn begin_composite_render_pass(
     ctx: &FrameRenderContext,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
-    extent: vk::Extent2D,
+    render_pass: crate::types::RenderPass,
+    framebuffer: crate::types::Framebuffer,
+    extent: crate::types::Extent2D,
     attachment_count: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
+    let extent = extent.raw();
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
         .extent(extent);
@@ -43,8 +45,8 @@ pub unsafe fn begin_composite_render_pass(
     };
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
+        .render_pass(render_pass.raw())
+        .framebuffer(framebuffer.raw())
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -55,11 +57,13 @@ pub unsafe fn record_composite_draw(
     ctx: &FrameRenderContext,
     pipeline: &RRPipeline,
     descriptor: &RRCompositeDescriptorSet,
-    extent: vk::Extent2D,
+    extent: crate::types::Extent2D,
     debug_view_mode_value: i32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
+    let extent = extent.raw();
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 
@@ -106,19 +110,24 @@ pub unsafe fn record_composite_draw(
     Ok(())
 }
 
-pub unsafe fn end_composite_render_pass(ctx: &FrameRenderContext, cmd: vk::CommandBuffer) {
-    ctx.device.device.cmd_end_render_pass(cmd);
+pub unsafe fn end_composite_render_pass(
+    ctx: &FrameRenderContext,
+    cmd: crate::types::CommandBuffer,
+) {
+    ctx.device.device().cmd_end_render_pass(cmd.raw());
 }
 
 pub unsafe fn begin_hdr_render_pass(
     ctx: &FrameRenderContext,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
-    extent: vk::Extent2D,
+    render_pass: crate::types::RenderPass,
+    framebuffer: crate::types::Framebuffer,
+    extent: crate::types::Extent2D,
     background_radiance: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
+    let extent = extent.raw();
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
         .extent(extent);
@@ -144,8 +153,8 @@ pub unsafe fn begin_hdr_render_pass(
     let clear_values = [color_clear_value, depth_clear_value];
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
+        .render_pass(render_pass.raw())
+        .framebuffer(framebuffer.raw())
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -156,11 +165,11 @@ pub unsafe fn record_composite_to_hdr_pass(
     ctx: &FrameRenderContext,
     pipeline: &RRPipeline,
     descriptor: &RRCompositeDescriptorSet,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
-    extent: vk::Extent2D,
+    render_pass: crate::types::RenderPass,
+    framebuffer: crate::types::Framebuffer,
+    extent: crate::types::Extent2D,
     debug_view_mode_value: i32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
     begin_hdr_render_pass(
         ctx,

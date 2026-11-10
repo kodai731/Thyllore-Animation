@@ -4,7 +4,7 @@ use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGiz
 use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
-    gizmo_create_buffers,
+    gizmo_create_buffers_for_every_slot, gizmo_create_static_buffers,
 };
 use crate::ecs::{LightState, PipelineManager};
 use crate::vulkanr::command::*;
@@ -12,16 +12,16 @@ use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
+    BlendConfig, CullFace, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder,
+    PushConstantConfig, RRPipeline, ShaderStages, Topology, VertexInputConfig,
 };
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
-use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;
+use thyllore_vulkan_core::types::Instance;
 
 pub(super) struct GizmoPipelineIds {
     pub(super) grid: usize,
@@ -45,54 +45,39 @@ impl App {
     ) -> Result<GizmoPipelineIds> {
         let grid = PipelineBuilder::from_pass(&GRID)
             .vertex_input(VertexInputConfig::Gizmo)
-            .topology(vk::PrimitiveTopology::LINE_LIST)
-            .polygon_mode(vk::PolygonMode::LINE)
-            .depth_test(DepthTestConfig {
-                test_enable: true,
-                write_enable: false,
-                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-            })
+            .topology(Topology::LineList)
+            .polygon_mode(FillMode::Line)
+            .depth_test(DepthTestConfig::read_only(DepthCompare::GreaterOrEqual))
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create grid pipeline")?;
         let grid = pipeline_storage.register(grid);
         pipeline_allocate_id(pipeline_manager);
 
         let gizmo = PipelineBuilder::from_pass(&GIZMO)
             .vertex_input(VertexInputConfig::Gizmo)
-            .topology(vk::PrimitiveTopology::LINE_LIST)
-            .polygon_mode(vk::PolygonMode::LINE)
+            .topology(Topology::LineList)
+            .polygon_mode(FillMode::Line)
             .no_depth_test()
             .descriptor_layouts(&render_layouts)
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context("Failed to create gizmo pipeline")?;
         let gizmo = pipeline_storage.register(gizmo);
         pipeline_allocate_id(pipeline_manager);
 
-        let bone_push_constants = PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        };
-        let depth_front = DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        };
-        let depth_behind = DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::LESS_OR_EQUAL,
-        };
+        let bone_push_constants =
+            PushConstantConfig::new(ShaderStages::Fragment, 0, std::mem::size_of::<f32>() as u32);
+        let depth_front = DepthTestConfig::read_only(DepthCompare::GreaterOrEqual);
+        let depth_behind = DepthTestConfig::read_only(DepthCompare::LessOrEqual);
 
         let bone_solid = Self::build_bone_pipeline(
             rrdevice,
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             None,
             None,
             bone_push_constants,
@@ -106,8 +91,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             None,
             None,
@@ -122,9 +107,9 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             Some(depth_front),
             None,
             bone_push_constants,
@@ -138,8 +123,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             Some(depth_front),
             None,
@@ -154,9 +139,9 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::TRIANGLE_LIST,
-            vk::PolygonMode::FILL,
-            Some(vk::CullModeFlags::BACK),
+            Topology::TriangleList,
+            FillMode::Fill,
+            Some(CullFace::Back),
             Some(depth_behind),
             Some(BlendConfig::default()),
             bone_push_constants,
@@ -170,8 +155,8 @@ impl App {
             rrswapchain,
             rrrender,
             render_layouts,
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
+            Topology::LineList,
+            FillMode::Line,
             None,
             Some(depth_behind),
             Some(BlendConfig::default()),
@@ -199,9 +184,9 @@ impl App {
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
         render_layouts: &[&ReflectedSetLayout],
-        topology: vk::PrimitiveTopology,
-        polygon_mode: vk::PolygonMode,
-        cull_mode: Option<vk::CullModeFlags>,
+        topology: Topology,
+        polygon_mode: FillMode,
+        cull_mode: Option<CullFace>,
         depth_test: Option<DepthTestConfig>,
         blend: Option<BlendConfig>,
         push_constants: PushConstantConfig,
@@ -230,7 +215,7 @@ impl App {
         }
 
         let pipeline = builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent()))
             .context(format!("Failed to create {} pipeline", label))?;
         let id = pipeline_storage.register(pipeline);
         pipeline_allocate_id(pipeline_manager);
@@ -262,11 +247,10 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
+            gizmo_create_static_buffers(
                 &mut gizmo_data.mesh,
                 &mut backend,
-                0,
-                crate::render::BufferMemoryType::DeviceLocal,
+                thyllore_render_core::BufferMemoryType::DeviceLocal,
             )
             .expect("Failed to create gizmo buffers");
         }
@@ -284,13 +268,8 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(
-                &mut light_gizmo_data.mesh,
-                &mut backend,
-                0,
-                crate::render::BufferMemoryType::HostVisible,
-            )
-            .expect("Failed to create light gizmo buffers");
+            gizmo_create_buffers_for_every_slot(&mut light_gizmo_data.mesh, &mut backend)
+                .expect("Failed to create light gizmo buffers");
         }
 
         Self::setup_bone_gizmo_resources(pipeline_ids, data);
@@ -365,7 +344,7 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
         data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+            .insert_resource(crate::ecs::resource::SpringBoneInspectorState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
         data.ecs_world

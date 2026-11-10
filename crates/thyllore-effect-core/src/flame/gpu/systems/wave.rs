@@ -1,5 +1,5 @@
 use crate::flame::*;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// Parse a mode mask string into a set of matched indices.
 /// Supports: "0-32" (range), "5" (single), "!17" (exclusion: all except 17),
@@ -38,17 +38,17 @@ fn parse_mode_mask(mask: &str) -> std::collections::HashSet<usize> {
 /// CPU mirror of the shader's `flameAnisoCompress` over the erosion chain
 /// (axis optionally bent toward the advection direction by aniso_axis_advect).
 fn noise_aniso_compress(effect: &FlameEffect, v: [f32; 3]) -> [f32; 3] {
-    let advect = Vector3::new(
+    let advect = Vec3::new(
         effect.wind.direction.x,
         effect.warp.rise_speed,
         effect.wind.direction.y,
     );
-    let mut axis = Vector3::new(0.0, 1.0, 0.0);
-    if effect.contour.aniso_axis_advect > 0.0 && advect.magnitude2() > 1e-8 {
+    let mut axis = Vec3::new(0.0, 1.0, 0.0);
+    if effect.contour.aniso_axis_advect > 0.0 && advect.length_squared() > 1e-8 {
         let blend = effect.contour.aniso_axis_advect.clamp(0.0, 1.0);
         axis = (axis * (1.0 - blend) + advect.normalize() * blend).normalize();
     }
-    let vector = Vector3::new(v[0], v[1], v[2]);
+    let vector = Vec3::new(v[0], v[1], v[2]);
     let compressed = vector - axis * vector.dot(axis) * (1.0 - effect.noise.aniso_y);
     [compressed.x, compressed.y, compressed.z]
 }

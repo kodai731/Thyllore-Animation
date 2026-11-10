@@ -15,7 +15,7 @@ pub use component::*;
 pub use context::*;
 pub use effect_context::EffectContext;
 pub use events::*;
-pub use frame_context::{FrameContext, MAX_FRAMES_IN_FLIGHT};
+pub use frame_context::{FrameContext, GpuSceneContext, MAX_FRAMES_IN_FLIGHT};
 pub use pass_context::PassContext;
 pub use query::*;
 pub use registry::*;

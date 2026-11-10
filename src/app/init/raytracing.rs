@@ -3,12 +3,12 @@ use crate::ecs::resource::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
+use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
+use thyllore_vulkan_core::types::Instance;
 
 use anyhow::Result;
 use std::rc::Rc;
-use vulkanalia::prelude::v1_0::*;
 
 impl App {
     pub(crate) unsafe fn init_ray_tracing_with_resources(
@@ -30,7 +30,7 @@ impl App {
         log!("Created G-Buffer render pass and framebuffer");
 
         if let Some(hdr_buffer) = &mut data.viewport.hdr_buffer {
-            hdr_buffer.attach_depth(rrdevice, rrrender.gbuffer_depth_image_view)?;
+            hdr_buffer.attach_depth(rrdevice, rrrender.gbuffer_depth_image_view())?;
         }
 
         log!("Ray Tracing initialization complete");
@@ -43,19 +43,8 @@ impl App {
         data: &mut AppData,
         rrcommand_pool: &Rc<RRCommandPool>,
     ) -> Result<()> {
-        let procedural_primitives =
-            crate::app::raytracing::scene_build::collect_procedural_primitives(&data.ecs_world);
-        let mesh_transforms =
-            crate::ecs::systems::collect_mesh_transforms(&data.ecs_world, &data.ecs_assets);
-        data.raytracing.build_acceleration_structures(
-            instance,
-            rrdevice,
-            rrcommand_pool,
-            &data.graphics_resources.meshes,
-            &mesh_transforms,
-            &procedural_primitives,
-        )?;
-        data.raytracing.bind_ray_query_tlas(rrdevice)
+        let (mut gpu, world, assets) = data.scene_parts(instance, rrdevice, rrcommand_pool);
+        crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)
     }
 
     pub(crate) unsafe fn create_ray_tracing_pipelines_with_resources(
@@ -67,12 +56,16 @@ impl App {
     ) -> Result<()> {
         let (offscreen_render_pass, offscreen_extent) =
             if let Some(ref offscreen) = data.viewport.offscreen {
-                (Some(offscreen.render_pass), Some(offscreen.extent()))
+                (Some(offscreen.render_pass()), Some(offscreen.extent()))
             } else {
                 (None, None)
             };
 
-        let hdr_render_pass = data.viewport.hdr_buffer.as_ref().map(|hdr| hdr.render_pass);
+        let hdr_render_pass = data
+            .viewport
+            .hdr_buffer
+            .as_ref()
+            .map(|hdr| hdr.render_pass());
 
         {
             let mut billboard = data.ecs_world.resource_mut::<BillboardData>();

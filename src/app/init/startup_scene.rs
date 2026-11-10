@@ -1,38 +1,36 @@
-use crate::app::{App, AppData};
+use std::path::{Path, PathBuf};
 
+use crate::animation::editable::EditableAnimationClip;
+use crate::app::{App, AppData};
+use crate::ecs::component::ClipSchedule;
+use crate::ecs::systems::model_load_systems::build_initial_clip_schedule;
+use crate::ecs::world::World;
 use crate::ecs::{SceneState, TimelineState};
+use crate::scene::{find_default_scene, load_scene, LoadedScene};
 
 use anyhow::Result;
 
-/// Clean up old screenshot files from the log directory
+const SCREENSHOT_FILE_PREFIX: &str = "screenshot_";
+const BATCH_SCENE_FLAG: &str = "--batch-scene";
+
+type StartupScene = (PathBuf, LoadedScene, Vec<EditableAnimationClip>);
+
 pub fn cleanup_old_screenshots() -> Result<()> {
-    use std::fs;
-    use std::path::PathBuf;
-
     let log_dir = PathBuf::from("log");
-
     if !log_dir.exists() {
         return Ok(());
     }
 
-    let entries = fs::read_dir(&log_dir)?;
-
     let mut deleted_count = 0;
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_file() {
-            if let Some(filename) = path.file_name() {
-                if let Some(filename_str) = filename.to_str() {
-                    if filename_str.starts_with("screenshot_") {
-                        fs::remove_file(&path)?;
-                        deleted_count += 1;
-                        log!("Deleted old screenshot: {:?}", filename_str);
-                    }
-                }
-            }
+    for entry in std::fs::read_dir(&log_dir)? {
+        let path = entry?.path();
+        if !is_screenshot_file(&path) {
+            continue;
         }
+
+        std::fs::remove_file(&path)?;
+        deleted_count += 1;
+        log!("Deleted old screenshot: {}", path.display());
     }
 
     if deleted_count > 0 {
@@ -42,116 +40,106 @@ pub fn cleanup_old_screenshots() -> Result<()> {
     Ok(())
 }
 
+fn is_screenshot_file(path: &Path) -> bool {
+    let has_screenshot_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(SCREENSHOT_FILE_PREFIX));
+
+    has_screenshot_name && path.is_file()
+}
+
 impl App {
     pub(super) fn apply_loaded_scene(
         data: &mut AppData,
-        loaded_scene: Option<(
-            std::path::PathBuf,
-            crate::scene::LoadedScene,
-            Vec<crate::animation::editable::EditableAnimationClip>,
-        )>,
-    ) -> anyhow::Result<()> {
+        loaded_scene: Option<StartupScene>,
+    ) -> Result<()> {
         let mut scene_state = SceneState::new();
-        if let Some((scene_path, scene, clips)) = loaded_scene {
-            crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
-                &mut data.ecs_world,
-                &mut data.ecs_assets,
-                clips,
-            );
-            crate::scene::apply_loaded_scene_to_world(
-                &scene,
-                &mut data.ecs_world,
-                &mut data.ecs_assets,
-            );
 
-            let active_clip_id = {
-                let timeline = data.ecs_world.resource::<TimelineState>();
-                timeline.current_clip_id
-            };
-
-            if let Some(clip_id) = active_clip_id {
-                let schedule = crate::ecs::systems::model_load_systems::build_initial_clip_schedule(
-                    Some(clip_id),
-                    &data.ecs_world,
+        match loaded_scene {
+            Some((scene_path, scene, clips)) => {
+                crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                    &mut data.ecs_world,
+                    &mut data.ecs_assets,
+                    clips,
                 );
-                for (_, existing) in data
-                    .ecs_world
-                    .iter_components_mut::<crate::ecs::component::ClipSchedule>()
-                {
-                    *existing = schedule.clone();
-                }
+                crate::scene::apply_loaded_scene_to_world(
+                    &scene,
+                    &mut data.ecs_world,
+                    &mut data.ecs_assets,
+                );
+                assign_active_clip_schedule(&mut data.ecs_world);
+                scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
             }
-
-            scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
-        } else {
-            crate::hooks::effect_spawn::spawn_empty_scene_defaults(
+            None => crate::hooks::effect_spawn::spawn_empty_scene_defaults(
                 &mut data.ecs_world,
                 &mut data.ecs_assets,
-            );
+            ),
         }
+
         data.ecs_world.insert_resource(scene_state);
         Ok(())
     }
 
-    pub(super) fn determine_startup_model() -> (
-        String,
-        Option<(
-            std::path::PathBuf,
-            crate::scene::LoadedScene,
-            Vec<crate::animation::editable::EditableAnimationClip>,
-        )>,
-    ) {
-        use crate::scene::{find_default_scene, load_scene};
+    pub(super) fn determine_startup_model() -> (String, Option<StartupScene>) {
+        let batch_scene =
+            find_batch_scene_path().and_then(|path| load_startup_scene(path, "batch"));
+        let startup_scene = batch_scene
+            .or_else(|| find_default_scene().and_then(|path| load_startup_scene(path, "default")));
 
-        // Check for --batch-scene flag in command line arguments
-        let args: Vec<String> = std::env::args().collect();
-        if let Some(pos) = args.iter().position(|a| a == "--batch-scene") {
-            if let Some(path_str) = args.get(pos + 1) {
-                let scene_path = std::path::PathBuf::from(path_str);
-                if scene_path.exists() {
-                    match load_scene(&scene_path) {
-                        Ok(loaded) => {
-                            let model_path = loaded
-                                .model_path
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default();
-                            let clips = loaded.clips.clone();
-                            log!("Loaded batch scene from: {}", scene_path.display());
-                            return (model_path, Some((scene_path, loaded, clips)));
-                        }
-                        Err(e) => {
-                            log_error!("Failed to load batch scene: {:?}", e);
-                        }
-                    }
-                } else {
-                    log_error!("Batch scene path does not exist: {}", scene_path.display());
-                }
-            } else {
-                log_error!("--batch-scene flag is missing the path argument");
-            }
+        match startup_scene {
+            Some((model_path, scene)) => (model_path, Some(scene)),
+            None => (String::new(), None),
         }
-
-        if let Some(scene_path) = find_default_scene() {
-            match load_scene(&scene_path) {
-                Ok(loaded) => {
-                    // Loading uses the resolved assets path from LoadedScene.model_path (None for
-                    // a generated mesh with no file). Saving still uses loaded.scene.model.path.
-                    let model_path = loaded
-                        .model_path
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let clips = loaded.clips.clone();
-                    log!("Loaded default scene from: {}", scene_path.display());
-                    return (model_path, Some((scene_path, loaded, clips)));
-                }
-                Err(e) => {
-                    log_error!("Failed to load default scene: {:?}", e);
-                }
-            }
-        }
-
-        ("".to_string(), None)
     }
+}
+
+fn assign_active_clip_schedule(world: &mut World) {
+    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
+        return;
+    };
+
+    let schedule = build_initial_clip_schedule(Some(clip_id), world);
+    for (_, existing) in world.iter_components_mut::<ClipSchedule>() {
+        *existing = schedule.clone();
+    }
+}
+
+fn find_batch_scene_path() -> Option<PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    let flag_position = args.iter().position(|arg| arg == BATCH_SCENE_FLAG)?;
+
+    let Some(path_argument) = args.get(flag_position + 1) else {
+        log_error!("{} flag is missing the path argument", BATCH_SCENE_FLAG);
+        return None;
+    };
+
+    let scene_path = PathBuf::from(path_argument);
+    if !scene_path.exists() {
+        log_error!("Batch scene path does not exist: {}", scene_path.display());
+        return None;
+    }
+
+    Some(scene_path)
+}
+
+fn load_startup_scene(scene_path: PathBuf, origin: &str) -> Option<(String, StartupScene)> {
+    let loaded = match load_scene(&scene_path) {
+        Ok(loaded) => loaded,
+        Err(error) => {
+            log_error!("Failed to load {} scene: {:?}", origin, error);
+            return None;
+        }
+    };
+
+    // A generated mesh has no file, so its model path is empty. Saving uses loaded.scene.model.path.
+    let model_path = loaded
+        .model_path
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let clips = loaded.clips.clone();
+    log!("Loaded {} scene from: {}", origin, scene_path.display());
+
+    Some((model_path, (scene_path, loaded, clips)))
 }

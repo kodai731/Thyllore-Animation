@@ -1,8 +1,9 @@
 use crate::app::{App, AppData};
 
 use super::graphics::VulkanResources;
+use super::startup_scene::load_startup_scene;
 use crate::ecs::resource::pipeline_allocate_id;
-use crate::ecs::systems::create_default_grid_scale;
+use crate::ecs::systems::{apply_startup_scene, create_default_grid_scale};
 use crate::ecs::PipelineManager;
 use crate::hooks::startup::{StartupHooks, StartupPhase};
 use crate::vulkanr::command::*;
@@ -106,12 +107,14 @@ impl App {
             &mut data,
         )?;
 
-        let (model_path, loaded_scene) = Self::determine_startup_model();
-
         // The scene restores timeline, panel, curve editor and post-processing state onto existing resources.
         startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::Editor);
         startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::PostProcessing);
-        Self::apply_loaded_scene(&mut data, loaded_scene)?;
+        apply_startup_scene(
+            &mut data.ecs_world,
+            &mut data.ecs_assets,
+            load_startup_scene(),
+        );
         data.raytracing.set_command_pool(&rrcommand_pool);
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
@@ -164,12 +167,7 @@ impl App {
             in_flight_fences,
         };
 
-        Self::register_vulkan_resources(
-            &mut data,
-            &vulkan_resources,
-            &model_path,
-            rrdevice.msaa_samples(),
-        );
+        Self::register_vulkan_resources(&mut data, &vulkan_resources, rrdevice.msaa_samples());
         startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::Ml);
 
         let grid_scale = create_default_grid_scale();

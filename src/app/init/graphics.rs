@@ -174,7 +174,6 @@ impl App {
     pub(super) fn register_vulkan_resources(
         data: &mut AppData,
         resources: &VulkanResources,
-        model_path: &str,
         msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
     ) {
         data.ecs_world.insert_resource(FrameSync::new(
@@ -201,13 +200,6 @@ impl App {
 
         data.ecs_world
             .insert_resource(SurfaceState::new(resources.surface, resources.messenger));
-
-        {
-            let mut model_state = data.ecs_world.resource_mut::<ModelState>();
-            if model_state.model_path.is_empty() {
-                model_state.model_path = model_path.to_string();
-            }
-        }
 
         if !data.ecs_world.contains_resource::<RenderConfig>() {
             data.ecs_world

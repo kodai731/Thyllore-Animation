@@ -164,7 +164,7 @@ Consequences for placement:
 Everything that decides what the engine does: components and resources (data only), systems (logic, one
 file per domain, one directory per effect), phases (execution order and event dispatch), `systems/world/`
 (systems that drive the engine's own lifecycle rather than a domain: the batch run's schedule, capture
-record and report, frame schedule (`world/frame.rs`)), and the ECS core (world, storage, query, registry, events). Rules are in
+record and report, frame schedule (`world/frame.rs`), startup scene restore (`world/startup_scene.rs`)), and the ECS core (world, storage, query, registry, events). Rules are in
 `ecs-architecture.md`.
 
 No file here declares `impl App`, takes `&mut App` or imports `crate::app`. A system that needs
@@ -277,7 +277,7 @@ naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, 
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
 `ScalarCurveEvent::AddEffect(key)` / `OverlayEvent::SelectEffectInstance { key, index }`, the batch `add_<key>`
-action sends the same command, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+action sends the same command, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `apply_startup_scene` (`src/ecs/systems/world/startup_scene.rs`) calls
 `spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
 its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes

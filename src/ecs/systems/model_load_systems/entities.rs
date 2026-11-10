@@ -1,5 +1,4 @@
 use super::clips::{build_initial_clip_schedule, register_loaded_clips};
-use super::load::ClipRegistration;
 use crate::animation::{classify_imported_animation, ImportedAnimationTraits};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
@@ -15,7 +14,6 @@ pub(super) fn spawn_model_entities(
     world: &mut World,
     assets: &mut AssetStorage,
     load_result: &ModelLoadResult,
-    clip_registration: ClipRegistration,
 ) -> Entity {
     let name = model_display_name(model_name, "model");
     let animation_type = classify_imported_animation(ImportedAnimationTraits {
@@ -29,7 +27,7 @@ pub(super) fn spawn_model_entities(
         load_result.node_animation_scale
     );
 
-    let first_clip_id = register_loaded_clips(world, assets, &load_result.clips, clip_registration);
+    let first_clip_id = register_loaded_clips(world, assets, &load_result.clips);
     let initial_schedule = build_initial_clip_schedule(first_clip_id, world);
 
     let mut parent_builder = world

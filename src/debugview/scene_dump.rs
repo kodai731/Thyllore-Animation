@@ -1,3 +1,5 @@
+use thyllore_math_core::Aabb;
+
 use crate::app::App;
 
 impl App {
@@ -58,29 +60,18 @@ impl App {
                     v.pos.z
                 );
 
-                let mut min_x = f32::MAX;
-                let mut max_x = f32::MIN;
-                let mut min_y = f32::MAX;
-                let mut max_y = f32::MIN;
-                let mut min_z = f32::MAX;
-                let mut max_z = f32::MIN;
-                for v in &mesh.vertex_data.vertices {
-                    min_x = min_x.min(v.pos.x);
-                    max_x = max_x.max(v.pos.x);
-                    min_y = min_y.min(v.pos.y);
-                    max_y = max_y.max(v.pos.y);
-                    min_z = min_z.min(v.pos.z);
-                    max_z = max_z.max(v.pos.z);
+                let positions = mesh.vertex_data.vertices.iter().map(|vertex| vertex.pos);
+                if let Some(bounds) = Aabb::from_points(positions) {
+                    log!(
+                        "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                        bounds.min.x,
+                        bounds.max.x,
+                        bounds.min.y,
+                        bounds.max.y,
+                        bounds.min.z,
+                        bounds.max.z
+                    );
                 }
-                log!(
-                    "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
-                    min_x,
-                    max_x,
-                    min_y,
-                    max_y,
-                    min_z,
-                    max_z
-                );
             }
         }
 

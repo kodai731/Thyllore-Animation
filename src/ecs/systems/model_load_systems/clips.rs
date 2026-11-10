@@ -1,4 +1,3 @@
-use super::load::ClipRegistration;
 use crate::animation::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
@@ -43,17 +42,12 @@ pub(super) fn register_imported_animation(
         .and_then(vrm_humanoid_to_mapping);
 }
 
-/// Returns the clip the timeline should start on, or `None` when the scene restores its own clips.
+/// Returns the clip the timeline should start on, or `None` for a model that cannot animate.
 pub(super) fn register_loaded_clips(
     world: &mut World,
     assets: &mut AssetStorage,
     loaded_clips: &[AnimationClip],
-    clip_registration: ClipRegistration,
 ) -> Option<SourceClipId> {
-    if clip_registration == ClipRegistration::DeferredToScene {
-        return None;
-    }
-
     if let Some(first_clip_id) = register_clips_to_library(world, assets, loaded_clips) {
         return Some(first_clip_id);
     }
@@ -70,11 +64,7 @@ fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
     let kept_clip_id = {
         let library = world.resource::<ClipLibrary>();
         let selected = world.resource::<TimelineState>().current_clip_id;
-        select_kept_clip_id(
-            selected,
-            |id| library.get(id).is_some(),
-            library.all_clip_ids().copied(),
-        )?
+        select_kept_clip_id(selected, library.all_clip_ids().copied())?
     };
 
     let clip_duration = world
@@ -335,8 +325,7 @@ mod tests {
             clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        let first_clip_id =
-            register_loaded_clips(&mut world, &mut assets, &[], ClipRegistration::FromModel);
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
 
         assert_eq!(first_clip_id, Some(user_source_id));
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
@@ -380,8 +369,7 @@ mod tests {
             skeleton: Skeleton::default(),
         });
 
-        let first_clip_id =
-            register_loaded_clips(&mut world, &mut assets, &[], ClipRegistration::FromModel);
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
 
         assert!(first_clip_id.is_some());
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);

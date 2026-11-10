@@ -517,8 +517,9 @@ the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient life
 place that waits idle, fetches the command pool and swapchain, splits `AppData` with `scene_parts` and
 runs a scene rebuild closure such as `src/ecs/systems/model_load_systems/`; every `World` resource the
 load touches is inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
-`features/` (see below), `color_test_quad.rs`. Model loading itself (`load.rs` entry points and load
-order, `reload.rs` scene-keeping replace and generated mesh load, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
+`features/` (see below), `color_test_quad.rs`. Model loading itself (`replace.rs` scene model
+replacement and additive part load, `keep_scene.rs` the two entry points, which keep the scene's own entities
+and scheduled clips across the replacement and rebuild the acceleration structures once, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
 `entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
 `src/ecs/systems/model_load_systems/`; texture file resolution is `thyllore-importer-core`
 (`resolve_mesh_texture`); the acceleration structure build is `RayTracingData::build_acceleration_structures`

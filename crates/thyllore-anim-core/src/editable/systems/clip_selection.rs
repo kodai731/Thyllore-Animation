@@ -3,12 +3,16 @@ use crate::editable::components::keyframe::SourceClipId;
 /// The selected clip while it is still loaded, otherwise the oldest loaded clip.
 pub fn select_kept_clip_id(
     selected: Option<SourceClipId>,
-    is_loaded: impl Fn(SourceClipId) -> bool,
-    loaded_ids: impl Iterator<Item = SourceClipId>,
+    loaded_ids: impl IntoIterator<Item = SourceClipId>,
 ) -> Option<SourceClipId> {
-    selected
-        .filter(|id| is_loaded(*id))
-        .or_else(|| loaded_ids.min())
+    let mut oldest_loaded: Option<SourceClipId> = None;
+    for loaded_id in loaded_ids {
+        if selected == Some(loaded_id) {
+            return selected;
+        }
+        oldest_loaded = Some(oldest_loaded.map_or(loaded_id, |oldest| oldest.min(loaded_id)));
+    }
+    oldest_loaded
 }
 
 #[cfg(test)]
@@ -16,7 +20,7 @@ mod tests {
     use super::*;
 
     fn select(selected: Option<SourceClipId>, loaded: &[SourceClipId]) -> Option<SourceClipId> {
-        select_kept_clip_id(selected, |id| loaded.contains(&id), loaded.iter().copied())
+        select_kept_clip_id(selected, loaded.iter().copied())
     }
 
     #[test]

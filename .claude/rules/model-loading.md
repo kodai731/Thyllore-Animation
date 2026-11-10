@@ -18,8 +18,9 @@ paths:
   structures, then runs `ModelLoadHooks` (`src/hooks/model_load.rs`) without naming a domain.
 - What does not need `World` or Vulkan lives in the crates: the mesh texture choice
   (`thyllore_importer_core::resolve_mesh_texture`), the clip kept across a load
-  (`thyllore_anim_core::editable::select_kept_clip_id` / `is_user_clip_selected`) and the animation type
-  (`classify_imported_animation`).
+  (`thyllore_anim_core::editable::select_kept_clip_id`) and the animation type
+  (`classify_imported_animation`). Whether the selected clip is the user's own is a `ClipLibrary` method
+  (`is_user_clip_selected`, `src/ecs/resource/editor/clip_library.rs`).
 - The startup model comes from the scene file: `--batch-scene <path>` or `assets/scenes/default.scene.ron`
   (`determine_startup_model` in `src/app/init/instance.rs`). There is no hard-coded model path; to change the
   default model, edit the scene file, not the code.

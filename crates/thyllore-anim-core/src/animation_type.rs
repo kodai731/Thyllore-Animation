@@ -20,15 +20,10 @@ pub struct ImportedAnimationTraits {
 
 /// How an imported model animates: skinned meshes play skeletal clips, otherwise clips move nodes.
 pub fn classify_imported_animation(traits: ImportedAnimationTraits) -> AnimationType {
-    match traits {
-        ImportedAnimationTraits {
-            has_skinned_meshes: true,
-            ..
-        } => AnimationType::Skeletal,
-        ImportedAnimationTraits {
-            has_clips: true, ..
-        } => AnimationType::Node,
-        ImportedAnimationTraits { .. } => AnimationType::None,
+    match (traits.has_skinned_meshes, traits.has_clips) {
+        (true, _) => AnimationType::Skeletal,
+        (false, true) => AnimationType::Node,
+        (false, false) => AnimationType::None,
     }
 }
 

@@ -11,39 +11,6 @@ use crate::loader::fbx::FbxModel;
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::swapchain::RRSwapchain;
 
-/// Who registers the clips a model brings: the load itself, or the scene restore that follows it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ClipRegistration {
-    FromModel,
-    DeferredToScene,
-}
-
-pub unsafe fn load_model_from_file_system(
-    path: &str,
-    gpu: &mut GpuSceneContext,
-    swapchain: &RRSwapchain,
-    world: &mut World,
-    assets: &mut AssetStorage,
-    clip_registration: ClipRegistration,
-) -> Result<()> {
-    log!("=== Loading model from path: {} ===", path);
-
-    let (load_result, fbx_model) = read_model_file(path)?;
-    replace_scene_model(
-        &load_result,
-        path,
-        gpu,
-        swapchain,
-        world,
-        assets,
-        clip_registration,
-        fbx_model,
-    )?;
-
-    log!("=== Model loaded successfully ===");
-    Ok(())
-}
-
 pub(crate) unsafe fn append_model_to_scene(
     load_result: &ModelLoadResult,
     part_name: &str,
@@ -100,6 +67,7 @@ pub(super) unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Opt
     }
 }
 
+/// Leaves the acceleration structures released; the caller rebuilds them once the scene is whole.
 pub(super) unsafe fn replace_scene_model(
     load_result: &ModelLoadResult,
     model_name: &str,
@@ -107,7 +75,6 @@ pub(super) unsafe fn replace_scene_model(
     swapchain: &RRSwapchain,
     world: &mut World,
     assets: &mut AssetStorage,
-    clip_registration: ClipRegistration,
     fbx_model: Option<FbxModel>,
 ) -> Result<Entity> {
     cleanup::reset_scene_model(gpu, world, assets)?;
@@ -132,16 +99,9 @@ pub(super) unsafe fn replace_scene_model(
         gpu.graphics,
         &posed_meshes,
     );
-    rebuild_scene_acceleration(gpu, world, assets)?;
 
-    let parent_entity = entities::spawn_model_entities(
-        model_name,
-        gpu.graphics,
-        world,
-        assets,
-        load_result,
-        clip_registration,
-    );
+    let parent_entity =
+        entities::spawn_model_entities(model_name, gpu.graphics, world, assets, load_result);
     if is_model_file_path(model_name) {
         world.insert_component(parent_entity, GlbSource::FilePath(model_name.to_string()));
     }

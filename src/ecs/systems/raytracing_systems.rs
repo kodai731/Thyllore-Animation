@@ -4,7 +4,7 @@ use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
 use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
-use thyllore_vulkan_core::raytracing::{GpuPrimitive, RRAccelerationStructure, RRBLAS};
+use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
@@ -106,15 +106,6 @@ pub unsafe fn rebuild_scene_acceleration(
     assets: &AssetStorage,
 ) -> Result<()> {
     let procedural_primitives = crate::hooks::gpu_primitive::collect_all(world);
-    rebuild_scene_acceleration_with_primitives(gpu, world, assets, &procedural_primitives)
-}
-
-pub unsafe fn rebuild_scene_acceleration_with_primitives(
-    gpu: &mut GpuSceneContext,
-    world: &World,
-    assets: &AssetStorage,
-    procedural_primitives: &[GpuPrimitive<'static>],
-) -> Result<()> {
     let mesh_transforms = collect_mesh_transforms(world, assets);
     gpu.raytracing.build_acceleration_structures(
         gpu.instance,
@@ -122,7 +113,7 @@ pub unsafe fn rebuild_scene_acceleration_with_primitives(
         gpu.command_pool,
         &gpu.graphics.meshes,
         &mesh_transforms,
-        procedural_primitives,
+        &procedural_primitives,
     )?;
     gpu.raytracing.bind_ray_query_tlas(gpu.device)
 }

@@ -8,7 +8,7 @@ mod pose;
 mod pose_transforms;
 pub mod spring_bone;
 
-pub use animation_type::AnimationType;
+pub use animation_type::{classify_imported_animation, AnimationType, ImportedAnimationTraits};
 pub use clip::*;
 pub use constraint::*;
 pub use model_scale::*;

@@ -22,6 +22,16 @@ use thyllore_vulkan_core::types::Instance;
 
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
+/// What a scene rebuild outside the frame loop (model load, mesh edit, debug delete) borrows from the app.
+pub struct GpuSceneContext<'a> {
+    pub instance: &'a Instance,
+    pub device: &'a RRDevice,
+    pub command_pool: &'a Rc<RRCommandPool>,
+    pub graphics: &'a mut GraphicsResources,
+    pub raytracing: &'a mut RayTracingData,
+    pub onion_skin: &'a mut Option<OnionSkinGpuState>,
+}
+
 pub struct FrameContext<'a> {
     pub instance: &'a Instance,
     pub device: &'a RRDevice,

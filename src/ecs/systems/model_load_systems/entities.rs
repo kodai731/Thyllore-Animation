@@ -1,4 +1,5 @@
 use super::clips::{build_initial_clip_schedule, register_loaded_clips};
+use crate::animation::{classify_imported_animation, ImportedAnimationTraits};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
@@ -13,10 +14,12 @@ pub(super) fn spawn_model_entities(
     world: &mut World,
     assets: &mut AssetStorage,
     load_result: &ModelLoadResult,
-    scene_will_provide_clips: bool,
 ) -> Entity {
     let name = model_display_name(model_name, "model");
-    let animation_type = determine_animation_type(load_result);
+    let animation_type = classify_imported_animation(ImportedAnimationTraits {
+        has_skinned_meshes: load_result.has_skinned_meshes,
+        has_clips: !load_result.clips.is_empty(),
+    });
     log!(
         "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}",
         animation_type,
@@ -24,8 +27,7 @@ pub(super) fn spawn_model_entities(
         load_result.node_animation_scale
     );
 
-    let first_clip_id =
-        register_loaded_clips(world, assets, &load_result.clips, scene_will_provide_clips);
+    let first_clip_id = register_loaded_clips(world, assets, &load_result.clips);
     let initial_schedule = build_initial_clip_schedule(first_clip_id, world);
 
     let mut parent_builder = world
@@ -164,14 +166,4 @@ pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or(fallback)
         .to_string()
-}
-
-fn determine_animation_type(load_result: &ModelLoadResult) -> AnimationType {
-    if load_result.has_skinned_meshes {
-        AnimationType::Skeletal
-    } else if !load_result.clips.is_empty() {
-        AnimationType::Node
-    } else {
-        AnimationType::None
-    }
 }

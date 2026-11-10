@@ -153,36 +153,24 @@ impl RayTracingData {
         }
 
         let mut acceleration_structure = RRAccelerationStructure::new();
-
-        // Collect vertex_buffers in the same order as BLAS creation
-        let vertex_buffers: Vec<_> = meshes
-            .iter()
-            .filter(|mesh| mesh.render_to_gbuffer)
-            .map(|mesh| {
-                (
-                    mesh.vertex_buffer.buffer(),
-                    mesh.vertex_data.vertices.len() as u32,
-                    std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                    mesh.index_buffer.buffer(),
-                    mesh.vertex_data.indices.len() as u32,
-                )
-            })
-            .collect();
+        let mut hit_table_meshes = Vec::new();
 
         for (mesh_index, mesh) in meshes.iter().enumerate() {
             if !mesh.render_to_gbuffer {
                 continue;
             }
 
+            let vertex_count = mesh.vertex_data.vertices.len() as u32;
+            let vertex_stride = std::mem::size_of::<vulkan_data::Vertex>() as u32;
             let mut blas = RRAccelerationStructure::create_blas(
                 instance,
                 rrdevice,
                 rrcommand_pool,
                 &mesh.vertex_buffer.buffer(),
-                mesh.vertex_data.vertices.len() as u32,
-                std::mem::size_of::<vulkan_data::Vertex>() as u32,
+                vertex_count,
+                vertex_stride,
                 &mesh.index_buffer.buffer(),
-                mesh.vertex_data.indices.len() as u32,
+                mesh.index_buffer.indices,
             )?;
 
             let model = mesh_transforms
@@ -194,6 +182,13 @@ impl RayTracingData {
             };
 
             acceleration_structure.blas_list.push(blas);
+            hit_table_meshes.push((
+                mesh.vertex_buffer.buffer(),
+                vertex_count,
+                vertex_stride,
+                mesh.index_buffer.buffer(),
+                mesh.index_buffer.indices,
+            ));
             log!("Created BLAS for mesh");
         }
 
@@ -225,7 +220,7 @@ impl RayTracingData {
         acceleration_structure.fill_hit_shading_table(
             instance,
             rrdevice,
-            &vertex_buffers,
+            &hit_table_meshes,
             procedurals,
         )?;
 

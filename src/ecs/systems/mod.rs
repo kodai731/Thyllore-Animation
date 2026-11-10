@@ -58,6 +58,7 @@ mod locator_systems;
 mod material_texture_systems;
 pub mod mesh_systems;
 pub mod message_log_systems;
+pub mod model_load_systems;
 mod model_scale_systems;
 mod morph_track_systems;
 mod morph_weight_systems;

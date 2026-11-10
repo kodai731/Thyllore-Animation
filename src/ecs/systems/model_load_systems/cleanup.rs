@@ -9,20 +9,19 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::invalidate_humanoid_rig;
 use crate::ecs::world::World;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use crate::ecs::GpuSceneContext;
 
 pub(super) unsafe fn reset_scene_model(
-    device: &RRDevice,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
+    gpu: &mut GpuSceneContext,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
     log!("Cleaning up model resources...");
 
-    release_model_gpu_resources(device, graphics, raytracing)?;
+    if let Some(mut onion_skin) = gpu.onion_skin.take() {
+        onion_skin.destroy(gpu.device);
+    }
+    release_model_gpu_resources(gpu.device, gpu.graphics, gpu.raytracing)?;
     reset_model_world_state(world);
     world.clear();
     assets.clear();

@@ -19,9 +19,6 @@ pub enum CameraEvent {
     LoadModel {
         path: String,
     },
-    LoadModelAdditive {
-        path: String,
-    },
     SpawnDebugPrimitive {
         kind: DebugPrimitiveKind,
     },
@@ -120,10 +117,6 @@ fn dispatch_camera_events(
 
             CameraEvent::LoadModel { path } => {
                 scene_loads.push(SceneLoadCommand::LoadModel { path: path.clone() });
-            }
-
-            CameraEvent::LoadModelAdditive { path } => {
-                scene_loads.push(SceneLoadCommand::LoadModelAdditive { path: path.clone() });
             }
 
             CameraEvent::SpawnDebugPrimitive { kind } => {

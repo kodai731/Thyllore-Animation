@@ -1,4 +1,4 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
+use crate::animation::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
@@ -42,17 +42,12 @@ pub(super) fn register_imported_animation(
         .and_then(vrm_humanoid_to_mapping);
 }
 
-/// Returns the clip the timeline should start on, or `None` when the scene restores its own clips.
+/// Returns the clip the timeline should start on, or `None` for a model that cannot animate.
 pub(super) fn register_loaded_clips(
     world: &mut World,
     assets: &mut AssetStorage,
     loaded_clips: &[AnimationClip],
-    scene_will_provide_clips: bool,
 ) -> Option<SourceClipId> {
-    if scene_will_provide_clips {
-        return None;
-    }
-
     if let Some(first_clip_id) = register_clips_to_library(world, assets, loaded_clips) {
         return Some(first_clip_id);
     }
@@ -68,11 +63,8 @@ pub(super) fn register_loaded_clips(
 fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
     let kept_clip_id = {
         let library = world.resource::<ClipLibrary>();
-        let selected = world
-            .resource::<TimelineState>()
-            .current_clip_id
-            .filter(|id| library.get(*id).is_some());
-        selected.or_else(|| library.all_clip_ids().min().copied())?
+        let selected = world.resource::<TimelineState>().current_clip_id;
+        select_kept_clip_id(selected, library.all_clip_ids().copied())?
     };
 
     let clip_duration = world
@@ -247,18 +239,13 @@ pub fn build_initial_clip_schedule(
 }
 
 pub fn keeps_selected_user_clip(world: &World) -> bool {
-    let timeline = match world.get_resource::<TimelineState>() {
-        Some(t) => t,
-        None => return false,
-    };
-    let Some(current_id) = timeline.current_clip_id else {
+    let (Some(timeline), Some(library)) = (
+        world.get_resource::<TimelineState>(),
+        world.get_resource::<ClipLibrary>(),
+    ) else {
         return false;
     };
-    let library = match world.get_resource::<ClipLibrary>() {
-        Some(l) => l,
-        None => return false,
-    };
-    library.get(current_id).is_some() && !library.model_clip_ids.contains(&current_id)
+    library.is_user_clip_selected(timeline.current_clip_id)
 }
 
 #[cfg(test)]
@@ -338,7 +325,7 @@ mod tests {
             clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
 
         assert_eq!(first_clip_id, Some(user_source_id));
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
@@ -382,7 +369,7 @@ mod tests {
             skeleton: Skeleton::default(),
         });
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[], false);
+        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
 
         assert!(first_clip_id.is_some());
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);

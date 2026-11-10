@@ -10,7 +10,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
 use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
-use crate::ecs::FrameContext;
+use crate::ecs::{FrameContext, GpuSceneContext};
 use thyllore_vulkan_core::types::Instance;
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Mat4> {
@@ -98,6 +98,24 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         &acceleration_structure.blas_list,
         &acceleration_structure.procedural_blas,
     )
+}
+
+pub unsafe fn rebuild_scene_acceleration(
+    gpu: &mut GpuSceneContext,
+    world: &World,
+    assets: &AssetStorage,
+) -> Result<()> {
+    let procedural_primitives = crate::hooks::gpu_primitive::collect_all(world);
+    let mesh_transforms = collect_mesh_transforms(world, assets);
+    gpu.raytracing.build_acceleration_structures(
+        gpu.instance,
+        gpu.device,
+        gpu.command_pool,
+        &gpu.graphics.meshes,
+        &mesh_transforms,
+        &procedural_primitives,
+    )?;
+    gpu.raytracing.bind_ray_query_tlas(gpu.device)
 }
 
 fn apply_instance_transform(blas: &mut RRBLAS, model: &Mat4) -> bool {

@@ -48,9 +48,6 @@ pub enum SceneLoadCommand {
     LoadModel {
         path: String,
     },
-    LoadModelAdditive {
-        path: String,
-    },
     #[cfg(feature = "auto-rig")]
     LoadModelFromMemory {
         glb_data: Vec<u8>,

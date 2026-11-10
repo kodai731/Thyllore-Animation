@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
-use crate::vulkanr::context::{CommandState, SwapchainState};
+use crate::vulkanr::context::CommandState;
 use anyhow::Result;
 use glam::Vec3;
 
@@ -16,11 +16,6 @@ impl App {
         position: Vec3,
     ) -> Result<()> {
         log!("Spawning debug primitive: {:?}", kind);
-        self.rrdevice.wait_idle()?;
-
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-
         let (load_result, part_name) = match kind {
             DebugPrimitiveKind::Cube => (
                 thyllore_importer_core::primitive::build_cube_model(1.0),
@@ -40,18 +35,16 @@ impl App {
                 "Floor",
             ),
         };
-        let parent_entity = crate::app::model::append_model_to_scene(
-            &load_result,
-            part_name,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
-        )?;
+        let parent_entity = self.rebuild_scene(|gpu, swapchain, world, assets| {
+            crate::ecs::systems::model_load_systems::append_model_to_scene(
+                &load_result,
+                part_name,
+                gpu,
+                swapchain,
+                world,
+                assets,
+            )
+        })?;
 
         self.data.ecs_world.insert_component(
             parent_entity,
@@ -123,23 +116,10 @@ impl App {
         }
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        let procedural_primitives =
-            crate::app::raytracing::scene_build::collect_procedural_primitives(
-                &self.data.ecs_world,
-            );
-        let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
-            &self.data.ecs_world,
-            &self.data.ecs_assets,
-        );
-        crate::app::raytracing::scene_build::rebuild_acceleration_structures(
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &procedural_primitives,
-            &mesh_transforms,
-        )?;
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
+        crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
         log!("Deleted {} entities with GPU cleanup", entities.len());
         Ok(())

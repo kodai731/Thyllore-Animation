@@ -298,8 +298,9 @@ file describes a contract only; it never names a concrete effect. `startup.rs` h
 `run: fn(&mut World)`) and the `startup_resource!(T, Phase)` macro (inserts `T::default()` if absent) and
 `startup_hook!("Name", Phase, fn)` macro: a resource that needs a default value is inserted by writing
 `startup_resource!(T, Editor)` next to its definition (an effect's settings and UI state in
-`src/ecs/resource/<effect>/`), and `App::create` in `src/app/init/instance.rs` calls `run_startup_phase`
-per phase in name order without naming a type; feature-gated resources register with `#[cfg(feature)]` in
+`src/ecs/resource/<effect>/`), and `App::create` in `src/app/init/instance.rs` collects `StartupHooks` once
+(a name registered twice fails startup) and calls `run_phase` exactly once per phase, in name order, without
+naming a type; feature-gated resources register with `#[cfg(feature)]` in
 their own file.
 
 ## Hook or command?
@@ -523,7 +524,7 @@ the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient life
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `scene_rebuild.rs` (`App::rebuild_scene`: the one
 place that waits idle, fetches the command pool and swapchain, splits `AppData` with `scene_parts` and
 runs a scene rebuild closure such as `src/ecs/systems/model_load_systems/`; every `World` resource the
-load touches is inserted once in `init/instance.rs`, never lazily during a load), `render_context.rs`, `post_process/`,
+load touches is inserted once at startup by a `startup_resource!` / `startup_hook!` registration or by `src/app/init/`, never lazily during a load), `render_context.rs`, `post_process/`,
 `features/` (see below), `color_test_quad.rs`. Model loading itself (`replace.rs` scene model
 replacement and additive part load, `keep_scene.rs` the two entry points, which keep the scene's own entities
 and scheduled clips across the replacement and rebuild the acceleration structures once, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /

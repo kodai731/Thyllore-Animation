@@ -252,7 +252,7 @@ impl App {
                 &mut backend,
                 thyllore_render_core::BufferMemoryType::DeviceLocal,
             )
-            .expect("Failed to create gizmo buffers");
+            .context("Failed to create gizmo buffers")?;
         }
 
         let light_position = data.ecs_world.resource::<LightState>().light_position;
@@ -269,7 +269,7 @@ impl App {
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers_for_every_slot(&mut light_gizmo_data.mesh, &mut backend)
-                .expect("Failed to create light gizmo buffers");
+                .context("Failed to create light gizmo buffers")?;
         }
 
         Self::setup_bone_gizmo_resources(pipeline_ids, data);

@@ -2,7 +2,7 @@
 paths:
   - "src/ecs/systems/model_load_systems/**"
   - "src/app/scene_rebuild.rs"
-  - "src/app/init/instance.rs"
+  - "src/app/init/startup_scene.rs"
   - "crates/thyllore-importer-core/**"
 ---
 
@@ -22,7 +22,7 @@ paths:
   (`classify_imported_animation`). Whether the selected clip is the user's own is a `ClipLibrary` method
   (`is_user_clip_selected`, `src/ecs/resource/editor/clip_library.rs`).
 - The startup model comes from the scene file: `--batch-scene <path>` or `assets/scenes/default.scene.ron`
-  (`determine_startup_model` in `src/app/init/instance.rs`). There is no hard-coded model path; to change the
+  (`determine_startup_model` in `src/app/init/startup_scene.rs`). There is no hard-coded model path; to change the
   default model, edit the scene file, not the code.
 - Sample models live under `assets/models/<name>/`; textures are resolved relative to the model file
   (`thyllore-importer-core` `texture/search.rs`, `texture/resolve.rs`).

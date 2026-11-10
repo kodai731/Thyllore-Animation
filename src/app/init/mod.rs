@@ -7,4 +7,3 @@ pub mod raytracing;
 mod startup_scene;
 
 pub use instance::*;
-pub use startup_scene::cleanup_old_screenshots;

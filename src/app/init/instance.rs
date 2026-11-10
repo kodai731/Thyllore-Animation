@@ -4,7 +4,7 @@ use super::graphics::VulkanResources;
 use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::systems::create_default_grid_scale;
 use crate::ecs::PipelineManager;
-use crate::hooks::startup::{run_startup_phase, StartupPhase};
+use crate::hooks::startup::{StartupHooks, StartupPhase};
 use crate::vulkanr::command::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::pipeline::{CullFace, FillMode, RRPipeline, Topology};
@@ -30,7 +30,8 @@ impl App {
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
         data.effect_hooks.register_passes(&mut data.pass_graph);
 
-        Self::initialize_core_ecs_resources(&mut data)?;
+        let startup_hooks = StartupHooks::collect()?;
+        Self::initialize_core_ecs_resources(&mut data, &startup_hooks)?;
 
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
@@ -107,10 +108,9 @@ impl App {
 
         let (model_path, loaded_scene) = Self::determine_startup_model();
 
-        // The scene restores timeline, panel, curve editor and post-processing state, so those
-        // resources must exist before it is applied. Registration is idempotent and runs again below.
-        Self::register_editor_resources(&mut data);
-        Self::register_post_processing_resources(&mut data);
+        // The scene restores timeline, panel, curve editor and post-processing state onto existing resources.
+        startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::Editor);
+        startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::PostProcessing);
         Self::apply_loaded_scene(&mut data, loaded_scene)?;
         data.raytracing.set_command_pool(&rrcommand_pool);
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
@@ -164,12 +164,13 @@ impl App {
             in_flight_fences,
         };
 
-        Self::register_resources(
+        Self::register_vulkan_resources(
             &mut data,
             &vulkan_resources,
             &model_path,
             rrdevice.msaa_samples(),
         );
+        startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::Ml);
 
         let grid_scale = create_default_grid_scale();
         data.ecs_world.insert_resource(grid_mesh_data);
@@ -197,8 +198,11 @@ impl App {
         })
     }
 
-    fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
-        run_startup_phase(&mut data.ecs_world, StartupPhase::CoreResources);
+    fn initialize_core_ecs_resources(
+        data: &mut AppData,
+        startup_hooks: &StartupHooks,
+    ) -> Result<()> {
+        startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::CoreResources);
         data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world
@@ -217,25 +221,5 @@ impl App {
         ui_windows.init_window_state(&mut data.ecs_world);
         data.ecs_world.insert_resource(ui_windows);
         Ok(())
-    }
-
-    fn register_resources(
-        data: &mut AppData,
-        resources: &VulkanResources,
-        model_path: &str,
-        msaa_samples: thyllore_vulkan_core::pipeline::SampleCount,
-    ) {
-        Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
-        Self::register_editor_resources(data);
-        Self::register_post_processing_resources(data);
-        run_startup_phase(&mut data.ecs_world, StartupPhase::Ml);
-    }
-
-    fn register_editor_resources(data: &mut AppData) {
-        run_startup_phase(&mut data.ecs_world, StartupPhase::Editor);
-    }
-
-    fn register_post_processing_resources(data: &mut AppData) {
-        run_startup_phase(&mut data.ecs_world, StartupPhase::PostProcessing);
     }
 }

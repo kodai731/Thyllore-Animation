@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::animation::editable::EditableAnimationClip;
 use crate::app::{App, AppData};
@@ -10,44 +10,9 @@ use crate::scene::{find_default_scene, load_scene, LoadedScene};
 
 use anyhow::Result;
 
-const SCREENSHOT_FILE_PREFIX: &str = "screenshot_";
 const BATCH_SCENE_FLAG: &str = "--batch-scene";
 
 type StartupScene = (PathBuf, LoadedScene, Vec<EditableAnimationClip>);
-
-pub fn cleanup_old_screenshots() -> Result<()> {
-    let log_dir = PathBuf::from("log");
-    if !log_dir.exists() {
-        return Ok(());
-    }
-
-    let mut deleted_count = 0;
-    for entry in std::fs::read_dir(&log_dir)? {
-        let path = entry?.path();
-        if !is_screenshot_file(&path) {
-            continue;
-        }
-
-        std::fs::remove_file(&path)?;
-        deleted_count += 1;
-        log!("Deleted old screenshot: {}", path.display());
-    }
-
-    if deleted_count > 0 {
-        log!("Cleaned up {} old screenshot(s)", deleted_count);
-    }
-
-    Ok(())
-}
-
-fn is_screenshot_file(path: &Path) -> bool {
-    let has_screenshot_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with(SCREENSHOT_FILE_PREFIX));
-
-    has_screenshot_name && path.is_file()
-}
 
 impl App {
     pub(super) fn apply_loaded_scene(

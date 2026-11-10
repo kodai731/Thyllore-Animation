@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
 use crate::animation::BoneId;
-use crate::ecs::world::{Entity, World};
+use crate::ecs::world::Entity;
 
 pub use thyllore_anim_core::editable::SnapSettings;
 
@@ -112,13 +112,7 @@ pub struct TimelineState {
     pub schedule_extent_seconds: f32,
 }
 
-crate::startup_hook!("TimelineState", Editor, insert_timeline_state_if_missing);
-
-fn insert_timeline_state_if_missing(world: &mut World) {
-    if !world.contains_resource::<TimelineState>() {
-        world.insert_resource(TimelineState::new());
-    }
-}
+crate::startup_resource!(TimelineState, Editor);
 
 impl TimelineState {
     pub fn new() -> Self {

@@ -275,11 +275,6 @@ impl App {
         Self::setup_bone_gizmo_resources(pipeline_ids, data);
         Self::setup_transform_gizmo_resources(pipeline_ids, data);
 
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::PointerState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::PointerCapture::default());
-
         let billboard_data = Self::initialize_billboard(
             instance,
             rrdevice,
@@ -326,10 +321,6 @@ impl App {
 
         bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
         data.ecs_world.insert_resource(bone_gizmo_data);
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::gizmo::BoneSelectionState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::WeightHeatmapState::default());
 
         let mut constraint_gizmo_data = ConstraintGizmoData::default();
         constraint_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
@@ -343,18 +334,6 @@ impl App {
         spring_bone_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(spring_bone_gizmo_data);
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneInspectorState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::BlendShapeInspectorState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::MorphTrackPlayback::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::ExpressionLibraryState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::AvatarSetupState::default());
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::MaterialTextureState::default());
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
@@ -364,8 +343,6 @@ impl App {
         tg.solid_render_info.pipeline_id = Some(pipeline_ids.bone_solid);
         tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(tg);
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::TransformGizmoState::default());
     }
 
     unsafe fn initialize_billboard(

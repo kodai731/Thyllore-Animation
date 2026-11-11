@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn test_mergeable_updates_after_only() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("original");
         let mid = make_dummy_clip("mid");
         let final_state = make_dummy_clip("final");
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_mergeable_different_description_creates_new_entry() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let a = make_dummy_clip("a");
         let b = make_dummy_clip("b");
         let c = make_dummy_clip("c");

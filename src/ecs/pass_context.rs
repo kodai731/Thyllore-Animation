@@ -32,6 +32,7 @@ pub struct PassContext<'a> {
     pub onion_skin_gpu: Option<&'a OnionSkinGpuState>,
     pub world: &'a World,
     pub assets: &'a AssetStorage,
+    pub frame_slot: usize,
 }
 
 impl<'a> PassContext<'a> {
@@ -42,6 +43,7 @@ impl<'a> PassContext<'a> {
             buffers: self.buffers,
             pipelines: self.pipelines,
             image_index,
+            frame_slot: self.frame_slot,
         }
     }
 

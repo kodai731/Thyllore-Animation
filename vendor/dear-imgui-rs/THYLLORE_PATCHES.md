@@ -8,3 +8,6 @@ Re-apply when updating the vendored crate.
   `no_inputs`, `no_nav`.
 - `src/window/child_window.rs`: `ChildWindow::scroll_bar` and `horizontal_scrollbar`.
 - `src/io/events.rs`: `Io::input_queue_characters` (characters queued since the last frame).
+- `../dear-imgui-sys/build.rs`: the MSVC branch no longer forces `opt_level(0)` in debug; the C++
+  optimization level comes from Cargo's `OPT_LEVEL` so `[profile.dev.package.dear-imgui-sys]` in the
+  root `Cargo.toml` applies on every platform.

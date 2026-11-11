@@ -1,9 +1,9 @@
-use cgmath::{Deg, InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_scene_core::declare_scene_format;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CameraPose {
-    pub pivot: Vector3<f32>,
+    pub pivot: Vec3,
     pub yaw: f32,
     pub pitch: f32,
     pub distance: f32,
@@ -19,14 +19,14 @@ pub struct CameraTransition {
 
 #[derive(Clone, Debug)]
 pub struct Camera {
-    pub pivot: Vector3<f32>,
+    pub pivot: Vec3,
     pub yaw: f32,
     pub pitch: f32,
     pub distance: f32,
-    pub fov_y: Deg<f32>,
+    pub fov_y: f32,
     pub near_plane: f32,
 
-    pub initial_pivot: Vector3<f32>,
+    pub initial_pivot: Vec3,
     pub initial_yaw: f32,
     pub initial_pitch: f32,
     pub initial_distance: f32,
@@ -58,10 +58,10 @@ impl Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let initial_pos = Vector3::new(5.0_f32, 5.0, 5.0);
-        let pivot = Vector3::new(0.0_f32, 0.0, 0.0);
+        let initial_pos = Vec3::new(5.0_f32, 5.0, 5.0);
+        let pivot = Vec3::new(0.0_f32, 0.0, 0.0);
         let diff = initial_pos - pivot;
-        let distance: f32 = diff.magnitude();
+        let distance: f32 = diff.length();
         let yaw: f32 = diff.x.atan2(diff.z);
         let pitch: f32 = (diff.y / distance).asin();
 
@@ -70,7 +70,7 @@ impl Default for Camera {
             yaw,
             pitch,
             distance,
-            fov_y: Deg(45.0),
+            fov_y: f32::to_radians(45.0),
             near_plane: crate::ecs::systems::camera_systems::near_plane_for_distance(distance),
             initial_pivot: pivot,
             initial_yaw: yaw,
@@ -97,7 +97,7 @@ declare_scene_format! {
         pivot: [f32; 3] {
             get: |c| [c.pivot.x, c.pivot.y, c.pivot.z],
             set: |c, v| {
-                c.pivot = Vector3::new(v[0], v[1], v[2]);
+                c.pivot = Vec3::new(v[0], v[1], v[2]);
                 c.initial_pivot = c.pivot;
             },
         },
@@ -122,10 +122,12 @@ declare_scene_format! {
                 c.initial_distance = v;
             },
         },
-        fov_y: f32 { get: |c| c.fov_y.0, set: |c, v| c.fov_y = Deg(v) },
+        fov_y: f32 { get: |c| c.fov_y.to_degrees(), set: |c, v| c.fov_y = f32::to_radians(v) },
         fly_speed_scale: f32 { get: |c| c.fly_speed_scale, set: |c, v| c.fly_speed_scale = v },
     },
     runtime {},
 }
 
 crate::scene_resource!(Camera);
+
+crate::startup_resource!(Camera, CoreResources);

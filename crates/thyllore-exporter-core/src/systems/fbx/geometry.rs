@@ -88,6 +88,7 @@ pub(crate) fn encode_triangle_polygon_indices(indices: &[u32]) -> Vec<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::Vec3;
 
     #[test]
     fn test_encode_triangle_polygon_indices() {
@@ -115,7 +116,7 @@ mod tests {
     #[test]
     fn test_convert_positions_to_fbx_no_scale() {
         let mut fbx_data = FbxData::new();
-        fbx_data.positions = vec![cgmath::Vector3::new(0.01, 0.02, 0.03)];
+        fbx_data.positions = vec![Vec3::new(0.01, 0.02, 0.03)];
         fbx_data.local_positions = vec![];
 
         let positions = convert_positions_to_fbx(&fbx_data, 1.0);

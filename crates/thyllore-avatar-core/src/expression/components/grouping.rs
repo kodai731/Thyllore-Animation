@@ -29,3 +29,10 @@ impl Default for ExpressionGrouping {
         toml::from_str(GROUPING_TOML).expect("expression_grouping.toml is valid TOML")
     }
 }
+
+impl ExpressionGrouping {
+    pub fn shared() -> &'static ExpressionGrouping {
+        static SHARED: std::sync::OnceLock<ExpressionGrouping> = std::sync::OnceLock::new();
+        SHARED.get_or_init(ExpressionGrouping::default)
+    }
+}

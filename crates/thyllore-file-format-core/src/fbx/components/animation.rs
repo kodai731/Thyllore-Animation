@@ -1,4 +1,4 @@
-use cgmath::Quaternion;
+use glam::Quat;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -12,7 +12,7 @@ pub struct FbxAnimation {
 pub struct BoneAnimation {
     pub bone_name: String,
     pub translation_keys: Vec<KeyFrame<[f32; 3]>>,
-    pub rotation_keys: Vec<KeyFrame<Quaternion<f32>>>,
+    pub rotation_keys: Vec<KeyFrame<Quat>>,
     pub scale_keys: Vec<KeyFrame<[f32; 3]>>,
 }
 

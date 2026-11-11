@@ -1,4 +1,4 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FlameUIState {
     pub texture_fit_path: String,
     pub texture_fit_blend: f32,
@@ -44,3 +44,5 @@ impl Default for FlameUIState {
         }
     }
 }
+
+crate::startup_resource!(FlameUIState, PostProcessing);

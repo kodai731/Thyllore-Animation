@@ -1,10 +1,11 @@
 use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
-use crate::ecs::resource::{HierarchyState, WindRenderSettings};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_WIND_NAME: &str = "Wind";
 
@@ -24,7 +25,7 @@ fn wind_entities(world: &World) -> Vec<Entity> {
 
 fn spawn_wind_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
     let effect = WindTornadoEffect {
-        position: cgmath::Vector3::new(-2.5 * ordinal as f32, 0.0, 0.0),
+        position: Vec3::new(-2.5 * ordinal as f32, 0.0, 0.0),
         ..WindTornadoEffect::default()
     };
     spawn_wind_with_clip(
@@ -70,11 +71,3 @@ pub fn resolve_selected_wind(world: &World) -> Option<Entity> {
 
     world.entities_with::<WindTornadoEffect>().first().copied()
 }
-
-fn insert_wind_default_resources(world: &mut World) {
-    if !world.contains_resource::<WindRenderSettings>() {
-        world.insert_resource(WindRenderSettings::default());
-    }
-}
-
-crate::effect_default_resource!("wind", insert_wind_default_resources);

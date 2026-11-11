@@ -1,6 +1,7 @@
+use glam::Vec3;
 #[derive(Clone, Debug)]
 pub struct MotionPath {
-    pub center: cgmath::Vector3<f32>,
+    pub center: Vec3,
     pub radius: f32,
     pub angular_speed: f32,
     pub phase_offset: f32,
@@ -10,7 +11,7 @@ pub struct MotionPath {
 impl Default for MotionPath {
     fn default() -> Self {
         Self {
-            center: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            center: Vec3::new(0.0, 0.0, 0.0),
             radius: 0.0,
             angular_speed: 0.0,
             phase_offset: 0.0,
@@ -22,11 +23,11 @@ impl Default for MotionPath {
 /// Compute the XZ-plane circular position for a given time.
 ///
 /// `center + (cos(phase_offset + angular_speed * time) * radius, 0, sin(...) * radius)`
-pub fn motion_path_position(path: &MotionPath, time: f32) -> cgmath::Vector3<f32> {
+pub fn motion_path_position(path: &MotionPath, time: f32) -> Vec3 {
     let angle = path.phase_offset + path.angular_speed * time;
     let x = path.center.x + angle.cos() * path.radius;
     let z = path.center.z + angle.sin() * path.radius;
-    cgmath::Vector3::new(x, path.center.y, z)
+    Vec3::new(x, path.center.y, z)
 }
 
 #[cfg(test)]
@@ -38,7 +39,7 @@ mod tests {
     fn test_periodicity_and_radius() {
         let omega = 1.0;
         let path = MotionPath {
-            center: cgmath::Vector3::new(0.0, 5.0, 0.0),
+            center: Vec3::new(0.0, 5.0, 0.0),
             radius: 2.0,
             angular_speed: omega,
             phase_offset: 0.0,

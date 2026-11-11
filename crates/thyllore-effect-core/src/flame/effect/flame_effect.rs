@@ -1,13 +1,13 @@
 use crate::flame::*;
-use cgmath::{Matrix4, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[scene(key = "flame", tag = ParameterOwner, owner = Frame, tags = PARAMETER_OWNERSHIP, snapshot = flame_parameter_snapshot, scalars = FLAME_SCALAR_PARAMS, ui = FLAME_UI_PARAMS, overwrite = overwrite_persisted_fields)]
 pub struct FlameEffect {
     #[persist(as = [f32; 3])]
-    pub position: Vector3<f32>,
+    pub position: Vec3,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
-    pub rotation: Quaternion<f32>,
+    pub rotation: Quat,
     #[persist(curve, debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
     #[persist(curve, debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
@@ -72,14 +72,14 @@ pub struct FlameEffect {
     #[nested]
     pub branch: FlameBranch,
     pub coefficients: FlameCoefficients,
-    pub light_position_world: Vector3<f32>,
+    pub light_position_world: Vec3,
 }
 
 impl Default for FlameEffect {
     fn default() -> Self {
         let mut effect = Self {
-            position: Vector3::new(0.0, 0.0, 0.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            position: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             height: 1.6,
             radius: 0.6,
             sigma_t: 1.0,
@@ -89,7 +89,7 @@ impl Default for FlameEffect {
             time_scale: 1.0,
             time_offset: 0.0,
             coefficients: FlameCoefficients::default(),
-            light_position_world: Vector3::new(2.0, 3.0, 2.0),
+            light_position_world: Vec3::new(2.0, 3.0, 2.0),
             self_shadow_strength: 0.5,
             radial_sharpness: 4.0,
             spread_gain: 0.0,
@@ -139,20 +139,20 @@ pub fn wave_segment_count(effect: &FlameEffect) -> u32 {
         .clamp(WAVE_SEGMENTS_MIN, WAVE_SEGMENTS_MAX)
 }
 
-pub fn build_flame_model_matrix(effect: &FlameEffect) -> Matrix4<f32> {
+pub fn build_flame_model_matrix(effect: &FlameEffect) -> Mat4 {
     let radius = flame_bounding_radius(effect).max(MIN_FLAME_EXTENT);
     let height = effect.height.max(MIN_FLAME_EXTENT);
-    Matrix4::from_translation(effect.position)
-        * Matrix4::from(effect.rotation)
-        * Matrix4::from_nonuniform_scale(radius, height, radius)
+    Mat4::from_translation(effect.position)
+        * Mat4::from_quat(effect.rotation)
+        * Mat4::from_scale(Vec3::new(radius, height, radius))
 }
 
-pub fn build_flame_inverse_model_matrix(effect: &FlameEffect) -> Matrix4<f32> {
+pub fn build_flame_inverse_model_matrix(effect: &FlameEffect) -> Mat4 {
     let radius = flame_bounding_radius(effect).max(MIN_FLAME_EXTENT);
     let height = effect.height.max(MIN_FLAME_EXTENT);
-    Matrix4::from_nonuniform_scale(1.0 / radius, 1.0 / height, 1.0 / radius)
-        * Matrix4::from(effect.rotation.conjugate())
-        * Matrix4::from_translation(-effect.position)
+    Mat4::from_scale(Vec3::new(1.0 / radius, 1.0 / height, 1.0 / radius))
+        * Mat4::from_quat(effect.rotation.conjugate())
+        * Mat4::from_translation(-effect.position)
 }
 
 impl crate::EffectPresets for FlameEffect {
@@ -166,7 +166,7 @@ impl crate::EffectPresets for FlameEffect {
 impl crate::Placement for FlameEffect {
     fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
         self.time = time;
-        self.position = Vector3::from(position);
+        self.position = Vec3::from(position);
         crate::scene_convert::quaternion_wxyz::set(&mut self.rotation, rotation);
     }
 }

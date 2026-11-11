@@ -1,18 +1,16 @@
-use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
-
 use crate::ecs::resource::FlameGpuState;
+use crate::ecs::systems::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
+use anyhow::Result;
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::HistoryTargets;
-
-use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
+use thyllore_vulkan_core::types::{ImageView, Instance, Sampler};
 
 /// Blends the shading onto the HDR color and writes the unblended result into the history image.
 pub const FLAME_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
@@ -28,9 +26,9 @@ pub unsafe fn create_flame_pipeline(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     flame_history: &HistoryTargets,
-    position_image_view: vk::ImageView,
-    position_sampler: vk::Sampler,
-    scene_depth_view: vk::ImageView,
+    position_image_view: ImageView,
+    position_sampler: Sampler,
+    scene_depth_view: ImageView,
 ) -> Result<FlameGpuState> {
     let flame_ubo = UniformBuffer::new(
         instance,
@@ -45,8 +43,8 @@ pub unsafe fn create_flame_pipeline(
         rrdevice,
         &flame_ubo,
         FlameImageBindings {
-            history_image_views: flame_history.views,
-            flame_sampler: flame_history.sampler,
+            history_image_views: flame_history.views(),
+            flame_sampler: flame_history.sampler(),
             sdf_image_view: position_image_view,
             sdf_sampler: position_sampler,
             scene_depth_view,
@@ -56,7 +54,7 @@ pub unsafe fn create_flame_pipeline(
     let flame_shading_pipeline = FLAME_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        flame_history.render_pass,
+        flame_history.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &flame_descriptor.layout,

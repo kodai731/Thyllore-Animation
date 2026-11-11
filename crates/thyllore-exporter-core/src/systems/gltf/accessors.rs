@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::Quaternion;
+use glam::Quat;
 use gltf::json::accessor::{ComponentType, GenericComponentType, Type};
 use gltf::json::validation::{Checked, USize64};
 use gltf::json::{self, Index};
@@ -160,8 +160,8 @@ pub(crate) fn build_bone_to_node_map(
     map
 }
 
-pub(crate) fn quaternion_to_gltf_array(q: Quaternion<f32>) -> [f32; 4] {
-    [q.v.x, q.v.y, q.v.z, q.s]
+pub(crate) fn quaternion_to_gltf_array(q: Quat) -> [f32; 4] {
+    [q.x, q.y, q.z, q.w]
 }
 
 pub(crate) fn compute_min_max_scalar(data: &[f32]) -> (f32, f32) {
@@ -201,7 +201,7 @@ pub(crate) fn compute_min_max_vec4(data: &[f32]) -> ([f32; 4], [f32; 4]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Quaternion;
+    use glam::Quat;
     use thyllore_anim_core::Skeleton;
 
     fn create_test_skeleton() -> Skeleton {
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_quaternion_to_gltf_array() {
-        let q = Quaternion::new(1.0, 0.2, 0.3, 0.4);
+        let q = Quat::from_xyzw(0.2, 0.3, 0.4, 1.0);
         let arr = quaternion_to_gltf_array(q);
 
         assert_eq!(arr[0], 0.2);
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_quaternion_identity() {
-        let q = Quaternion::new(1.0, 0.0, 0.0, 0.0);
+        let q = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0);
         let arr = quaternion_to_gltf_array(q);
 
         assert_eq!(arr, [0.0, 0.0, 0.0, 1.0]);

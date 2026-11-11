@@ -9,4 +9,4 @@ repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
-cgmath = "0.18"
+glam = "0.34"

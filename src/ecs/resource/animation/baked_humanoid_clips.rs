@@ -14,6 +14,8 @@ pub struct BakedHumanoidClips {
     pub last_view: Option<(Option<SourceClipId>, ClipPreview, u32)>,
 }
 
+crate::startup_resource!(BakedHumanoidClips, Editor);
+
 pub struct BakedHumanoidClip {
     pub fps: u32,
     pub asset_id: AssetId,

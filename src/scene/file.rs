@@ -78,6 +78,10 @@ impl ModelReference {
     pub fn is_generated_mesh(&self) -> bool {
         self.path == Self::GENERATED_MESH
     }
+
+    pub fn names_file(&self) -> bool {
+        !self.path.is_empty() && !self.is_generated_mesh()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

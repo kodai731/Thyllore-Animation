@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3, Vector4};
+use glam::{Quat, Vec3, Vec4};
 
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
@@ -18,7 +18,7 @@ pub struct MeshInspectorData {
 #[derive(Clone, Debug)]
 pub struct MaterialInspectorData {
     pub name: String,
-    pub base_color: Vector4<f32>,
+    pub base_color: Vec4,
     pub metallic: f32,
     pub roughness: f32,
 }
@@ -27,9 +27,9 @@ pub struct MaterialInspectorData {
 pub struct InspectorData {
     pub entity: Entity,
     pub name: String,
-    pub translation: Option<Vector3<f32>>,
-    pub rotation_euler: Option<Vector3<f32>>,
-    pub scale: Option<Vector3<f32>>,
+    pub translation: Option<Vec3>,
+    pub rotation_euler: Option<Vec3>,
+    pub scale: Option<Vec3>,
     pub visible: Option<bool>,
     pub icon: EntityIcon,
     pub mesh: Option<MeshInspectorData>,
@@ -127,26 +127,26 @@ pub fn resolve_transform_entity(world: &World, entity: Entity) -> Entity {
         .unwrap_or(entity)
 }
 
-pub fn update_entity_translation(world: &mut World, entity: Entity, translation: Vector3<f32>) {
+pub fn update_entity_translation(world: &mut World, entity: Entity, translation: Vec3) {
     let target = resolve_transform_entity(world, entity);
     if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.translation = translation;
     }
 }
 
-pub fn update_entity_rotation(world: &mut World, entity: Entity, rotation: Quaternion<f32>) {
+pub fn update_entity_rotation(world: &mut World, entity: Entity, rotation: Quat) {
     let target = resolve_transform_entity(world, entity);
     if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.rotation = rotation;
     }
 }
 
-pub fn update_entity_rotation_euler(world: &mut World, entity: Entity, euler: Vector3<f32>) {
+pub fn update_entity_rotation_euler(world: &mut World, entity: Entity, euler: Vec3) {
     let rotation = euler_degrees_to_quaternion(&euler);
     update_entity_rotation(world, entity, rotation);
 }
 
-pub fn update_entity_scale(world: &mut World, entity: Entity, scale: Vector3<f32>) {
+pub fn update_entity_scale(world: &mut World, entity: Entity, scale: Vec3) {
     let target = resolve_transform_entity(world, entity);
     if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.scale = scale;

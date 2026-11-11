@@ -7,7 +7,7 @@ use crate::lightning::analytic::hash_channel::HashChannel;
 use crate::lightning::analytic::timing;
 use crate::lightning::effect::LightningSource;
 use crate::LightningEffect;
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::{hash_f32, hash_u32};
 
 pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment> {
@@ -229,21 +229,18 @@ fn strike_start_point(effect: &LightningEffect, seed: u32, strike: u32) -> [f32;
 }
 
 /// Corners of the local axis-aligned box enclosing every rim capsule alive at `t`.
-pub fn compute_lightning_segment_aabb(
-    effect: &LightningEffect,
-    t: f32,
-) -> Option<[Vector3<f32>; 8]> {
-    let mut bounds: Option<(Vector3<f32>, Vector3<f32>)> = None;
+pub fn compute_lightning_segment_aabb(effect: &LightningEffect, t: f32) -> Option<[Vec3; 8]> {
+    let mut bounds: Option<(Vec3, Vec3)> = None;
     for seg in build_lightning_segments(effect, t) {
         let rim_radius = seg.r0.max(seg.r1) * effect.look.rim_ratio;
-        let rim_extent = Vector3::new(rim_radius, rim_radius, rim_radius);
-        for endpoint in [Vector3::from(seg.a), Vector3::from(seg.b)] {
+        let rim_extent = Vec3::new(rim_radius, rim_radius, rim_radius);
+        for endpoint in [Vec3::from(seg.a), Vec3::from(seg.b)] {
             let low = endpoint - rim_extent;
             let high = endpoint + rim_extent;
             bounds = Some(match bounds {
                 Some((min, max)) => (
-                    Vector3::new(min.x.min(low.x), min.y.min(low.y), min.z.min(low.z)),
-                    Vector3::new(max.x.max(high.x), max.y.max(high.y), max.z.max(high.z)),
+                    Vec3::new(min.x.min(low.x), min.y.min(low.y), min.z.min(low.z)),
+                    Vec3::new(max.x.max(high.x), max.y.max(high.y), max.z.max(high.z)),
                 ),
                 None => (low, high),
             });

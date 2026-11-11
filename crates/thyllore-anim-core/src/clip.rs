@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 use std::collections::HashMap;
 
 use crate::{BoneId, Skeleton, SkeletonId};
@@ -51,41 +51,37 @@ impl<T> Keyframe<T> {
 
 #[derive(Clone, Debug, Default)]
 pub struct TransformChannel {
-    pub translation: Vec<Keyframe<Vector3<f32>>>,
-    pub rotation: Vec<Keyframe<Quaternion<f32>>>,
-    pub scale: Vec<Keyframe<Vector3<f32>>>,
+    pub translation: Vec<Keyframe<Vec3>>,
+    pub rotation: Vec<Keyframe<Quat>>,
+    pub scale: Vec<Keyframe<Vec3>>,
 }
 
 impl TransformChannel {
-    pub fn sample_translation(&self, time: f32) -> Option<Vector3<f32>> {
+    pub fn sample_translation(&self, time: f32) -> Option<Vec3> {
         Self::sample_vec3(&self.translation, time, None)
     }
 
-    pub fn sample_translation_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
+    pub fn sample_translation_looped(&self, time: f32, duration: f32) -> Option<Vec3> {
         Self::sample_vec3(&self.translation, time, Some(duration))
     }
 
-    pub fn sample_rotation(&self, time: f32) -> Option<Quaternion<f32>> {
+    pub fn sample_rotation(&self, time: f32) -> Option<Quat> {
         Self::sample_quat(&self.rotation, time, None)
     }
 
-    pub fn sample_rotation_looped(&self, time: f32, duration: f32) -> Option<Quaternion<f32>> {
+    pub fn sample_rotation_looped(&self, time: f32, duration: f32) -> Option<Quat> {
         Self::sample_quat(&self.rotation, time, Some(duration))
     }
 
-    pub fn sample_scale(&self, time: f32) -> Option<Vector3<f32>> {
+    pub fn sample_scale(&self, time: f32) -> Option<Vec3> {
         Self::sample_vec3(&self.scale, time, None)
     }
 
-    pub fn sample_scale_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
+    pub fn sample_scale_looped(&self, time: f32, duration: f32) -> Option<Vec3> {
         Self::sample_vec3(&self.scale, time, Some(duration))
     }
 
-    fn sample_vec3(
-        keyframes: &[Keyframe<Vector3<f32>>],
-        time: f32,
-        duration: Option<f32>,
-    ) -> Option<Vector3<f32>> {
+    fn sample_vec3(keyframes: &[Keyframe<Vec3>], time: f32, duration: Option<f32>) -> Option<Vec3> {
         if keyframes.is_empty() {
             return None;
         }
@@ -129,11 +125,7 @@ impl TransformChannel {
         }
     }
 
-    fn sample_quat(
-        keyframes: &[Keyframe<Quaternion<f32>>],
-        time: f32,
-        duration: Option<f32>,
-    ) -> Option<Quaternion<f32>> {
+    fn sample_quat(keyframes: &[Keyframe<Quat>], time: f32, duration: Option<f32>) -> Option<Quat> {
         if keyframes.is_empty() {
             return None;
         }
@@ -158,7 +150,7 @@ impl TransformChannel {
                     let wrap_duration = dur - last_kf.time + first_kf.time;
                     if wrap_duration > 0.0001 {
                         let t = (time - last_kf.time) / wrap_duration;
-                        return Some(slerp(last_kf.value, first_kf.value, t));
+                        return Some(last_kf.value.slerp(first_kf.value, t));
                     }
                 }
             }
@@ -172,19 +164,19 @@ impl TransformChannel {
 
         match k0.interpolation {
             Interpolation::Step => Some(k0.value),
-            Interpolation::Linear => Some(slerp(k0.value, k1.value, t)),
+            Interpolation::Linear => Some(k0.value.slerp(k1.value, t)),
             Interpolation::CubicSpline => Some(normalize_quat(hermite_quat(k0, k1, t))),
         }
     }
 }
 
-fn hermite_vec3(k0: &Keyframe<Vector3<f32>>, k1: &Keyframe<Vector3<f32>>, t: f32) -> Vector3<f32> {
+fn hermite_vec3(k0: &Keyframe<Vec3>, k1: &Keyframe<Vec3>, t: f32) -> Vec3 {
     let dt = k1.time - k0.time;
     let t2 = t * t;
     let t3 = t2 * t;
 
-    let b0 = k0.out_tangent.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
-    let a1 = k1.in_tangent.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+    let b0 = k0.out_tangent.unwrap_or(Vec3::new(0.0, 0.0, 0.0));
+    let a1 = k1.in_tangent.unwrap_or(Vec3::new(0.0, 0.0, 0.0));
 
     let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
     let h10 = (t3 - 2.0 * t2 + t) * dt;
@@ -194,16 +186,12 @@ fn hermite_vec3(k0: &Keyframe<Vector3<f32>>, k1: &Keyframe<Vector3<f32>>, t: f32
     k0.value * h00 + b0 * h10 + k1.value * h01 + a1 * h11
 }
 
-fn hermite_quat(
-    k0: &Keyframe<Quaternion<f32>>,
-    k1: &Keyframe<Quaternion<f32>>,
-    t: f32,
-) -> Quaternion<f32> {
+fn hermite_quat(k0: &Keyframe<Quat>, k1: &Keyframe<Quat>, t: f32) -> Quat {
     let dt = k1.time - k0.time;
     let t2 = t * t;
     let t3 = t2 * t;
 
-    let zero_q = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+    let zero_q = Quat::from_xyzw(0.0, 0.0, 0.0, 0.0);
     let b0 = k0.out_tangent.unwrap_or(zero_q);
     let a1 = k1.in_tangent.unwrap_or(zero_q);
 
@@ -212,56 +200,20 @@ fn hermite_quat(
     let h01 = -2.0 * t3 + 3.0 * t2;
     let h11 = (t3 - t2) * dt;
 
-    Quaternion::new(
-        k0.value.s * h00 + b0.s * h10 + k1.value.s * h01 + a1.s * h11,
-        k0.value.v.x * h00 + b0.v.x * h10 + k1.value.v.x * h01 + a1.v.x * h11,
-        k0.value.v.y * h00 + b0.v.y * h10 + k1.value.v.y * h01 + a1.v.y * h11,
-        k0.value.v.z * h00 + b0.v.z * h10 + k1.value.v.z * h01 + a1.v.z * h11,
+    Quat::from_xyzw(
+        k0.value.x * h00 + b0.x * h10 + k1.value.x * h01 + a1.x * h11,
+        k0.value.y * h00 + b0.y * h10 + k1.value.y * h01 + a1.y * h11,
+        k0.value.z * h00 + b0.z * h10 + k1.value.z * h01 + a1.z * h11,
+        k0.value.w * h00 + b0.w * h10 + k1.value.w * h01 + a1.w * h11,
     )
 }
 
-pub fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
-    let dot = a.s * b.s + a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
-
-    let (b, dot) = if dot < 0.0 {
-        (Quaternion::new(-b.s, -b.v.x, -b.v.y, -b.v.z), -dot)
+/// Unit quaternion of `q`; the zero quaternion maps to the identity rotation.
+pub fn normalize_quat(q: Quat) -> Quat {
+    if q.length_squared() > 0.0 {
+        q.normalize()
     } else {
-        (b, dot)
-    };
-
-    let dot = dot.clamp(-1.0, 1.0);
-
-    if dot > 0.9995 {
-        let result = Quaternion::new(
-            a.s + t * (b.s - a.s),
-            a.v.x + t * (b.v.x - a.v.x),
-            a.v.y + t * (b.v.y - a.v.y),
-            a.v.z + t * (b.v.z - a.v.z),
-        );
-        return normalize_quat(result);
-    }
-
-    let theta_0 = dot.acos();
-    let sin_theta_0 = theta_0.sin();
-
-    let s0 = ((1.0 - t) * theta_0).sin() / sin_theta_0;
-    let s1 = (t * theta_0).sin() / sin_theta_0;
-
-    let result = Quaternion::new(
-        s0 * a.s + s1 * b.s,
-        s0 * a.v.x + s1 * b.v.x,
-        s0 * a.v.y + s1 * b.v.y,
-        s0 * a.v.z + s1 * b.v.z,
-    );
-    normalize_quat(result)
-}
-
-pub fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
-    let len = (q.s * q.s + q.v.x * q.v.x + q.v.y * q.v.y + q.v.z * q.v.z).sqrt();
-    if len > 0.0 {
-        Quaternion::new(q.s / len, q.v.x / len, q.v.y / len, q.v.z / len)
-    } else {
-        Quaternion::new(1.0, 0.0, 0.0, 0.0)
+        Quat::IDENTITY
     }
 }
 
@@ -306,39 +258,12 @@ pub struct MorphWeightChannel {
     pub keyframes: Vec<Keyframe<f32>>,
 }
 
-pub fn compose_transform(
-    translation: Vector3<f32>,
-    rotation: Quaternion<f32>,
-    scale: Vector3<f32>,
-) -> Matrix4<f32> {
-    let t = Matrix4::from_translation(translation);
-    let r = Matrix4::from(rotation);
-    let s = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
-    t * r * s
+pub fn compose_transform(translation: Vec3, rotation: Quat, scale: Vec3) -> Mat4 {
+    Mat4::from_scale_rotation_translation(scale, rotation, translation)
 }
 
-pub fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
-    let translation = Vector3::new(m[3][0], m[3][1], m[3][2]);
-
-    let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
-    let sy = (m[1][0] * m[1][0] + m[1][1] * m[1][1] + m[1][2] * m[1][2]).sqrt();
-    let sz = (m[2][0] * m[2][0] + m[2][1] * m[2][1] + m[2][2] * m[2][2]).sqrt();
-    let scale = Vector3::new(sx, sy, sz);
-
-    let rot_matrix = cgmath::Matrix3::new(
-        m[0][0] / sx.max(0.0001),
-        m[0][1] / sx.max(0.0001),
-        m[0][2] / sx.max(0.0001),
-        m[1][0] / sy.max(0.0001),
-        m[1][1] / sy.max(0.0001),
-        m[1][2] / sy.max(0.0001),
-        m[2][0] / sz.max(0.0001),
-        m[2][1] / sz.max(0.0001),
-        m[2][2] / sz.max(0.0001),
-    );
-    let rotation = Quaternion::from(rot_matrix);
-
-    (translation, rotation, scale)
+pub fn decompose_transform(m: &Mat4) -> (Vec3, Quat, Vec3) {
+    thyllore_math_core::decompose(m)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -384,16 +309,16 @@ mod tests {
     fn make_linear_channel() -> TransformChannel {
         TransformChannel {
             translation: vec![
-                Keyframe::new(0.0, Vector3::new(0.0, 0.0, 0.0)),
-                Keyframe::new(1.0, Vector3::new(10.0, 0.0, 0.0)),
+                Keyframe::new(0.0, Vec3::new(0.0, 0.0, 0.0)),
+                Keyframe::new(1.0, Vec3::new(10.0, 0.0, 0.0)),
             ],
             rotation: vec![
-                Keyframe::new(0.0, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
-                Keyframe::new(1.0, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+                Keyframe::new(0.0, Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)),
+                Keyframe::new(1.0, Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)),
             ],
             scale: vec![
-                Keyframe::new(0.0, Vector3::new(1.0, 1.0, 1.0)),
-                Keyframe::new(1.0, Vector3::new(2.0, 2.0, 2.0)),
+                Keyframe::new(0.0, Vec3::new(1.0, 1.0, 1.0)),
+                Keyframe::new(1.0, Vec3::new(2.0, 2.0, 2.0)),
             ],
         }
     }
@@ -418,12 +343,8 @@ mod tests {
     fn test_step_interpolation() {
         let ch = TransformChannel {
             translation: vec![
-                Keyframe::with_interpolation(0.0, Vector3::new(0.0, 0.0, 0.0), Interpolation::Step),
-                Keyframe::with_interpolation(
-                    1.0,
-                    Vector3::new(10.0, 0.0, 0.0),
-                    Interpolation::Step,
-                ),
+                Keyframe::with_interpolation(0.0, Vec3::new(0.0, 0.0, 0.0), Interpolation::Step),
+                Keyframe::with_interpolation(1.0, Vec3::new(10.0, 0.0, 0.0), Interpolation::Step),
             ],
             ..Default::default()
         };
@@ -438,17 +359,17 @@ mod tests {
     fn test_hermite_vec3_at_endpoints() {
         let k0 = Keyframe {
             time: 0.0,
-            value: Vector3::new(0.0, 0.0, 0.0),
+            value: Vec3::new(0.0, 0.0, 0.0),
             interpolation: Interpolation::CubicSpline,
-            in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
-            out_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+            in_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
+            out_tangent: Some(Vec3::new(1.0, 0.0, 0.0)),
         };
         let k1 = Keyframe {
             time: 1.0,
-            value: Vector3::new(1.0, 0.0, 0.0),
+            value: Vec3::new(1.0, 0.0, 0.0),
             interpolation: Interpolation::CubicSpline,
-            in_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
-            out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+            in_tangent: Some(Vec3::new(1.0, 0.0, 0.0)),
+            out_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
         };
 
         let v0 = hermite_vec3(&k0, &k1, 0.0);
@@ -462,17 +383,17 @@ mod tests {
     fn test_hermite_vec3_midpoint() {
         let k0 = Keyframe {
             time: 0.0,
-            value: Vector3::new(0.0, 0.0, 0.0),
+            value: Vec3::new(0.0, 0.0, 0.0),
             interpolation: Interpolation::CubicSpline,
-            in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
-            out_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+            in_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
+            out_tangent: Some(Vec3::new(1.0, 0.0, 0.0)),
         };
         let k1 = Keyframe {
             time: 1.0,
-            value: Vector3::new(1.0, 0.0, 0.0),
+            value: Vec3::new(1.0, 0.0, 0.0),
             interpolation: Interpolation::CubicSpline,
-            in_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
-            out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+            in_tangent: Some(Vec3::new(1.0, 0.0, 0.0)),
+            out_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
         };
 
         let mid = hermite_vec3(&k0, &k1, 0.5);
@@ -489,17 +410,17 @@ mod tests {
             translation: vec![
                 Keyframe {
                     time: 0.0,
-                    value: Vector3::new(0.0, 0.0, 0.0),
+                    value: Vec3::new(0.0, 0.0, 0.0),
                     interpolation: Interpolation::CubicSpline,
-                    in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
-                    out_tangent: Some(Vector3::new(3.0, 0.0, 0.0)),
+                    in_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
+                    out_tangent: Some(Vec3::new(3.0, 0.0, 0.0)),
                 },
                 Keyframe {
                     time: 1.0,
-                    value: Vector3::new(3.0, 0.0, 0.0),
+                    value: Vec3::new(3.0, 0.0, 0.0),
                     interpolation: Interpolation::CubicSpline,
-                    in_tangent: Some(Vector3::new(3.0, 0.0, 0.0)),
-                    out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+                    in_tangent: Some(Vec3::new(3.0, 0.0, 0.0)),
+                    out_tangent: Some(Vec3::new(0.0, 0.0, 0.0)),
                 },
             ],
             ..Default::default()

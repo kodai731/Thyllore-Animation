@@ -1,0 +1,204 @@
+use std::collections::HashMap;
+
+use glam::{Mat3, Mat4, Quat};
+use thyllore_anim_core::editable::{
+    clip_remap_bone_ids, AnimationClipFile, EditableAnimationClip, ANIMATION_FORMAT_VERSION,
+};
+use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
+use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
+use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
+use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
+use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
+use thyllore_avatar_core::motion::systems::bake::bake_humanoid_clip;
+use thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context;
+use thyllore_model_core::BoneId;
+
+use crate::avatar_setup_bridge::BoneSpec;
+use crate::blender_space::{
+    bone_local_offset, engine_frame_rotation, parent_relative_locals, rows, MatrixRows,
+};
+use thyllore_math_core::{axis_lengths, invert};
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct BoneRotationTrack {
+    pub bone: String,
+    /// Parent-relative rotation per frame as (w, x, y, z); a root bone's is its engine model-space rotation.
+    pub rotations: Vec<[f32; 4]>,
+    /// The rotation written over the bone's rest local, one `PoseBone.matrix_basis` per frame.
+    pub bases: Vec<MatrixRows>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct BakedClip {
+    pub name: String,
+    pub fps: u32,
+    pub frame_times: Vec<f32>,
+    pub hips_bone: String,
+    /// Engine model-space offset of the hips in metres, one per frame.
+    pub hips_offsets: Vec<[f32; 3]>,
+    /// The same offsets as the hips bone's `PoseBone.location`, one per frame.
+    pub hips_locations: Vec<[f32; 3]>,
+    pub bone_rotations: Vec<BoneRotationTrack>,
+}
+
+/// `bones` carry `bind_matrix`; `armature_world` and `rest_matrices` (`Bone.matrix_local` per bone)
+/// are the Blender matrices the baked poses are written through.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BakeClipFileRequest {
+    pub bones: Vec<BoneSpec>,
+    pub clip_ron: String,
+    pub fps: u32,
+    pub armature_world: MatrixRows,
+    pub rest_matrices: Vec<MatrixRows>,
+    pub scale_length: f32,
+}
+
+/// Bakes a humanoid standard-space clip file onto the rig the way the engine plays a template:
+/// role-named tracks bind to the inferred humanoid bones, then every frame is retargeted.
+pub fn bake_clip_file(request: &BakeClipFileRequest) -> anyhow::Result<BakedClip> {
+    let rest_locals = parent_relative_locals(
+        Mat4::IDENTITY,
+        &request
+            .bones
+            .iter()
+            .map(|bone| bone.parent)
+            .collect::<Vec<_>>(),
+        &request.rest_matrices,
+    )?;
+    let root_rotation_inverse = engine_frame_rotation(&request.armature_world).inverse();
+    let mut clip = parse_clip(&request.clip_ron)?;
+    let inputs: Vec<BoneInput> = request.bones.iter().cloned().map(Into::into).collect();
+    let (mapping, _) = infer_mapping(&inputs);
+    clip_remap_bone_ids(&mut clip, &track_name_table(&inputs, &mapping));
+
+    let context = retarget_context(&request.bones, &inputs, &mapping)?;
+    let baked = bake_humanoid_clip(&context, &clip, request.fps);
+    let hips_index = *context
+        .mapping
+        .by_role
+        .get(&HumanoidRole::Hips)
+        .ok_or_else(|| anyhow::anyhow!("the rig has no Hips bone"))?;
+
+    let bone_rotations = baked
+        .bone_rotations
+        .iter()
+        .map(|(&index, rotations)| {
+            let bone = &request.bones[index];
+            let in_blender_axes = |q: &Quat| match bone.parent {
+                None => root_rotation_inverse * *q,
+                Some(_) => *q,
+            };
+            Ok(BoneRotationTrack {
+                bone: bone.name.clone(),
+                rotations: rotations.iter().map(|q| [q.w, q.x, q.y, q.z]).collect(),
+                bases: rotations
+                    .iter()
+                    .map(|q| basis_of_rotation(&rest_locals[index], in_blender_axes(q), &bone.name))
+                    .collect::<anyhow::Result<_>>()?,
+            })
+        })
+        .collect::<anyhow::Result<_>>()?;
+    let hips_locations = baked
+        .hips_offsets
+        .iter()
+        .map(|offset| {
+            bone_local_offset(
+                &request.armature_world,
+                &request.rest_matrices[hips_index],
+                *offset,
+                request.scale_length,
+            )
+            .map(Into::into)
+        })
+        .collect::<anyhow::Result<_>>()?;
+
+    Ok(BakedClip {
+        name: clip.name,
+        fps: request.fps,
+        frame_times: baked.frame_times,
+        hips_bone: request.bones[hips_index].name.clone(),
+        hips_offsets: baked.hips_offsets.iter().map(|v| [v.x, v.y, v.z]).collect(),
+        hips_locations,
+        bone_rotations,
+    })
+}
+
+/// The rest local with its rotation replaced, relative to the rest local: Blender's `matrix_basis`.
+fn basis_of_rotation(rest_local: &Mat4, rotation: Quat, bone: &str) -> anyhow::Result<MatrixRows> {
+    let translation = Mat4::from_translation(rest_local.w_axis.truncate());
+    let scale = Mat4::from_scale(axis_lengths(*rest_local));
+    let rest_inverse = invert(rest_local, || format!("rest local of bone \"{bone}\""))?;
+    Ok(rows(
+        rest_inverse * translation * Mat4::from_quat(rotation) * scale,
+    ))
+}
+
+fn parse_clip(clip_ron: &str) -> anyhow::Result<EditableAnimationClip> {
+    let mut file: AnimationClipFile = ron::from_str(clip_ron)?;
+    if !(1..=ANIMATION_FORMAT_VERSION).contains(&file.version) {
+        anyhow::bail!(
+            "clip format version {} is not supported (expected 1..={})",
+            file.version,
+            ANIMATION_FORMAT_VERSION
+        );
+    }
+
+    file.scalar_curves.clear();
+    file.into_clip(|_| None).map_err(|e| anyhow::anyhow!(e))
+}
+
+fn track_name_table(bones: &[BoneInput], mapping: &HumanoidMapping) -> HashMap<String, BoneId> {
+    let mut table: HashMap<String, BoneId> = bones
+        .iter()
+        .enumerate()
+        .map(|(index, bone)| (bone.name.clone(), index as BoneId))
+        .collect();
+    for (role, &index) in &mapping.by_role {
+        table.insert(role.unity_name().to_string(), index as BoneId);
+    }
+    table
+}
+
+fn retarget_context(
+    bones: &[BoneSpec],
+    inputs: &[BoneInput],
+    mapping: &HumanoidMapping,
+) -> anyhow::Result<RetargetContext> {
+    let frame = derive_humanoid_frame(mapping, inputs).ok_or_else(|| {
+        anyhow::anyhow!("the rig needs Hips, Head and both upper arms to derive its frame")
+    })?;
+    let rest_pose = detect_rest_pose(mapping, inputs);
+    let skeleton = retarget_skeleton(bones)?;
+    build_retarget_context(&skeleton, mapping, &frame, rest_pose)
+        .ok_or_else(|| anyhow::anyhow!("the rig needs Hips and both feet to retarget a clip"))
+}
+
+fn retarget_skeleton(bones: &[BoneSpec]) -> anyhow::Result<RetargetSkeleton> {
+    let bones = bones
+        .iter()
+        .map(|bone| {
+            Ok(RetargetBone {
+                parent: bone.parent,
+                world_position: bone.rest_position.into(),
+                world_rotation: rotation_of_rest_frame(&bone.bind_global()?),
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(RetargetSkeleton { bones })
+}
+
+fn rotation_of_rest_frame(bind: &Mat4) -> Quat {
+    let frame = Mat3::from_mat4(*bind);
+    Quat::from_mat3(&Mat3::from_cols(
+        frame.x_axis.normalize(),
+        frame.y_axis.normalize(),
+        frame.z_axis.normalize(),
+    ))
+}
+
+#[cfg(test)]
+mod tests;

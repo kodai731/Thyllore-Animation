@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
@@ -19,7 +19,7 @@ impl Default for Locator {
 }
 
 impl Locator {
-    pub fn at(position: Vector3<f32>) -> Self {
+    pub fn at(position: Vec3) -> Self {
         Self {
             position: position.into(),
             ..Self::default()
@@ -35,12 +35,12 @@ impl SceneComponent for Locator {
 crate::scene_owner!(Locator {
     icon: crate::ecs::component::EntityIcon::Empty,
     placement: |locator| (
-        Vector3::from(locator.position),
-        Quaternion::new(
-            locator.rotation[0],
+        Vec3::from(locator.position),
+        Quat::from_xyzw(
             locator.rotation[1],
             locator.rotation[2],
             locator.rotation[3],
+            locator.rotation[0]
         ),
     ),
 });

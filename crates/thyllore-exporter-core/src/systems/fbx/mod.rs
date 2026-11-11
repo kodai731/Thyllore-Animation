@@ -8,6 +8,8 @@ pub(crate) mod file_identity;
 pub(crate) mod geometry;
 pub(crate) mod mesh_material;
 pub(crate) mod skin;
+pub mod skin_clusters;
 pub(crate) mod writer;
 
 pub use export::export_full_fbx;
+pub use skin_clusters::clusters_from_skin_data;

@@ -1,8 +1,8 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{LightningGpuState, LightningRenderTargets};
+use crate::ecs::resource::LightningGpuState;
 use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
+use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::LIGHTNING_RESOLVE;
 use crate::vulkanr::render::RRRender;
@@ -11,6 +11,7 @@ use thyllore_effect_core::LIGHTNING_MAX_INSTANCES;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants,
 };
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub const LIGHTNING_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &LIGHTNING_RESOLVE,
@@ -25,7 +26,7 @@ pub unsafe fn create_lightning_gpu_state(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     targets: &LightningRenderTargets,
-    scene_depth_view: vk::ImageView,
+    scene_depth_view: ImageView,
 ) -> Result<LightningGpuState> {
     let ubo = UniformBuffer::new(
         instance,
@@ -45,7 +46,7 @@ pub unsafe fn create_lightning_gpu_state(
     let resolve_pipeline = LIGHTNING_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             &resolve_descriptor.layout,

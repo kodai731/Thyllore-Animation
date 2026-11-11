@@ -78,18 +78,17 @@ mod tests {
 
     use super::*;
 
-    const GPU_OWNER_TYPES: [&str; 11] = [
-        "vk::Image",
-        "vk::Buffer",
-        "vk::RenderPass",
-        "vk::Framebuffer",
-        "vk::DeviceMemory",
+    const GPU_OWNER_TYPES: [&str; 10] = [
         "RRImage",
-        "RRBuffer",
         "RRUniformBuffer",
         "RRPipeline",
         "UniformBuffer",
         "VolumeImage",
+        "Image",
+        "Buffer",
+        "RenderPass",
+        "Framebuffer",
+        "DeviceMemory",
     ];
 
     fn resource_sources() -> Vec<(String, String)> {
@@ -101,7 +100,7 @@ mod tests {
     }
 
     fn collect_resource_sources(dir: &Path, sources: &mut Vec<(String, String)>) {
-        let entries = std::fs::read_dir(dir).expect("src/ecs/resource exists");
+        let entries = std::fs::read_dir(dir).expect("source dir exists");
         for path in entries
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
@@ -109,7 +108,7 @@ mod tests {
             if path.is_dir() {
                 collect_resource_sources(&path, sources);
             } else if path.extension().is_some_and(|ext| ext == "rs") {
-                let source = std::fs::read_to_string(&path).expect("resource file is readable");
+                let source = std::fs::read_to_string(&path).expect("source file is readable");
                 sources.push((path.display().to_string(), source));
             }
         }
@@ -153,19 +152,19 @@ mod tests {
     #[test]
     fn gpu_owner_detection_reads_field_types_not_borrowed_handles() {
         assert!(declares_gpu_owner_field(
-            "pub struct A {\n    pub image: vk::Image,\n}"
-        ));
-        assert!(declares_gpu_owner_field(
             "pub struct A {\n    pub ubo: Option<UniformBuffer<X>>,\n}"
         ));
         assert!(declares_gpu_owner_field(
             "pub struct A {\n    pub texture: Option<RRImage>,\n}"
         ));
         assert!(!declares_gpu_owner_field(
-            "pub struct A {\n    pub view: vk::ImageView,\n}"
+            "pub struct A {\n    pub id: PipelineId,\n}"
+        ));
+        assert!(declares_gpu_owner_field(
+            "pub struct A {\n    pub image: Image,\n}"
         ));
         assert!(!declares_gpu_owner_field(
-            "pub struct A {\n    pub id: PipelineId,\n}"
+            "pub struct A {\n    pub view: ImageView,\n}"
         ));
     }
 

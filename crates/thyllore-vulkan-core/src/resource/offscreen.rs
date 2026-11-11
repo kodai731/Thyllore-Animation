@@ -5,41 +5,75 @@ use crate::core::RRDevice;
 use crate::render::pass::get_depth_format;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::types::Instance;
 
 #[derive(Clone, Debug, Default)]
 pub struct OffscreenFramebuffer {
-    pub msaa_color_image: vk::Image,
-    pub msaa_color_image_memory: vk::DeviceMemory,
-    pub msaa_color_image_view: vk::ImageView,
+    pub(crate) msaa_color_image: vk::Image,
+    pub(crate) msaa_color_image_memory: vk::DeviceMemory,
+    pub(crate) msaa_color_image_view: vk::ImageView,
 
-    pub resolve_color_image: vk::Image,
-    pub resolve_color_image_memory: vk::DeviceMemory,
-    pub resolve_color_image_view: vk::ImageView,
+    pub(crate) resolve_color_image: vk::Image,
+    pub(crate) resolve_color_image_memory: vk::DeviceMemory,
+    pub(crate) resolve_color_image_view: vk::ImageView,
 
-    pub msaa_depth_image: vk::Image,
-    pub msaa_depth_image_memory: vk::DeviceMemory,
-    pub msaa_depth_image_view: vk::ImageView,
+    pub(crate) msaa_depth_image: vk::Image,
+    pub(crate) msaa_depth_image_memory: vk::DeviceMemory,
+    pub(crate) msaa_depth_image_view: vk::ImageView,
 
-    pub framebuffer: vk::Framebuffer,
-    pub render_pass: vk::RenderPass,
-    pub sampler: vk::Sampler,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) sampler: vk::Sampler,
 
     pub width: u32,
     pub height: u32,
-    pub format: vk::Format,
-    pub msaa_samples: vk::SampleCountFlags,
+    pub(crate) format: vk::Format,
+    pub(crate) msaa_samples: vk::SampleCountFlags,
 }
 
 impl OffscreenFramebuffer {
+    #[inline]
+    pub fn resolve_color_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.resolve_color_image_view)
+    }
+
+    #[inline]
+    pub fn format(&self) -> crate::types::Format {
+        crate::types::Format(self.format)
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn resolve_color_image(&self) -> crate::types::Image {
+        crate::types::Image(self.resolve_color_image)
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        crate::types::Framebuffer(self.framebuffer)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
         width: u32,
         height: u32,
-        msaa_samples: vk::SampleCountFlags,
-        format: vk::Format,
+        msaa_samples: crate::pipeline::builder::SampleCount,
+        format: crate::types::Format,
     ) -> Result<Self> {
+        let command_pool = command_pool.raw();
+        let msaa_samples: vk::SampleCountFlags = msaa_samples.into();
+        let format = format.raw();
         let (msaa_color_image, msaa_color_image_memory) = create_image(
             instance,
             rrdevice,
@@ -129,10 +163,10 @@ impl OffscreenFramebuffer {
             .height(height)
             .layers(1);
         let framebuffer = rrdevice
-            .device
+            .device()
             .create_framebuffer(&framebuffer_info, None)?;
 
-        let sampler = Self::create_sampler(&rrdevice.device)?;
+        let sampler = Self::create_sampler(&rrdevice.device())?;
 
         log!(
             "Created offscreen framebuffer: {}x{} with MSAA {:?}",
@@ -265,7 +299,7 @@ impl OffscreenFramebuffer {
             .subpasses(&subpasses)
             .dependencies(&dependencies);
 
-        let render_pass = rrdevice.device.create_render_pass(&info, None)?;
+        let render_pass = rrdevice.device().create_render_pass(&info, None)?;
         Ok(render_pass)
     }
 
@@ -293,7 +327,7 @@ impl OffscreenFramebuffer {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
         new_width: u32,
         new_height: u32,
     ) -> Result<()> {
@@ -301,9 +335,9 @@ impl OffscreenFramebuffer {
             return Ok(());
         }
 
-        let msaa_samples = self.msaa_samples;
-        let format = self.format;
-        self.destroy(&rrdevice.device);
+        let msaa_samples = crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples);
+        let format = crate::types::Format(self.format);
+        self.destroy(&rrdevice.device());
 
         let new_fb = Self::new(
             instance,
@@ -324,7 +358,7 @@ impl OffscreenFramebuffer {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         device.destroy_sampler(self.sampler, None);
         device.destroy_framebuffer(self.framebuffer, None);
         device.destroy_render_pass(self.render_pass, None);
@@ -344,21 +378,21 @@ impl OffscreenFramebuffer {
         log!("Destroyed offscreen framebuffer");
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D {
             width: self.width,
             height: self.height,
         }
     }
 
-    pub fn resolve_image_view(&self) -> vk::ImageView {
-        self.resolve_color_image_view
+    pub fn resolve_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.resolve_color_image_view)
     }
 }
 
 impl GpuResource for OffscreenFramebuffer {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
 
         self.sampler = vk::Sampler::null();
         self.framebuffer = vk::Framebuffer::null();

@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_math_core::{Aabb, BoundingSphere};
 
 use crate::asset::AssetStorage;
@@ -72,12 +72,12 @@ fn mesh_entity_bounding_sphere(
         mesh.vertex_data
             .vertices
             .iter()
-            .map(|vertex| Vector3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)),
+            .map(|vertex| Vec3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)),
     )?;
 
     let world_matrix = world
         .get_component::<GlobalTransform>(entity)
-        .map_or_else(|| Matrix4::from_scale(1.0), |global| global.0);
+        .map_or_else(|| Mat4::IDENTITY, |global| global.0);
     Some(local_bounds.transformed(&world_matrix).bounding_sphere())
 }
 
@@ -98,7 +98,7 @@ pub fn bone_bounding_sphere(
         .chain(bone.children.iter().copied());
     let neighbour_distances: Vec<f32> = neighbour_ids
         .filter_map(|id| globals.get(id as usize))
-        .map(|matrix| (translation_of(matrix) - center).magnitude())
+        .map(|matrix| (translation_of(matrix) - center).length())
         .collect();
     let radius = if neighbour_distances.is_empty() {
         BONE_RADIUS_FALLBACK
@@ -109,6 +109,6 @@ pub fn bone_bounding_sphere(
     Some(BoundingSphere { center, radius })
 }
 
-fn translation_of(matrix: &Matrix4<f32>) -> Vector3<f32> {
-    Vector3::new(matrix.w.x, matrix.w.y, matrix.w.z)
+fn translation_of(matrix: &Mat4) -> Vec3 {
+    Vec3::new(matrix.w_axis.x, matrix.w_axis.y, matrix.w_axis.z)
 }

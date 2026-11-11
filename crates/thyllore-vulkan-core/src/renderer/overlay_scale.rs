@@ -24,16 +24,20 @@ impl OverlayResolveScale {
         }
     }
 
-    pub fn reduce_extent(self, full: vk::Extent2D) -> vk::Extent2D {
+    pub fn reduce_extent(self, full: crate::types::Extent2D) -> crate::types::Extent2D {
         let divisor = self.divisor();
-        vk::Extent2D {
+        crate::types::Extent2D {
             width: (full.width / divisor).max(1),
             height: (full.height / divisor).max(1),
         }
     }
 
     /// Reduced resolution scissor grown by one texel so the upsample taps stay inside resolved pixels.
-    pub fn reduce_scissor(self, scissor: vk::Rect2D, reduced_extent: vk::Extent2D) -> vk::Rect2D {
+    pub fn reduce_scissor(
+        self,
+        scissor: crate::types::Rect2D,
+        reduced_extent: crate::types::Extent2D,
+    ) -> crate::types::Rect2D {
         let divisor = self.divisor() as i32;
         let left = (scissor.offset.x / divisor - 1).max(0);
         let top = (scissor.offset.y / divisor - 1).max(0);
@@ -42,9 +46,9 @@ impl OverlayResolveScale {
         let bottom = ((scissor.offset.y + scissor.extent.height as i32).div_euclid(divisor) + 2)
             .min(reduced_extent.height as i32);
 
-        vk::Rect2D {
-            offset: vk::Offset2D { x: left, y: top },
-            extent: vk::Extent2D {
+        crate::types::Rect2D {
+            offset: crate::types::Offset2D { x: left, y: top },
+            extent: crate::types::Extent2D {
                 width: (right - left).max(0) as u32,
                 height: (bottom - top).max(0) as u32,
             },
@@ -54,9 +58,9 @@ impl OverlayResolveScale {
 
 /// The screen rectangle covering every scissor, grown by two pixels; the full extent when empty.
 pub fn union_scissor(
-    scissors: impl Iterator<Item = vk::Rect2D>,
-    full_extent: vk::Extent2D,
-) -> vk::Rect2D {
+    scissors: impl Iterator<Item = crate::types::Rect2D>,
+    full_extent: crate::types::Extent2D,
+) -> crate::types::Rect2D {
     let mut bounds: Option<(i32, i32, i32, i32)> = None;
     for scissor in scissors {
         let candidate = (
@@ -77,8 +81,8 @@ pub fn union_scissor(
     }
 
     let Some((left, top, right, bottom)) = bounds else {
-        return vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
+        return crate::types::Rect2D {
+            offset: crate::types::Offset2D { x: 0, y: 0 },
             extent: full_extent,
         };
     };
@@ -87,9 +91,9 @@ pub fn union_scissor(
     let right = (right + 2).min(full_extent.width as i32);
     let bottom = (bottom + 2).min(full_extent.height as i32);
 
-    vk::Rect2D {
-        offset: vk::Offset2D { x: left, y: top },
-        extent: vk::Extent2D {
+    crate::types::Rect2D {
+        offset: crate::types::Offset2D { x: left, y: top },
+        extent: crate::types::Extent2D {
             width: (right - left).max(0) as u32,
             height: (bottom - top).max(0) as u32,
         },
@@ -109,28 +113,43 @@ pub const UPSAMPLE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
 /// and left readable for the upsample. The scale is chosen per frame, so only the format is fixed.
 #[derive(Clone, Debug, Default)]
 pub struct ReducedResolveTarget {
-    pub render_pass: vk::RenderPass,
-    pub format: vk::Format,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) format: vk::Format,
 }
 
 impl ReducedResolveTarget {
-    pub unsafe fn new(rrdevice: &RRDevice, format: vk::Format) -> Result<Self> {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn format(&self) -> crate::types::Format {
+        crate::types::Format(self.format)
+    }
+
+    pub unsafe fn new(rrdevice: &RRDevice, format: crate::types::Format) -> Result<Self> {
         let render_pass = create_color_overlay_render_pass(
             rrdevice,
             ColorOverlayPassDesc {
-                format,
+                format: format.raw(),
                 load_op: vk::AttachmentLoadOp::CLEAR,
                 initial_layout: vk::ImageLayout::UNDEFINED,
                 final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             },
-        )?;
+        )?
+        .raw();
         Ok(Self {
             render_pass,
-            format,
+            format: format.raw(),
         })
     }
 
-    pub fn transient_desc(&self, scale: OverlayResolveScale, full: vk::Extent2D) -> TransientDesc {
+    pub fn transient_desc(
+        &self,
+        scale: OverlayResolveScale,
+        full: crate::types::Extent2D,
+    ) -> TransientDesc {
         let extent = scale.reduce_extent(full);
         TransientDesc {
             width: extent.width,
@@ -142,19 +161,19 @@ impl ReducedResolveTarget {
 
     pub fn overlay_pass(
         &self,
-        framebuffer: vk::Framebuffer,
+        framebuffer: crate::types::Framebuffer,
         scale: OverlayResolveScale,
-        full: vk::Extent2D,
+        full: crate::types::Extent2D,
     ) -> OverlayPass {
         OverlayPass {
             render_pass: self.render_pass,
-            framebuffer,
-            extent: scale.reduce_extent(full),
+            framebuffer: framebuffer.raw(),
+            extent: scale.reduce_extent(full).raw(),
             load: OverlayAttachmentLoad::Clear([0.0; 4]),
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &Device) {
         if self.render_pass != vk::RenderPass::null() {
             device.destroy_render_pass(self.render_pass, None);
             self.render_pass = vk::RenderPass::null();
@@ -164,7 +183,7 @@ impl ReducedResolveTarget {
 
 impl GpuResource for ReducedResolveTarget {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {
@@ -176,22 +195,22 @@ impl GpuResource for ReducedResolveTarget {
 mod tests {
     use super::*;
 
-    fn rect(x: i32, y: i32, width: u32, height: u32) -> vk::Rect2D {
-        vk::Rect2D {
-            offset: vk::Offset2D { x, y },
-            extent: vk::Extent2D { width, height },
+    fn rect(x: i32, y: i32, width: u32, height: u32) -> crate::types::Rect2D {
+        crate::types::Rect2D {
+            offset: crate::types::Offset2D { x, y },
+            extent: crate::types::Extent2D { width, height },
         }
     }
 
     #[test]
     fn reduce_extent_never_reaches_zero() {
-        let tiny = vk::Extent2D {
+        let tiny = crate::types::Extent2D {
             width: 3,
             height: 1,
         };
         assert_eq!(
             OverlayResolveScale::Quarter.reduce_extent(tiny),
-            vk::Extent2D {
+            crate::types::Extent2D {
                 width: 1,
                 height: 1
             }
@@ -200,7 +219,7 @@ mod tests {
 
     #[test]
     fn reduced_scissor_grows_by_one_texel_inside_the_reduced_extent() {
-        let reduced = vk::Extent2D {
+        let reduced = crate::types::Extent2D {
             width: 100,
             height: 50,
         };
@@ -213,7 +232,7 @@ mod tests {
 
     #[test]
     fn union_scissor_covers_every_rect_and_falls_back_to_the_full_extent() {
-        let full = vk::Extent2D {
+        let full = crate::types::Extent2D {
             width: 200,
             height: 100,
         };

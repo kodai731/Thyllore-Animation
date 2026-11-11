@@ -14,7 +14,8 @@ pub mod raytracing;
 pub mod render;
 pub mod renderer;
 pub mod resource;
-pub mod vulkan;
+pub mod types;
+pub(crate) mod vulkan;
 
 pub use backend::VulkanBackend;
 pub use command::*;
@@ -28,4 +29,3 @@ pub use raytracing::*;
 pub use render::*;
 pub use renderer::*;
 pub use resource::*;
-pub use vulkan::*;

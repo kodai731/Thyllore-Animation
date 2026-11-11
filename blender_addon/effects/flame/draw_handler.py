@@ -1,4 +1,3 @@
-import math
 import time
 import traceback
 
@@ -40,14 +39,6 @@ def _load_shader(specialization):
     print(f"[Thyllore Flame] shader built in {time.perf_counter() - started:.2f}s for {key}", flush=True)
     _cached_shaders[key] = shader
     return shader
-
-
-def blender_window_to_engine_projection(window_matrix, near):
-    f_y = window_matrix[1][1]
-    f_x = window_matrix[0][0]
-    fovy = 2.0 * math.atan(1.0 / f_y)
-    aspect = f_y / f_x
-    return coordinates.engine_projection(fovy, aspect, near)
 
 
 def blender_view_to_engine_view(view_matrix):
@@ -220,7 +211,7 @@ def draw_flames():
     region_data = context.region_data
     view_matrix = list(region_data.view_matrix)
     window_matrix = list(region_data.window_matrix)
-    proj = blender_window_to_engine_projection(window_matrix, VIEWPORT_NEAR)
+    proj = coordinates.blender_window_to_engine_projection(window_matrix, VIEWPORT_NEAR)
     view, camera_pos = blender_view_to_engine_view(view_matrix)
     w = region.width
     h = region.height

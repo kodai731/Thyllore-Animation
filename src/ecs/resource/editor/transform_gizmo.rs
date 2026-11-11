@@ -13,7 +13,7 @@ pub enum CoordinateSpace {
     Local,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransformGizmoState {
     pub mode: TransformGizmoMode,
     pub coordinate_space: CoordinateSpace,
@@ -37,3 +37,5 @@ impl Default for TransformGizmoState {
         }
     }
 }
+
+crate::startup_resource!(TransformGizmoState, Editor);

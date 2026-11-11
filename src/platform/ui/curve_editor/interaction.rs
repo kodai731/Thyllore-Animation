@@ -5,7 +5,7 @@ use super::hit_test::*;
 use super::selection::*;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
-use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
+use crate::animation::editable::EditableAnimationClip;
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
     CurveTrackRef, CurveViewMode, DraggingTangent, TimelineState, UiPointerOwnerId,
@@ -37,7 +37,7 @@ pub(super) fn handle_curve_view_interaction(
     world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     cursor_pos: [f32; 2],
     curve_area_width: f32,
     timeline_state: &TimelineState,
@@ -99,7 +99,7 @@ pub(super) fn handle_curve_view_interaction(
                 Some(property_type) => vt.for_property(property_type, curves_to_draw),
                 None => curves_to_draw
                     .first()
-                    .map_or(*vt, |(curve, _, _)| vt.for_curve(curve)),
+                    .map_or(*vt, |DrawnCurve { curve, .. }| vt.for_curve(curve)),
             };
             editor_state.context_menu_click_value = click_vt.y_to_value(mouse_pos[1]);
             ui.open_popup("curve_editor_context_menu");
@@ -121,7 +121,7 @@ pub(super) fn handle_mouse_interaction(
     world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     pointer: &UiPointer,
     access: CurvePointerAccess,
     ruler_pos: [f32; 2],
@@ -180,24 +180,7 @@ pub(super) fn handle_mouse_interaction(
         && in_curve_area
         && matches!(editor_state.interaction, CurveInteractionMode::Idle)
     {
-        let modifier = if ui.io().key_ctrl() {
-            SelectionModifier::Toggle
-        } else if ui.io().key_shift() {
-            SelectionModifier::Range
-        } else {
-            SelectionModifier::None
-        };
-        let curve_to_insert_on =
-            handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
-        if let (Some(property_type), Some(track)) =
-            (curve_to_insert_on, editor_state.selected_track_ref())
-        {
-            world.send_command(TimelineEvent::InsertKeyframeOnCurve {
-                track,
-                property_type,
-                time: vt.x_to_time(mouse_pos[0]).max(0.0),
-            });
-        }
+        insert_or_select_at_click(ui, world, editor_state, vt, mouse_pos, curves_to_draw);
     }
 
     if middle_clicked && in_curve_area {
@@ -240,13 +223,47 @@ pub(super) fn handle_mouse_interaction(
     }
 }
 
+fn read_selection_modifier(ui: &imgui::Ui) -> SelectionModifier {
+    if ui.io().key_ctrl() {
+        SelectionModifier::Toggle
+    } else if ui.io().key_shift() {
+        SelectionModifier::Range
+    } else {
+        SelectionModifier::None
+    }
+}
+
+fn insert_or_select_at_click(
+    ui: &imgui::Ui,
+    world: &World,
+    editor_state: &mut CurveEditorState,
+    vt: &ViewTransform,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[DrawnCurve<'_>],
+) {
+    let modifier = read_selection_modifier(ui);
+    let curve_to_insert_on =
+        handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
+    let (Some(property_type), Some(track)) =
+        (curve_to_insert_on, editor_state.selected_track_ref())
+    else {
+        return;
+    };
+
+    world.send_command(TimelineEvent::InsertKeyframeOnCurve {
+        track,
+        property_type,
+        time: vt.x_to_time(mouse_pos[0]).max(0.0),
+    });
+}
+
 pub(super) fn handle_mouse_release(
     world: &World,
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
     button: ReleasedButton,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     time_snap: TimeSnap,
 ) {
     if button == ReleasedButton::Left {
@@ -267,7 +284,7 @@ fn finish_left_drag(
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     time_snap: TimeSnap,
 ) {
     match editor_state.interaction.clone() {
@@ -299,7 +316,7 @@ fn finish_tangent_drag(
     editor_state: &CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     dragging: DraggingTangent,
 ) {
     let Some(track_ref) = editor_state.selected_track_ref() else {
@@ -321,38 +338,40 @@ fn finish_keyframe_drag(
     editor_state: &CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     time_snap: TimeSnap,
     axis_lock: Option<AxisLock>,
 ) {
     let Some(track_ref) = editor_state.selected_track_ref() else {
         return;
     };
-    for sel in &editor_state.selected_keyframes {
-        let curve_vt = vt.for_property(sel.property_type, curves_to_draw);
-        let delta = dragged_key_delta(&curve_vt, editor_state.drag_start_mouse_pos, mouse_pos);
+    let applied_axis_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
 
+    send_for_each_selected_key(world, &editor_state.selected_keyframes, |selected| {
+        let curve_vt = vt.for_property(selected.property_type, curves_to_draw);
+        let delta = dragged_key_delta(&curve_vt, editor_state.drag_start_mouse_pos, mouse_pos);
         let [new_time, new_value] = dragged_key_position(
-            [sel.original_time, sel.original_value],
+            [selected.original_time, selected.original_value],
             delta,
-            effective_axis_lock(editor_state.view_mode, axis_lock),
+            applied_axis_lock,
             time_snap,
         );
-        world.send_command(TimelineEvent::MoveKeyframe {
+
+        TimelineEvent::MoveKeyframe {
             track: track_ref,
-            property_type: sel.property_type.clone(),
-            keyframe_id: sel.keyframe_id,
+            property_type: selected.property_type,
+            keyframe_id: selected.keyframe_id,
             new_time,
             new_value,
-        });
-    }
+        }
+    });
 }
 
 fn finish_box_selection(
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     start: [f32; 2],
     mode: BoxSelectMode,
 ) {

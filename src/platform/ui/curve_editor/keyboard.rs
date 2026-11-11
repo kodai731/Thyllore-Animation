@@ -1,9 +1,9 @@
 use super::context_menu::CURVE_EXTRAPOLATION_MENU;
+use super::selection::send_for_each_selected_key;
 use super::tween::apply_tween;
+use super::view::DrawnCurve;
 use super::window::SuggestionOverlay;
-use crate::animation::editable::{
-    InterpolationType, PropertyCurve, TangentContinuity, TangentType,
-};
+use crate::animation::editable::{InterpolationType, TangentContinuity, TangentType};
 use crate::animation::BoneId;
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, FrameRequest,
@@ -117,7 +117,7 @@ pub(crate) const CURVE_EDITOR_KEY_BINDINGS: &[CurveEditorKeyBinding] = &[
 
 pub(super) struct CurveEditorKeyboardTarget<'a> {
     pub world: &'a World,
-    pub curves: &'a [(&'a PropertyCurve, [f32; 4], &'a str)],
+    pub curves: &'a [DrawnCurve<'a>],
     pub track_ref: CurveTrackRef,
 }
 
@@ -185,14 +185,14 @@ fn send_tangent_type(
     target: &CurveEditorKeyboardTarget,
     tangent_type: TangentType,
 ) {
-    for selected in &editor_state.selected_keyframes {
-        target.world.send_command(TimelineEvent::SetTangentType {
+    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
+        TimelineEvent::SetTangentType {
             track: target.track_ref,
             property_type: selected.property_type,
             keyframe_id: selected.keyframe_id,
             tangent_type,
-        });
-    }
+        }
+    });
 }
 
 fn send_interpolation(
@@ -200,41 +200,37 @@ fn send_interpolation(
     target: &CurveEditorKeyboardTarget,
     interpolation: InterpolationType,
 ) {
-    for selected in &editor_state.selected_keyframes {
-        target
-            .world
-            .send_command(TimelineEvent::SetKeyframeInterpolation {
-                track: target.track_ref,
-                property_type: selected.property_type,
-                keyframe_id: selected.keyframe_id,
-                interpolation,
-            });
-    }
+    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
+        TimelineEvent::SetKeyframeInterpolation {
+            track: target.track_ref,
+            property_type: selected.property_type,
+            keyframe_id: selected.keyframe_id,
+            interpolation,
+        }
+    });
 }
 
 fn send_toggled_continuity(editor_state: &CurveEditorState, target: &CurveEditorKeyboardTarget) {
     let continuity = compute_toggled_continuity(target.curves, &editor_state.selected_keyframes);
-    for selected in &editor_state.selected_keyframes {
-        target
-            .world
-            .send_command(TimelineEvent::SetTangentContinuity {
-                track: target.track_ref,
-                property_type: selected.property_type,
-                keyframe_id: selected.keyframe_id,
-                continuity,
-            });
-    }
+    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
+        TimelineEvent::SetTangentContinuity {
+            track: target.track_ref,
+            property_type: selected.property_type,
+            keyframe_id: selected.keyframe_id,
+            continuity,
+        }
+    });
 }
 
 fn compute_toggled_continuity(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
 ) -> TangentContinuity {
     let any_unified = selected_keyframes.iter().any(|selected| {
         curves
             .iter()
-            .filter(|(curve, _, _)| curve.property_type == selected.property_type)
-            .filter_map(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
+            .filter(|DrawnCurve { curve, .. }| curve.property_type == selected.property_type)
+            .filter_map(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
             .any(|kf| kf.continuity == TangentContinuity::Unified)
     });
 
@@ -245,11 +241,9 @@ fn compute_toggled_continuity(
     }
 }
 
-pub(super) fn select_all_keyframes(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
-) -> Vec<CurveSelectedKeyframe> {
+pub(super) fn select_all_keyframes(curves: &[DrawnCurve<'_>]) -> Vec<CurveSelectedKeyframe> {
     let mut selected = Vec::new();
-    for (curve, _, _) in curves {
+    for DrawnCurve { curve, .. } in curves {
         for kf in &curve.keyframes {
             selected.push(CurveSelectedKeyframe {
                 property_type: curve.property_type,
@@ -294,7 +288,7 @@ pub(super) fn handle_suggestion_keyboard(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableKeyframe, PropertyType};
+    use crate::animation::editable::{EditableKeyframe, PropertyCurve, PropertyType};
 
     fn make_curve(property_type: PropertyType) -> PropertyCurve {
         PropertyCurve::from_keyframes(
@@ -310,7 +304,7 @@ mod tests {
 
     #[test]
     fn select_all_keyframes_empty() {
-        let curves: Vec<(&PropertyCurve, [f32; 4], &str)> = vec![];
+        let curves: Vec<DrawnCurve<'_>> = vec![];
         let selected = select_all_keyframes(&curves);
         assert!(selected.is_empty());
     }
@@ -318,7 +312,10 @@ mod tests {
     #[test]
     fn select_all_takes_every_key_of_every_visible_curve() {
         let curve = make_curve(PropertyType::TranslationX);
-        let curves = [(&curve, [1.0, 0.0, 0.0, 1.0], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0, 0.0, 0.0, 1.0],
+        }];
         let selected = select_all_keyframes(&curves);
         assert_eq!(selected.len(), 2);
         assert_eq!(selected[0].keyframe_id, 0);
@@ -334,8 +331,14 @@ mod tests {
         let curve_x = make_curve(PropertyType::TranslationX);
         let curve_y = make_curve(PropertyType::TranslationY);
         let curves = [
-            (&curve_x, [1.0, 0.0, 0.0, 1.0], "x"),
-            (&curve_y, [0.0, 1.0, 0.0, 1.0], "y"),
+            DrawnCurve {
+                curve: &curve_x,
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            DrawnCurve {
+                curve: &curve_y,
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
         ];
         let selected = select_all_keyframes(&curves);
         assert_eq!(selected.len(), 4);
@@ -345,7 +348,10 @@ mod tests {
     fn toggle_breaks_when_any_selected_key_is_unified() {
         let mut curve = make_curve(PropertyType::TranslationX);
         curve.keyframes[0].continuity = TangentContinuity::Broken;
-        let curves = [(&curve, [1.0, 0.0, 0.0, 1.0], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0, 0.0, 0.0, 1.0],
+        }];
         let selected = select_all_keyframes(&curves);
         assert_eq!(
             compute_toggled_continuity(&curves, &selected),
@@ -359,7 +365,10 @@ mod tests {
         for kf in &mut curve.keyframes {
             kf.continuity = TangentContinuity::Broken;
         }
-        let curves = [(&curve, [1.0, 0.0, 0.0, 1.0], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0, 0.0, 0.0, 1.0],
+        }];
         let selected = select_all_keyframes(&curves);
         assert_eq!(
             compute_toggled_continuity(&curves, &selected),

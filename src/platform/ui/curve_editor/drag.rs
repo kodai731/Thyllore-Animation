@@ -1,9 +1,7 @@
-use crate::animation::editable::{
-    align_opposite_handle, BezierHandle, PropertyCurve, TangentContinuity,
-};
+use crate::animation::editable::{align_opposite_handle, BezierHandle, TangentContinuity};
 use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
 
-use super::view::ViewTransform;
+use super::view::{DrawnCurve, ViewTransform};
 
 const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
 
@@ -94,10 +92,10 @@ pub(super) fn dragged_key_delta(
 pub(super) fn compute_dragged_tangent(
     dragging: &DraggingTangent,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> (BezierHandle, BezierHandle) {
-    for (curve, _, _) in curves_to_draw {
+    for DrawnCurve { curve, .. } in curves_to_draw {
         if curve.property_type != dragging.property_type {
             continue;
         }
@@ -149,7 +147,16 @@ mod tests {
     fn normalized_drag_value_delta_scales_with_each_curve_half_width() {
         let small = build_two_point_curve(PropertyType::TranslationX, [0.0, 10.0]);
         let large = build_two_point_curve(PropertyType::TranslationY, [100.0, -100.0]);
-        let curves = [(&small, [1.0; 4], "x"), (&large, [1.0; 4], "y")];
+        let curves = [
+            DrawnCurve {
+                curve: &small,
+                color: [1.0; 4],
+            },
+            DrawnCurve {
+                curve: &large,
+                color: [1.0; 4],
+            },
+        ];
         let vt = build_normalized_pixel_view();
         let drag_start = [50.0, 50.0];
         let mouse_pos = [50.0, 40.0];
@@ -184,7 +191,10 @@ mod tests {
             original_handle: kf.out_tangent.clone(),
         };
         let vt = build_pixel_view();
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
 
         let (in_tangent, out_tangent) =
             compute_dragged_tangent(&dragging, [40.0, 20.0], &curves, &vt);

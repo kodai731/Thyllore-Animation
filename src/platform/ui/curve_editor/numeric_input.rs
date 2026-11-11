@@ -1,9 +1,9 @@
-use crate::animation::editable::{EditableKeyframe, PropertyCurve};
+use crate::animation::editable::EditableKeyframe;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 
-use super::view::find_drawn_curve;
+use super::view::{find_drawn_curve, DrawnCurve};
 
 const SHARED_VALUE_TOLERANCE: f32 = 1e-6;
 const FIELD_WIDTH: f32 = 80.0;
@@ -57,7 +57,7 @@ pub(super) fn build_selected_key_fields(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &mut CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     track_ref: CurveTrackRef,
 ) {
     let selected_keys = collect_selected_keys(&editor_state.selected_keyframes, curves);
@@ -81,13 +81,13 @@ pub(super) fn build_selected_key_fields(
 
 fn collect_selected_keys<'a>(
     selected_keyframes: &'a [CurveSelectedKeyframe],
-    curves: &[(&'a PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'a>],
 ) -> Vec<(&'a CurveSelectedKeyframe, &'a EditableKeyframe)> {
     selected_keyframes
         .iter()
         .filter_map(|selected| {
             find_drawn_curve(curves, selected.property_type)
-                .and_then(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
+                .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
                 .map(|key| (selected, key))
         })
         .collect()

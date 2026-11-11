@@ -4,7 +4,10 @@ use super::super::view::{
     calculate_y_tick_count, compute_nice_step, format_value_label, ViewTransform,
 };
 use super::super::window::TIME_RULER_HEIGHT;
+use super::diamond::{draw_key_diamond, DiamondStyle, KeyDiamond};
 
+const POSE_MARKER_HALF_SIZE: f32 = 5.0;
+const POSE_MARKER_TOP_OFFSET: f32 = 8.0;
 const GRID_COLOR: [f32; 4] = [0.25, 0.25, 0.28, 1.0];
 const NORMALIZED_OUTSIDE_SHADE: [f32; 4] = [0.0, 0.0, 0.0, 0.25];
 
@@ -138,31 +141,19 @@ pub(in crate::platform::ui::curve_editor) fn draw_pose_markers(
             }
         }
 
-        let diamond_size = 5.0;
-        let diamond_y = top + 8.0;
-        let color = if is_selected {
-            selected_color
-        } else {
-            unselected_color
+        let marker = KeyDiamond {
+            center: [x, top + POSE_MARKER_TOP_OFFSET],
+            half_size: POSE_MARKER_HALF_SIZE,
         };
-        let top_pt = [x, diamond_y - diamond_size];
-        let right_pt = [x + diamond_size, diamond_y];
-        let bottom_pt = [x, diamond_y + diamond_size];
-        let left_pt = [x - diamond_size, diamond_y];
         if is_selected {
-            draw_list
-                .add_triangle(top_pt, right_pt, bottom_pt, color)
-                .filled(true)
-                .build();
-            draw_list
-                .add_triangle(top_pt, bottom_pt, left_pt, color)
-                .filled(true)
-                .build();
+            draw_key_diamond(draw_list, marker, selected_color, DiamondStyle::Filled);
         } else {
-            draw_list.add_line(top_pt, right_pt, color).build();
-            draw_list.add_line(right_pt, bottom_pt, color).build();
-            draw_list.add_line(bottom_pt, left_pt, color).build();
-            draw_list.add_line(left_pt, top_pt, color).build();
+            draw_key_diamond(
+                draw_list,
+                marker,
+                unselected_color,
+                DiamondStyle::Outline { thickness: 1.0 },
+            );
         }
     }
 }

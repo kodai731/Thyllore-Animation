@@ -79,6 +79,29 @@ pub(super) fn dof_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
 pub(super) fn auto_exposure_group(view: &SceneSettingsView) -> UiRow<SceneSettingsView> {
     let mut rows: Vec<UiRow<SceneSettingsView>> = Vec::new();
 
+    rows.extend(auto_exposure_metering_rows());
+    rows.extend(auto_exposure_adaptation_rows());
+    rows.extend(auto_exposure_histogram_rows());
+
+    if view.exposure_readout.is_some() {
+        rows.push(UiRow::Canvas(|ui, _world, v: &SceneSettingsView| {
+            if let Some((exposure, ev100)) = v.exposure_readout {
+                ui.text(format!("Current Exposure: {:.4}", exposure));
+                ui.text(format!("Current EV100: {:.2}", ev100));
+            }
+        }));
+    }
+
+    UiRow::Group {
+        title: "Auto Exposure".into(),
+        initially_open: false,
+        rows,
+    }
+}
+
+fn auto_exposure_metering_rows() -> Vec<UiRow<SceneSettingsView>> {
+    let mut rows: Vec<UiRow<SceneSettingsView>> = Vec::new();
+
     rows.push(UiRow::Switch {
         label: "Auto Exposure Enabled",
         get: |v: &SceneSettingsView| v.auto_exposure.as_ref().map_or(false, |a| a.enabled),
@@ -123,6 +146,12 @@ pub(super) fn auto_exposure_group(view: &SceneSettingsView) -> UiRow<SceneSettin
             }
         },
     });
+
+    rows
+}
+
+fn auto_exposure_adaptation_rows() -> Vec<UiRow<SceneSettingsView>> {
+    let mut rows: Vec<UiRow<SceneSettingsView>> = Vec::new();
 
     rows.push(UiRow::Slider {
         label: "Min EV",
@@ -184,6 +213,12 @@ pub(super) fn auto_exposure_group(view: &SceneSettingsView) -> UiRow<SceneSettin
         },
     });
 
+    rows
+}
+
+fn auto_exposure_histogram_rows() -> Vec<UiRow<SceneSettingsView>> {
+    let mut rows: Vec<UiRow<SceneSettingsView>> = Vec::new();
+
     rows.push(UiRow::Slider {
         label: "Low Percent",
         min: 0.0,
@@ -210,18 +245,5 @@ pub(super) fn auto_exposure_group(view: &SceneSettingsView) -> UiRow<SceneSettin
         },
     });
 
-    if view.exposure_readout.is_some() {
-        rows.push(UiRow::Canvas(|ui, _world, v: &SceneSettingsView| {
-            if let Some((exposure, ev100)) = v.exposure_readout {
-                ui.text(format!("Current Exposure: {:.4}", exposure));
-                ui.text(format!("Current EV100: {:.2}", ev100));
-            }
-        }));
-    }
-
-    UiRow::Group {
-        title: "Auto Exposure".into(),
-        initially_open: false,
-        rows,
-    }
+    rows
 }

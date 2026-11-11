@@ -45,6 +45,15 @@ pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>>
 pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
     let mut rows: Vec<UiRow<FlameSectionView>> = vec![UiRow::Heading("Texture Fit")];
 
+    rows.extend(fit_source_rows());
+    rows.extend(fit_group_rows(view));
+    rows.extend(fit_apply_rows());
+    rows
+}
+
+fn fit_source_rows() -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
+
     rows.push(UiRow::Choice {
         label: "Fit Texture",
         options: |_world, view| {
@@ -101,6 +110,12 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
         },
     });
 
+    rows
+}
+
+fn fit_group_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
+
     rows.push(UiRow::Slider {
         label: "Fit Blend",
         min: 0.0,
@@ -152,6 +167,12 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
             view.flame_ui.texture_fit_groups[3] = value;
         },
     });
+
+    rows
+}
+
+fn fit_apply_rows() -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
 
     rows.push(UiRow::Choice {
         label: "Fit Mode",

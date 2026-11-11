@@ -4,7 +4,7 @@ use crate::animation::editable::{
 };
 use crate::ecs::resource::CurveSelectedKeyframe;
 
-use super::super::view::ViewTransform;
+use super::super::view::{DrawnCurve, ViewTransform};
 
 pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     draw_list: &imgui::DrawListMut,
@@ -196,12 +196,12 @@ pub(super) fn dashed_segments(points: &[[f32; 2]], dash: f32, gap: f32) -> Vec<[
 
 pub(in crate::platform::ui::curve_editor) fn draw_selected_keyframes_highlight(
     draw_list: &imgui::DrawListMut,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
     vt: &ViewTransform,
 ) {
     for selected in selected_keyframes {
-        for (curve, _, _) in curves_to_draw {
+        for DrawnCurve { curve, .. } in curves_to_draw {
             if curve.property_type == selected.property_type {
                 if let Some(kf) = curve.get_keyframe(selected.keyframe_id) {
                     let curve_vt = vt.for_curve(curve);
@@ -221,12 +221,12 @@ pub(in crate::platform::ui::curve_editor) fn draw_selected_keyframes_highlight(
 
 pub(in crate::platform::ui::curve_editor) fn draw_tangent_handles(
     draw_list: &imgui::DrawListMut,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
     vt: &ViewTransform,
 ) {
     for selected in selected_keyframes {
-        for (curve, color, _) in curves_to_draw {
+        for DrawnCurve { curve, color, .. } in curves_to_draw {
             if curve.property_type != selected.property_type {
                 continue;
             }

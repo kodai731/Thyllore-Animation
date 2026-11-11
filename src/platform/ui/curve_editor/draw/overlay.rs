@@ -1,18 +1,21 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{curve_sample, PropertyCurve, PropertyType};
+use crate::animation::editable::{curve_sample, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::resource::{CurveEditorBuffer, CurveSelectedKeyframe, TweenSession};
 
 use super::super::tween::{compute_curve_tween, curve_with_values};
-use super::super::view::ViewTransform;
+use super::super::view::{DrawnCurve, ViewTransform};
 use super::super::window::{SuggestionOverlay, ALL_PROPERTY_TYPES};
+use super::diamond::{draw_key_diamond, DiamondStyle, KeyDiamond};
+
+const GHOST_KEY_HALF_SIZE: f32 = 6.0;
 
 pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
     draw_list: &imgui::DrawListMut,
     buffer: &CurveEditorBuffer,
     bone_id: BoneId,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     visible_curves: &HashSet<PropertyType>,
     vt: &ViewTransform,
 ) {
@@ -57,7 +60,7 @@ pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
 pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
     draw_list: &imgui::DrawListMut,
     overlays: &[SuggestionOverlay],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     visible_curves: &HashSet<PropertyType>,
     vt: &ViewTransform,
 ) {
@@ -92,40 +95,15 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
         let curve_vt = vt.for_property(overlay.property_type, curves_to_draw);
         let kf_x = curve_vt.time_to_x(overlay.time);
         let kf_y = curve_vt.value_to_y(overlay.value);
-        let diamond_size = 6.0;
-
-        draw_list
-            .add_line(
-                [kf_x, kf_y - diamond_size],
-                [kf_x + diamond_size, kf_y],
-                ghost_color,
-            )
-            .thickness(2.0)
-            .build();
-        draw_list
-            .add_line(
-                [kf_x + diamond_size, kf_y],
-                [kf_x, kf_y + diamond_size],
-                ghost_color,
-            )
-            .thickness(2.0)
-            .build();
-        draw_list
-            .add_line(
-                [kf_x, kf_y + diamond_size],
-                [kf_x - diamond_size, kf_y],
-                ghost_color,
-            )
-            .thickness(2.0)
-            .build();
-        draw_list
-            .add_line(
-                [kf_x - diamond_size, kf_y],
-                [kf_x, kf_y - diamond_size],
-                ghost_color,
-            )
-            .thickness(2.0)
-            .build();
+        draw_key_diamond(
+            draw_list,
+            KeyDiamond {
+                center: [kf_x, kf_y],
+                half_size: GHOST_KEY_HALF_SIZE,
+            },
+            ghost_color,
+            DiamondStyle::Outline { thickness: 2.0 },
+        );
 
         let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
 
@@ -157,11 +135,11 @@ pub(in crate::platform::ui::curve_editor) fn draw_tween_curve_overlay(
     draw_list: &imgui::DrawListMut,
     session: &TweenSession,
     selected_keyframes: &[CurveSelectedKeyframe],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     sample_count: usize,
 ) {
-    for (curve, color, _) in curves_to_draw {
+    for DrawnCurve { curve, color, .. } in curves_to_draw {
         let tweened_values = compute_curve_tween(curve, selected_keyframes, session);
         if tweened_values.is_empty() {
             continue;

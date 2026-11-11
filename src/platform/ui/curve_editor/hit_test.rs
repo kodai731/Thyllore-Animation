@@ -1,20 +1,19 @@
 use crate::animation::editable::{
-    curve_sample, BezierHandle, EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve,
-    PropertyType,
+    curve_sample, BezierHandle, EditableKeyframe, InterpolationType, KeyframeId, PropertyType,
 };
 use crate::ecs::resource::{CurveSelectedKeyframe, TangentHandleType};
 
-use super::view::{find_drawn_curve, ViewTransform};
+use super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
 pub(super) const KEYFRAME_HIT_RADIUS: f32 = 8.0;
 pub(super) const CURVE_HIT_RADIUS_PX: f32 = 6.0;
 
 pub(super) fn find_keyframe_time(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     property_type: &PropertyType,
     keyframe_id: KeyframeId,
 ) -> Option<f32> {
-    for (curve, _, _) in curves {
+    for DrawnCurve { curve, .. } in curves {
         if curve.property_type == *property_type {
             return curve.get_keyframe(keyframe_id).map(|kf| kf.time);
         }
@@ -24,10 +23,10 @@ pub(super) fn find_keyframe_time(
 
 pub(super) fn find_keyframe_at_position(
     mouse_pos: [f32; 2],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> Option<(PropertyType, KeyframeId, f32, f32)> {
-    for (curve, _, _) in curves {
+    for DrawnCurve { curve, .. } in curves {
         let curve_vt = vt.for_curve(curve);
         for kf in &curve.keyframes {
             let x = curve_vt.time_to_x(kf.time);
@@ -48,14 +47,14 @@ pub(super) fn find_keyframe_at_position(
 
 pub(super) fn find_curve_at_position(
     mouse_pos: [f32; 2],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> Option<PropertyType> {
     let mouse_time = vt.x_to_time(mouse_pos[0]);
 
     curves
         .iter()
-        .filter_map(|(curve, _, _)| {
+        .filter_map(|DrawnCurve { curve, .. }| {
             let value = curve_sample(curve, mouse_time)?;
             let distance = (vt.for_curve(curve).value_to_y(value) - mouse_pos[1]).abs();
             (distance <= CURVE_HIT_RADIUS_PX).then_some((curve.property_type, distance))
@@ -81,12 +80,13 @@ fn tangent_handle_hit(
 
 pub(super) fn find_tangent_handle_at_position(
     mouse_pos: [f32; 2],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
     vt: &ViewTransform,
 ) -> Option<(TangentHandleType, PropertyType, KeyframeId, BezierHandle)> {
     for selected in selected_keyframes {
-        let Some((curve, _, _)) = find_drawn_curve(curves, selected.property_type) else {
+        let Some(DrawnCurve { curve, .. }) = find_drawn_curve(curves, selected.property_type)
+        else {
             continue;
         };
         let Some(kf) = curve.get_keyframe(selected.keyframe_id) else {
@@ -122,7 +122,7 @@ pub(super) fn find_tangent_handle_at_position(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::curve_add_keyframe;
+    use crate::animation::editable::{curve_add_keyframe, PropertyCurve};
 
     use super::super::test_fixtures::*;
 
@@ -137,7 +137,16 @@ mod tests {
     fn find_curve_at_position_picks_the_nearest_curve_within_the_radius() {
         let lower = build_flat_curve(PropertyType::TranslationX, 0.2);
         let upper = build_flat_curve(PropertyType::TranslationY, 0.25);
-        let curves = [(&lower, [1.0; 4], "x"), (&upper, [1.0; 4], "y")];
+        let curves = [
+            DrawnCurve {
+                curve: &lower,
+                color: [1.0; 4],
+            },
+            DrawnCurve {
+                curve: &upper,
+                color: [1.0; 4],
+            },
+        ];
 
         let hit = find_curve_at_position([50.0, 78.0], &curves, &build_pixel_view());
 
@@ -147,7 +156,10 @@ mod tests {
     #[test]
     fn find_curve_at_position_misses_beyond_the_radius() {
         let curve = build_flat_curve(PropertyType::TranslationX, 0.2);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
 
         let hit = find_curve_at_position(
             [50.0, 80.0 - CURVE_HIT_RADIUS_PX - 1.0],
@@ -162,7 +174,16 @@ mod tests {
     fn normalized_keyframe_hit_uses_each_curve_range() {
         let small = build_two_point_curve(PropertyType::TranslationX, [0.0, 10.0]);
         let large = build_two_point_curve(PropertyType::TranslationY, [100.0, -100.0]);
-        let curves = [(&small, [1.0; 4], "x"), (&large, [1.0; 4], "y")];
+        let curves = [
+            DrawnCurve {
+                curve: &small,
+                color: [1.0; 4],
+            },
+            DrawnCurve {
+                curve: &large,
+                color: [1.0; 4],
+            },
+        ];
         let vt = build_normalized_pixel_view();
 
         let bottom_hit = find_keyframe_at_position([0.0, 100.0], &curves, &vt);

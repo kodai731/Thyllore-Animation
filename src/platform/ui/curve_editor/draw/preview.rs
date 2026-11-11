@@ -7,14 +7,14 @@ use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
 use super::super::drag::{
     compute_dragged_tangent, dragged_key_delta, dragged_key_position, TimeSnap,
 };
-use super::super::view::ViewTransform;
+use super::super::view::{DrawnCurve, ViewTransform};
 
 pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
     mouse_pos: [f32; 2],
     drag_start: [f32; 2],
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
     axis_lock: Option<AxisLock>,
     time_snap: TimeSnap,
@@ -22,9 +22,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     for sel in selected_keyframes {
         let curve = match curves_to_draw
             .iter()
-            .find(|(c, _, _)| c.property_type == sel.property_type)
+            .find(|DrawnCurve { curve: c, .. }| c.property_type == sel.property_type)
         {
-            Some((curve, _, _)) => *curve,
+            Some(DrawnCurve { curve, .. }) => *curve,
             None => continue,
         };
         let curve_vt = vt.for_curve(curve);
@@ -71,10 +71,10 @@ pub(in crate::platform::ui::curve_editor) fn draw_drag_neighbor_lines(
     draw_list: &imgui::DrawListMut,
     preview_pos: [f32; 2],
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     selected: &CurveSelectedKeyframe,
 ) {
-    for (curve, color, _) in curves_to_draw {
+    for DrawnCurve { curve, color, .. } in curves_to_draw {
         if curve.property_type != selected.property_type {
             continue;
         }
@@ -116,14 +116,18 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
     draw_list: &imgui::DrawListMut,
     dragging: &DraggingTangent,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) {
     let (curve, color) = match curves_to_draw
         .iter()
-        .find(|(c, _, _)| c.property_type == dragging.property_type)
+        .find(|DrawnCurve { curve: c, .. }| c.property_type == dragging.property_type)
     {
-        Some((c, col, _)) => (*c, *col),
+        Some(DrawnCurve {
+            curve: c,
+            color: col,
+            ..
+        }) => (*c, *col),
         None => return,
     };
 

@@ -73,20 +73,26 @@ impl ViewTransform {
     pub(super) fn for_property(
         &self,
         property_type: PropertyType,
-        curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+        curves_to_draw: &[DrawnCurve<'_>],
     ) -> ViewTransform {
         find_drawn_curve(curves_to_draw, property_type)
-            .map_or(*self, |(curve, _, _)| self.for_curve(curve))
+            .map_or(*self, |DrawnCurve { curve, .. }| self.for_curve(curve))
     }
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::platform::ui::curve_editor) struct DrawnCurve<'curve> {
+    pub curve: &'curve PropertyCurve,
+    pub color: [f32; 4],
+}
+
 pub(super) fn find_drawn_curve<'curves, 'curve>(
-    curves_to_draw: &'curves [(&'curve PropertyCurve, [f32; 4], &'curves str)],
+    curves_to_draw: &'curves [DrawnCurve<'curve>],
     property_type: PropertyType,
-) -> Option<&'curves (&'curve PropertyCurve, [f32; 4], &'curves str)> {
+) -> Option<&'curves DrawnCurve<'curve>> {
     curves_to_draw
         .iter()
-        .find(|(curve, _, _)| curve.property_type == property_type)
+        .find(|DrawnCurve { curve, .. }| curve.property_type == property_type)
 }
 
 const MIN_NORMALIZED_HALF_WIDTH: f32 = 1e-6;
@@ -111,7 +117,7 @@ pub(super) fn curve_value_range(curve: &PropertyCurve) -> Option<(f32, f32)> {
 /// clip that grows while a key is dragged keeps the time scale under the cursor.
 pub(super) fn initialize_view_range(
     editor_state: &mut CurveEditorState,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     clip_duration: f32,
 ) {
     if editor_state.view_initialized {
@@ -256,13 +262,11 @@ pub(super) fn format_value_label(value: f32) -> String {
     }
 }
 
-pub(super) fn calculate_global_value_range(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
-) -> (f32, f32) {
+pub(super) fn calculate_global_value_range(curves: &[DrawnCurve<'_>]) -> (f32, f32) {
     let mut min_val = f32::MAX;
     let mut max_val = f32::MIN;
 
-    for (curve, _, _) in curves {
+    for DrawnCurve { curve, .. } in curves {
         for kf in &curve.keyframes {
             min_val = min_val.min(kf.value);
             max_val = max_val.max(kf.value);
@@ -352,17 +356,17 @@ fn merge_into_bounds(points: impl Iterator<Item = (f32, f32)>) -> Option<FrameBo
     })
 }
 
-fn collect_all_keyframe_bounds(curves: &[(&PropertyCurve, [f32; 4], &str)]) -> Option<FrameBounds> {
+fn collect_all_keyframe_bounds(curves: &[DrawnCurve<'_>]) -> Option<FrameBounds> {
     merge_into_bounds(
         curves
             .iter()
-            .flat_map(|(curve, _, _)| curve.keyframes.iter())
+            .flat_map(|DrawnCurve { curve, .. }| curve.keyframes.iter())
             .map(|keyframe| (keyframe.time, keyframe.value)),
     )
 }
 
 fn collect_selected_keyframe_bounds(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
 ) -> Option<FrameBounds> {
     if selected_keyframes.is_empty() {
@@ -371,14 +375,14 @@ fn collect_selected_keyframe_bounds(
 
     merge_into_bounds(selected_keyframes.iter().filter_map(|selected| {
         find_drawn_curve(curves, selected.property_type)
-            .and_then(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
+            .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
             .map(|keyframe| (keyframe.time, keyframe.value))
     }))
 }
 
 pub(super) fn apply_frame_request(
     editor_state: &mut CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     current_time: f32,
 ) {
     let Some(request) = editor_state.frame_request.take() else {
@@ -471,7 +475,10 @@ mod tests {
     #[test]
     fn view_time_scale_stays_put_while_the_clip_grows() {
         let curve = build_curve(&[(0.0, 0.0), (2.4, 1.0)]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
         let mut editor_state = CurveEditorState::default();
 
         initialize_view_range(&mut editor_state, &curves, 2.4);
@@ -484,7 +491,10 @@ mod tests {
     #[test]
     fn framing_two_keys_places_them_at_the_padding_edges() {
         let curve = build_curve(&[(1.0, 0.0), (2.0, 10.0)]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
         let mut editor_state = build_editor_state(FrameRequest::All);
 
         apply_frame_request(&mut editor_state, &curves, 0.0);
@@ -500,7 +510,10 @@ mod tests {
     #[test]
     fn framing_a_single_key_keeps_zoom_finite() {
         let curve = build_curve(&[(1.0, 5.0)]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
         let mut editor_state = build_editor_state(FrameRequest::Selected);
 
         apply_frame_request(&mut editor_state, &curves, 0.0);
@@ -515,7 +528,10 @@ mod tests {
     #[test]
     fn framing_the_playhead_centers_current_time_and_keeps_zoom() {
         let curve = build_curve(&[(1.0, 0.0), (2.0, 10.0)]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
         let mut editor_state = build_editor_state(FrameRequest::Playhead);
         editor_state.zoom_x = 3.0;
 

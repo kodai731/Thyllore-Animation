@@ -4,3 +4,5 @@ pub struct ExpressionLibraryState {
     pub source_model_path: String,
     pub capture_name: String,
 }
+
+crate::startup_resource!(ExpressionLibraryState, Editor);

@@ -18,3 +18,5 @@ pub struct SpringBoneState {
     pub baked_bone_ids: Vec<BoneId>,
     pub original_clip_source_id: Option<u64>,
 }
+
+crate::startup_resource!(SpringBoneState, Editor);

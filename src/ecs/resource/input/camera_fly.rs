@@ -26,3 +26,5 @@ pub struct CameraFlyInput {
     pub speed_modifier: FlySpeedModifier,
     pub delta_seconds: f32,
 }
+
+crate::startup_resource!(CameraFlyInput, Editor);

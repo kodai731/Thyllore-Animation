@@ -112,6 +112,8 @@ pub struct TimelineState {
     pub schedule_extent_seconds: f32,
 }
 
+crate::startup_resource!(TimelineState, Editor);
+
 impl TimelineState {
     pub fn new() -> Self {
         Self {

@@ -52,11 +52,21 @@ pub struct EditEntry {
     pub after: EditCommandAfter,
 }
 
+pub const DEFAULT_MAX_HISTORY: usize = 100;
+
 #[derive(Debug)]
 pub struct EditHistory {
     undo_stack: Vec<EditEntry>,
     redo_stack: Vec<EditEntry>,
     max_history: usize,
+}
+
+crate::startup_resource!(EditHistory, Editor);
+
+impl Default for EditHistory {
+    fn default() -> Self {
+        Self::new(DEFAULT_MAX_HISTORY)
+    }
 }
 
 impl EditHistory {
@@ -238,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_push_and_undo_clip_edit() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
 
@@ -265,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_push_and_redo() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
 
@@ -281,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_redo_cleared_on_new_edit() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("b1");
         let after = make_dummy_clip("a1");
         history.push_clip_edit(1, before, after, "first");
@@ -316,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_returns_entry() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
         history.push_clip_edit(1, before, after, "edit");
@@ -326,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_empty() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         assert!(history.last_undo_mut().is_none());
     }
 

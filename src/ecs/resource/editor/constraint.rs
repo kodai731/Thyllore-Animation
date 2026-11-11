@@ -11,6 +11,8 @@ pub struct ConstraintEditorState {
     pub bake: BakeForm,
 }
 
+crate::startup_resource!(ConstraintEditorState, Editor);
+
 impl Default for ConstraintEditorState {
     fn default() -> Self {
         Self {

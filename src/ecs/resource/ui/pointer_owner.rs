@@ -1,3 +1,5 @@
+crate::startup_resource!(UiPointerOwner, Editor);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiPointerOwnerId {
     Timeline,

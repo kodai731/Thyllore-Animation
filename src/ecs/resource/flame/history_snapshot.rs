@@ -15,3 +15,5 @@ pub struct FlameHistorySnapshot {
 }
 
 pub type FlameHistorySnapshotState = HistorySnapshotState<FlameHistorySnapshot>;
+
+crate::startup_resource!(FlameHistorySnapshotState, PostProcessing);

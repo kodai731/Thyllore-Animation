@@ -22,6 +22,7 @@ pub mod viewport;
 pub use render_context::{build_frame_render_context, build_pass_context, RenderContext};
 
 pub use data::AppData;
+pub use features::screenshot::cleanup_old_screenshots;
 pub use init::*;
 
 use crate::ecs::{ResMut, ResRef, Resource};

@@ -190,13 +190,13 @@ pub fn find_default_scene() -> Option<PathBuf> {
 
 pub struct LoadedScene {
     pub scene: SceneFile,
-    /// `None` when the scene's mesh was generated in-app and has no file to load.
+    /// `None` when the scene has no model or its mesh was generated in-app.
     pub model_path: Option<PathBuf>,
     pub clips: Vec<crate::animation::editable::EditableAnimationClip>,
 }
 
 fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<Option<PathBuf>> {
-    if model.is_generated_mesh() {
+    if !model.names_file() {
         return Ok(None);
     }
 
@@ -281,6 +281,16 @@ mod tests {
 
         assert!(loaded.model_path.is_none());
         assert!(loaded.scene.model.is_generated_mesh());
+    }
+
+    #[test]
+    fn scene_without_a_model_loads_without_a_model_file() {
+        let dir = temp_dir("no_model");
+        let scene_path = write_scene(&dir, "");
+
+        let loaded = load_scene(&scene_path).expect("an empty path names no file");
+
+        assert!(loaded.model_path.is_none());
     }
 
     #[test]

@@ -52,3 +52,5 @@ impl Default for SpringBoneInspectorState {
         }
     }
 }
+
+crate::startup_resource!(SpringBoneInspectorState, Editor);

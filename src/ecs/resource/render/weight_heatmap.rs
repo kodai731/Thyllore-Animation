@@ -18,6 +18,8 @@ pub struct WeightHeatmapState {
     last_applied: HeatmapApplication,
 }
 
+crate::startup_resource!(WeightHeatmapState, Editor);
+
 impl WeightHeatmapState {
     pub fn last_applied(&self) -> &HeatmapApplication {
         &self.last_applied

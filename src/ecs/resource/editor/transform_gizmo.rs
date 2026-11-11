@@ -37,3 +37,5 @@ impl Default for TransformGizmoState {
         }
     }
 }
+
+crate::startup_resource!(TransformGizmoState, Editor);

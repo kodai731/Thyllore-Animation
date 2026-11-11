@@ -34,3 +34,5 @@ pub struct AvatarSetupState {
     pub chain_gen_report: Option<ChainGenReport>,
     pub body_collider_fit: CapsuleFitParams,
 }
+
+crate::startup_resource!(AvatarSetupState, Editor);

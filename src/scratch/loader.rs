@@ -24,6 +24,8 @@ pub struct ScratchHost {
     pub libraries: Vec<libloading::Library>,
 }
 
+crate::startup_resource!(ScratchHost, Editor);
+
 impl ScratchHost {
     pub fn load_job(
         &mut self,

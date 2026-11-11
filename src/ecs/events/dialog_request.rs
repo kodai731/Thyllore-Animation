@@ -19,6 +19,8 @@ pub enum DialogRequest {
     },
 }
 
+crate::startup_resource!(EventQueue<DialogRequest>, Editor);
+
 pub fn send_dialog_request(world: &World, request: DialogRequest) {
     world
         .resource_mut::<EventQueue<DialogRequest>>()

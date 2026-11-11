@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+use crate::ecs::world::World;
+
 pub const UI_SETTINGS_PATH: &str = ".config/ui_settings.ron";
 pub const MIN_UI_SCALE: f32 = 0.75;
 pub const MAX_UI_SCALE: f32 = 2.0;
@@ -45,6 +47,14 @@ impl Default for UiSettings {
 
 pub fn clamp_ui_scale(value: f32) -> f32 {
     value.clamp(MIN_UI_SCALE, MAX_UI_SCALE)
+}
+
+crate::startup_hook!("UiSettings", Editor, insert_ui_settings_if_missing);
+
+fn insert_ui_settings_if_missing(world: &mut World) {
+    if !world.contains_resource::<UiSettings>() {
+        world.insert_resource(load_ui_settings(Path::new(UI_SETTINGS_PATH)));
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -6,7 +6,7 @@ license = "Apache-2.0"
 description = "Debug-only CPU mirrors of the render shaders (not a dependency of the product)"
 
 [dependencies]
-cgmath = "0.18"
+glam = "0.34"
 serde_json = "1"
 thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-render-core = { path = "../thyllore-render-core" }

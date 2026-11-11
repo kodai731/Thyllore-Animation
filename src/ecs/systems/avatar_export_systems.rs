@@ -8,9 +8,8 @@ use thyllore_exporter_core::systems::unity::curves::{morph_track_curves, write_e
 use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, ExpressionLibraryState, TimelineState};
-use crate::ecs::systems::avatar_setup_systems::{
-    export_avatar_sidecar, find_expression_morph, find_model_path,
-};
+use crate::ecs::systems::avatar_setup_systems::find_model_path;
+use crate::ecs::systems::avatar_sidecar_systems::{export_avatar_sidecar, find_expression_morph};
 use crate::ecs::world::World;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 

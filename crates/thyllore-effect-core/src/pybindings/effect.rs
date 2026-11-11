@@ -1,5 +1,5 @@
 use crate::water::{inverse_view_proj_f64, ABSORPTION_REFERENCE_DISTANCE};
-use cgmath::Matrix4;
+use glam::Mat4;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::de::DeserializeOwned;
@@ -37,21 +37,12 @@ fn value_error(message: String) -> PyErr {
     PyErr::new::<pyo3::exceptions::PyValueError, _>(message)
 }
 
-fn ui_kind_name(kind: UiKind) -> &'static str {
-    match kind {
-        UiKind::Scalar => "scalar",
-        UiKind::Color => "color",
-        UiKind::Absorption => "absorption",
-        UiKind::Offset => "offset",
-    }
-}
-
 fn fill_ui_param_dict(dict: &Bound<'_, PyDict>, param: &UiParam) -> PyResult<()> {
     dict.set_item("name", param.name)?;
     dict.set_item("path", param.path)?;
     dict.set_item("label", param.display_label())?;
     dict.set_item("group", param.group)?;
-    dict.set_item("kind", ui_kind_name(param.kind))?;
+    dict.set_item("kind", param.kind.name())?;
     dict.set_item("min", param.min)?;
     dict.set_item("max", param.max)?;
     dict.set_item("format", param.format)?;
@@ -183,15 +174,53 @@ pub fn blender_to_engine_matrix() -> [[f32; 4]; 4] {
     thyllore_math_core::blender_to_engine_rows()
 }
 
-pub fn matrix_from_column_major(values: [f32; 16]) -> Matrix4<f32> {
-    Matrix4::new(
+fn matrix_from_rows(rows: &[[f32; 4]; 4]) -> Mat4 {
+    Mat4::from_cols_array_2d(rows).transpose()
+}
+
+fn rows_of(matrix: Mat4) -> [[f32; 4]; 4] {
+    matrix.transpose().to_cols_array_2d()
+}
+
+/// The engine's projection (row-major): Vulkan clip space, reversed infinite depth.
+#[pyfunction]
+pub fn engine_projection(fovy_radians: f32, aspect: f32, near: f32) -> [[f32; 4]; 4] {
+    rows_of(thyllore_math_core::perspective_infinite_reverse(
+        fovy_radians,
+        aspect,
+        near,
+    ))
+}
+
+/// The engine's projection (row-major) for a viewport whose Blender `window_matrix` is given as rows.
+#[pyfunction]
+pub fn engine_projection_from_window(window_matrix: [[f32; 4]; 4], near: f32) -> [[f32; 4]; 4] {
+    rows_of(thyllore_math_core::perspective_infinite_reverse_focal(
+        window_matrix[0][0],
+        window_matrix[1][1],
+        near,
+    ))
+}
+
+/// Blender world points in the local space of the object whose `matrix_world` rows are given.
+#[pyfunction]
+pub fn object_local_points(
+    object_world: [[f32; 4]; 4],
+    points: Vec<[f32; 3]>,
+) -> PyResult<Vec<[f32; 3]>> {
+    thyllore_math_core::world_to_local_points(&matrix_from_rows(&object_world), &points)
+        .map_err(|error| value_error(error.to_string()))
+}
+
+pub fn matrix_from_column_major(values: [f32; 16]) -> Mat4 {
+    Mat4::from_cols_array(&[
         values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
         values[8], values[9], values[10], values[11], values[12], values[13], values[14],
         values[15],
-    )
+    ])
 }
 
-pub fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Matrix4<f32> {
+pub fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Mat4 {
     inverse_view_proj_f64(
         matrix_from_column_major(proj),
         matrix_from_column_major(view),

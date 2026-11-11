@@ -4,9 +4,9 @@ use imgui::{SnapshotTextureId, TextureFormat, TextureId, TextureUploadRect};
 use crate::ecs::resource::ImguiTextures;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{shader_bindings, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{imgui_texture_id, shader_bindings, ReflectedSetLayout};
 use crate::vulkanr::resource::{GpuResource, PixelRegion, SampledTexture};
-use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::types::{Instance, Sampler};
 
 fn pixel_region(rect: &TextureUploadRect) -> PixelRegion<'_> {
     PixelRegion {
@@ -24,7 +24,7 @@ pub unsafe fn imgui_texture_create(
     rrdevice: &RRDevice,
     command_pool: &RRCommandPool,
     layout: &ReflectedSetLayout,
-    sampler: vk::Sampler,
+    sampler: Sampler,
     imgui_textures: &mut ImguiTextures,
     id: SnapshotTextureId,
     region: PixelRegion<'_>,
@@ -48,7 +48,7 @@ pub unsafe fn imgui_texture_create(
     );
 
     imgui_textures.textures.insert(id, texture);
-    Ok(TextureId::new(descriptor_set.as_raw()))
+    Ok(TextureId::new(imgui_texture_id(descriptor_set)))
 }
 
 pub unsafe fn imgui_texture_update(
@@ -66,7 +66,7 @@ pub unsafe fn imgui_texture_update(
     let regions: Vec<PixelRegion<'_>> = rects.iter().map(pixel_region).collect();
 
     texture.upload_regions(instance, rrdevice, command_pool, &regions)?;
-    Ok(TextureId::new(texture.descriptor_set().as_raw()))
+    Ok(TextureId::new(imgui_texture_id(texture.descriptor_set())))
 }
 
 pub unsafe fn imgui_texture_destroy(
@@ -74,7 +74,7 @@ pub unsafe fn imgui_texture_destroy(
     imgui_textures: &mut ImguiTextures,
     id: SnapshotTextureId,
 ) -> Result<()> {
-    rrdevice.device.device_wait_idle()?;
+    rrdevice.wait_idle()?;
     let mut texture = imgui_textures
         .textures
         .remove(&id)

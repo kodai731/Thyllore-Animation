@@ -1,6 +1,4 @@
 pub mod copilot;
-#[cfg(feature = "debug-log")]
-pub mod debug_log;
 pub mod degrade;
 pub mod feedback;
 pub mod mode;

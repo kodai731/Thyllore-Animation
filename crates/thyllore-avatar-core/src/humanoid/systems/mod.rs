@@ -4,6 +4,6 @@ pub mod humanoid_frame;
 pub mod mapping_io;
 pub mod name_match;
 pub mod pose;
-pub mod spring_prefix;
+pub mod structural_chains;
 pub mod tokenize;
 pub mod validate;

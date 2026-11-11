@@ -316,7 +316,7 @@ pub fn parse_param_field(
         if kind == ValueKind::Other {
             return Err(Error::new_spanned(
                 field,
-                "ui is only available for f32 / u32 / bool / [f32; N] values",
+                "ui is only available for f32 / u32 / bool / [f32; N] / Vec3 values",
             ));
         }
         if ui.min.is_none() || ui.max.is_none() {
@@ -409,6 +409,7 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
 
 fn value_kind(ty: &Type) -> ValueKind {
     match ty {
+        Type::Path(path) if is_vec3(path) => ValueKind::Array(3),
         Type::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 => {
             match path.path.segments[0].ident.to_string().as_str() {
                 "f32" => ValueKind::F32,
@@ -433,6 +434,13 @@ fn value_kind(ty: &Type) -> ValueKind {
         }
         _ => ValueKind::Other,
     }
+}
+
+fn is_vec3(path: &syn::TypePath) -> bool {
+    let Some(last) = path.path.segments.last() else {
+        return false;
+    };
+    path.qself.is_none() && last.ident == "Vec3" && last.arguments.is_none()
 }
 
 fn doc_comment(field: &Field) -> String {
@@ -1195,6 +1203,16 @@ mod tests {
     fn rejects_color_kind_on_non_rgb_arrays() {
         let message = expand_err(&format!("{TOP} struct S {{ #[persist(ui(kind = Color, min = 0.0, max = 1.0))] pub c: [f32; 2] }}"));
         assert!(message.contains("[f32; 3]"), "{message}");
+    }
+
+    #[test]
+    fn vector3_with_ui_is_a_three_component_array() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Offset, min = -1.0, max = 1.0))] pub dir: Vec3 }}"
+        ));
+        for suffix in ["dir_x", "dir_y", "dir_z"] {
+            assert!(expanded.contains(&format!("\"{suffix}\"")), "{expanded}");
+        }
     }
 
     #[test]

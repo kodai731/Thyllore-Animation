@@ -1,7 +1,7 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::PassContext;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 struct BloomFrame<'a> {
     bloom_chain: &'a thyllore_vulkan_core::resource::BloomChain,
@@ -53,7 +53,7 @@ fn bloom_frame<'a, 'b>(ctx: &'a PassContext<'b>) -> Result<Option<BloomFrame<'a>
 
 pub unsafe fn record_bloom_downsample(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     mip_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -76,7 +76,7 @@ pub unsafe fn record_bloom_downsample(
 
 pub unsafe fn record_bloom_upsample(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     pass_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -96,7 +96,7 @@ pub unsafe fn record_bloom_upsample(
     )
 }
 
-pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -> Result<()> {
+pub unsafe fn record_dof(ctx: &PassContext, command_buffer: CommandBuffer) -> Result<()> {
     let (Some(pipeline), Some(dof_descriptor), Some(dof_buffer)) = (
         ctx.raytracing.dof_pipeline.as_ref(),
         ctx.raytracing.dof_descriptor.as_ref(),
@@ -107,7 +107,7 @@ pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -
     let output = ctx.transient_image(crate::app::post_process::DOF_OUTPUT)?;
     let Some(dof_framebuffer) = ctx
         .transient
-        .cached_framebuffer(dof_buffer.render_pass, &[output.view])
+        .cached_framebuffer(dof_buffer.render_pass(), &[output.view()])
     else {
         return Ok(());
     };
@@ -147,7 +147,7 @@ pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -
 
 pub unsafe fn record_auto_exposure(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     frame_slot: usize,
 ) -> Result<()> {
     let ae_settings = ctx
@@ -202,38 +202,7 @@ pub unsafe fn record_auto_exposure(
         command_buffer,
     )?;
 
-    // BufferMemoryBarrier: COMPUTE_SHADER (SHADER_WRITE) → TRANSFER (TRANSFER_READ)
-    let barrier = vk::BufferMemoryBarrier::builder()
-        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-        .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-        .buffer(buffers.luminance_buffer)
-        .offset(0)
-        .size(8u64)
-        .build();
-
-    render.device.device.cmd_pipeline_barrier(
-        command_buffer,
-        vk::PipelineStageFlags::COMPUTE_SHADER,
-        vk::PipelineStageFlags::TRANSFER,
-        vk::DependencyFlags::empty(),
-        &[] as &[vk::MemoryBarrier],
-        &[barrier],
-        &[] as &[vk::ImageMemoryBarrier],
-    );
-
-    // Copy luminance_buffer → readback_buffers[frame_slot] (8 bytes)
-    render.device.device.cmd_copy_buffer(
-        command_buffer,
-        buffers.luminance_buffer,
-        buffers.readback_buffers[frame_slot],
-        &[vk::BufferCopy::builder()
-            .src_offset(0)
-            .dst_offset(0)
-            .size(thyllore_vulkan_core::resource::LUMINANCE_BUFFER_SIZE)
-            .build()],
-    );
+    buffers.record_luminance_readback(render.device, command_buffer, frame_slot);
 
     Ok(())
 }

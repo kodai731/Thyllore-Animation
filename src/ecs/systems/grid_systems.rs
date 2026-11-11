@@ -1,6 +1,6 @@
 use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
-use crate::ecs::component::{ColorVertex, LineMesh, MeshScale};
+use crate::ecs::component::{ColorVertex, MeshScale, StaticLineMesh};
 
 /// Grid line color: light gray, visible against black background
 const GRID_LINE_COLOR: [f32; 3] = [0.25, 0.25, 0.25];
@@ -105,8 +105,8 @@ fn add_line_vertex_data(
 }
 
 #[deprecated(note = "Use create_grid_mesh_data() instead")]
-pub fn create_grid_mesh() -> (LineMesh, u32) {
-    let mut mesh = LineMesh::default();
+pub fn create_grid_mesh() -> (StaticLineMesh, u32) {
+    let mut mesh = StaticLineMesh::default();
 
     let grid_count = 1000;
     let grid_extent = 10000.0;
@@ -148,7 +148,7 @@ pub fn create_grid_mesh() -> (LineMesh, u32) {
 
 #[allow(deprecated)]
 fn add_grid_axis(
-    mesh: &mut LineMesh,
+    mesh: &mut StaticLineMesh,
     axis: u32,
     count: u32,
     extent: f32,
@@ -189,7 +189,7 @@ fn add_grid_axis(
 }
 
 #[allow(deprecated)]
-fn add_line_vertices(mesh: &mut LineMesh, pos: [f32; 3], color: [f32; 3]) {
+fn add_line_vertices(mesh: &mut StaticLineMesh, pos: [f32; 3], color: [f32; 3]) {
     let vertex = ColorVertex { pos, color };
     let index = mesh.vertices.len() as u32;
     mesh.vertices.push(vertex);

@@ -7,6 +7,8 @@ pub struct BonePoseOverride {
     pub overrides: HashMap<BoneId, BoneLocalPose>,
 }
 
+crate::startup_resource!(BonePoseOverride, Editor);
+
 impl BonePoseOverride {
     pub fn clear(&mut self) {
         self.overrides.clear();

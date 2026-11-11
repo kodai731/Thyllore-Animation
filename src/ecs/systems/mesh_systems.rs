@@ -1,19 +1,17 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::ecs::component::mesh::MeshData;
 use crate::ecs::resource::MeshAssets;
 
 pub use thyllore_model_core::mesh::{compute_vertex_layout, create_interleaved_buffer};
 
-pub fn mesh_calculate_model_bounds(
-    assets: &MeshAssets,
-) -> Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)> {
+pub fn mesh_calculate_model_bounds(assets: &MeshAssets) -> Option<(Vec3, Vec3, Vec3)> {
     if assets.meshes.is_empty() {
         return None;
     }
 
-    let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-    let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+    let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+    let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
     let mut has_vertices = false;
 
     for mesh in &assets.meshes {
@@ -32,7 +30,7 @@ pub fn mesh_calculate_model_bounds(
         return None;
     }
 
-    let center = Vector3::new(
+    let center = Vec3::new(
         (min.x + max.x) * 0.5,
         (min.y + max.y) * 0.5,
         (min.z + max.z) * 0.5,

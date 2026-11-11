@@ -1,21 +1,25 @@
 pub use anyhow::{anyhow, Result};
 pub use core::result::Result::Ok;
 // pub use log::*;  // カスタムlog!マクロと競合するため、標準のlogクレートは使わない
-pub use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-pub use vulkanalia::prelude::v1_2::*;
-pub use vulkanalia::vk::ExtDebugUtilsExtension;
-pub use vulkanalia::vk::KhrSurfaceExtension;
-pub use vulkanalia::vk::KhrSwapchainExtension;
-pub use vulkanalia::window as vk_window;
-pub use vulkanalia::Version;
+pub(crate) use vulkanalia::loader::{LibloadingLoader, LIBRARY};
+pub(crate) use vulkanalia::prelude::v1_2::*;
+pub(crate) use vulkanalia::vk::ExtDebugUtilsExtension;
+pub(crate) use vulkanalia::vk::KhrSurfaceExtension;
+pub(crate) use vulkanalia::vk::KhrSwapchainExtension;
+pub(crate) use vulkanalia::window as vk_window;
+pub(crate) use vulkanalia::Version;
 
-pub unsafe fn get_memory_type_index(
+use crate::types::Instance;
+
+pub(crate) unsafe fn get_memory_type_index(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
     properties: vk::MemoryPropertyFlags,
     requirements: vk::MemoryRequirements,
 ) -> Result<u32> {
-    let memory = instance.get_physical_device_memory_properties(physical_device);
+    let memory = instance
+        .raw()
+        .get_physical_device_memory_properties(physical_device);
     (0..memory.memory_type_count)
         .find(|i| {
             let suitable = (requirements.memory_type_bits & (1 << i) as u32) != 0;

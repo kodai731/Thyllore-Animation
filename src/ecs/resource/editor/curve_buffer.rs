@@ -8,6 +8,8 @@ pub struct CurveEditorBuffer {
     pub snapshots: HashMap<(BoneId, PropertyType), Vec<(f32, f32)>>,
 }
 
+crate::startup_resource!(CurveEditorBuffer, Editor);
+
 impl CurveEditorBuffer {
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()

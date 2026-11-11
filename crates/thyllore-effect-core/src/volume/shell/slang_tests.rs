@@ -42,17 +42,17 @@ fn sample_shells() -> [VolumeShell; 3] {
     ]
 }
 
-fn random_ray(rng: &mut fastrand::Rng, shell: &VolumeShell) -> (Vector3<f32>, Vector3<f32>) {
+fn random_ray(rng: &mut fastrand::Rng, shell: &VolumeShell) -> (Vec3, Vec3) {
     let reach = shell
         .envelope_radius(shell.h_top)
         .max(shell.envelope_radius(0.0))
         * 2.0;
-    let origin = Vector3::new(
+    let origin = Vec3::new(
         (rng.f32() * 2.0 - 1.0) * reach,
         (rng.f32() * 1.4 - 0.2) * shell.height,
         (rng.f32() * 2.0 - 1.0) * reach,
     );
-    let direction = Vector3::new(
+    let direction = Vec3::new(
         rng.f32() * 2.0 - 1.0,
         rng.f32() * 2.0 - 1.0,
         rng.f32() * 2.0 - 1.0,
@@ -66,20 +66,20 @@ struct Mismatch {
     worst_rel: f32,
 }
 
-fn random_wall_point(rng: &mut fastrand::Rng, shell: &VolumeShell) -> (Vector3<f32>, Vector3<f32>) {
+fn random_wall_point(rng: &mut fastrand::Rng, shell: &VolumeShell) -> (Vec3, Vec3) {
     let h = rng.f32() * 1.2 * shell.h_top;
     let half_width = shell.width_q.sqrt();
     let radius = shell.wall_radius(h) + (rng.f32() * 2.0 - 1.0) * 1.5 * half_width;
     let angle = rng.f32() * std::f32::consts::TAU;
-    let point = Vector3::new(radius * angle.cos(), h * shell.height, radius * angle.sin());
-    (point, Vector3::new(0.0, 0.0, 0.0))
+    let point = Vec3::new(radius * angle.cos(), h * shell.height, radius * angle.sin());
+    (point, Vec3::new(0.0, 0.0, 0.0))
 }
 
 fn compare<S, F, G>(name: &str, sample: S, rust: F, slang: G) -> Mismatch
 where
-    S: Fn(&mut fastrand::Rng, &VolumeShell) -> (Vector3<f32>, Vector3<f32>),
-    F: Fn(&VolumeShell, Vector3<f32>, Vector3<f32>) -> f32,
-    G: Fn(&VolumeShell, Vector3<f32>, Vector3<f32>) -> f32,
+    S: Fn(&mut fastrand::Rng, &VolumeShell) -> (Vec3, Vec3),
+    F: Fn(&VolumeShell, Vec3, Vec3) -> f32,
+    G: Fn(&VolumeShell, Vec3, Vec3) -> f32,
 {
     let mut rng = fastrand::Rng::with_seed(0x5148);
     let mut mismatch = Mismatch {

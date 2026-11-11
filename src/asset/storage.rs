@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use crate::animation::{AnimationClip, Skeleton, SkeletonId};
-use crate::render::MaterialUBO;
 use crate::vulkanr::resource::graphics_resource::MaterialId;
+use thyllore_render_core::MaterialUBO;
 
 pub type AssetId = u64;
 
@@ -46,7 +46,7 @@ pub struct NodeAsset {
     pub id: AssetId,
     pub name: String,
     pub parent_id: Option<AssetId>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
 }
 
 impl Default for NodeAsset {
@@ -55,7 +55,7 @@ impl Default for NodeAsset {
             id: 0,
             name: String::new(),
             parent_id: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         }
     }
 }

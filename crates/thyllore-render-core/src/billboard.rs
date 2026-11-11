@@ -1,6 +1,6 @@
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
-use crate::DynamicMesh;
+use crate::StaticMesh;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy, Default)]
@@ -9,10 +9,10 @@ pub struct BillboardVertex {
     pub tex_coord: [f32; 2],
 }
 
-pub type BillboardMesh = DynamicMesh<BillboardVertex>;
+pub type BillboardMesh = StaticMesh<BillboardVertex>;
 
 #[derive(Clone, Debug)]
 pub struct BillboardTransform {
-    pub position: Vector3<f32>,
-    pub model_matrix: Matrix4<f32>,
+    pub position: Vec3,
+    pub model_matrix: Mat4,
 }

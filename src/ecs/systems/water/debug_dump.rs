@@ -213,8 +213,8 @@ fn build_laplace_beltrami_modes_json(effect: &WaterTorusEffect) -> Value {
 
 fn build_ubo_json(ubo: &WaterUBO) -> Value {
     json!({
-        "model": matrix_json(&ubo.model),
-        "inverse_model": matrix_json(&ubo.inverse_model),
+        "model": matrix_json(&ubo.model.to_mat4()),
+        "inverse_model": matrix_json(&ubo.inverse_model.to_mat4()),
         "radii": ubo.radii,
         "absorption": ubo.absorption,
         "flow": ubo.flow,

@@ -105,8 +105,8 @@ fn build_effect_json(effect: &WindTornadoEffect) -> Value {
 fn build_ubo_json(ubo: &WindUBO) -> Value {
     let puffs: Vec<[f32; 4]> = ubo.puffs[..ubo.puff_params[0] as usize].to_vec();
     json!({
-        "model": matrix_json(&ubo.model),
-        "inverse_model": matrix_json(&ubo.inverse_model),
+        "model": matrix_json(&ubo.model.to_mat4()),
+        "inverse_model": matrix_json(&ubo.inverse_model.to_mat4()),
         "shape": ubo.shape,
         "wall": ubo.wall,
         "optics": ubo.optics,

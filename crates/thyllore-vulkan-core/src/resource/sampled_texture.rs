@@ -9,9 +9,10 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 use thyllore_spirv_reflect::ShaderBinding;
 
-pub const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+pub(crate) const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 pub const SAMPLED_TEXTURE_BYTES_PER_PIXEL: usize = 4;
 
 /// Tightly packed rows of RGBA8 pixels destined for a rectangle of a texture.
@@ -47,7 +48,7 @@ impl SampledTexture {
         command_pool: &RRCommandPool,
         layout: &ReflectedSetLayout,
         sampler_binding: ShaderBinding,
-        sampler: vk::Sampler,
+        sampler: crate::types::Sampler,
         region: PixelRegion<'_>,
     ) -> Result<Self> {
         let (image, memory) = create_image(
@@ -76,7 +77,7 @@ impl SampledTexture {
             .image(
                 sampler_binding,
                 view,
-                sampler,
+                sampler.raw(),
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
@@ -97,8 +98,8 @@ impl SampledTexture {
         Ok(texture)
     }
 
-    pub fn descriptor_set(&self) -> vk::DescriptorSet {
-        self.descriptor_set.handle()
+    pub fn descriptor_set(&self) -> crate::types::DescriptorSet {
+        crate::types::DescriptorSet(self.descriptor_set.handle())
     }
 
     pub unsafe fn upload_regions(
@@ -140,7 +141,7 @@ impl SampledTexture {
         )?;
         let copies = pack_regions(rrdevice, staging_memory, total_len, regions)?;
 
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let command_buffer = begin_single_time_commands(rrdevice, command_pool.command_pool)?;
         transition_for_transfer(device, command_buffer, self.image, old_layout);
         device.cmd_copy_buffer_to_image(
@@ -171,7 +172,7 @@ unsafe fn pack_regions(
     regions: &[PixelRegion<'_>],
 ) -> Result<Vec<vk::BufferImageCopy>> {
     let mapped = rrdevice
-        .device
+        .device()
         .map_memory(
             staging_memory,
             0,
@@ -196,7 +197,7 @@ unsafe fn pack_regions(
         offset += region.packed_len();
     }
 
-    rrdevice.device.unmap_memory(staging_memory);
+    rrdevice.device().unmap_memory(staging_memory);
     Ok(copies)
 }
 

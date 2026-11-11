@@ -1,7 +1,7 @@
 use super::*;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
-fn random_in_unit_sphere() -> Vector3<f32> {
+fn random_in_unit_sphere() -> Vec3 {
     let mut x: f32 = 0.0;
     let mut y: f32 = 0.0;
     let mut z: f32 = 0.0;
@@ -10,14 +10,14 @@ fn random_in_unit_sphere() -> Vector3<f32> {
         y = fastrand::f32() * 2.0 - 1.0;
         z = fastrand::f32() * 2.0 - 1.0;
     }
-    Vector3::new(x, y, z)
+    Vec3::new(x, y, z)
 }
 
-fn random_direction() -> Vector3<f32> {
+fn random_direction() -> Vec3 {
     let theta = fastrand::f32() * 2.0 * std::f32::consts::PI;
     let cos_phi = fastrand::f32() * 2.0 - 1.0;
     let sin_phi = (1.0 - cos_phi * cos_phi).sqrt();
-    Vector3::new(sin_phi * theta.cos(), cos_phi, sin_phi * theta.sin()).normalize()
+    Vec3::new(sin_phi * theta.cos(), cos_phi, sin_phi * theta.sin()).normalize()
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn test_intersect_torus_residuals_and_root_counts() {
         for i in 0..hits.count as usize {
             let t = hits.roots[i];
             let p = origin + dir * t;
-            let p_norm = Vector3::new(p.x / major_radius, p.y / major_radius, p.z / major_radius);
+            let p_norm = Vec3::new(p.x / major_radius, p.y / major_radius, p.z / major_radius);
             let residual = torus_implicit(p_norm, r_hat);
             assert!(
                 residual.abs() < 1e-5,
@@ -97,7 +97,7 @@ fn test_project_to_torus_residual_and_identity() {
 
         let proj = project_to_torus(p, major_radius, minor_radius);
 
-        let p_norm = Vector3::new(
+        let p_norm = Vec3::new(
             proj.point.x / major_radius,
             proj.point.y / major_radius,
             proj.point.z / major_radius,
@@ -114,7 +114,7 @@ fn test_project_to_torus_residual_and_identity() {
         );
 
         let surface_point = torus_surface_point(proj.u, proj.v, major_radius, minor_radius);
-        let diff = (surface_point - proj.point).magnitude();
+        let diff = (surface_point - proj.point).length();
         assert!(
             diff < 1e-5 * major_radius.max(1.0),
             "identity diff={:.8} p={:?} proj={:?} surface={:?} u={} v={}",
@@ -133,8 +133,8 @@ fn test_torus_local_bounds() {
     let major_radius = 5.0;
     let minor_radius = 1.0;
     let (min, max) = torus_local_bounds(major_radius, minor_radius);
-    assert_eq!(min, Vector3::new(-6.0, -1.0, -6.0));
-    assert_eq!(max, Vector3::new(6.0, 1.0, 6.0));
+    assert_eq!(min, Vec3::new(-6.0, -1.0, -6.0));
+    assert_eq!(max, Vec3::new(6.0, 1.0, 6.0));
 }
 
 #[test]
@@ -152,18 +152,18 @@ fn test_torus_local_bounds_corners() {
 
 #[test]
 fn test_torus_gradient() {
-    let p = Vector3::new(6.0, 0.0, 0.0);
+    let p = Vec3::new(6.0, 0.0, 0.0);
     let r_hat = 0.2;
     let grad = torus_gradient(p, r_hat);
-    assert!(grad.magnitude() > 1e-6);
+    assert!(grad.length() > 1e-6);
 }
 
 #[test]
 fn test_bounding_sphere_reject() {
     let major_radius = 5.0;
     let minor_radius = 1.0;
-    let origin = Vector3::new(100.0, 100.0, 100.0);
-    let dir = Vector3::new(0.0, 0.0, 1.0);
+    let origin = Vec3::new(100.0, 100.0, 100.0);
+    let dir = Vec3::new(0.0, 0.0, 1.0);
     let hits = intersect_torus(origin, dir, major_radius, minor_radius);
     assert_eq!(hits.count, 0);
 }
@@ -172,8 +172,8 @@ fn test_bounding_sphere_reject() {
 fn test_roots_are_sorted() {
     let major_radius = 5.0;
     let minor_radius = 1.0;
-    let origin = Vector3::new(0.0, 0.0, -10.0);
-    let dir = Vector3::new(0.0, 0.0, 1.0);
+    let origin = Vec3::new(0.0, 0.0, -10.0);
+    let dir = Vec3::new(0.0, 0.0, 1.0);
     let hits = intersect_torus(origin, dir, major_radius, minor_radius);
     assert_eq!(hits.count, 4);
     for i in 1..hits.count as usize {
@@ -199,8 +199,8 @@ fn test_roots_are_sorted() {
 fn test_roots_are_positive() {
     let major_radius = 5.0;
     let minor_radius = 1.0;
-    let origin = Vector3::new(0.0, 0.0, -10.0);
-    let dir = Vector3::new(0.0, 0.0, 1.0);
+    let origin = Vec3::new(0.0, 0.0, -10.0);
+    let dir = Vec3::new(0.0, 0.0, 1.0);
     let hits = intersect_torus(origin, dir, major_radius, minor_radius);
     for i in 0..hits.count as usize {
         assert!(hits.roots[i] > 0.0, "root[{}] = {}", i, hits.roots[i]);
@@ -214,9 +214,9 @@ fn test_torus_surface_normal_is_normalized() {
         let v = fastrand::f32() * 2.0 * std::f32::consts::PI;
         let n = torus_surface_normal(u, v);
         assert!(
-            (n.magnitude() - 1.0).abs() < 1e-6,
+            (n.length() - 1.0).abs() < 1e-6,
             "normal magnitude={:.8}",
-            n.magnitude()
+            n.length()
         );
     }
 }

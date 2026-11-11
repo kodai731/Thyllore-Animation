@@ -35,6 +35,17 @@ pub enum UiKind {
     Offset,
 }
 
+impl UiKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            UiKind::Scalar => "scalar",
+            UiKind::Color => "color",
+            UiKind::Absorption => "absorption",
+            UiKind::Offset => "offset",
+        }
+    }
+}
+
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
 #[derive(Clone, Copy, Debug)]
 pub struct UiParam {

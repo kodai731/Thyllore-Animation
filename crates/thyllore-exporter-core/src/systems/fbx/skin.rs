@@ -87,3 +87,19 @@ pub(crate) fn matrix4_to_flat_f64_scaled(m: &Mat4, inv_unit_scale: f32) -> [f64;
         m.col(3)[3] as f64,
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_matrix4_to_flat_f64_scaled() {
+        let identity = Mat4::IDENTITY;
+        let flat = matrix4_to_flat_f64_scaled(&identity, 2.0);
+        assert!((flat[0] - 1.0).abs() < 1e-8);
+        assert!((flat[5] - 1.0).abs() < 1e-8);
+        assert!((flat[10] - 1.0).abs() < 1e-8);
+        assert!((flat[15] - 1.0).abs() < 1e-8);
+        assert!((flat[12] - 0.0).abs() < 1e-8);
+    }
+}

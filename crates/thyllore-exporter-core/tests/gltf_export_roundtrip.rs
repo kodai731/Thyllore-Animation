@@ -1,11 +1,10 @@
 #![cfg(test)]
 
 use std::fs;
-use std::path::PathBuf;
 
 use gltf::binary::Glb;
 use gltf::json::{self, Index};
-use thyllore_anim_core::editable::{curve_add_keyframe, PropertyType};
+use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip, PropertyType};
 use thyllore_anim_core::Skeleton;
 
 use thyllore_exporter_core::systems::gltf::export_gltf_animation_only;
@@ -18,9 +17,8 @@ fn create_test_skeleton() -> Skeleton {
     skeleton
 }
 
-fn create_test_clip() -> thyllore_anim_core::editable::EditableAnimationClip {
-    let mut clip =
-        thyllore_anim_core::editable::EditableAnimationClip::new(1, "test_anim".to_string());
+fn create_test_clip() -> EditableAnimationClip {
+    let mut clip = EditableAnimationClip::new(1, "test_anim".to_string());
     let track = clip.add_track(0, "Hips".to_string());
     let curve = track.get_curve_mut(PropertyType::TranslationX);
     curve_add_keyframe(curve, 0.0, 0.0);
@@ -29,16 +27,12 @@ fn create_test_clip() -> thyllore_anim_core::editable::EditableAnimationClip {
     clip
 }
 
-fn temp_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(name)
-}
-
 #[test]
 fn test_export_gltf_animation_only_creates_file() {
     let skeleton = create_test_skeleton();
     let clip = create_test_clip();
 
-    let output_path = temp_path("test_export_gltf_animation_only.glb");
+    let output_path = std::env::temp_dir().join("test_export_gltf_animation_only.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     assert!(
@@ -56,7 +50,7 @@ fn test_export_gltf_animation_only_node_count_matches_bone_count() {
     let skeleton = create_test_skeleton();
     let clip = create_test_clip();
 
-    let output_path = temp_path("test_node_count.glb");
+    let output_path = std::env::temp_dir().join("test_node_count.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
@@ -76,7 +70,7 @@ fn test_export_gltf_animation_only_has_animation_channels() {
     let skeleton = create_test_skeleton();
     let clip = create_test_clip();
 
-    let output_path = temp_path("test_channels.glb");
+    let output_path = std::env::temp_dir().join("test_channels.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
@@ -96,7 +90,7 @@ fn test_export_gltf_animation_only_node_hierarchy_matches_skeleton() {
     let skeleton = create_test_skeleton();
     let clip = create_test_clip();
 
-    let output_path = temp_path("test_hierarchy.glb");
+    let output_path = std::env::temp_dir().join("test_hierarchy.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
@@ -144,7 +138,7 @@ fn test_export_gltf_animation_only_scene_contains_root_bones() {
     let skeleton = create_test_skeleton();
     let clip = create_test_clip();
 
-    let output_path = temp_path("test_scene.glb");
+    let output_path = std::env::temp_dir().join("test_scene.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &[]).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();
@@ -180,7 +174,7 @@ fn test_export_gltf_animation_only_writes_vrm_humanoid() {
     let clip = create_test_clip();
     let humanoid_bones = [("hips".to_string(), 0), ("spine".to_string(), 1)];
 
-    let output_path = temp_path("test_vrm_humanoid.glb");
+    let output_path = std::env::temp_dir().join("test_vrm_humanoid.glb");
     export_gltf_animation_only(&clip, &skeleton, &output_path, &humanoid_bones).unwrap();
 
     let bytes = fs::read(&output_path).unwrap();

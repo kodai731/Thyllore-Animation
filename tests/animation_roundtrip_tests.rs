@@ -228,7 +228,7 @@ fn test_gltf_to_fbx_roundtrip() -> anyhow::Result<()> {
 
     // Export to FBX
     let fbx_output_path = std::env::temp_dir().join("roundtrip_gltf_to_fbx.fbx");
-    thyllore_exporter_core::systems::fbx::animation::export_animation_fbx(
+    thyllore_exporter_core::systems::fbx::export_animation_fbx(
         &editable_clip,
         skeleton,
         &fbx_output_path,

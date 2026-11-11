@@ -26,7 +26,7 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
         Some(fbx_model) => {
             crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, Some(&clip), &skeleton, path)
         }
-        None => crate::exporter::fbx_animation::export_animation_fbx(
+        None => crate::exporter::fbx_exporter::export_animation_fbx(
             &clip,
             &skeleton,
             path,

@@ -13,12 +13,8 @@ pub(super) fn find_keyframe_time(
     property_type: &PropertyType,
     keyframe_id: KeyframeId,
 ) -> Option<f32> {
-    for DrawnCurve { curve, .. } in curves {
-        if curve.property_type == *property_type {
-            return curve.get_keyframe(keyframe_id).map(|kf| kf.time);
-        }
-    }
-    None
+    let DrawnCurve { curve, .. } = find_drawn_curve(curves, *property_type)?;
+    curve.get_keyframe(keyframe_id).map(|kf| kf.time)
 }
 
 pub(super) fn find_keyframe_at_position(

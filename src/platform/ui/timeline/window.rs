@@ -1,4 +1,20 @@
-use super::*;
+use super::clip_track::{build_clip_tracks_section, ClipTrackContext};
+use super::input::{handle_middle_drag_pan, handle_mouse_wheel_zoom, handle_timeline_shortcuts};
+use super::layout::{PIXELS_PER_SECOND, TIME_RULER_HEIGHT, TRACK_LABEL_WIDTH};
+use super::ruler::build_time_ruler_with_scrub;
+use super::transport::build_transport_controls;
+use crate::asset::AssetStorage;
+use crate::ecs::component::ClipTrackSnapshot;
+use crate::ecs::resource::{
+    ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState, LayoutSnapshot,
+    PoseLibrary, TimelineInteractionState, TimelineState,
+};
+use crate::ecs::systems::clip_track_systems::query_clip_tracks;
+use crate::ecs::systems::timeline_effective_duration;
+use crate::ecs::world::World;
+use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use imgui::Condition;
 
 pub(super) fn draw_timeline_window(
     ui: &imgui::Ui,
@@ -178,16 +194,15 @@ pub(super) fn build_timeline_content(
                 state.pan_pending_delta_x = 0.0;
             }
             if !clip_track_snapshot.entries.is_empty() {
-                build_clip_tracks_section(
+                let mut context = ClipTrackContext {
                     ui,
                     world,
-                    state,
-                    interaction,
+                    state: &mut *state,
+                    interaction: &mut *interaction,
                     clip_library,
-                    curve_editor_state,
-                    clip_track_snapshot,
-                    timeline_width,
-                );
+                    curve_editor_state: &mut *curve_editor_state,
+                };
+                build_clip_tracks_section(&mut context, clip_track_snapshot, timeline_width);
             }
         });
 }

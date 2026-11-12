@@ -347,7 +347,7 @@ fn finish_keyframe_drag(
     };
     let applied_axis_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
 
-    send_for_each_selected_key(world, &editor_state.selected_keyframes, |selected| {
+    for selected in &editor_state.selected_keyframes {
         let curve_vt = vt.for_property(selected.property_type, curves_to_draw);
         let delta = dragged_key_delta(&curve_vt, editor_state.drag_start_mouse_pos, mouse_pos);
         let [new_time, new_value] = dragged_key_position(
@@ -357,14 +357,14 @@ fn finish_keyframe_drag(
             time_snap,
         );
 
-        TimelineEvent::MoveKeyframe {
+        world.send_command(TimelineEvent::MoveKeyframe {
             track: track_ref,
             property_type: selected.property_type,
             keyframe_id: selected.keyframe_id,
             new_time,
             new_value,
-        }
-    });
+        });
+    }
 }
 
 fn finish_box_selection(

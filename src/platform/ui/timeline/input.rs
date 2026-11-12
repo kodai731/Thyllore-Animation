@@ -1,4 +1,12 @@
-use super::*;
+use super::layout::PIXELS_PER_SECOND;
+use crate::ecs::resource::{TimelineState, UiPointerOwnerId};
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::World;
+use crate::platform::ui::pointer::{
+    read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion,
+};
+use imgui::MouseButton;
 
 pub(super) fn handle_timeline_shortcuts(ui: &imgui::Ui, world: &World, state: &TimelineState) {
     let io = ui.io();

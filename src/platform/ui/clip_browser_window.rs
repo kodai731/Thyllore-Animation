@@ -37,13 +37,17 @@ fn draw_clip_browser_window(
         });
 }
 
-fn clip_action_button(ui: &imgui::Ui, label: &str, enabled: bool) -> bool {
-    if enabled {
-        ui.small_button(label)
-    } else {
+fn clip_action_button<Action>(
+    ui: &imgui::Ui,
+    label: &str,
+    available_action: Option<Action>,
+) -> Option<Action> {
+    let Some(action) = available_action else {
         ui.text_disabled(label);
-        false
-    }
+        return None;
+    };
+
+    ui.small_button(label).then_some(action)
 }
 
 fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
@@ -56,70 +60,45 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
         send_dialog_request(world, DialogRequest::LoadClip);
     }
 
+    let selected_clip = timeline_state.current_clip_id;
+    let clip_export = |format: ClipExportFormat| {
+        selected_clip.map(|source_id| DialogRequest::ExportClip { source_id, format })
+    };
+
     ui.same_line();
-    let has_selection = timeline_state.current_clip_id.is_some();
-    if clip_action_button(ui, "Save", has_selection) {
-        if let Some(id) = timeline_state.current_clip_id {
-            send_dialog_request(world, DialogRequest::SaveClip(id));
-        }
+    if let Some(source_id) = clip_action_button(ui, "Save", selected_clip) {
+        send_dialog_request(world, DialogRequest::SaveClip(source_id));
     }
 
     ui.same_line();
-    if clip_action_button(ui, "FBX", has_selection) {
-        if let Some(id) = timeline_state.current_clip_id {
-            send_dialog_request(
-                world,
-                DialogRequest::ExportClip {
-                    source_id: id,
-                    format: ClipExportFormat::Fbx,
-                },
-            );
-        }
+    if let Some(request) = clip_action_button(ui, "FBX", clip_export(ClipExportFormat::Fbx)) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
     let has_model = world
         .get_resource::<GltfModelCache>()
         .map_or(false, |c| c.has_model());
-    if clip_action_button(ui, "glTF", has_selection || has_model) {
-        if let Some(id) = timeline_state.current_clip_id {
-            send_dialog_request(
-                world,
-                DialogRequest::ExportClip {
-                    source_id: id,
-                    format: ClipExportFormat::Gltf,
-                },
-            );
-        } else {
-            send_dialog_request(world, DialogRequest::ExportModelGltf);
-        }
+    let gltf_export = clip_export(ClipExportFormat::Gltf)
+        .or_else(|| has_model.then_some(DialogRequest::ExportModelGltf));
+    if let Some(request) = clip_action_button(ui, "glTF", gltf_export) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
-    if clip_action_button(ui, "glTF (anim only)", has_selection) {
-        if let Some(id) = timeline_state.current_clip_id {
-            send_dialog_request(
-                world,
-                DialogRequest::ExportClip {
-                    source_id: id,
-                    format: ClipExportFormat::GltfAnimationOnly,
-                },
-            );
-        }
+    let animation_only_export = clip_export(ClipExportFormat::GltfAnimationOnly);
+    if let Some(request) = clip_action_button(ui, "glTF (anim only)", animation_only_export) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
-    if clip_action_button(ui, "Dup", has_selection) {
-        if let Some(id) = timeline_state.current_clip_id {
-            world.send_command(ClipBrowserEvent::Duplicate(id));
-        }
+    if let Some(source_id) = clip_action_button(ui, "Dup", selected_clip) {
+        world.send_command(ClipBrowserEvent::Duplicate(source_id));
     }
 
     ui.same_line();
-    if clip_action_button(ui, "Del", has_selection) {
-        if let Some(id) = timeline_state.current_clip_id {
-            world.send_command(ClipBrowserEvent::Delete(id));
-        }
+    if let Some(source_id) = clip_action_button(ui, "Del", selected_clip) {
+        world.send_command(ClipBrowserEvent::Delete(source_id));
     }
 }
 

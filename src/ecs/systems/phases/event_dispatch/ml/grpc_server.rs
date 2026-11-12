@@ -1,5 +1,7 @@
 #![cfg(feature = "text-to-motion")]
 
+use std::sync::OnceLock;
+
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::GrpcServerProcess;
@@ -30,12 +32,15 @@ impl UiCommand for GrpcServerEvent {
 }
 
 fn start_grpc_server(server: &mut GrpcServerProcess) {
-    let working_dir = resolve_training_repo_path();
-
-    if let Err(error) = server.start(&working_dir, SERVER_CONFIG_PATH) {
+    if let Err(error) = server.start(training_repo_path(), SERVER_CONFIG_PATH) {
         log_error!("Failed to start gRPC server: {}", error);
         server.last_error = Some(error);
     }
+}
+
+fn training_repo_path() -> &'static str {
+    static TRAINING_REPO_PATH: OnceLock<String> = OnceLock::new();
+    TRAINING_REPO_PATH.get_or_init(resolve_training_repo_path)
 }
 
 fn resolve_training_repo_path() -> String {

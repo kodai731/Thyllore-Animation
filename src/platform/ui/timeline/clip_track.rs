@@ -1,4 +1,30 @@
-use super::*;
+use super::clip_block::{
+    compute_block_color, compute_border_color, draw_clip_block, handle_clip_mute_button,
+    is_point_in_rect, truncate_label,
+};
+use super::clip_drag::{begin_clip_drag, clip_block_display_times, handle_clip_drag_release};
+use super::clip_properties::build_clip_instance_properties;
+use super::layout::{
+    CLIP_BLOCK_COLORS, CLIP_BLOCK_MIN_WIDTH, CLIP_TRACK_HEIGHT, PIXELS_PER_SECOND,
+    TRACK_LABEL_WIDTH,
+};
+use crate::animation::editable::SourceClipId;
+use crate::animation::BoneId;
+use crate::ecs::component::{
+    ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
+};
+use crate::ecs::resource::{
+    ClipLibrary, ClipPreview, CurveEditorState, TimelineInteractionState, TimelineState,
+    UiPointerOwnerId,
+};
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::{clip_schedule_assign_lanes, find_preview_owner};
+use crate::ecs::world::{Entity, World};
+use crate::platform::ui::numeric_format::numeric_format;
+use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
+use imgui::MouseButton;
 
 struct ClipTrackPointer {
     pos: [f32; 2],
@@ -7,31 +33,45 @@ struct ClipTrackPointer {
     double_clicked: bool,
 }
 
+pub(super) struct ClipTrackContext<'a> {
+    pub(super) ui: &'a imgui::Ui,
+    pub(super) world: &'a World,
+    pub(super) state: &'a mut TimelineState,
+    pub(super) interaction: &'a mut TimelineInteractionState,
+    pub(super) clip_library: &'a ClipLibrary,
+    pub(super) curve_editor_state: &'a mut CurveEditorState,
+}
+
 struct ClipTrackFrame {
     pointer: ClipTrackPointer,
     pixels_per_second: f32,
     timeline_width: f32,
-    solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)>,
+    solo_preview: Option<(Entity, SourceClipId)>,
 }
 
 struct ClipTrackRow<'a> {
+    frame: &'a ClipTrackFrame,
     entry_idx: usize,
     entry: &'a ClipTrackEntry,
     track_origin: [f32; 2],
-    is_solo_owner: bool,
+    solo_clip: Option<SourceClipId>,
+}
+
+struct ClipInstanceSlot<'a> {
+    index: usize,
+    instance: &'a ClipInstanceSnapshot,
+    lane: usize,
 }
 
 pub(super) fn build_clip_tracks_section(
-    ui: &imgui::Ui,
-    world: &World,
-    state: &mut TimelineState,
-    interaction: &mut TimelineInteractionState,
-    clip_library: &ClipLibrary,
-    curve_editor_state: &mut CurveEditorState,
+    context: &mut ClipTrackContext,
     snapshot: &ClipTrackSnapshot,
     timeline_width: f32,
 ) {
-    let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let ui = context.ui;
+    let world = context.world;
+
+    let pixels_per_second = PIXELS_PER_SECOND * context.state.zoom_level;
     let pointer = read_ui_pointer(ui);
     let mouse_clicked = pointer.is_clicked(MouseButton::Left)
         && ui_pointer_begin(ui, world, UiPointerOwnerId::Timeline, PointerRegion::Window);
@@ -44,17 +84,17 @@ pub(super) fn build_clip_tracks_section(
 
     handle_clip_drag_release(
         world,
-        interaction,
+        context.interaction,
         track_pointer.pos,
         track_pointer.down,
         pixels_per_second,
     );
 
-    let solo_preview: Option<(crate::ecs::world::Entity, SourceClipId)> =
-        (state.preview == ClipPreview::Solo && state.current_clip_id.is_some())
-            .then(|| find_preview_owner(world))
-            .flatten()
-            .zip(state.current_clip_id);
+    let solo_preview: Option<(Entity, SourceClipId)> = (context.state.preview == ClipPreview::Solo
+        && context.state.current_clip_id.is_some())
+    .then(|| find_preview_owner(world))
+    .flatten()
+    .zip(context.state.current_clip_id);
     let frame = ClipTrackFrame {
         pointer: track_pointer,
         pixels_per_second,
@@ -62,41 +102,29 @@ pub(super) fn build_clip_tracks_section(
         solo_preview,
     };
 
+    let section_start_y = ui.cursor_screen_pos()[1];
     let mut clicked_any_block = false;
-    let mut total_track_rows: f32 = 0.0;
 
     for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
-        let (clicked_row_block, track_height) = build_clip_track_row(
-            ui,
-            world,
-            state,
-            interaction,
-            clip_library,
-            curve_editor_state,
-            &frame,
-            entry_idx,
-            entry,
-        );
-        clicked_any_block |= clicked_row_block;
-        total_track_rows += track_height;
+        clicked_any_block |= build_clip_track_row(context, &frame, entry_idx, entry);
     }
 
-    if frame.pointer.clicked && !clicked_any_block {
-        deselect_on_empty_track_click(ui, world, &frame, total_track_rows, snapshot.entries.len());
+    let clicked_empty_track =
+        frame.pointer.clicked && !clicked_any_block && frame.pointer.pos[1] >= section_start_y;
+    if clicked_empty_track {
+        world.send_command(ClipInstanceEvent::Deselect);
     }
 }
 
 fn build_clip_track_row(
-    ui: &imgui::Ui,
-    world: &World,
-    state: &mut TimelineState,
-    interaction: &mut TimelineInteractionState,
-    clip_library: &ClipLibrary,
-    curve_editor_state: &mut CurveEditorState,
+    context: &mut ClipTrackContext,
     frame: &ClipTrackFrame,
     entry_idx: usize,
     entry: &ClipTrackEntry,
-) -> (bool, f32) {
+) -> bool {
+    let ui = context.ui;
+    let world = context.world;
+
     build_group_headers(ui, world, entry);
 
     let cursor_pos = ui.cursor_screen_pos();
@@ -106,26 +134,23 @@ fn build_clip_track_row(
     let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
     let draw_list = ui.get_window_draw_list();
 
-    let solo_clip_for_row = frame
-        .solo_preview
-        .filter(|(owner, _)| *owner == entry.entity)
-        .map(|(_, clip_id)| clip_id);
     let row = ClipTrackRow {
+        frame,
         entry_idx,
         entry,
         track_origin,
-        is_solo_owner: solo_clip_for_row.is_some(),
+        solo_clip: frame
+            .solo_preview
+            .filter(|(owner, _)| *owner == entry.entity)
+            .map(|(_, clip_id)| clip_id),
     };
 
     let lanes = world
         .get_component::<ClipSchedule>(entry.entity)
         .map(|schedule| clip_schedule_assign_lanes(&schedule.instances))
         .unwrap_or_else(|| vec![0; entry.instances.len()]);
-    let mut lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
-
-    if row.is_solo_owner {
-        lane_count += 1;
-    }
+    let instance_lane_count = lanes.iter().max().map_or(1, |max_lane| max_lane + 1);
+    let lane_count = instance_lane_count + usize::from(row.solo_clip.is_some());
 
     let track_height = (lane_count as f32) * CLIP_TRACK_HEIGHT;
 
@@ -143,41 +168,24 @@ fn build_clip_track_row(
 
     let mut clicked_any_block = false;
 
-    for (inst_idx, inst) in entry.instances.iter().enumerate() {
-        clicked_any_block |= build_clip_instance_block(
-            ui,
-            world,
-            state,
-            interaction,
-            clip_library,
-            curve_editor_state,
-            &draw_list,
-            frame,
-            &row,
-            inst_idx,
-            inst,
-            lanes[inst_idx],
-        );
+    for (index, instance) in entry.instances.iter().enumerate() {
+        let slot = ClipInstanceSlot {
+            index,
+            instance,
+            lane: lanes[index],
+        };
+        clicked_any_block |= build_clip_instance_block(context, &draw_list, &row, &slot);
     }
 
-    if let Some(solo_source_id) = solo_clip_for_row {
-        draw_solo_preview_block(
-            &draw_list,
-            clip_library,
-            solo_source_id,
-            track_origin,
-            lane_count - 1,
-            frame.pixels_per_second,
-        );
-    }
+    draw_solo_preview_block(&draw_list, context.clip_library, &row, instance_lane_count);
 
     ui.dummy([frame.timeline_width, track_height]);
 
-    accept_clip_source_drop(ui, world, frame, entry.entity, track_origin);
+    accept_clip_source_drop(ui, world, &row);
 
-    build_clip_instance_properties(ui, world, state, clip_library, entry);
+    build_clip_instance_properties(ui, world, context.state, context.clip_library, entry);
 
-    (clicked_any_block, track_height)
+    clicked_any_block
 }
 
 fn compute_lane_block_rect(
@@ -194,24 +202,19 @@ fn compute_lane_block_rect(
 }
 
 fn build_clip_instance_block(
-    ui: &imgui::Ui,
-    world: &World,
-    state: &TimelineState,
-    interaction: &mut TimelineInteractionState,
-    clip_library: &ClipLibrary,
-    curve_editor_state: &mut CurveEditorState,
+    context: &mut ClipTrackContext,
     draw_list: &imgui::DrawListMut,
-    frame: &ClipTrackFrame,
     row: &ClipTrackRow,
-    inst_idx: usize,
-    inst: &ClipInstanceSnapshot,
-    lane: usize,
+    slot: &ClipInstanceSlot,
 ) -> bool {
+    let world = context.world;
+    let frame = row.frame;
+    let inst = slot.instance;
     let entity = row.entry.entity;
     let pixels_per_second = frame.pixels_per_second;
 
     let (draw_start, draw_end) = clip_block_display_times(
-        interaction,
+        context.interaction,
         entity,
         inst,
         frame.pointer.pos,
@@ -221,19 +224,19 @@ fn build_clip_instance_block(
     let block_w = ((draw_end - draw_start) * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
     let (block_min, block_max) = compute_lane_block_rect(
         row.track_origin,
-        lane,
+        slot.lane,
         draw_start * pixels_per_second,
         block_w,
     );
 
     let base_color = CLIP_BLOCK_COLORS[row.entry_idx % CLIP_BLOCK_COLORS.len()];
-    let mut color = compute_block_color(base_color, inst, interaction, entity);
+    let mut color = compute_block_color(base_color, inst, context.interaction, entity);
 
-    if row.is_solo_owner {
+    if row.solo_clip.is_some() {
         color[3] *= 0.4;
     }
 
-    let border_color = compute_border_color(inst, state, entity);
+    let border_color = compute_border_color(inst, context.state, entity);
 
     draw_clip_block(draw_list, block_min, block_max, color, border_color, inst);
 
@@ -244,8 +247,8 @@ fn build_clip_instance_block(
         world.send_command(HierarchyEvent::SelectEntity(entity));
         world.send_command(TimelineEvent::SelectClip(inst.source_id));
         open_curve_editor_for_clip(
-            curve_editor_state,
-            clip_library,
+            context.curve_editor_state,
+            context.clip_library,
             inst.source_id,
             row.entry.mesh_bone_id,
         );
@@ -256,7 +259,7 @@ fn build_clip_instance_block(
             instance_id: inst.instance_id,
         });
         begin_clip_drag(
-            interaction,
+            context.interaction,
             entity,
             inst,
             frame.pointer.pos,
@@ -266,7 +269,7 @@ fn build_clip_instance_block(
         );
     }
 
-    handle_clip_mute_button(ui, world, entity, inst, inst_idx, row.entry_idx);
+    handle_clip_mute_button(context.ui, world, entity, inst, slot.index, row.entry_idx);
 
     clicked_block
 }
@@ -274,17 +277,15 @@ fn build_clip_instance_block(
 fn draw_solo_preview_block(
     draw_list: &imgui::DrawListMut,
     clip_library: &ClipLibrary,
-    solo_source_id: SourceClipId,
-    track_origin: [f32; 2],
+    row: &ClipTrackRow,
     solo_lane: usize,
-    pixels_per_second: f32,
 ) {
-    let Some(clip) = clip_library.get(solo_source_id) else {
+    let Some(clip) = row.solo_clip.and_then(|clip_id| clip_library.get(clip_id)) else {
         return;
     };
 
-    let block_w = (clip.duration * pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
-    let (block_min, block_max) = compute_lane_block_rect(track_origin, solo_lane, 0.0, block_w);
+    let block_w = (clip.duration * row.frame.pixels_per_second).max(CLIP_BLOCK_MIN_WIDTH);
+    let (block_min, block_max) = compute_lane_block_rect(row.track_origin, solo_lane, 0.0, block_w);
 
     draw_list
         .add_rect(block_min, block_max, [1.0, 1.0, 1.0, 1.0])
@@ -295,13 +296,7 @@ fn draw_solo_preview_block(
     draw_list.add_text(label_pos, [1.0, 1.0, 1.0, 1.0], &clip.name);
 }
 
-fn accept_clip_source_drop(
-    ui: &imgui::Ui,
-    world: &World,
-    frame: &ClipTrackFrame,
-    entity: crate::ecs::world::Entity,
-    track_origin: [f32; 2],
-) {
+fn accept_clip_source_drop(ui: &imgui::Ui, world: &World, row: &ClipTrackRow) {
     let Some(target) = ui.drag_drop_target() else {
         return;
     };
@@ -309,28 +304,13 @@ fn accept_clip_source_drop(
         .accept_payload::<SourceClipId, _>("CLIP_SOURCE", imgui::DragDropTargetFlags::empty());
 
     if let Some(Ok(payload)) = accepted {
-        let drop_x = frame.pointer.pos[0] - track_origin[0];
-        let start_time = (drop_x / frame.pixels_per_second).max(0.0);
+        let drop_x = row.frame.pointer.pos[0] - row.track_origin[0];
+        let start_time = (drop_x / row.frame.pixels_per_second).max(0.0);
         world.send_command(ClipInstanceEvent::Add {
-            entity,
+            entity: row.entry.entity,
             source_id: payload.data,
             start_time,
         });
-    }
-}
-
-fn deselect_on_empty_track_click(
-    ui: &imgui::Ui,
-    world: &World,
-    frame: &ClipTrackFrame,
-    total_track_rows: f32,
-    entry_count: usize,
-) {
-    let section_start_y = ui.cursor_screen_pos()[1]
-        - (total_track_rows + entry_count as f32 * ui.text_line_height_with_spacing());
-
-    if frame.pointer.pos[1] >= section_start_y {
-        world.send_command(ClipInstanceEvent::Deselect);
     }
 }
 
@@ -343,7 +323,7 @@ pub(super) fn build_group_headers(ui: &imgui::Ui, world: &World, entry: &ClipTra
 pub(super) fn build_single_group_header(
     ui: &imgui::Ui,
     world: &World,
-    entity: crate::ecs::world::Entity,
+    entity: Entity,
     group: &ClipGroupSnapshot,
 ) {
     let mute_label = if group.muted { "[M]" } else { "[ ]" };

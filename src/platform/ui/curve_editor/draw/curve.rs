@@ -4,7 +4,7 @@ use crate::animation::editable::{
 };
 use crate::ecs::resource::CurveSelectedKeyframe;
 
-use super::super::view::{DrawnCurve, ViewTransform};
+use super::super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
 pub(in crate::platform::ui::curve_editor) fn draw_curve_with_keyframes(
     draw_list: &imgui::DrawListMut,
@@ -133,8 +133,8 @@ fn draw_keyframe_marker(
     }
 }
 
-const EXTRAPOLATION_DASH: f32 = 6.0;
-const EXTRAPOLATION_GAP: f32 = 4.0;
+pub(super) const DASH_LENGTH: f32 = 6.0;
+pub(super) const DASH_GAP: f32 = 4.0;
 
 fn draw_extrapolation(
     draw_list: &imgui::DrawListMut,
@@ -155,7 +155,7 @@ fn draw_extrapolation(
         })
         .collect();
 
-    for [from, to] in dashed_segments(&points, EXTRAPOLATION_DASH, EXTRAPOLATION_GAP) {
+    for [from, to] in dashed_segments(&points, DASH_LENGTH, DASH_GAP) {
         draw_list.add_line(from, to, color).thickness(1.5).build();
     }
 }
@@ -201,21 +201,21 @@ pub(in crate::platform::ui::curve_editor) fn draw_selected_keyframes_highlight(
     vt: &ViewTransform,
 ) {
     for selected in selected_keyframes {
-        for DrawnCurve { curve, .. } in curves_to_draw {
-            if curve.property_type == selected.property_type {
-                if let Some(kf) = curve.get_keyframe(selected.keyframe_id) {
-                    let curve_vt = vt.for_curve(curve);
-                    let x = curve_vt.time_to_x(kf.time);
-                    let y = curve_vt.value_to_y(kf.value);
+        let selected_key = find_drawn_curve(curves_to_draw, selected.property_type).and_then(
+            |DrawnCurve { curve, .. }| Some((*curve, curve.get_keyframe(selected.keyframe_id)?)),
+        );
+        let Some((curve, kf)) = selected_key else {
+            continue;
+        };
 
-                    draw_list
-                        .add_circle([x, y], 8.0, [1.0, 1.0, 0.0, 1.0])
-                        .thickness(2.0)
-                        .build();
-                }
-                break;
-            }
-        }
+        let curve_vt = vt.for_curve(curve);
+        let x = curve_vt.time_to_x(kf.time);
+        let y = curve_vt.value_to_y(kf.value);
+
+        draw_list
+            .add_circle([x, y], 8.0, [1.0, 1.0, 0.0, 1.0])
+            .thickness(2.0)
+            .build();
     }
 }
 

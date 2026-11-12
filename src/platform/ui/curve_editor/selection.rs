@@ -6,18 +6,6 @@ use crate::ecs::resource::{
     BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveViewMode,
     DraggingTangent,
 };
-use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
-use crate::ecs::world::World;
-
-pub(super) fn send_for_each_selected_key<'a>(
-    world: &World,
-    selected_keyframes: impl IntoIterator<Item = &'a CurveSelectedKeyframe>,
-    build_event: impl Fn(&CurveSelectedKeyframe) -> TimelineEvent,
-) {
-    for selected in selected_keyframes {
-        world.send_command(build_event(selected));
-    }
-}
 
 pub(super) fn handle_curve_area_click(
     editor_state: &mut CurveEditorState,
@@ -182,15 +170,11 @@ pub(super) fn refresh_selected_keyframe_positions(
     curves: &[DrawnCurve<'_>],
 ) {
     for sel in selected.iter_mut() {
-        for DrawnCurve { curve, .. } in curves {
-            if curve.property_type != sel.property_type {
-                continue;
-            }
-            if let Some(kf) = curve.get_keyframe(sel.keyframe_id) {
-                sel.original_time = kf.time;
-                sel.original_value = kf.value;
-            }
-            break;
+        let current_key = find_drawn_curve(curves, sel.property_type)
+            .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(sel.keyframe_id));
+        if let Some(kf) = current_key {
+            sel.original_time = kf.time;
+            sel.original_value = kf.value;
         }
     }
 }
@@ -250,22 +234,21 @@ pub(super) fn collect_keyframes_in_range(
     let min_time = time_a.min(time_b);
     let max_time = time_a.max(time_b);
 
-    for DrawnCurve { curve, .. } in curves {
-        if curve.property_type == *property_type {
-            return curve
-                .keyframes
-                .iter()
-                .filter(|kf| kf.time >= min_time && kf.time <= max_time)
-                .map(|kf| CurveSelectedKeyframe {
-                    property_type: property_type.clone(),
-                    keyframe_id: kf.id,
-                    original_time: kf.time,
-                    original_value: kf.value,
-                })
-                .collect();
-        }
-    }
-    Vec::new()
+    let Some(DrawnCurve { curve, .. }) = find_drawn_curve(curves, *property_type) else {
+        return Vec::new();
+    };
+
+    curve
+        .keyframes
+        .iter()
+        .filter(|kf| kf.time >= min_time && kf.time <= max_time)
+        .map(|kf| CurveSelectedKeyframe {
+            property_type: property_type.clone(),
+            keyframe_id: kf.id,
+            original_time: kf.time,
+            original_value: kf.value,
+        })
+        .collect()
 }
 
 pub(super) fn collect_keyframes_in_screen_rect(

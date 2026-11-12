@@ -1,4 +1,9 @@
-use super::*;
+use super::layout::{CLIP_BLOCK_MIN_WIDTH, CLIP_EDGE_DRAG_WIDTH};
+use crate::ecs::component::ClipInstanceSnapshot;
+use crate::ecs::resource::{ClipDragState, ClipDragType, TimelineInteractionState};
+use crate::ecs::systems::clip_drag_preview_times;
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::world::World;
 
 pub(super) fn handle_clip_drag_release(
     world: &World,

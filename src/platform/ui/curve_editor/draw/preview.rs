@@ -7,7 +7,7 @@ use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
 use super::super::drag::{
     compute_dragged_tangent, dragged_key_delta, dragged_key_position, TimeSnap,
 };
-use super::super::view::{DrawnCurve, ViewTransform};
+use super::super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
 pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
@@ -20,12 +20,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_keyframe_drag_preview(
     time_snap: TimeSnap,
 ) {
     for sel in selected_keyframes {
-        let curve = match curves_to_draw
-            .iter()
-            .find(|DrawnCurve { curve: c, .. }| c.property_type == sel.property_type)
-        {
-            Some(DrawnCurve { curve, .. }) => *curve,
-            None => continue,
+        let Some(DrawnCurve { curve, .. }) = find_drawn_curve(curves_to_draw, sel.property_type)
+        else {
+            continue;
         };
         let curve_vt = vt.for_curve(curve);
 
@@ -119,16 +116,10 @@ pub(in crate::platform::ui::curve_editor) fn draw_tangent_drag_curve_preview(
     curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) {
-    let (curve, color) = match curves_to_draw
-        .iter()
-        .find(|DrawnCurve { curve: c, .. }| c.property_type == dragging.property_type)
-    {
-        Some(DrawnCurve {
-            curve: c,
-            color: col,
-            ..
-        }) => (*c, *col),
-        None => return,
+    let Some(&DrawnCurve { curve, color }) =
+        find_drawn_curve(curves_to_draw, dragging.property_type)
+    else {
+        return;
     };
 
     let kf_idx = match curve

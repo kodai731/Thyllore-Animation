@@ -1,4 +1,10 @@
-use super::*;
+use crate::animation::editable::{BlendMode, SourceClipId};
+use crate::ecs::component::ClipTrackEntry;
+use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
+use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
+use crate::ecs::world::World;
+use crate::platform::ui::numeric_format::numeric_format;
 
 pub(super) fn build_clip_instance_properties(
     ui: &imgui::Ui,

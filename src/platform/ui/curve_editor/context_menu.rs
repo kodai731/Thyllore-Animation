@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-use super::selection::send_for_each_selected_key;
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
 use super::view::DrawnCurve;
 use super::window::ALL_PROPERTY_TYPES;
@@ -91,16 +90,18 @@ fn delete_context_menu_keys(
     track_ref: CurveTrackRef,
     context_key: &CurveSelectedKeyframe,
 ) {
-    let targets: Vec<&CurveSelectedKeyframe> = if editor_state.selected_keyframes.len() > 1 {
-        editor_state.selected_keyframes.iter().collect()
+    let targets = if editor_state.selected_keyframes.len() > 1 {
+        editor_state.selected_keyframes.as_slice()
     } else {
-        vec![context_key]
+        std::slice::from_ref(context_key)
     };
-    send_for_each_selected_key(world, targets, |key| TimelineEvent::DeleteKeyframe {
-        track: track_ref,
-        property_type: key.property_type,
-        keyframe_id: key.keyframe_id,
-    });
+    for key in targets {
+        world.send_command(TimelineEvent::DeleteKeyframe {
+            track: track_ref,
+            property_type: key.property_type,
+            keyframe_id: key.keyframe_id,
+        });
+    }
 
     editor_state.selected_keyframes.clear();
     editor_state.selection_anchor = None;

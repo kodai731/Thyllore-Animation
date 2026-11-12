@@ -1,7 +1,7 @@
 use crate::animation::editable::{align_opposite_handle, BezierHandle, TangentContinuity};
 use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
 
-use super::view::{DrawnCurve, ViewTransform};
+use super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
 const AXIS_LOCK_THRESHOLD_PX: f32 = 4.0;
 
@@ -95,45 +95,39 @@ pub(super) fn compute_dragged_tangent(
     curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> (BezierHandle, BezierHandle) {
-    for DrawnCurve { curve, .. } in curves_to_draw {
-        if curve.property_type != dragging.property_type {
-            continue;
-        }
+    let dragged_key = find_drawn_curve(curves_to_draw, dragging.property_type).and_then(
+        |DrawnCurve { curve, .. }| Some((*curve, curve.get_keyframe(dragging.keyframe_id)?)),
+    );
+    let Some((curve, kf)) = dragged_key else {
+        return (BezierHandle::linear(), BezierHandle::linear());
+    };
 
-        let kf = match curve.get_keyframe(dragging.keyframe_id) {
-            Some(kf) => kf,
-            None => break,
-        };
+    let curve_vt = vt.for_curve(curve);
+    let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
+    let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
+    let time_offset = mouse_time - kf.time;
+    let value_offset = mouse_value - kf.value;
+    let new_handle = BezierHandle::new(time_offset, value_offset);
 
-        let curve_vt = vt.for_curve(curve);
-        let mouse_time = curve_vt.x_to_time(mouse_pos[0]);
-        let mouse_value = curve_vt.y_to_value(mouse_pos[1]);
-        let time_offset = mouse_time - kf.time;
-        let value_offset = mouse_value - kf.value;
-        let new_handle = BezierHandle::new(time_offset, value_offset);
+    let (in_tangent, out_tangent) = match dragging.handle_type {
+        TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
+        TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
+    };
 
-        let (in_tangent, out_tangent) = match dragging.handle_type {
-            TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
-            TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
-        };
-
-        if kf.continuity == TangentContinuity::Unified {
-            return match dragging.handle_type {
-                TangentHandleType::In => {
-                    let aligned_out = align_opposite_handle(&in_tangent, &out_tangent);
-                    (in_tangent, aligned_out)
-                }
-                TangentHandleType::Out => {
-                    let aligned_in = align_opposite_handle(&out_tangent, &in_tangent);
-                    (aligned_in, out_tangent)
-                }
-            };
-        }
-
+    if kf.continuity != TangentContinuity::Unified {
         return (in_tangent, out_tangent);
     }
 
-    (BezierHandle::linear(), BezierHandle::linear())
+    match dragging.handle_type {
+        TangentHandleType::In => {
+            let aligned_out = align_opposite_handle(&in_tangent, &out_tangent);
+            (in_tangent, aligned_out)
+        }
+        TangentHandleType::Out => {
+            let aligned_in = align_opposite_handle(&out_tangent, &in_tangent);
+            (aligned_in, out_tangent)
+        }
+    }
 }
 
 #[cfg(test)]

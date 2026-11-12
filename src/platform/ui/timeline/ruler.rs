@@ -1,4 +1,11 @@
-use super::*;
+use super::layout::{
+    PIXELS_PER_SECOND, PLAYHEAD_HANDLE_SIZE, TIME_RULER_HEIGHT, TRACK_LABEL_WIDTH,
+};
+use crate::ecs::resource::{TimelineInteractionState, TimelineState, UiPointerOwnerId};
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::world::World;
+use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
+use imgui::MouseButton;
 
 pub(super) fn build_time_ruler_with_scrub(
     ui: &imgui::Ui,

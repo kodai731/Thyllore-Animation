@@ -1,7 +1,6 @@
 use super::context_menu::CURVE_EXTRAPOLATION_MENU;
-use super::selection::send_for_each_selected_key;
 use super::tween::apply_tween;
-use super::view::DrawnCurve;
+use super::view::{find_drawn_curve, DrawnCurve};
 use super::window::SuggestionOverlay;
 use crate::animation::editable::{InterpolationType, TangentContinuity, TangentType};
 use crate::animation::BoneId;
@@ -185,14 +184,14 @@ fn send_tangent_type(
     target: &CurveEditorKeyboardTarget,
     tangent_type: TangentType,
 ) {
-    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
-        TimelineEvent::SetTangentType {
+    for selected in &editor_state.selected_keyframes {
+        target.world.send_command(TimelineEvent::SetTangentType {
             track: target.track_ref,
             property_type: selected.property_type,
             keyframe_id: selected.keyframe_id,
             tangent_type,
-        }
-    });
+        });
+    }
 }
 
 fn send_interpolation(
@@ -200,26 +199,30 @@ fn send_interpolation(
     target: &CurveEditorKeyboardTarget,
     interpolation: InterpolationType,
 ) {
-    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
-        TimelineEvent::SetKeyframeInterpolation {
-            track: target.track_ref,
-            property_type: selected.property_type,
-            keyframe_id: selected.keyframe_id,
-            interpolation,
-        }
-    });
+    for selected in &editor_state.selected_keyframes {
+        target
+            .world
+            .send_command(TimelineEvent::SetKeyframeInterpolation {
+                track: target.track_ref,
+                property_type: selected.property_type,
+                keyframe_id: selected.keyframe_id,
+                interpolation,
+            });
+    }
 }
 
 fn send_toggled_continuity(editor_state: &CurveEditorState, target: &CurveEditorKeyboardTarget) {
     let continuity = compute_toggled_continuity(target.curves, &editor_state.selected_keyframes);
-    send_for_each_selected_key(target.world, &editor_state.selected_keyframes, |selected| {
-        TimelineEvent::SetTangentContinuity {
-            track: target.track_ref,
-            property_type: selected.property_type,
-            keyframe_id: selected.keyframe_id,
-            continuity,
-        }
-    });
+    for selected in &editor_state.selected_keyframes {
+        target
+            .world
+            .send_command(TimelineEvent::SetTangentContinuity {
+                track: target.track_ref,
+                property_type: selected.property_type,
+                keyframe_id: selected.keyframe_id,
+                continuity,
+            });
+    }
 }
 
 fn compute_toggled_continuity(
@@ -227,11 +230,9 @@ fn compute_toggled_continuity(
     selected_keyframes: &[CurveSelectedKeyframe],
 ) -> TangentContinuity {
     let any_unified = selected_keyframes.iter().any(|selected| {
-        curves
-            .iter()
-            .filter(|DrawnCurve { curve, .. }| curve.property_type == selected.property_type)
-            .filter_map(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
-            .any(|kf| kf.continuity == TangentContinuity::Unified)
+        find_drawn_curve(curves, selected.property_type)
+            .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
+            .is_some_and(|kf| kf.continuity == TangentContinuity::Unified)
     });
 
     if any_unified {

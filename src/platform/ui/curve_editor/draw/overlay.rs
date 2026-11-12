@@ -10,6 +10,7 @@ use super::super::window::{SuggestionOverlay, ALL_PROPERTY_TYPES};
 use super::diamond::{draw_key_diamond, DiamondStyle, KeyDiamond};
 
 const GHOST_KEY_HALF_SIZE: f32 = 6.0;
+const GHOST_KEY_OUTLINE_THICKNESS: f32 = 2.0;
 
 pub(in crate::platform::ui::curve_editor) fn draw_buffer_curve_overlay(
     draw_list: &imgui::DrawListMut,
@@ -102,7 +103,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_suggestion_curve_overlay(
                 half_size: GHOST_KEY_HALF_SIZE,
             },
             ghost_color,
-            DiamondStyle::Outline { thickness: 2.0 },
+            DiamondStyle::Outline {
+                thickness: GHOST_KEY_OUTLINE_THICKNESS,
+            },
         );
 
         let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];

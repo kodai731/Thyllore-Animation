@@ -4,10 +4,13 @@ use super::super::view::{
     calculate_y_tick_count, compute_nice_step, format_value_label, ViewTransform,
 };
 use super::super::window::TIME_RULER_HEIGHT;
+use super::curve::{dashed_segments, DASH_GAP, DASH_LENGTH};
 use super::diamond::{draw_key_diamond, DiamondStyle, KeyDiamond};
 
 const POSE_MARKER_HALF_SIZE: f32 = 5.0;
 const POSE_MARKER_TOP_OFFSET: f32 = 8.0;
+const POSE_MARKER_LINE_THICKNESS: f32 = 1.0;
+const SELECTED_POSE_MARKER_LINE_THICKNESS: f32 = 2.0;
 const GRID_COLOR: [f32; 4] = [0.25, 0.25, 0.28, 1.0];
 const NORMALIZED_OUTSIDE_SHADE: [f32; 4] = [0.0, 0.0, 0.0, 0.25];
 
@@ -129,14 +132,14 @@ pub(in crate::platform::ui::curve_editor) fn draw_pose_markers(
         if is_selected {
             draw_list
                 .add_line([x, top], [x, bottom], selected_color)
-                .thickness(2.0)
+                .thickness(SELECTED_POSE_MARKER_LINE_THICKNESS)
                 .build();
         } else {
-            let segments = super::curve::dashed_segments(&[[x, top], [x, bottom]], 6.0, 4.0);
+            let segments = dashed_segments(&[[x, top], [x, bottom]], DASH_LENGTH, DASH_GAP);
             for [from, to] in segments {
                 draw_list
                     .add_line(from, to, unselected_color)
-                    .thickness(1.0)
+                    .thickness(POSE_MARKER_LINE_THICKNESS)
                     .build();
             }
         }
@@ -152,7 +155,9 @@ pub(in crate::platform::ui::curve_editor) fn draw_pose_markers(
                 draw_list,
                 marker,
                 unselected_color,
-                DiamondStyle::Outline { thickness: 1.0 },
+                DiamondStyle::Outline {
+                    thickness: POSE_MARKER_LINE_THICKNESS,
+                },
             );
         }
     }

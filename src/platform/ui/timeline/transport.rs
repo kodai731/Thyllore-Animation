@@ -1,4 +1,13 @@
-use super::*;
+use super::clip_track::build_clip_display_name;
+use super::input::compute_zoom_limits;
+use crate::ecs::resource::{ClipLibrary, ClipPreview, CurveEditorState, TimelineState};
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::timeline_effective_duration;
+use crate::ecs::world::World;
+use crate::platform::ui::theme::icons::Icon;
+use crate::platform::ui::theme::widgets::{
+    icon_button, segmented_control, toolbar_divider, ButtonState,
+};
 
 pub(super) fn build_transport_controls(
     ui: &imgui::Ui,

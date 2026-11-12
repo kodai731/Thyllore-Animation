@@ -16,13 +16,25 @@ pub type UiWindowInitFn = fn(&mut World);
 
 pub type UiWindowBuildFn = fn(&imgui::Ui, &World, &AssetStorage, &GraphicsResources);
 
+pub type FormWindowFn = fn(
+    &World,
+    &AssetStorage,
+    &GraphicsResources,
+) -> Option<crate::platform::ui::form_window::FormWindow>;
+
+#[derive(Clone, Copy)]
+pub enum UiWindowBody {
+    Canvas(UiWindowBuildFn),
+    Form(FormWindowFn),
+}
+
 #[derive(Clone, Copy)]
 pub struct UiWindowHook {
     pub name: &'static str,
     pub panel: UiPanel,
     pub order: u16,
     pub init: UiWindowInitFn,
-    pub build: UiWindowBuildFn,
+    pub body: UiWindowBody,
 }
 
 inventory::collect!(UiWindowHook);
@@ -54,7 +66,18 @@ macro_rules! ui_window {
                 panel: $crate::hooks::ui_window::UiPanel::$panel,
                 order: $order,
                 init: $init,
-                build: $build,
+                body: $crate::hooks::ui_window::UiWindowBody::Canvas($build),
+            }
+        }
+    };
+    ($name:literal, $panel:ident, $order:literal, form = $form:path) => {
+        inventory::submit! {
+            $crate::hooks::ui_window::UiWindowHook {
+                name: $name,
+                panel: $crate::hooks::ui_window::UiPanel::$panel,
+                order: $order,
+                init: $crate::hooks::ui_window::no_window_state,
+                body: $crate::hooks::ui_window::UiWindowBody::Form($form),
             }
         }
     };

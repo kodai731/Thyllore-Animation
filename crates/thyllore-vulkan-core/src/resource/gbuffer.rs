@@ -5,42 +5,103 @@ use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::types::Instance;
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from
 /// the same pixel so a click can compare what an effect covers against what the surface covers.
-pub const READBACK_POSITION_OFFSET: vk::DeviceSize = 16;
-pub const READBACK_STAGING_SIZE: vk::DeviceSize = READBACK_POSITION_OFFSET + 16;
+pub(crate) const READBACK_POSITION_OFFSET: vk::DeviceSize = 16;
+pub(crate) const READBACK_STAGING_SIZE: vk::DeviceSize = READBACK_POSITION_OFFSET + 16;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRGBuffer {
-    pub position_image: vk::Image,
-    pub position_image_memory: vk::DeviceMemory,
-    pub position_image_view: vk::ImageView,
+    pub(crate) position_image: vk::Image,
+    pub(crate) position_image_memory: vk::DeviceMemory,
+    pub(crate) position_image_view: vk::ImageView,
 
-    pub normal_image: vk::Image,
-    pub normal_image_memory: vk::DeviceMemory,
-    pub normal_image_view: vk::ImageView,
+    pub(crate) normal_image: vk::Image,
+    pub(crate) normal_image_memory: vk::DeviceMemory,
+    pub(crate) normal_image_view: vk::ImageView,
 
-    pub albedo_image: vk::Image,
-    pub albedo_image_memory: vk::DeviceMemory,
-    pub albedo_image_view: vk::ImageView,
+    pub(crate) albedo_image: vk::Image,
+    pub(crate) albedo_image_memory: vk::DeviceMemory,
+    pub(crate) albedo_image_view: vk::ImageView,
 
-    pub object_id_image: vk::Image,
-    pub object_id_image_memory: vk::DeviceMemory,
-    pub object_id_image_view: vk::ImageView,
+    pub(crate) object_id_image: vk::Image,
+    pub(crate) object_id_image_memory: vk::DeviceMemory,
+    pub(crate) object_id_image_view: vk::ImageView,
 
-    pub shadow_mask_image: vk::Image,
-    pub shadow_mask_image_memory: vk::DeviceMemory,
-    pub shadow_mask_image_view: vk::ImageView,
+    pub(crate) shadow_mask_image: vk::Image,
+    pub(crate) shadow_mask_image_memory: vk::DeviceMemory,
+    pub(crate) shadow_mask_image_view: vk::ImageView,
 
-    pub readback_staging_buffer: vk::Buffer,
-    pub readback_staging_memory: vk::DeviceMemory,
+    pub(crate) readback_staging_buffer: vk::Buffer,
+    pub(crate) readback_staging_memory: vk::DeviceMemory,
 
     pub width: u32,
     pub height: u32,
 }
 
 impl RRGBuffer {
+    #[inline]
+    pub fn position_image(&self) -> crate::types::Image {
+        crate::types::Image(self.position_image)
+    }
+
+    #[inline]
+    pub fn normal_image(&self) -> crate::types::Image {
+        crate::types::Image(self.normal_image)
+    }
+
+    #[inline]
+    pub fn albedo_image(&self) -> crate::types::Image {
+        crate::types::Image(self.albedo_image)
+    }
+
+    #[inline]
+    pub fn object_id_image(&self) -> crate::types::Image {
+        crate::types::Image(self.object_id_image)
+    }
+
+    #[inline]
+    pub fn shadow_mask_image(&self) -> crate::types::Image {
+        crate::types::Image(self.shadow_mask_image)
+    }
+
+    #[inline]
+    pub fn position_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.position_image_view)
+    }
+
+    #[inline]
+    pub fn normal_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.normal_image_view)
+    }
+
+    #[inline]
+    pub fn albedo_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.albedo_image_view)
+    }
+
+    #[inline]
+    pub fn object_id_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.object_id_image_view)
+    }
+
+    #[inline]
+    pub fn shadow_mask_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.shadow_mask_image_view)
+    }
+
+    #[inline]
+    pub fn readback_staging_buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.readback_staging_buffer)
+    }
+
+    #[inline]
+    pub fn readback_staging_memory(&self) -> crate::types::DeviceMemory {
+        crate::types::DeviceMemory(self.readback_staging_memory)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -219,31 +280,31 @@ impl RRGBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.position_image_view,
             &mut self.position_image,
             &mut self.position_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.normal_image_view,
             &mut self.normal_image,
             &mut self.normal_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.albedo_image_view,
             &mut self.albedo_image,
             &mut self.albedo_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.object_id_image_view,
             &mut self.object_id_image,
             &mut self.object_id_image_memory,
         );
         destroy_image_set(
-            &rrdevice.device,
+            &rrdevice.device(),
             &mut self.shadow_mask_image_view,
             &mut self.shadow_mask_image,
             &mut self.shadow_mask_image_memory,
@@ -251,13 +312,13 @@ impl RRGBuffer {
 
         if self.readback_staging_buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.readback_staging_buffer, None);
             self.readback_staging_buffer = vk::Buffer::null();
         }
         if self.readback_staging_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.readback_staging_memory, None);
             self.readback_staging_memory = vk::DeviceMemory::null();
         }
@@ -268,8 +329,9 @@ impl RRGBuffer {
     pub unsafe fn transition_layouts(
         &self,
         rrdevice: &RRDevice,
-        command_pool: vk::CommandPool,
+        command_pool: crate::types::CommandPool,
     ) -> Result<()> {
+        let command_pool = command_pool.raw();
         transition_image_layout(
             rrdevice,
             rrdevice.graphics_queue,
@@ -327,6 +389,28 @@ impl RRGBuffer {
 
         Ok(())
     }
+}
+
+pub unsafe fn read_picked_texel(
+    rrdevice: &RRDevice,
+    staging_memory: crate::types::DeviceMemory,
+) -> Option<(u32, [f32; 3])> {
+    let ptr = rrdevice
+        .device()
+        .map_memory(
+            staging_memory.raw(),
+            0,
+            READBACK_STAGING_SIZE,
+            vk::MemoryMapFlags::empty(),
+        )
+        .ok()?;
+
+    let object_id = *(ptr as *const u32);
+    let position_ptr = (ptr as *const u8).add(READBACK_POSITION_OFFSET as usize) as *const f32;
+    let world_position = [*position_ptr, *position_ptr.add(1), *position_ptr.add(2)];
+
+    rrdevice.device().unmap_memory(staging_memory.raw());
+    Some((object_id, world_position))
 }
 
 unsafe fn destroy_image_set(

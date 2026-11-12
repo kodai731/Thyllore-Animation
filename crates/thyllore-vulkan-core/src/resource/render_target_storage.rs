@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::core::device::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 use crate::vulkan::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -13,12 +14,19 @@ pub enum RenderTargetKey {
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderTargetEntry {
-    pub image: vk::Image,
-    pub memory: vk::DeviceMemory,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
+}
+
+impl RenderTargetEntry {
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        crate::types::Image(self.image)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -29,14 +37,14 @@ pub struct RenderTargetStorage {
 }
 
 impl RenderTargetStorage {
-    pub unsafe fn ensure(
+    pub(crate) unsafe fn ensure(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
         key: RenderTargetKey,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_info: Option<vk::SamplerCreateInfo>,
+        sampler_desc: Option<crate::resource::image::SamplerDesc>,
     ) -> Result<&RenderTargetEntry> {
         if !self.has_valid_extent() {
             return Err(anyhow!(
@@ -53,10 +61,10 @@ impl RenderTargetStorage {
 
         if !is_reusable {
             if let Some(outdated) = self.entries.remove(&key) {
-                destroy_entry(&rrdevice.device, &outdated);
+                destroy_entry(&rrdevice.device(), &outdated);
             }
 
-            let entry = self.create_entry(instance, rrdevice, format, usage, sampler_info)?;
+            let entry = self.create_entry(instance, rrdevice, format, usage, sampler_desc)?;
             self.entries.insert(key, entry);
         }
 
@@ -71,7 +79,7 @@ impl RenderTargetStorage {
         rrdevice: &RRDevice,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_info: Option<vk::SamplerCreateInfo>,
+        sampler_desc: Option<crate::resource::image::SamplerDesc>,
     ) -> Result<RenderTargetEntry> {
         let (image, memory) = create_image(
             instance,
@@ -90,20 +98,20 @@ impl RenderTargetStorage {
         {
             Ok(view) => view,
             Err(error) => {
-                rrdevice.device.destroy_image(image, None);
-                rrdevice.device.free_memory(memory, None);
+                rrdevice.device().destroy_image(image, None);
+                rrdevice.device().free_memory(memory, None);
                 return Err(error);
             }
         };
 
-        let sampler = match sampler_info {
-            Some(info) => match rrdevice.device.create_sampler(&info, None) {
-                Ok(sampler) => sampler,
+        let sampler = match sampler_desc {
+            Some(desc) => match crate::resource::image::create_sampler(rrdevice, desc) {
+                Ok(sampler) => sampler.raw(),
                 Err(error) => {
-                    rrdevice.device.destroy_image_view(view, None);
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
-                    return Err(error.into());
+                    rrdevice.device().destroy_image_view(view, None);
+                    rrdevice.device().destroy_image(image, None);
+                    rrdevice.device().free_memory(memory, None);
+                    return Err(error);
                 }
             },
             None => vk::Sampler::null(),
@@ -127,25 +135,21 @@ impl RenderTargetStorage {
         (self.width, self.height)
     }
 
-    pub unsafe fn ensure_extent(&mut self, device: &vulkanalia::Device, width: u32, height: u32) {
+    pub unsafe fn ensure_extent(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
         if (self.width, self.height) == (width, height) {
             return;
         }
-        self.set_extent_and_reset(device, width, height);
+        self.set_extent_and_reset(rrdevice, width, height);
     }
 
-    pub unsafe fn set_extent_and_reset(
-        &mut self,
-        device: &vulkanalia::Device,
-        width: u32,
-        height: u32,
-    ) {
-        self.destroy_all(device);
+    pub unsafe fn set_extent_and_reset(&mut self, rrdevice: &RRDevice, width: u32, height: u32) {
+        self.destroy_all(rrdevice);
         self.width = width;
         self.height = height;
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
         for (_, entry) in self.entries.drain() {
             destroy_entry(device, &entry);
         }
@@ -196,7 +200,7 @@ unsafe fn destroy_entry(device: &vulkanalia::Device, entry: &RenderTargetEntry) 
 
 impl GpuResource for RenderTargetStorage {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        self.destroy_all(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

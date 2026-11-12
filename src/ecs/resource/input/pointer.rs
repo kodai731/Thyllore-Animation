@@ -48,6 +48,8 @@ pub struct PointerState {
     pub middle_press_position: Option<[f32; 2]>,
 }
 
+crate::startup_resource!(PointerState, Editor);
+
 impl PointerState {
     pub fn middle_clicked(&self) -> bool {
         let Some(pressed_at) = self.middle_press_position else {

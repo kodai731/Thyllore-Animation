@@ -2,8 +2,10 @@ use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
-use thyllore_math_core::*;
+use glam::{Mat4, Vec4};
+use std::mem::offset_of;
 use thyllore_spirv_reflect::declare_gpu_block;
 
 pub use thyllore_model_core::mesh::{Vertex, VertexData};
@@ -12,11 +14,11 @@ pub use thyllore_model_core::mesh::{Vertex, VertexData};
 #[derive(Clone, Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
     pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
@@ -75,39 +77,39 @@ impl RRData {
         self.rruniform_buffers.clear();
 
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
 
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
 
         if self.vertex_buffer.buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.vertex_buffer.buffer, None);
             self.vertex_buffer.buffer = vk::Buffer::null();
         }
 
         if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.vertex_buffer.buffer_memory, None);
             self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
         }
 
         if self.index_buffer.buffer != vk::Buffer::null() {
             rrdevice
-                .device
+                .device()
                 .destroy_buffer(self.index_buffer.buffer, None);
             self.index_buffer.buffer = vk::Buffer::null();
         }
 
         if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
             rrdevice
-                .device
+                .device()
                 .free_memory(self.index_buffer.buffer_memory, None);
             self.index_buffer.buffer_memory = vk::DeviceMemory::null();
         }
@@ -117,12 +119,12 @@ impl RRData {
         self.delete_buffers(rrdevice);
 
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
 
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }
@@ -149,7 +151,7 @@ declare_gpu_block! {
 
 impl Default for UniformBufferObject {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             model: identity,
             view: identity,
@@ -174,7 +176,7 @@ declare_gpu_block! {
 
 impl Default for SceneUniformData {
     fn default() -> Self {
-        let identity = Mat4::identity();
+        let identity = Mat4::IDENTITY;
         Self {
             light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
             light_color: Vec4::new(1.0, 1.0, 1.0, thyllore_render_core::AMBIENT_INTENSITY),
@@ -188,7 +190,7 @@ impl Default for SceneUniformData {
     }
 }
 
-pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
+pub(crate) fn vertex_binding_description() -> vk::VertexInputBindingDescription {
     vk::VertexInputBindingDescription::builder()
         .binding(0)
         .stride(size_of::<Vertex>() as u32)
@@ -196,33 +198,33 @@ pub fn vertex_binding_description() -> vk::VertexInputBindingDescription {
         .build()
 }
 
-pub fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
+pub(crate) fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
     let pos = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(0)
         .format(vk::Format::R32G32B32_SFLOAT)
-        .offset(0)
+        .offset(offset_of!(Vertex, pos) as u32)
         .build();
 
     let color = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(1)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(size_of::<Vec3>() as u32)
+        .offset(offset_of!(Vertex, color) as u32)
         .build();
 
     let tex_coord = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(2)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset((size_of::<Vec3>() + size_of::<Vec4>()) as u32)
+        .offset(offset_of!(Vertex, tex_coord) as u32)
         .build();
 
     let normal = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(3)
         .format(vk::Format::R32G32B32_SFLOAT)
-        .offset((size_of::<Vec3>() + size_of::<Vec4>() + size_of::<Vec2>()) as u32)
+        .offset(offset_of!(Vertex, normal) as u32)
         .build();
 
     [pos, color, tex_coord, normal]

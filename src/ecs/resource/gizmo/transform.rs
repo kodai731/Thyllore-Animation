@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::animation::BoneId;
 use crate::ecs::component::{GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo};
@@ -18,11 +18,11 @@ pub struct TransformGizmoData {
     pub solid_mesh: LineMesh,
     pub line_render_info: RenderInfo,
     pub solid_render_info: RenderInfo,
-    pub drag_start_position: Vector3<f32>,
-    pub drag_start_rotation: Quaternion<f32>,
-    pub drag_start_scale: Vector3<f32>,
-    pub drag_plane_normal: Vector3<f32>,
-    pub drag_initial_hit: Vector3<f32>,
+    pub drag_start_position: Vec3,
+    pub drag_start_rotation: Quat,
+    pub drag_start_scale: Vec3,
+    pub drag_plane_normal: Vec3,
+    pub drag_initial_hit: Vec3,
     pub drag_initial_angle: f32,
     pub target_bone_id: Option<BoneId>,
     pub target_entity: Option<Entity>,
@@ -41,11 +41,11 @@ impl Default for TransformGizmoData {
             solid_mesh: LineMesh::default(),
             line_render_info: RenderInfo::default(),
             solid_render_info: RenderInfo::default(),
-            drag_start_position: Vector3::new(0.0, 0.0, 0.0),
-            drag_start_rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            drag_start_scale: Vector3::new(1.0, 1.0, 1.0),
-            drag_plane_normal: Vector3::new(0.0, 1.0, 0.0),
-            drag_initial_hit: Vector3::new(0.0, 0.0, 0.0),
+            drag_start_position: Vec3::new(0.0, 0.0, 0.0),
+            drag_start_rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            drag_start_scale: Vec3::new(1.0, 1.0, 1.0),
+            drag_plane_normal: Vec3::new(0.0, 1.0, 0.0),
+            drag_initial_hit: Vec3::new(0.0, 0.0, 0.0),
             drag_initial_angle: 0.0,
             target_bone_id: None,
             target_entity: None,

@@ -285,6 +285,7 @@ fn build_curve_copilot_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
 #[cfg(feature = "text-to-motion")]
 fn build_grpc_server_panel(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::GrpcServerProcess;
+    use crate::ecs::systems::phases::event_dispatch::ml::grpc_server::GrpcServerEvent;
 
     ui.text("gRPC Server:");
 
@@ -293,56 +294,24 @@ fn build_grpc_server_panel(ui: &imgui::Ui, ecs_world: &World) {
     };
 
     let running = server.is_running();
+    let last_error = server.last_error.clone();
+    drop(server);
 
     if running {
         ui.text_colored([0.5, 1.0, 0.5, 1.0], "Running");
         if ui.button("Stop Server") {
-            server.stop();
+            ecs_world.send_command(GrpcServerEvent::Stop);
         }
-    } else {
-        ui.text_colored([0.7, 0.7, 0.7, 1.0], "Stopped");
-        if let Some(err) = &server.last_error {
-            ui.text_colored([1.0, 0.3, 0.3, 1.0], err);
-        }
-        if ui.button("Start Server") {
-            let working_dir = find_training_repo_path();
-            match server.start(&working_dir, "configs/server.yaml") {
-                Ok(()) => {}
-                Err(e) => {
-                    log_error!("Failed to start gRPC server: {}", e);
-                    server.last_error = Some(e);
-                }
-            }
-        }
-    }
-}
-
-#[cfg(feature = "text-to-motion")]
-fn find_training_repo_path() -> String {
-    if let Ok(path) = std::env::var("ANIMATION_TRAINING_PATH") {
-        return path;
+        return;
     }
 
-    let output = std::process::Command::new("wsl")
-        .args([
-            "--",
-            "bash",
-            "-l",
-            "-c",
-            "echo $HOME/Projects/AnimationModelTraining",
-        ])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output();
-
-    if let Ok(out) = output {
-        let wsl_path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !wsl_path.is_empty() {
-            return wsl_path;
-        }
+    ui.text_colored([0.7, 0.7, 0.7, 1.0], "Stopped");
+    if let Some(error) = &last_error {
+        ui.text_colored([1.0, 0.3, 0.3, 1.0], error);
     }
-
-    "../AnimationModelTraining".to_string()
+    if ui.button("Start Server") {
+        ecs_world.send_command(GrpcServerEvent::Start);
+    }
 }
 
 fn build_mouse_info(ui: &imgui::Ui, ecs_world: &World) {

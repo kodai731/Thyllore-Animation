@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::world::{
@@ -19,7 +18,7 @@ unsafe fn run_batch_capture(ctx: &CaptureContext, hooks: &BatchCaptureHooks) -> 
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    ctx.device.device.device_wait_idle()?;
+    ctx.device.wait_idle()?;
     hooks.run_all(ctx);
 
     let saved = ctx

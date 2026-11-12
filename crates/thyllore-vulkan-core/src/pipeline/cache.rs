@@ -22,7 +22,7 @@ pub struct PipelineKey {
 }
 
 impl PipelineKey {
-    pub fn new(
+    pub(crate) fn new(
         vertex_shader: &str,
         fragment_shader: &str,
         topology: vk::PrimitiveTopology,
@@ -60,7 +60,7 @@ pub struct PipelineCache {
 impl PipelineCache {
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let cache_info = vk::PipelineCacheCreateInfo::builder();
-        let vulkan_cache = rrdevice.device.create_pipeline_cache(&cache_info, None)?;
+        let vulkan_cache = rrdevice.device().create_pipeline_cache(&cache_info, None)?;
 
         Ok(Self {
             cache: HashMap::new(),
@@ -80,11 +80,7 @@ impl PipelineCache {
         self.cache.contains_key(key)
     }
 
-    pub fn vulkan_cache(&self) -> vk::PipelineCache {
-        self.vulkan_cache
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for (_, pipeline) in self.cache.drain() {
             pipeline.destroy(device);
         }
@@ -112,7 +108,7 @@ impl PipelineManager {
         rrrender: &RRRender,
         builder: PipelineBuilder,
         key: PipelineKey,
-        swapchain_extent: Option<vk::Extent2D>,
+        swapchain_extent: Option<crate::types::Extent2D>,
     ) -> Result<&RRPipeline> {
         if !self.cache.contains(&key) {
             let pipeline = builder.build(rrdevice, rrrender, swapchain_extent)?;
@@ -129,7 +125,7 @@ impl PipelineManager {
         self.cache.get(key)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.cache.destroy(device);
     }
 }

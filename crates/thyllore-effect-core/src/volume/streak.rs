@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 /// Azimuthal streak modulation of a shell: 1 + amplitude * cos(order * (theta - phase) + (rise - twist) * y).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -10,7 +10,7 @@ pub struct StreakModulation {
 }
 
 impl StreakModulation {
-    pub fn sigma(&self, local: Vector3<f32>, rotation_phase: f32) -> f32 {
+    pub fn sigma(&self, local: Vec3, rotation_phase: f32) -> f32 {
         let angle = self.order * (local.z.atan2(local.x) - rotation_phase) - self.twist * local.y
             + self.rise_time * local.y;
         1.0 + self.amplitude * angle.cos()

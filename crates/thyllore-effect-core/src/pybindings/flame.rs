@@ -7,7 +7,7 @@ use crate::flame::{
     refresh_flame_coefficients, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
     ParameterOwner, MIN_FLAME_EXTENT,
 };
-use cgmath::{Vector3, Vector4};
+use glam::{Vec3, Vec4};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -46,7 +46,7 @@ fn build_flame_from_params(
 ) -> PyResult<(FlameEffect, FlameBaked)> {
     let mut effect: FlameEffect = build_effect_from_params(py, params, time, position, rotation)?;
     if let Some(lp) = light_position {
-        effect.light_position_world = Vector3::new(lp[0], lp[1], lp[2]);
+        effect.light_position_world = Vec3::new(lp[0], lp[1], lp[2]);
     }
 
     let baked = FlameBaked::default();
@@ -95,7 +95,7 @@ pub fn flame_bounds_corners(
     Ok(flame_local_bounds_corners(&bounds)
         .iter()
         .map(|corner| {
-            let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+            let world = model * Vec4::new(corner.x, corner.y, corner.z, 1.0);
             [world.x, world.y, world.z]
         })
         .collect())

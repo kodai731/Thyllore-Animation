@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
     [string]$WheelsDir = "blender_addon/wheels",
-    [switch]$SkipMaturin
+    [switch]$SkipMaturin,
+    # Build only this crate (default: every wheel crate)
+    [string]$Crate = "",
+    # Build with the debug-log feature (crates that declare it)
+    [switch]$DebugLog
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,8 +14,12 @@ $AbsWheels = Join-Path $RepoRoot $WheelsDir
 
 New-Item -ItemType Directory -Path $AbsWheels -Force | Out-Null
 
+function Test-CrateDeclaresDebugLog([string]$CrateName) {
+    $manifest = Get-Content (Join-Path $RepoRoot "crates/$CrateName/Cargo.toml") -Raw
+    return $manifest -match '(?m)^debug-log\s*='
+}
+
 if (-not $SkipMaturin) {
-    Write-Host "[collect_wheels] Building thyllore_ml_core wheel via maturin..." -ForegroundColor Cyan
     $PrevErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
@@ -19,22 +27,42 @@ if (-not $SkipMaturin) {
         if ($LASTEXITCODE -ne 0) {
             throw "maturin install failed"
         }
-
-        Push-Location (Join-Path $RepoRoot "crates/thyllore-ml-core")
-        $PrevRustFlags = $env:RUSTFLAGS
-        try {
-            $RemapFlag = "--remap-path-prefix=$HOME=."
-            $env:RUSTFLAGS = if ($PrevRustFlags) { "$PrevRustFlags $RemapFlag" } else { $RemapFlag }
-            & maturin build --release --features python --out $AbsWheels *>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "maturin build failed"
-            }
-        } finally {
-            $env:RUSTFLAGS = $PrevRustFlags
-            Pop-Location
-        }
     } finally {
         $ErrorActionPreference = $PrevErrorAction
+    }
+
+    $Crates = if ($Crate) { @($Crate) } else { @("thyllore-ml-core", "thyllore-avatar-api") }
+
+    foreach ($crateName in $Crates) {
+        if ($DebugLog) {
+            if (-not (Test-CrateDeclaresDebugLog $crateName)) {
+                throw "-Crate $crateName cannot be combined with -DebugLog (no debug-log feature in its Cargo.toml)"
+            }
+            $Features = "python,debug-log"
+            Write-Host "[collect_wheels] Building $crateName DEBUG wheel (features: $Features)" -ForegroundColor Cyan
+        } else {
+            $Features = "python"
+            Write-Host "[collect_wheels] Building $crateName wheel via maturin..." -ForegroundColor Cyan
+        }
+        $PrevErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            Push-Location (Join-Path $RepoRoot "crates/$crateName")
+            $PrevRustFlags = $env:RUSTFLAGS
+            try {
+                $RemapFlag = "--remap-path-prefix=$HOME=."
+                $env:RUSTFLAGS = if ($PrevRustFlags) { "$PrevRustFlags $RemapFlag" } else { $RemapFlag }
+                & maturin build --release --features $Features --out $AbsWheels *>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "maturin build failed"
+                }
+            } finally {
+                $env:RUSTFLAGS = $PrevRustFlags
+                Pop-Location
+            }
+        } finally {
+            $ErrorActionPreference = $PrevErrorAction
+        }
     }
 }
 

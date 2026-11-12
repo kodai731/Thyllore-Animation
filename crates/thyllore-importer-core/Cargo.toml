@@ -15,7 +15,7 @@ thyllore-anim-core = { path = "../thyllore-anim-core" }
 thyllore-log-core = { path = "../thyllore-log-core" }
 thyllore-file-format-core = { path = "../thyllore-file-format-core" }
 anyhow = "1"
-cgmath = "0.18"
+glam = "0.34"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 png = "0.17"

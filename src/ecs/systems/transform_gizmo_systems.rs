@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use cgmath::{vec3, Deg, InnerSpace, Quaternion, Rotation3, Vector2, Vector3};
+use glam::{vec3, Mat4, Quat, Vec2, Vec3, Vec4};
 
 use crate::ecs::component::{ColorVertex, LineMesh};
 use crate::ecs::resource::gizmo::transform::{TransformGizmoData, TransformGizmoHandle};
@@ -119,7 +119,7 @@ pub fn build_translate_gizmo_meshes(
 
 pub fn build_rotate_gizmo_meshes(
     active_handle: TransformGizmoHandle,
-    camera_dir: Vector3<f32>,
+    camera_dir: Vec3,
     line_mesh: &mut LineMesh,
     solid_mesh: &mut LineMesh,
 ) {
@@ -241,24 +241,24 @@ pub fn build_scale_gizmo_meshes(
 pub fn transform_gizmo_try_select(
     gizmo: &TransformGizmoData,
     mode: TransformGizmoMode,
-    mouse_pos: Vector2<f32>,
-    camera_pos: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    mouse_pos: Vec2,
+    camera_pos: Vec3,
+    camera_dir: Vec3,
+    camera_up: Vec3,
     swapchain_extent: (u32, u32),
-    fov_y: Deg<f32>,
+    fov_y: f32,
     near_plane: f32,
     gizmo_scale: f32,
 ) -> TransformGizmoHandle {
     let gizmo_pos = gizmo.position.position;
-    let view_mat = unsafe { view(camera_pos, camera_dir, camera_up) };
+    let view_mat = view(camera_pos, camera_dir, camera_up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
-    let distance = (gizmo_pos - camera_pos).magnitude();
+    let distance = (gizmo_pos - camera_pos).length();
     let scale_factor = distance * gizmo_scale;
     let threshold = 0.05 * scale_factor;
 
@@ -289,9 +289,9 @@ pub fn transform_gizmo_try_select(
 }
 
 fn select_translate_handle(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    gizmo_pos: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    gizmo_pos: Vec3,
     scale_factor: f32,
     threshold: f32,
 ) -> TransformGizmoHandle {
@@ -370,12 +370,12 @@ fn select_translate_handle(
 }
 
 fn select_rotate_handle(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    gizmo_pos: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    gizmo_pos: Vec3,
     scale_factor: f32,
     threshold: f32,
-    camera_dir: Vector3<f32>,
+    camera_dir: Vec3,
 ) -> TransformGizmoHandle {
     let radius = 0.9 * scale_factor;
 
@@ -433,9 +433,9 @@ fn select_rotate_handle(
 }
 
 fn select_scale_handle(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    gizmo_pos: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    gizmo_pos: Vec3,
     scale_factor: f32,
     threshold: f32,
 ) -> TransformGizmoHandle {
@@ -474,9 +474,9 @@ fn select_scale_handle(
 
 pub fn transform_gizmo_compute_drag_plane(
     handle: TransformGizmoHandle,
-    gizmo_pos: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-) -> (Vector3<f32>, Vector3<f32>) {
+    gizmo_pos: Vec3,
+    camera_dir: Vec3,
+) -> (Vec3, Vec3) {
     let plane_normal = match handle {
         TransformGizmoHandle::AxisX => {
             compute_best_axis_drag_plane_normal(vec3(1.0, 0.0, 0.0), camera_dir)
@@ -500,13 +500,10 @@ pub fn transform_gizmo_compute_drag_plane(
     (gizmo_pos, plane_normal)
 }
 
-fn compute_best_axis_drag_plane_normal(
-    axis: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-) -> Vector3<f32> {
+fn compute_best_axis_drag_plane_normal(axis: Vec3, camera_dir: Vec3) -> Vec3 {
     let cam_norm = camera_dir.normalize();
     let tangent = axis.cross(cam_norm);
-    if tangent.magnitude() < 1e-6 {
+    if tangent.length() < 1e-6 {
         return cam_norm;
     }
     tangent.cross(axis).normalize()
@@ -514,19 +511,19 @@ fn compute_best_axis_drag_plane_normal(
 
 pub fn transform_gizmo_process_translate_drag(
     gizmo: &TransformGizmoData,
-    mouse_pos: Vector2<f32>,
-    camera_pos: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    mouse_pos: Vec2,
+    camera_pos: Vec3,
+    camera_dir: Vec3,
+    camera_up: Vec3,
     swapchain_extent: (u32, u32),
-    fov_y: Deg<f32>,
+    fov_y: f32,
     near_plane: f32,
     snap: Option<f32>,
-) -> Option<Vector3<f32>> {
-    let view_mat = unsafe { view(camera_pos, camera_dir, camera_up) };
+) -> Option<Vec3> {
+    let view_mat = view(camera_pos, camera_dir, camera_up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
@@ -569,19 +566,19 @@ pub fn transform_gizmo_process_translate_drag(
 
 pub fn transform_gizmo_process_rotate_drag(
     gizmo: &TransformGizmoData,
-    mouse_pos: Vector2<f32>,
-    camera_pos: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    mouse_pos: Vec2,
+    camera_pos: Vec3,
+    camera_dir: Vec3,
+    camera_up: Vec3,
     swapchain_extent: (u32, u32),
-    fov_y: Deg<f32>,
+    fov_y: f32,
     near_plane: f32,
     snap_degrees: Option<f32>,
-) -> Option<Quaternion<f32>> {
-    let view_mat = unsafe { view(camera_pos, camera_dir, camera_up) };
+) -> Option<Quat> {
+    let view_mat = view(camera_pos, camera_dir, camera_up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
@@ -597,7 +594,7 @@ pub fn transform_gizmo_process_rotate_drag(
     let current_vec = (hit - gizmo.position.position).normalize();
     let initial_vec = (gizmo.drag_initial_hit - gizmo.position.position).normalize();
 
-    if current_vec.magnitude() < 1e-6 || initial_vec.magnitude() < 1e-6 {
+    if current_vec.length() < 1e-6 || initial_vec.length() < 1e-6 {
         return None;
     }
 
@@ -615,27 +612,24 @@ pub fn transform_gizmo_process_rotate_drag(
         angle = (angle / snap_rad).round() * snap_rad;
     }
 
-    Some(Quaternion::from_axis_angle(
-        rotation_axis,
-        cgmath::Rad(angle),
-    ))
+    Some(Quat::from_axis_angle(rotation_axis, angle))
 }
 
 pub fn transform_gizmo_process_scale_drag(
     gizmo: &TransformGizmoData,
-    mouse_pos: Vector2<f32>,
-    camera_pos: Vector3<f32>,
-    camera_dir: Vector3<f32>,
-    camera_up: Vector3<f32>,
+    mouse_pos: Vec2,
+    camera_pos: Vec3,
+    camera_dir: Vec3,
+    camera_up: Vec3,
     swapchain_extent: (u32, u32),
-    fov_y: Deg<f32>,
+    fov_y: f32,
     near_plane: f32,
     snap: Option<f32>,
-) -> Option<Vector3<f32>> {
-    let view_mat = unsafe { view(camera_pos, camera_dir, camera_up) };
+) -> Option<Vec3> {
+    let view_mat = view(camera_pos, camera_dir, camera_up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
@@ -646,7 +640,7 @@ pub fn transform_gizmo_process_scale_drag(
         gizmo.drag_plane_normal,
     )?;
 
-    let initial_dist = (gizmo.drag_initial_hit - gizmo.position.position).magnitude();
+    let initial_dist = (gizmo.drag_initial_hit - gizmo.position.position).length();
     if initial_dist < 1e-6 {
         return None;
     }
@@ -670,7 +664,7 @@ pub fn transform_gizmo_process_scale_drag(
             vec3(1.0, 1.0, ratio)
         }
         TransformGizmoHandle::Center => {
-            let current_dist = current_delta.magnitude();
+            let current_dist = current_delta.length();
             let ratio = current_dist / initial_dist;
             vec3(ratio, ratio, ratio)
         }
@@ -704,7 +698,7 @@ pub fn transform_gizmo_process_scale_drag(
 pub fn transform_gizmo_sync_to_bone(
     gizmo: &mut TransformGizmoData,
     active_bone_index: Option<usize>,
-    cached_transforms: &[cgmath::Matrix4<f32>],
+    cached_transforms: &[Mat4],
     bone_offsets: &[[f32; 3]],
     mesh_scale: f32,
 ) {
@@ -716,7 +710,7 @@ pub fn transform_gizmo_sync_to_bone(
             } else {
                 [0.0, 0.0, 0.0]
             };
-            let world_pos = transform * cgmath::Vector4::new(offset[0], offset[1], offset[2], 1.0);
+            let world_pos = transform * Vec4::new(offset[0], offset[1], offset[2], 1.0);
             let raw_pos = vec3(world_pos.x, world_pos.y, world_pos.z);
             gizmo.position.position = vec3(
                 world_pos.x * mesh_scale,
@@ -743,7 +737,7 @@ pub fn transform_gizmo_sync_to_bone(
 
 pub fn transform_gizmo_sync_to_entity(
     gizmo: &mut TransformGizmoData,
-    world_position: Vector3<f32>,
+    world_position: Vec3,
     entity: crate::ecs::Entity,
 ) {
     gizmo.position.position = world_position;
@@ -753,8 +747,8 @@ pub fn transform_gizmo_sync_to_entity(
 }
 
 fn generate_cone_vertices(
-    base_center: Vector3<f32>,
-    tip: Vector3<f32>,
+    base_center: Vec3,
+    tip: Vec3,
     radius: f32,
     segments: u32,
     color: [f32; 3],
@@ -801,7 +795,7 @@ fn generate_cone_vertices(
 }
 
 fn generate_cube_vertices(
-    center: Vector3<f32>,
+    center: Vec3,
     half_size: f32,
     color: [f32; 3],
     verts: &mut Vec<ColorVertex>,
@@ -837,7 +831,7 @@ fn generate_cube_vertices(
 }
 
 fn generate_circle_vertices(
-    normal: Vector3<f32>,
+    normal: Vec3,
     radius: f32,
     segments: u32,
     color: [f32; 3],
@@ -863,7 +857,7 @@ fn generate_circle_vertices(
     }
 }
 
-fn compute_orthonormal_basis(normal: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
+fn compute_orthonormal_basis(normal: Vec3) -> (Vec3, Vec3) {
     let n = normal.normalize();
     let up = if n.y.abs() < 0.99 {
         vec3(0.0, 1.0, 0.0)
@@ -926,13 +920,13 @@ fn apply_snap_value(val: f32, snap: f32) -> f32 {
 }
 
 fn check_plane_handle_hit(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    gizmo_pos: Vector3<f32>,
-    plane_normal: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    gizmo_pos: Vec3,
+    plane_normal: Vec3,
     plane_offset: f32,
     plane_size: f32,
-    extract_2d: impl Fn(Vector3<f32>) -> (f32, f32),
+    extract_2d: impl Fn(Vec3) -> (f32, f32),
 ) -> bool {
     let hit = ray_plane_intersection(ray_origin, ray_direction, gizmo_pos, plane_normal);
     match hit {
@@ -949,10 +943,10 @@ fn check_plane_handle_hit(
 }
 
 pub fn compute_ray_to_circle_distance(
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
-    center: Vector3<f32>,
-    normal: Vector3<f32>,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
+    center: Vec3,
+    normal: Vec3,
     radius: f32,
 ) -> f32 {
     let n = normal.normalize();
@@ -969,7 +963,7 @@ pub fn compute_ray_to_circle_distance(
 
     let hit = ray_origin + ray_direction * t;
     let to_hit = hit - center;
-    let dist_from_center = to_hit.magnitude();
+    let dist_from_center = to_hit.length();
 
     (dist_from_center - radius).abs()
 }

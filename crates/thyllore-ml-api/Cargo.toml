@@ -5,7 +5,17 @@ version = "0.0.1"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["kodai731"]
-description = "L2 stable contract: the ABI marker shared between thyllore-ml-core (the PyO3 wheel) and the Blender addon. Changes here require a coordinated wheel rebuild and end-user reinstall — keep this surface minimal."
+description = "L2 stable contract: the ABI marker shared by the PyO3 wheels (thyllore-ml-core, thyllore-avatar-api) and the Blender addon, and the PyO3 helpers both wheels use. Changes here require a coordinated wheel rebuild and end-user reinstall — keep this surface minimal."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[features]
+default = []
+python = ["dep:pyo3", "dep:pythonize", "dep:anyhow"]
+debug-log = ["dep:chrono"]
+
 [dependencies]
+anyhow = { version = "1", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"], optional = true }
+pythonize = { version = "0.29", optional = true }
+serde = "1"

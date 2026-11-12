@@ -1,10 +1,8 @@
-use cgmath::Deg;
-
 use crate::ecs::resource::{Camera, Exposure, PhysicalCameraParameters};
 
-pub fn compute_fov_from_physical_params(params: &PhysicalCameraParameters) -> Deg<f32> {
+pub fn compute_fov_from_physical_params(params: &PhysicalCameraParameters) -> f32 {
     let half_angle = (params.sensor_height_mm / (2.0 * params.focal_length_mm)).atan();
-    Deg(half_angle.to_degrees() * 2.0)
+    half_angle * 2.0
 }
 
 pub fn compute_ev100_from_physical_params(params: &PhysicalCameraParameters) -> f32 {
@@ -42,9 +40,9 @@ mod tests {
         let fov = compute_fov_from_physical_params(&params);
         let expected = 2.0 * (24.0_f32 / (2.0 * 35.0)).atan().to_degrees();
         assert!(
-            (fov.0 - expected).abs() < 0.01,
+            (fov.to_degrees() - expected).abs() < 0.01,
             "FOV was {} but expected {}",
-            fov.0,
+            fov.to_degrees(),
             expected
         );
     }
@@ -59,9 +57,9 @@ mod tests {
         let fov = compute_fov_from_physical_params(&params);
         let expected = 2.0 * (24.0_f32 / (2.0 * 50.0)).atan().to_degrees();
         assert!(
-            (fov.0 - expected).abs() < 0.01,
+            (fov.to_degrees() - expected).abs() < 0.01,
             "FOV was {} but expected {}",
-            fov.0,
+            fov.to_degrees(),
             expected
         );
     }
@@ -107,9 +105,9 @@ mod tests {
         let params = PhysicalCameraParameters::default();
         let fov = compute_fov_from_physical_params(&params);
         assert!(
-            fov.0 > 20.0 && fov.0 < 90.0,
+            fov.to_degrees() > 20.0 && fov.to_degrees() < 90.0,
             "Default FOV {} should be between 20 and 90 degrees",
-            fov.0
+            fov.to_degrees()
         );
     }
 
@@ -123,7 +121,7 @@ mod tests {
         };
         update_camera_from_physical_params(&mut camera, &params);
         let expected_fov = compute_fov_from_physical_params(&params);
-        assert!((camera.fov_y.0 - expected_fov.0).abs() < 0.01);
+        assert!((camera.fov_y - expected_fov).abs() < 0.01);
     }
 
     #[test]

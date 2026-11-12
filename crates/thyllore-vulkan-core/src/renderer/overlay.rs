@@ -1,8 +1,8 @@
 use crate::core::RRDevice;
 use crate::descriptor::{PassShaders, ReflectedSetLayout};
 use crate::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
+    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, SampleCount,
+    Topology, VertexInputConfig,
 };
 use crate::render::RRRender;
 use anyhow::{ensure, Result};
@@ -100,23 +100,65 @@ pub struct OverlayNodeSpec {
 #[derive(Clone, Debug)]
 pub struct OverlayInstanceDraw {
     pub dynamic_offsets: Vec<u32>,
-    pub scissor: vk::Rect2D,
+    pub(crate) scissor: vk::Rect2D,
 }
 
+impl OverlayInstanceDraw {
+    pub fn new(dynamic_offsets: Vec<u32>, scissor: crate::types::Rect2D) -> Self {
+        Self {
+            dynamic_offsets,
+            scissor: scissor.raw(),
+        }
+    }
+
+    #[inline]
+    pub fn scissor(&self) -> crate::types::Rect2D {
+        crate::types::Rect2D::from_raw(self.scissor)
+    }
+}
 /// The render target an overlay pass draws into and what it finds there.
 #[derive(Clone, Copy, Debug)]
 pub struct OverlayPass {
-    pub render_pass: vk::RenderPass,
-    pub framebuffer: vk::Framebuffer,
-    pub extent: vk::Extent2D,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) framebuffer: vk::Framebuffer,
+    pub(crate) extent: vk::Extent2D,
     pub load: OverlayAttachmentLoad,
 }
 
 impl OverlayPass {
-    pub fn full_area(&self) -> vk::Rect2D {
-        vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: self.extent,
+    pub fn new(
+        render_pass: crate::types::RenderPass,
+        framebuffer: crate::types::Framebuffer,
+        extent: crate::types::Extent2D,
+        load: OverlayAttachmentLoad,
+    ) -> Self {
+        Self {
+            render_pass: render_pass.raw(),
+            framebuffer: framebuffer.raw(),
+            extent: extent.raw(),
+            load,
+        }
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn framebuffer(&self) -> crate::types::Framebuffer {
+        crate::types::Framebuffer(self.framebuffer)
+    }
+
+    #[inline]
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D::from_raw(self.extent)
+    }
+
+    pub fn full_area(&self) -> crate::types::Rect2D {
+        crate::types::Rect2D {
+            offset: crate::types::Offset2D { x: 0, y: 0 },
+            extent: crate::types::Extent2D::from_raw(self.extent),
         }
     }
 }
@@ -126,18 +168,18 @@ impl OverlayNodeSpec {
         &self,
         rrdevice: &RRDevice,
         rrrender: &RRRender,
-        render_pass: vk::RenderPass,
+        render_pass: crate::types::RenderPass,
         descriptor_layouts: &[&ReflectedSetLayout],
-        extent: vk::Extent2D,
+        extent: crate::types::Extent2D,
     ) -> Result<RRPipeline> {
         let mut builder = PipelineBuilder::from_pass(self.shaders)
             .vertex_input(VertexInputConfig::Custom {
                 bindings: vec![],
                 attributes: vec![],
             })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .topology(Topology::TriangleList)
             .custom_render_pass(render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
+            .msaa_samples(SampleCount::One)
             .mrt_attachments(self.blends.len() as u32)
             .descriptor_layouts(descriptor_layouts)
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
@@ -165,22 +207,29 @@ impl OverlayNodeSpec {
     /// dynamic offsets and draws one fullscreen triangle inside its scissor.
     pub unsafe fn record(
         &self,
-        device: &Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         pass: &OverlayPass,
-        render_area: vk::Rect2D,
+        render_area: crate::types::Rect2D,
         pipeline: &RRPipeline,
         push_constants: Option<&[u8]>,
-        descriptor_sets: &[vk::DescriptorSet],
+        descriptor_sets: &[crate::types::DescriptorSet],
         draws: &[OverlayInstanceDraw],
     ) -> Result<()> {
+        let cmd = cmd.raw();
         self.ensure_push_constants_match(push_constants)?;
-        self.begin_render_pass(device, cmd, pass, render_area);
+        let descriptor_sets: Vec<vk::DescriptorSet> =
+            descriptor_sets.iter().map(|set| set.raw()).collect();
+        self.begin_render_pass(rrdevice, cmd, pass, render_area.raw());
 
-        device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-        set_full_viewport(device, cmd, pass.extent);
+        rrdevice.device().cmd_bind_pipeline(
+            cmd,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
+        );
+        set_full_viewport(&rrdevice.device(), cmd, pass.extent);
         if let Some(bytes) = push_constants {
-            device.cmd_push_constants(
+            rrdevice.device().cmd_push_constants(
                 cmd,
                 pipeline.pipeline_layout,
                 vk::ShaderStageFlags::FRAGMENT,
@@ -190,25 +239,25 @@ impl OverlayNodeSpec {
         }
 
         for draw in draws {
-            device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-            device.cmd_bind_descriptor_sets(
+            rrdevice.device().cmd_set_scissor(cmd, 0, &[draw.scissor]);
+            rrdevice.device().cmd_bind_descriptor_sets(
                 cmd,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.pipeline_layout,
                 0,
-                descriptor_sets,
+                &descriptor_sets,
                 &draw.dynamic_offsets,
             );
-            draw_fullscreen_triangle(device, cmd);
+            draw_fullscreen_triangle(&rrdevice.device(), cmd);
         }
 
-        device.cmd_end_render_pass(cmd);
+        rrdevice.device().cmd_end_render_pass(cmd);
         Ok(())
     }
 
     unsafe fn begin_render_pass(
         &self,
-        device: &Device,
+        rrdevice: &RRDevice,
         cmd: vk::CommandBuffer,
         pass: &OverlayPass,
         render_area: vk::Rect2D,
@@ -227,7 +276,11 @@ impl OverlayNodeSpec {
             .framebuffer(pass.framebuffer)
             .render_area(render_area)
             .clear_values(&clear_values);
-        device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+        rrdevice.device().cmd_begin_render_pass(
+            cmd,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
     }
 
     fn ensure_push_constants_match(&self, push_constants: Option<&[u8]>) -> Result<()> {

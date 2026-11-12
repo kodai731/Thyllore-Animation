@@ -3,3 +3,5 @@
 pub struct UiFocusState {
     pub focused_window: Option<String>,
 }
+
+crate::startup_resource!(UiFocusState, Editor);

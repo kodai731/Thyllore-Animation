@@ -1,5 +1,7 @@
 use crate::ecs::resource::{ClipDragPreview, ClipDragState};
 
+crate::startup_resource!(TimelineInteractionState, Editor);
+
 #[derive(Clone, Debug, Default)]
 pub struct TimelineInteractionState {
     pub scrubbing: bool,

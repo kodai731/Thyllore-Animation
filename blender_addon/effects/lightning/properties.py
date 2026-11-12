@@ -23,20 +23,27 @@ def waypoint_midpoint(previous, end):
     return tuple((a + b) * 0.5 for a, b in zip(previous, end))
 
 
+def _local_points(lightning_obj, world_points) -> list:
+    import thyllore_effect_core as fx
+
+    object_world = [tuple(row) for row in lightning_obj.matrix_world]
+    return fx.object_local_points(object_world, [tuple(point) for point in world_points])
+
+
 def waypoint_local_points(lightning_obj):
-    world_to_local = lightning_obj.matrix_world.inverted()
-    return [
-        world_to_local @ waypoint.target.matrix_world.translation
+    targets = [
+        waypoint.target.matrix_world.translation
         for waypoint in lightning_obj.thyllore_lightning_waypoints
         if waypoint.target is not None
     ]
+    return _local_points(lightning_obj, targets)
 
 
 def target_local_point(lightning_obj):
     target = lightning_obj.thyllore_lightning_target
     if target is None:
         return None
-    return lightning_obj.matrix_world.inverted() @ target.matrix_world.translation
+    return _local_points(lightning_obj, [target.matrix_world.translation])[0]
 
 
 def lightning_local_end_point(lightning_obj):

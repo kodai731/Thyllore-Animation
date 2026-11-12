@@ -1,16 +1,14 @@
-use crate::matrix::Mat4;
-use cgmath::{Vector2, Vector3};
+use glam::{vec4, Mat4, Vec2, Vec3};
 
 pub fn calculate_billboard_click_rect(
-    world_pos: Vector3<f32>,
-    screen_size: Vector2<f32>,
+    world_pos: Vec3,
+    screen_size: Vec2,
     view_matrix: Mat4,
     proj_matrix: Mat4,
     billboard_world_size: f32,
     billboard_ndc_scale: f32,
 ) -> Option<[f32; 4]> {
-    let clip_pos =
-        proj_matrix * view_matrix * cgmath::vec4(world_pos.x, world_pos.y, world_pos.z, 1.0);
+    let clip_pos = proj_matrix * view_matrix * vec4(world_pos.x, world_pos.y, world_pos.z, 1.0);
 
     if clip_pos.w <= 0.0 {
         return None;
@@ -34,6 +32,6 @@ pub fn calculate_billboard_click_rect(
     ])
 }
 
-pub fn is_point_in_rect(point: Vector2<f32>, rect: [f32; 4]) -> bool {
+pub fn is_point_in_rect(point: Vec2, rect: [f32; 4]) -> bool {
     point.x >= rect[0] && point.x <= rect[2] && point.y >= rect[1] && point.y <= rect[3]
 }

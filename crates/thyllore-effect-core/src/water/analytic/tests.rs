@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 
 use super::laplace_beltrami_basis::{
     compute_laplace_beltrami_modes_cached, LAPLACE_BELTRAMI_MODE_COUNT,
@@ -115,11 +115,11 @@ fn test_build_laplace_beltrami_modes_matches_cached_modes_and_amplitude_sum() {
 fn test_pick_torus_identity_transform() {
     let major_radius = 5.0;
     let minor_radius = 1.0;
-    let model = Matrix4::identity();
-    let inverse_model = model.invert().unwrap();
+    let model = Mat4::IDENTITY;
+    let inverse_model = model.try_inverse().unwrap();
 
-    let ray_origin = Vector3::new(0.0, 0.0, -10.0);
-    let ray_dir = Vector3::new(0.0, 0.0, 1.0);
+    let ray_origin = Vec3::new(0.0, 0.0, -10.0);
+    let ray_dir = Vec3::new(0.0, 0.0, 1.0);
 
     let hit = pick_torus(
         ray_origin,
@@ -242,7 +242,7 @@ fn test_perturbed_normal_identity() {
         let n_perturbed = water_perturbed_normal(u, v, 0.0, 0.0, 0.0, major_radius, minor_radius);
         let n_expected = torus_surface_normal(u, v);
 
-        let diff = (n_perturbed - n_expected).magnitude();
+        let diff = (n_perturbed - n_expected).length();
         assert!(
             diff < 1e-6,
             "perturbed normal differs from surface normal by {:.8}",
@@ -250,7 +250,7 @@ fn test_perturbed_normal_identity() {
         );
 
         // Should be unit length
-        let mag = n_perturbed.magnitude();
+        let mag = n_perturbed.length();
         assert!(
             (mag - 1.0).abs() < 1e-6,
             "perturbed normal magnitude={:.8}",

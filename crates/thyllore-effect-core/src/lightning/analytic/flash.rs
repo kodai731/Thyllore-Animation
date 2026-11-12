@@ -1,6 +1,6 @@
 use crate::lightning::analytic::strike::{compute_lightning_segment_aabb, segment_length, Segment};
 use crate::LightningEffect;
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use glam::{Mat4, Vec4};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LightningFlash {
@@ -26,14 +26,14 @@ pub fn compute_flash_intensity(effect: &LightningEffect, segments: &[Segment]) -
 pub fn compute_lightning_flash(
     effect: &LightningEffect,
     segments: &[Segment],
-    model: &Matrix4<f32>,
-    inv_view_proj: Matrix4<f32>,
+    model: &Mat4,
+    inv_view_proj: Mat4,
 ) -> LightningFlash {
     let intensity = compute_flash_intensity(effect, segments);
     if intensity <= 0.0 {
         return LightningFlash::default();
     }
-    let Some(view_proj) = inv_view_proj.invert() else {
+    let Some(view_proj) = inv_view_proj.try_inverse() else {
         return LightningFlash::default();
     };
     let Some(corners) = compute_lightning_segment_aabb(effect, effect.time) else {
@@ -43,7 +43,7 @@ pub fn compute_lightning_flash(
     let model_view_proj = view_proj * model;
     let mut uv_bounds: Option<([f32; 2], [f32; 2])> = None;
     for corner in corners {
-        let clip = model_view_proj * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+        let clip = model_view_proj * Vec4::new(corner.x, corner.y, corner.z, 1.0);
         if clip.w <= 0.0 {
             continue;
         }
@@ -74,6 +74,7 @@ mod tests {
     use crate::lightning::analytic::{build_lightning_segments, burst_start_time};
     use crate::lightning::build_lightning_model_matrix;
     use crate::LightningShape;
+    use glam::Vec3;
 
     fn segment(a: [f32; 3], b: [f32; 3], intensity: f32) -> Segment {
         Segment {
@@ -89,7 +90,7 @@ mod tests {
 
     fn make_effect() -> LightningEffect {
         LightningEffect {
-            position: cgmath::Vector3::new(0.0, 10.0, 0.0),
+            position: Vec3::new(0.0, 10.0, 0.0),
             shape: LightningShape {
                 end_offset: [0.0, -10.0, 0.0],
                 core_radius: 0.5,
@@ -142,7 +143,7 @@ mod tests {
         let segments = build_lightning_segments(&effect, effect.time);
         let model = build_lightning_model_matrix(&effect);
 
-        let flash = compute_lightning_flash(&effect, &segments, &model, Matrix4::identity());
+        let flash = compute_lightning_flash(&effect, &segments, &model, Mat4::IDENTITY);
 
         assert!(!segments.is_empty(), "stroke should be alive");
         assert_eq!(flash, LightningFlash::default());
@@ -151,7 +152,7 @@ mod tests {
     #[test]
     fn test_flash_centered_on_projected_box() {
         let mut effect = make_effect();
-        effect.position = cgmath::Vector3::new(0.0, 0.0, 0.0);
+        effect.position = Vec3::new(0.0, 0.0, 0.0);
         effect.look.flash_gain = 1.0;
         effect.time = burst_start_time(&effect, 0) + effect.timing.attack_time;
         let segments = build_lightning_segments(&effect, effect.time);
@@ -159,9 +160,9 @@ mod tests {
         let corners = compute_lightning_segment_aabb(&effect, effect.time).expect("alive segments");
         let (low, high) = (corners[0], corners[7]);
 
-        let flash = compute_lightning_flash(&effect, &segments, &model, Matrix4::identity());
+        let flash = compute_lightning_flash(&effect, &segments, &model, Mat4::IDENTITY);
         effect.look.flash_radius *= 2.0;
-        let wider = compute_lightning_flash(&effect, &segments, &model, Matrix4::identity());
+        let wider = compute_lightning_flash(&effect, &segments, &model, Mat4::IDENTITY);
 
         let expected_center = [(low.x + high.x) * 0.25 + 0.5, (low.y + high.y) * 0.25 + 0.5];
         assert!(flash.intensity > 0.0);

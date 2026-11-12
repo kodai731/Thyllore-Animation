@@ -4,13 +4,19 @@ use vulkanalia::prelude::v1_0::*;
 use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::GpuBufferRegistry;
-use thyllore_render_core::{DynamicMesh, RenderInfo};
+use thyllore_render_core::{MeshBuffers, RenderInfo};
 
 pub struct LineMeshDrawOptions {
     pub index_count_override: Option<u32>,
     pub bind_object_set: bool,
-    pub frame_set_override: Option<vk::DescriptorSet>,
+    pub(crate) frame_set_override: Option<crate::types::DescriptorSet>,
     pub pipeline_override: Option<usize>,
+}
+
+impl LineMeshDrawOptions {
+    pub fn set_frame_set_override(&mut self, descriptor_set: crate::types::DescriptorSet) {
+        self.frame_set_override = Some(descriptor_set);
+    }
 }
 
 impl Default for LineMeshDrawOptions {
@@ -24,18 +30,21 @@ impl Default for LineMeshDrawOptions {
     }
 }
 
-pub unsafe fn record_line_mesh_draw<V>(
+pub unsafe fn record_line_mesh_draw(
     ctx: &FrameRenderContext,
-    mesh: &DynamicMesh<V>,
+    mesh: &dyn MeshBuffers,
     render_info: &RenderInfo,
     options: &LineMeshDrawOptions,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<bool> {
+    let cmd = cmd.raw();
     let buffers: &GpuBufferRegistry = ctx.buffers;
-    let Some(vertex_buffer) = buffers.get_vertex_buffer(mesh.current_vertex_buffer_handle()) else {
+    let frame_slot = ctx.frame_slot;
+    let Some(vertex_buffer) = buffers.get_vertex_buffer(mesh.vertex_buffer_handle(frame_slot))
+    else {
         return Ok(false);
     };
-    let Some(index_buffer) = buffers.get_index_buffer(mesh.current_index_buffer_handle()) else {
+    let Some(index_buffer) = buffers.get_index_buffer(mesh.index_buffer_handle(frame_slot)) else {
         return Ok(false);
     };
     let pipeline_id = options
@@ -56,11 +65,9 @@ pub unsafe fn record_line_mesh_draw<V>(
         cmd,
     );
 
-    let index_count = options
-        .index_count_override
-        .unwrap_or_else(|| mesh.indices.len() as u32);
+    let index_count = options.index_count_override.unwrap_or(mesh.index_count());
 
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     device.cmd_draw_indexed(cmd, index_count, 1, 0, 0, 0);
 
     Ok(true)
@@ -71,7 +78,7 @@ unsafe fn bind_line_pipeline(
     pipeline: &RRPipeline,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 }
 
@@ -79,17 +86,17 @@ unsafe fn bind_line_mesh_buffers(
     ctx: &FrameRenderContext,
     pipeline: &RRPipeline,
     render_info: &RenderInfo,
-    vertex_buffer: vk::Buffer,
-    index_buffer: vk::Buffer,
+    vertex_buffer: crate::types::Buffer,
+    index_buffer: crate::types::Buffer,
     options: &LineMeshDrawOptions,
     cmd: vk::CommandBuffer,
 ) {
-    let device = &ctx.device.device;
+    let device = &ctx.device.device();
     let image_index = ctx.image_index;
     let graphics = ctx.graphics;
 
-    device.cmd_bind_vertex_buffers(cmd, 0, &[vertex_buffer], &[0]);
-    device.cmd_bind_index_buffer(cmd, index_buffer, 0, vk::IndexType::UINT32);
+    device.cmd_bind_vertex_buffers(cmd, 0, &[vertex_buffer.raw()], &[0]);
+    device.cmd_bind_index_buffer(cmd, index_buffer.raw(), 0, vk::IndexType::UINT32);
 
     let descriptor_set_zero = options
         .frame_set_override
@@ -99,7 +106,7 @@ unsafe fn bind_line_mesh_buffers(
         vk::PipelineBindPoint::GRAPHICS,
         pipeline.pipeline_layout,
         0,
-        &[descriptor_set_zero],
+        &[descriptor_set_zero.raw()],
         &[],
     );
 
@@ -113,7 +120,7 @@ unsafe fn bind_line_mesh_buffers(
             vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             2,
-            &[object_set],
+            &[object_set.raw()],
             &[],
         );
     }
@@ -121,17 +128,17 @@ unsafe fn bind_line_mesh_buffers(
 
 pub unsafe fn push_fragment_alpha_constant(
     ctx: &FrameRenderContext,
-    pipeline_layout: vk::PipelineLayout,
+    pipeline_layout: crate::types::PipelineLayout,
     alpha: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) {
     let alpha_bytes = std::slice::from_raw_parts(
         &alpha as *const f32 as *const u8,
         std::mem::size_of::<f32>(),
     );
-    ctx.device.device.cmd_push_constants(
-        cmd,
-        pipeline_layout,
+    ctx.device.device().cmd_push_constants(
+        cmd.raw(),
+        pipeline_layout.raw(),
         vk::ShaderStageFlags::FRAGMENT,
         0,
         alpha_bytes,

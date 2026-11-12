@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LineMesh, MeshScale};
@@ -42,22 +42,22 @@ impl<'a> EcsContext<'a> {
         self.world.resource_mut::<LightState>()
     }
 
-    pub fn camera_position(&self) -> Vector3<f32> {
+    pub fn camera_position(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_position;
         compute_camera_position(&self.camera())
     }
 
-    pub fn camera_direction(&self) -> Vector3<f32> {
+    pub fn camera_direction(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_direction;
         compute_camera_direction(&self.camera())
     }
 
-    pub fn camera_up(&self) -> Vector3<f32> {
+    pub fn camera_up(&self) -> Vec3 {
         use crate::ecs::systems::camera_systems::compute_camera_up;
         compute_camera_up(&self.camera())
     }
 
-    pub fn light_position(&self) -> Vector3<f32> {
+    pub fn light_position(&self) -> Vec3 {
         self.light_state().light_position
     }
 

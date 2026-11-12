@@ -22,7 +22,7 @@ mod status_bar;
 mod text_to_animation_dialog;
 mod text_to_mesh_dialog;
 pub(crate) mod theme;
-pub(crate) mod timeline_window;
+pub(crate) mod timeline;
 mod toast;
 mod ui_rows;
 mod viewport_window;

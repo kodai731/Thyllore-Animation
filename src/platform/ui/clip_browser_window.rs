@@ -37,6 +37,19 @@ fn draw_clip_browser_window(
         });
 }
 
+fn clip_action_button<Action>(
+    ui: &imgui::Ui,
+    label: &str,
+    available_action: Option<Action>,
+) -> Option<Action> {
+    let Some(action) = available_action else {
+        ui.text_disabled(label);
+        return None;
+    };
+
+    ui.small_button(label).then_some(action)
+}
+
 fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
     if ui.small_button("+ New") {
         world.send_command(ClipBrowserEvent::CreateEmpty);
@@ -47,97 +60,45 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
         send_dialog_request(world, DialogRequest::LoadClip);
     }
 
+    let selected_clip = timeline_state.current_clip_id;
+    let clip_export = |format: ClipExportFormat| {
+        selected_clip.map(|source_id| DialogRequest::ExportClip { source_id, format })
+    };
+
     ui.same_line();
-    let has_selection = timeline_state.current_clip_id.is_some();
-    if has_selection {
-        if ui.small_button("Save") {
-            if let Some(id) = timeline_state.current_clip_id {
-                send_dialog_request(world, DialogRequest::SaveClip(id));
-            }
-        }
-    } else {
-        ui.text_disabled("Save");
+    if let Some(source_id) = clip_action_button(ui, "Save", selected_clip) {
+        send_dialog_request(world, DialogRequest::SaveClip(source_id));
     }
 
     ui.same_line();
-    if has_selection {
-        if ui.small_button("FBX") {
-            if let Some(id) = timeline_state.current_clip_id {
-                send_dialog_request(
-                    world,
-                    DialogRequest::ExportClip {
-                        source_id: id,
-                        format: ClipExportFormat::Fbx,
-                    },
-                );
-            }
-        }
-    } else {
-        ui.text_disabled("FBX");
+    if let Some(request) = clip_action_button(ui, "FBX", clip_export(ClipExportFormat::Fbx)) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
     let has_model = world
         .get_resource::<GltfModelCache>()
         .map_or(false, |c| c.has_model());
-    if has_selection {
-        if ui.small_button("glTF") {
-            if let Some(id) = timeline_state.current_clip_id {
-                send_dialog_request(
-                    world,
-                    DialogRequest::ExportClip {
-                        source_id: id,
-                        format: ClipExportFormat::Gltf,
-                    },
-                );
-            }
-        }
-    } else if has_model {
-        if ui.small_button("glTF") {
-            send_dialog_request(world, DialogRequest::ExportModelGltf);
-        }
-    } else {
-        ui.text_disabled("glTF");
+    let gltf_export = clip_export(ClipExportFormat::Gltf)
+        .or_else(|| has_model.then_some(DialogRequest::ExportModelGltf));
+    if let Some(request) = clip_action_button(ui, "glTF", gltf_export) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
-    if has_selection {
-        if ui.small_button("glTF (anim only)") {
-            if let Some(id) = timeline_state.current_clip_id {
-                send_dialog_request(
-                    world,
-                    DialogRequest::ExportClip {
-                        source_id: id,
-                        format: ClipExportFormat::GltfAnimationOnly,
-                    },
-                );
-            }
-        }
-    } else {
-        ui.text_disabled("glTF (anim only)");
+    let animation_only_export = clip_export(ClipExportFormat::GltfAnimationOnly);
+    if let Some(request) = clip_action_button(ui, "glTF (anim only)", animation_only_export) {
+        send_dialog_request(world, request);
     }
 
     ui.same_line();
-    let can_duplicate = has_selection;
-    if can_duplicate {
-        if ui.small_button("Dup") {
-            if let Some(id) = timeline_state.current_clip_id {
-                world.send_command(ClipBrowserEvent::Duplicate(id));
-            }
-        }
-    } else {
-        ui.text_disabled("Dup");
+    if let Some(source_id) = clip_action_button(ui, "Dup", selected_clip) {
+        world.send_command(ClipBrowserEvent::Duplicate(source_id));
     }
 
     ui.same_line();
-    if can_duplicate {
-        if ui.small_button("Del") {
-            if let Some(id) = timeline_state.current_clip_id {
-                world.send_command(ClipBrowserEvent::Delete(id));
-            }
-        }
-    } else {
-        ui.text_disabled("Del");
+    if let Some(source_id) = clip_action_button(ui, "Del", selected_clip) {
+        world.send_command(ClipBrowserEvent::Delete(source_id));
     }
 }
 

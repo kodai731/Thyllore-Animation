@@ -182,8 +182,22 @@ fn find_spring_bone_entity(world: &World) -> Option<Entity> {
 
 pub fn section_rows() -> Vec<UiRow<SpringView>> {
     let mut rows: Vec<UiRow<SpringView>> = Vec::new();
-    rows.push(chain_list_row());
 
+    rows.push(chain_list_row());
+    rows.extend(add_chain_rows());
+
+    rows.push(collider_list_row());
+    rows.extend(add_collider_rows());
+
+    rows.push(group_list_row());
+    rows.extend(add_group_rows());
+
+    rows.extend(gizmo_rows());
+    rows
+}
+
+fn add_chain_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows: Vec<UiRow<SpringView>> = Vec::new();
     rows.push(UiRow::Choice {
         label: "Root Bone",
         options: |_, view: &SpringView| bone_choice_options(view, view.chain_root_bone()),
@@ -219,7 +233,11 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
             }) as _
         },
     });
-    rows.push(collider_list_row());
+    rows
+}
+
+fn add_collider_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows: Vec<UiRow<SpringView>> = Vec::new();
     rows.push(UiRow::Choice {
         label: "Collider Bone",
         options: |_, view: &SpringView| bone_choice_options(view, view.collider_bone()),
@@ -266,7 +284,11 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
             }) as _
         },
     });
-    rows.push(group_list_row());
+    rows
+}
+
+fn add_group_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows: Vec<UiRow<SpringView>> = Vec::new();
     rows.push(UiRow::Text {
         label: "Group Name",
         get: |view: &SpringView| &view.add_group_name,
@@ -284,6 +306,11 @@ pub fn section_rows() -> Vec<UiRow<SpringView>> {
             }) as _
         },
     });
+    rows
+}
+
+fn gizmo_rows() -> Vec<UiRow<SpringView>> {
+    let mut rows: Vec<UiRow<SpringView>> = Vec::new();
     rows.push(UiRow::Toggle {
         label: "Show Collider Gizmos",
         get: |view: &SpringView| view.collider_gizmo_visible,

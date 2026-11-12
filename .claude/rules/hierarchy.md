@@ -495,8 +495,9 @@ another drag; it never reads `ui.io().mouse_*` / `ui.is_mouse_*` (`tests/ui_raw_
 `src/platform/ui/` groups its windows by feature: `effect/` (the per-effect sections `flame/`, `lightning/`,
 `water.rs`, `wind.rs` with the shared `rows.rs` / `sections.rs`), `inspector/` (the window, its target
 resolution and every inspector section: `sections.rs`, `blend_shape/`, `bone/`, `constraint/`,
-`spring_bone/`), `scene_settings/` (the scene panel's view and row groups), `avatar_setup/`, `curve_editor/`
-and `ui_rows/` (the `UiRow` declarations in `row.rs`, the single renderer in `draw.rs`, the test-only label
+`spring_bone/`), `scene_settings/` (the scene panel's view and row groups), `scene_overlay/` (the viewport `toolbar.rs` and the
+feature-gated `auto_rig.rs` buttons), `timeline/` (`window`, `transport`, `ruler`, the clip track files, `input`, the shared `layout` constants),
+`avatar_setup/`, `curve_editor/` and `ui_rows/` (the `UiRow` declarations in `row.rs`, the single renderer in `draw.rs`, the test-only label
 helpers in `labels.rs`). A new window or section goes into the directory of the feature it belongs to.
 
 ## src/vulkanr/

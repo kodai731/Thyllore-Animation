@@ -2,11 +2,6 @@ use std::path::Path;
 
 use imgui::{Condition, StyleVar};
 
-use super::pointer::read_ui_pointer;
-#[cfg(feature = "auto-rig")]
-use super::text_to_animation_dialog::TextToAnimationDialogState;
-#[cfg(feature = "auto-rig")]
-use super::text_to_mesh_dialog::TextToMeshDialogState;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
@@ -16,39 +11,38 @@ use crate::ecs::resource::{
     MIN_UI_SCALE, UI_SETTINGS_PATH,
 };
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-#[cfg(feature = "auto-rig")]
-use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::World;
+use crate::platform::ui::pointer::read_ui_pointer;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
-use super::scene_settings::{
+use crate::platform::ui::form_window::{FormPlacement, FormWindow};
+use crate::platform::ui::scene_settings::{
     read_scene_settings, scene_settings_rows, send_scene_settings_changes,
 };
-use crate::platform::ui::form_window::{FormPlacement, FormWindow};
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
 const TOOLBAR_HEIGHT: f32 = 28.0;
 const TOOLBAR_PADDING_X: f32 = 6.0;
-const TOOLBAR_GROUP_GAP: f32 = 12.0;
+pub(super) const TOOLBAR_GROUP_GAP: f32 = 12.0;
 const UI_SETTINGS_POPUP: &str = "ui_settings_popup";
 const DENSITY_OPTIONS: [(UiDensity, &str); 2] = [
     (UiDensity::Compact, "Compact"),
     (UiDensity::Default, "Default"),
 ];
 
-pub(super) struct GizmoKeyBinding {
-    pub(super) key: imgui::Key,
-    pub(super) label: &'static str,
+pub(in crate::platform::ui) struct GizmoKeyBinding {
+    pub(in crate::platform::ui) key: imgui::Key,
+    pub(in crate::platform::ui) label: &'static str,
     mode: TransformGizmoMode,
 }
 
-pub(super) const GIZMO_KEY_BINDINGS: &[GizmoKeyBinding] = &[
+pub(in crate::platform::ui) const GIZMO_KEY_BINDINGS: &[GizmoKeyBinding] = &[
     GizmoKeyBinding {
         key: imgui::Key::W,
         label: "Translate",
@@ -65,9 +59,6 @@ pub(super) const GIZMO_KEY_BINDINGS: &[GizmoKeyBinding] = &[
         mode: TransformGizmoMode::Scale,
     },
 ];
-
-#[cfg(feature = "auto-rig")]
-use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 
 fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInput) {
     let _window_padding = ui.push_style_var(StyleVar::WindowPadding([
@@ -93,7 +84,7 @@ fn draw_scene_toolbar(ui: &imgui::Ui, ecs_world: &World, viewport: &ViewportInpu
             build_overlay_buttons(ui, ecs_world);
 
             #[cfg(feature = "auto-rig")]
-            build_auto_rig_buttons(ui, ecs_world);
+            super::auto_rig::build_auto_rig_buttons(ui, ecs_world);
 
             build_scene_panel_toggle(ui, ecs_world);
         });
@@ -112,7 +103,7 @@ fn scene_panel_form(world: &World, _: &AssetStorage, _: &GraphicsResources) -> O
     let max_height = viewport.size[1] - TOOLBAR_HEIGHT - 2.0 * OVERLAY_MARGIN;
 
     let mut sections: Vec<Box<dyn crate::platform::ui::form_window::FormSection>> =
-        vec![super::form_window::rows_section(
+        vec![crate::platform::ui::form_window::rows_section(
             scene_settings_rows(&read_scene_settings(world)),
             read_scene_settings(world),
             send_scene_settings_changes,
@@ -325,106 +316,6 @@ fn build_ui_settings_popup(ui: &imgui::Ui, ecs_world: &World) {
         *ecs_world.resource_mut::<UiSettings>() = edited;
         if let Err(e) = save_ui_settings(Path::new(UI_SETTINGS_PATH), &edited) {
             log_warn!("Failed to save UI settings: {}", e);
-        }
-    }
-}
-
-#[cfg(feature = "auto-rig")]
-fn build_auto_rig_buttons(ui: &imgui::Ui, ecs_world: &World) {
-    ui.same_line_with_spacing(0.0, TOOLBAR_GROUP_GAP);
-    if ui.button("Generate Mesh") {
-        ecs_world.resource_mut::<TextToMeshDialogState>().open = true;
-    }
-
-    ui.same_line();
-    if ui.button("Generate Animation") {
-        ecs_world.resource_mut::<TextToAnimationDialogState>().open = true;
-    }
-
-    ui.same_line();
-    build_auto_rig_section(ui, ecs_world);
-}
-
-#[cfg(feature = "auto-rig")]
-fn build_auto_rig_section(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::component::GlbSource;
-    use crate::ecs::resource::HierarchyState;
-    use crate::ecs::world::Parent;
-
-    let auto_rig_state = ecs_world.resource::<AutoRigState>();
-    let status = auto_rig_state.status.clone();
-    let joint_count = auto_rig_state.joint_count;
-    let bone_count = auto_rig_state.bone_count;
-    let gen_time = auto_rig_state.generation_time_ms;
-    let error_msg = auto_rig_state.error_message.clone();
-    drop(auto_rig_state);
-
-    match status {
-        AutoRigStatus::Idle => {
-            let hierarchy = ecs_world.resource::<HierarchyState>();
-            let selected = hierarchy.selected_entity;
-            drop(hierarchy);
-
-            let has_glb_source = selected.map_or(false, |entity| {
-                if ecs_world.get_component::<GlbSource>(entity).is_some() {
-                    return true;
-                }
-                if let Some(Parent(parent)) = ecs_world.get_component::<Parent>(entity) {
-                    return ecs_world.get_component::<GlbSource>(*parent).is_some();
-                }
-                false
-            });
-
-            if has_glb_source && ui.button("Auto Rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigGenerate {
-                    num_sample_points: 65536,
-                });
-            }
-        }
-
-        AutoRigStatus::WaitingForServer => {
-            ui.text("Rigging: waiting for server...");
-            ui.same_line();
-            if ui.button("Cancel##rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
-            }
-        }
-
-        AutoRigStatus::Rigging => {
-            ui.text("Rigging: processing...");
-            ui.same_line();
-            if ui.button("Cancel##rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
-            }
-        }
-
-        AutoRigStatus::Previewing => {
-            if let Some(gen_time) = gen_time {
-                ui.text(format!(
-                    "Preview: {} joints, {} bones ({:.1}s)",
-                    joint_count.unwrap_or(0),
-                    bone_count.unwrap_or(0),
-                    gen_time / 1000.0
-                ));
-                ui.same_line();
-            }
-            if ui.button("Apply Rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigApply);
-            }
-            ui.same_line();
-            if ui.button("Discard##rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
-            }
-        }
-
-        AutoRigStatus::Error => {
-            if let Some(ref msg) = error_msg {
-                ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Rig error: {}", msg));
-                ui.same_line();
-            }
-            if ui.button("Dismiss##rig") {
-                ecs_world.send_command(AutoRigEvent::AutoRigDiscard);
-            }
         }
     }
 }

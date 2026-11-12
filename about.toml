@@ -1,7 +1,3 @@
-# cargo-about configuration
-# Generate: cargo about generate about.hbs > THIRD_PARTY_CARGO_LICENSES.html
-# Docs: https://embarkstudios.github.io/cargo-about/
-
 accepted = [
     "MIT",
     "Apache-2.0",
@@ -14,12 +10,12 @@ accepted = [
     "0BSD",
     "Unlicense",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "PDDL-1.0",
     "CDLA-Permissive-2.0",
-    "OpenSSL",
     "LGPL-2.1-or-later",
 ]
 
 ignore-build-dependencies = false
-ignore-dev-dependencies = true
+ignore-dev-dependencies = false
+
+private = { ignore = true }

@@ -12,7 +12,9 @@ on:
       - 'about.toml'
       - 'about.template.md'
       - 'THIRD_PARTY_CARGO_LICENSES.md'
+      - 'scratch/Cargo.toml'
       - 'scripts/generate_third_party_licenses.sh'
+      - 'scripts/check_own_crates_unpublished.sh'
       - '.github/workflows/third_party_licenses.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -25,7 +27,9 @@ on:
       - 'about.toml'
       - 'about.template.md'
       - 'THIRD_PARTY_CARGO_LICENSES.md'
+      - 'scratch/Cargo.toml'
       - 'scripts/generate_third_party_licenses.sh'
+      - 'scripts/check_own_crates_unpublished.sh'
       - '.github/workflows/third_party_licenses.yml'
 
 jobs:
@@ -47,6 +51,9 @@ jobs:
 
       - name: Check licenses with cargo-deny
         run: cargo deny check licenses
+
+      - name: Check own crates are excluded from the third-party list
+        run: bash scripts/check_own_crates_unpublished.sh
 
       - name: Regenerate and verify THIRD_PARTY_CARGO_LICENSES.md
         run: |

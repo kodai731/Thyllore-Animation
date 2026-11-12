@@ -1,14 +1,12 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameHistorySnapshotState, FlameRenderTargets};
+use crate::ecs::systems::flame::descriptors::FlameImageBindings;
+use crate::ecs::systems::flame::gpu_targets::{create_flame_history, recreate_flame_history};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::render::RRRender;
-use thyllore_vulkan_core::resource::render_target_storage::RenderTargetKey;
-use thyllore_vulkan_core::resource::{HistoryTargets, HistoryTargetsDesc};
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
@@ -23,18 +21,17 @@ unsafe fn create_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         return Ok(());
     };
 
-    let history = HistoryTargets::new(
+    let history = create_flame_history(
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
-        ctx.raytracing.command_pool,
+        ctx.raytracing.command_pool(),
         ctx.viewport_width,
         ctx.viewport_height,
         hdr_view,
-        flame_history_desc(),
     )?;
 
-    for image in history.images {
+    for image in history.images() {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
     ctx.world.insert_resource(FlameRenderTargets { history });
@@ -50,14 +47,14 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
     let flame_history = &flame_targets.history;
 
     let position_image_view = match ctx.raytracing.gbuffer {
-        Some(ref gbuffer) => gbuffer.position_image_view,
+        Some(ref gbuffer) => gbuffer.position_image_view(),
         None => {
             log!("GBuffer not available, skipping flame pipeline");
             return Ok(());
         }
     };
 
-    let position_sampler = match ctx.raytracing.gbuffer_sampler {
+    let position_sampler = match ctx.raytracing.gbuffer_sampler() {
         Some(sampler) => sampler,
         None => {
             log!("GBuffer sampler not available, skipping flame pipeline");
@@ -73,7 +70,7 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         flame_history,
         position_image_view,
         position_sampler,
-        rrrender.gbuffer_depth_image_view,
+        rrrender.gbuffer_depth_image_view(),
     )?;
     drop(flame_targets);
     ctx.world.insert_resource(gpu_state);
@@ -94,28 +91,27 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         return Ok(());
     };
     let (width, height) = (ctx.viewport_width, ctx.viewport_height);
-    let command_pool = ctx.raytracing.command_pool;
+    let command_pool = ctx.raytracing.command_pool();
     let scene_depth_view = ctx
         .world
         .resource::<RenderTargets>()
         .render
-        .gbuffer_depth_image_view;
+        .gbuffer_depth_image_view();
 
     let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() else {
         return Ok(());
     };
-    targets.history.destroy(&ctx.rrdevice.device);
-    targets.history = HistoryTargets::new(
+    recreate_flame_history(
         ctx.instance,
         ctx.rrdevice,
         ctx.storage,
         command_pool,
+        &mut targets.history,
         width,
         height,
         hdr_view,
-        flame_history_desc(),
     )?;
-    for image in targets.history.images {
+    for image in targets.history.images() {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
 
@@ -124,10 +120,10 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
             descriptor.update_image_views(
                 ctx.rrdevice,
                 FlameImageBindings {
-                    history_image_views: targets.history.views,
-                    flame_sampler: targets.history.sampler,
-                    sdf_image_view: gpu_state.sdf.image_view,
-                    sdf_sampler: gpu_state.sdf.sampler,
+                    history_image_views: targets.history.views(),
+                    flame_sampler: targets.history.sampler(),
+                    sdf_image_view: gpu_state.sdf.image_view(),
+                    sdf_sampler: gpu_state.sdf.sampler(),
                     scene_depth_view,
                 },
             )?;
@@ -139,40 +135,4 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         state.previous = None;
     }
     Ok(())
-}
-
-const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
-    RenderTargetKey::EffectHistory(0),
-    RenderTargetKey::EffectHistory(1),
-];
-
-pub const FLAME_HISTORY_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
-
-fn flame_history_desc() -> HistoryTargetsDesc {
-    HistoryTargetsDesc {
-        keys: FLAME_HISTORY_KEYS,
-        format: FLAME_HISTORY_FORMAT,
-        usage: vk::ImageUsageFlags::TRANSFER_SRC,
-        sampler: nearest_clamp_sampler_info(),
-        history_load_op: vk::AttachmentLoadOp::CLEAR,
-        depth_view: None,
-    }
-}
-
-fn nearest_clamp_sampler_info() -> vk::SamplerCreateInfo {
-    vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::NEAREST)
-        .min_filter(vk::Filter::NEAREST)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .anisotropy_enable(false)
-        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-        .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
-        .mip_lod_bias(0.0)
-        .min_lod(0.0)
-        .max_lod(0.0)
-        .build()
 }

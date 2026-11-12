@@ -44,3 +44,5 @@ impl PostProcessFrameTargets {
         self.bloom_bound.forget();
     }
 }
+
+crate::startup_resource!(PostProcessFrameTargets, CoreResources);

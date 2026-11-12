@@ -3,10 +3,11 @@ use std::collections::HashSet;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
+use super::view::DrawnCurve;
 use super::window::ALL_PROPERTY_TYPES;
 use crate::animation::editable::{
-    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyCurve, PropertyType,
-    TangentType, TangentWeightMode,
+    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyType, TangentType,
+    TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
@@ -89,10 +90,10 @@ fn delete_context_menu_keys(
     track_ref: CurveTrackRef,
     context_key: &CurveSelectedKeyframe,
 ) {
-    let targets: Vec<&CurveSelectedKeyframe> = if editor_state.selected_keyframes.len() > 1 {
-        editor_state.selected_keyframes.iter().collect()
+    let targets = if editor_state.selected_keyframes.len() > 1 {
+        editor_state.selected_keyframes.as_slice()
     } else {
-        vec![context_key]
+        std::slice::from_ref(context_key)
     };
     for key in targets {
         world.send_command(TimelineEvent::DeleteKeyframe {
@@ -188,7 +189,7 @@ pub(super) fn build_curve_extrapolation_menu(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     track_ref: CurveTrackRef,
 ) {
     ui.popup(CURVE_EXTRAPOLATION_MENU, || {
@@ -227,12 +228,12 @@ fn build_extrapolation_mode_items(
 
 pub(super) fn extrapolation_target_properties(
     selected_keyframes: &[CurveSelectedKeyframe],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
 ) -> Vec<PropertyType> {
     let mut targets: Vec<PropertyType> = if selected_keyframes.is_empty() {
         curves
             .iter()
-            .map(|(curve, _, _)| curve.property_type)
+            .map(|DrawnCurve { curve, .. }| curve.property_type)
             .collect()
     } else {
         selected_keyframes
@@ -281,6 +282,7 @@ pub(super) fn add_key_target_property(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::editable::PropertyCurve;
 
     #[test]
     fn add_key_on_a_role_bone_skips_translations_left_visible_by_default() {
@@ -311,8 +313,14 @@ mod tests {
         let curve_x = PropertyCurve::new(0, PropertyType::TranslationX);
         let curve_y = PropertyCurve::new(1, PropertyType::TranslationY);
         let curves = [
-            (&curve_x, [1.0, 0.0, 0.0, 1.0], "x"),
-            (&curve_y, [0.0, 1.0, 0.0, 1.0], "y"),
+            DrawnCurve {
+                curve: &curve_x,
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            DrawnCurve {
+                curve: &curve_y,
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
         ];
         let selected_on_y = |keyframe_id| CurveSelectedKeyframe {
             property_type: PropertyType::TranslationY,

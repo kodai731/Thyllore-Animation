@@ -1,6 +1,6 @@
 use crate::flame::*;
 use crate::flame_trail::{FlameTrailSample, FlameTrailState};
-use cgmath::{Matrix3, Matrix4, Vector3};
+use glam::{Mat3, Mat4, Vec3};
 
 /// Build the expanded model matrix for flame trail rendering.
 /// Computes world AABB of all trail samples + effect position, then builds a rotation-free
@@ -8,7 +8,7 @@ use cgmath::{Matrix3, Matrix4, Vector3};
 pub fn build_flame_trail_expanded_matrix(
     effect: &FlameEffect,
     samples: &[FlameTrailSample],
-) -> Matrix4<f32> {
+) -> Mat4 {
     assert!(
         !samples.is_empty(),
         "build_flame_trail_expanded_matrix requires at least one sample"
@@ -58,8 +58,12 @@ pub fn build_flame_trail_expanded_matrix(
     let base_y = min_y;
 
     // Build rotation-free expansion matrix using same construction as build_flame_model_matrix
-    Matrix4::from_translation(Vector3::new(cx, base_y, cz))
-        * Matrix4::from_nonuniform_scale(extension_radius, extension_height, extension_radius)
+    Mat4::from_translation(Vec3::new(cx, base_y, cz))
+        * Mat4::from_scale(Vec3::new(
+            extension_radius,
+            extension_height,
+            extension_radius,
+        ))
 }
 
 /// Build trail UBO fields: (trailUnitInverse, trailMeta, trailCoefficients).
@@ -69,12 +73,12 @@ pub fn build_flame_trail_expanded_matrix(
 pub fn build_flame_trail_ubo_fields(
     effect: &FlameEffect,
     trail: &FlameTrailState,
-) -> (Matrix4<f32>, FlameTrailMeta, [[f32; 4]; 4]) {
+) -> (Mat4, FlameTrailMeta, [[f32; 4]; 4]) {
     let count = trail.samples.len();
 
     if count == 0 {
         return (
-            Matrix4::<f32>::from_scale(1.0),
+            Mat4::IDENTITY,
             FlameTrailMeta {
                 sample_count: 0.0,
                 max_age: 0.0,
@@ -86,25 +90,25 @@ pub fn build_flame_trail_ubo_fields(
 
     // trailUnitInverse = inverse of unit model matrix (analytical: translation*scale -> inv_scale*inv_translation)
     let radius = flame_bounding_radius(effect);
-    let trail_unit_inverse = Matrix4::from_translation(-effect.position)
-        * Matrix4::from_nonuniform_scale(1.0 / radius, 1.0 / effect.height, 1.0 / radius);
+    let trail_unit_inverse = Mat4::from_translation(-effect.position)
+        * Mat4::from_scale(Vec3::new(1.0 / radius, 1.0 / effect.height, 1.0 / radius));
 
     // Build local-space sample offsets and their normalized ages (u = age_seconds / fade_seconds)
-    let linear = Matrix3::<f32>::from_cols(
-        Vector3::new(
-            trail_unit_inverse[0][0],
-            trail_unit_inverse[1][0],
-            trail_unit_inverse[2][0],
+    let linear = Mat3::from_cols(
+        Vec3::new(
+            trail_unit_inverse.col(0)[0],
+            trail_unit_inverse.col(1)[0],
+            trail_unit_inverse.col(2)[0],
         ),
-        Vector3::new(
-            trail_unit_inverse[0][1],
-            trail_unit_inverse[1][1],
-            trail_unit_inverse[2][1],
+        Vec3::new(
+            trail_unit_inverse.col(0)[1],
+            trail_unit_inverse.col(1)[1],
+            trail_unit_inverse.col(2)[1],
         ),
-        Vector3::new(
-            trail_unit_inverse[0][2],
-            trail_unit_inverse[1][2],
-            trail_unit_inverse[2][2],
+        Vec3::new(
+            trail_unit_inverse.col(0)[2],
+            trail_unit_inverse.col(1)[2],
+            trail_unit_inverse.col(2)[2],
         ),
     );
 
@@ -191,7 +195,7 @@ pub fn build_flame_trail_ubo_fields(
         } else {
             0.0
         };
-        let diff = Vector3::new(
+        let diff = Vec3::new(
             sample.position[0] - effect.position.x,
             sample.position[1] - effect.position.y,
             sample.position[2] - effect.position.z,

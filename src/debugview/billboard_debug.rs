@@ -7,9 +7,9 @@ use crate::ecs::world::World;
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::swapchain::RRSwapchain;
-use cgmath::{Deg, Vector3};
+use glam::{Vec3, Vec4};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
     let camera = world.resource::<Camera>();
@@ -25,7 +25,7 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
     };
 
     let gbuffer_debug_info = raytracing.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
-        position_image_view: gb.position_image_view,
+        position_image_view: gb.position_image_view(),
         extent_width: gb.width,
         extent_height: gb.height,
     });
@@ -38,21 +38,21 @@ pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingDat
         swapchain,
         &billboard.render_state.descriptor_set,
         gbuffer_debug_info.as_ref(),
-        raytracing.gbuffer_sampler,
+        raytracing.gbuffer_sampler(),
     );
 }
 
 pub struct BillboardDebugInfo {
-    pub light_position: Vector3<f32>,
-    pub camera_position: Vector3<f32>,
-    pub camera_direction: Vector3<f32>,
-    pub camera_up: Vector3<f32>,
+    pub light_position: Vec3,
+    pub camera_position: Vec3,
+    pub camera_direction: Vec3,
+    pub camera_up: Vec3,
     pub near_plane: f32,
-    pub fov_y: Deg<f32>,
+    pub fov_y: f32,
 }
 
 pub struct GBufferDebugInfo {
-    pub position_image_view: vk::ImageView,
+    pub position_image_view: ImageView,
     pub extent_width: u32,
     pub extent_height: u32,
 }
@@ -62,7 +62,7 @@ pub fn log_billboard_debug_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!("=== Billboard Depth Debug Info ===");
 
@@ -83,7 +83,7 @@ fn log_basic_info(
     swapchain: &RRSwapchain,
     billboard_descriptor_set: &RRBillboardDescriptorSet,
     gbuffer_info: Option<&GBufferDebugInfo>,
-    gbuffer_sampler: Option<vk::Sampler>,
+    gbuffer_sampler: Option<Sampler>,
 ) {
     log!(
         "Light position: ({:.2}, {:.2}, {:.2})",
@@ -104,7 +104,7 @@ fn log_basic_info(
         info.camera_direction.z
     );
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
     log!(
         "Swapchain extent: {}x{}",
         swapchain_extent.width,
@@ -140,18 +140,18 @@ fn log_basic_info(
     log!("  rrdata count: {}", billboard_descriptor_set.rrdata.len());
     log!(
         "  descriptor_sets count: {}",
-        billboard_descriptor_set.descriptor_sets.len()
+        billboard_descriptor_set.descriptor_sets().len()
     );
 }
 
 fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
     use crate::math::{coordinate_system::perspective_infinite_reverse, view};
 
-    let swapchain_extent = swapchain.swapchain_extent;
+    let swapchain_extent = swapchain.swapchain_extent();
 
-    let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
+    let view_matrix = view(info.camera_position, info.camera_direction, info.camera_up);
     let light_view_pos = view_matrix
-        * cgmath::Vector4::new(
+        * Vec4::new(
             info.light_position.x,
             info.light_position.y,
             info.light_position.z,
@@ -173,13 +173,13 @@ fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapch
 
     let light_clip_pos = proj * light_view_pos;
     let light_ndc = if light_clip_pos.w.abs() > 0.0001 {
-        cgmath::Vector3::new(
+        Vec3::new(
             light_clip_pos.x / light_clip_pos.w,
             light_clip_pos.y / light_clip_pos.w,
             light_clip_pos.z / light_clip_pos.w,
         )
     } else {
-        cgmath::Vector3::new(0.0, 0.0, 0.0)
+        Vec3::new(0.0, 0.0, 0.0)
     };
     log!(
         "Billboard NDC: ({:.4}, {:.4}, {:.4})",

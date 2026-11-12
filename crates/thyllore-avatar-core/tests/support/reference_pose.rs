@@ -1,5 +1,5 @@
 #![cfg(test)]
-use cgmath::{Matrix3, One, Rad, Vector3};
+use glam::{Mat3, Vec3};
 
 use super::canonical_bones;
 
@@ -26,16 +26,16 @@ pub fn reference_world_positions(
     let bones = canonical_bones();
     let n = bones.len();
 
-    let mut directions = vec![Matrix3::one(); n];
+    let mut directions = vec![Mat3::IDENTITY; n];
     let mut positions = vec![[0.0f32; 3]; n];
 
-    let hips_translation: Vector3<f32> = [
+    let hips_translation: Vec3 = [
         sampled.hips_translation[0],
         sampled.hips_translation[1],
         sampled.hips_translation[2],
     ]
     .into();
-    let canonical_hips_pos: Vector3<f32> = [
+    let canonical_hips_pos: Vec3 = [
         canonical_hips()[0],
         canonical_hips()[1],
         canonical_hips()[2],
@@ -93,14 +93,14 @@ pub fn reference_world_positions(
         };
 
         let euler = sampled.rotations.get(&role).copied().unwrap_or([0.0; 3]);
-        let r_x = Matrix3::from_angle_x(Rad(euler[0].to_radians()));
-        let r_y = Matrix3::from_angle_y(Rad(euler[1].to_radians()));
-        let r_z = Matrix3::from_angle_z(Rad(euler[2].to_radians()));
+        let r_x = Mat3::from_rotation_x(euler[0].to_radians());
+        let r_y = Mat3::from_rotation_y(euler[1].to_radians());
+        let r_z = Mat3::from_rotation_z(euler[2].to_radians());
         let r_i = r_y * r_x * r_z;
 
         let parent_dir = match bone.parent {
             Some(p) => directions[p],
-            None => Matrix3::one(),
+            None => Mat3::IDENTITY,
         };
         directions[i] = parent_dir * r_i;
 
@@ -108,11 +108,9 @@ pub fn reference_world_positions(
             positions[i] = [pos_root.x, pos_root.y, pos_root.z];
         } else {
             let p = bone.parent.unwrap();
-            let parent_pos: Vector3<f32> =
-                [positions[p][0], positions[p][1], positions[p][2]].into();
-            let child_rest: Vector3<f32> =
-                [bone.position[0], bone.position[1], bone.position[2]].into();
-            let parent_rest: Vector3<f32> = [
+            let parent_pos: Vec3 = [positions[p][0], positions[p][1], positions[p][2]].into();
+            let child_rest: Vec3 = [bone.position[0], bone.position[1], bone.position[2]].into();
+            let parent_rest: Vec3 = [
                 bones[p].position[0],
                 bones[p].position[1],
                 bones[p].position[2],

@@ -4,6 +4,7 @@ use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayou
 use crate::descriptor::shader_bindings::composite;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
+use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_spirv_reflect::declare_gpu_block;
 
@@ -30,22 +31,48 @@ impl Default for SelectionUBO {
 
 #[derive(Clone, Copy, Debug)]
 pub struct CompositeGBufferViews {
-    pub position_image_view: vk::ImageView,
-    pub position_sampler: vk::Sampler,
-    pub normal_image_view: vk::ImageView,
-    pub normal_sampler: vk::Sampler,
-    pub shadow_mask_image_view: vk::ImageView,
-    pub shadow_mask_sampler: vk::Sampler,
-    pub albedo_image_view: vk::ImageView,
-    pub albedo_sampler: vk::Sampler,
-    pub object_id_image_view: vk::ImageView,
-    pub object_id_sampler: vk::Sampler,
+    pub(crate) position_image_view: vk::ImageView,
+    pub(crate) position_sampler: vk::Sampler,
+    pub(crate) normal_image_view: vk::ImageView,
+    pub(crate) normal_sampler: vk::Sampler,
+    pub(crate) shadow_mask_image_view: vk::ImageView,
+    pub(crate) shadow_mask_sampler: vk::Sampler,
+    pub(crate) albedo_image_view: vk::ImageView,
+    pub(crate) albedo_sampler: vk::Sampler,
+    pub(crate) object_id_image_view: vk::ImageView,
+    pub(crate) object_id_sampler: vk::Sampler,
+}
+
+impl CompositeGBufferViews {
+    pub fn new(
+        position_image_view: crate::types::ImageView,
+        normal_image_view: crate::types::ImageView,
+        shadow_mask_image_view: crate::types::ImageView,
+        albedo_image_view: crate::types::ImageView,
+        object_id_image_view: crate::types::ImageView,
+        gbuffer_sampler: crate::types::Sampler,
+        object_id_sampler: crate::types::Sampler,
+    ) -> Self {
+        let gbuffer_sampler = gbuffer_sampler.raw();
+        Self {
+            position_image_view: position_image_view.raw(),
+            position_sampler: gbuffer_sampler,
+            normal_image_view: normal_image_view.raw(),
+            normal_sampler: gbuffer_sampler,
+            shadow_mask_image_view: shadow_mask_image_view.raw(),
+            shadow_mask_sampler: gbuffer_sampler,
+            albedo_image_view: albedo_image_view.raw(),
+            albedo_sampler: gbuffer_sampler,
+            object_id_image_view: object_id_image_view.raw(),
+            object_id_sampler: object_id_sampler.raw(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRCompositeDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub(crate) descriptor_set: vk::DescriptorSet,
     pub selection: UniformBuffer<SelectionUBO>,
 }
 
@@ -64,7 +91,7 @@ impl RRCompositeDescriptorSet {
         })
     }
 
-    pub unsafe fn allocate_and_update(
+    pub(crate) unsafe fn allocate_and_update(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -151,7 +178,7 @@ impl RRCompositeDescriptorSet {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         self.selection.destroy(device);
         self.layout.destroy(rrdevice);
     }

@@ -1,20 +1,19 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::lightning_resolve;
 use crate::vulkanr::descriptor::{
-    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE,
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+    LIGHTNING_RESOLVE,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::GpuResource;
-use crate::vulkanr::resource::UniformBuffer;
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 #[derive(Clone, Debug, Default)]
 pub struct LightningResolveDescriptorSet {
     sets: ReflectedDescriptorSets,
-    pub scene_depth_sampler: vk::Sampler,
+    pub scene_depth_sampler: thyllore_vulkan_core::types::Sampler,
 }
 
 impl LightningResolveDescriptorSet {
@@ -22,11 +21,11 @@ impl LightningResolveDescriptorSet {
         ReflectedLayoutSpec::local(&LIGHTNING_RESOLVE)
             .with_override(
                 lightning_resolve::LIGHTNING,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                DescriptorKind::UniformBufferDynamic,
             )
             .with_override(
                 lightning_resolve::SEGMENTS,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                DescriptorKind::UniformBufferDynamic,
             )
     }
 
@@ -44,7 +43,7 @@ impl LightningResolveDescriptorSet {
         self.sets.layout()
     }
 
-    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+    pub fn descriptor_set(&self) -> thyllore_vulkan_core::types::DescriptorSet {
         self.sets.set(0)
     }
 
@@ -53,7 +52,7 @@ impl LightningResolveDescriptorSet {
         rrdevice: &RRDevice,
         lightning_ubo: &UniformBuffer<LightningUBO>,
         segments_ubo: &UniformBuffer<LightningSegmentsUBO>,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: thyllore_vulkan_core::types::ImageView,
     ) -> Result<()> {
         self.sets
             .writer(0)
@@ -66,15 +65,14 @@ impl LightningResolveDescriptorSet {
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: thyllore_vulkan_core::types::ImageView,
     ) -> Result<()> {
         self.sets
             .writer(0)
-            .image(
+            .sampled_depth(
                 lightning_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
                 self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
         Ok(())

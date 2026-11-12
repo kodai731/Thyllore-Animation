@@ -12,11 +12,13 @@ impl Default for HeatmapApplication {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct WeightHeatmapState {
     pub enabled: bool,
     last_applied: HeatmapApplication,
 }
+
+crate::startup_resource!(WeightHeatmapState, Editor);
 
 impl WeightHeatmapState {
     pub fn last_applied(&self) -> &HeatmapApplication {

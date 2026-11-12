@@ -20,6 +20,8 @@ pub fn run_event_dispatch_phase(
     run_dispatch_prep_hooks(world, assets);
 
     apply_queued_ui_commands(world, assets, graphics);
+
+    crate::scratch::step_scratch_jobs(world, assets, graphics);
 }
 
 #[cfg(test)]

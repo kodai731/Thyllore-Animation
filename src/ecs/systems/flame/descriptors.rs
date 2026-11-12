@@ -1,44 +1,46 @@
-use crate::vulkanr::core::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
 use crate::vulkanr::descriptor::{
-    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::{GpuResource, UniformBuffer};
 use thyllore_effect_core::FlameUBO;
-use thyllore_vulkan_core::vulkan::*;
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 const FLAME_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlameImageBindings {
-    pub history_image_views: [vk::ImageView; FLAME_HISTORY_SET_COUNT],
-    pub flame_sampler: vk::Sampler,
-    pub sdf_image_view: vk::ImageView,
-    pub sdf_sampler: vk::Sampler,
-    pub scene_depth_view: vk::ImageView,
+    pub history_image_views: [thyllore_vulkan_core::types::ImageView; FLAME_HISTORY_SET_COUNT],
+    pub flame_sampler: thyllore_vulkan_core::types::Sampler,
+    pub sdf_image_view: thyllore_vulkan_core::types::ImageView,
+    pub sdf_sampler: thyllore_vulkan_core::types::Sampler,
+    pub scene_depth_view: thyllore_vulkan_core::types::ImageView,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRFlameDescriptorSet {
     sets: ReflectedDescriptorSets,
-    pub scene_depth_sampler: vk::Sampler,
+    pub scene_depth_sampler: thyllore_vulkan_core::types::Sampler,
 }
 
 impl RRFlameDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&FLAME_RESOLVE).with_override(
-            flame_resolve::FLAME,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
+        ReflectedLayoutSpec::local(&FLAME_RESOLVE)
+            .with_override(flame_resolve::FLAME, DescriptorKind::UniformBufferDynamic)
     }
 
     pub fn layout(&self) -> &ReflectedSetLayout {
         self.sets.layout()
     }
 
-    pub fn descriptor_set(&self, history_index: usize) -> vk::DescriptorSet {
+    pub fn descriptor_set(
+        &self,
+        history_index: usize,
+    ) -> thyllore_vulkan_core::types::DescriptorSet {
         self.sets.set(history_index)
     }
 
@@ -80,23 +82,20 @@ impl RRFlameDescriptorSet {
             let previous_history_view = images.history_image_views[1 - history_index];
             self.sets
                 .writer(history_index)
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
                     previous_history_view,
                     images.flame_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_SDF_SAMPLER,
                     images.sdf_image_view,
                     images.sdf_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_depth(
                     flame_resolve::SCENE_DEPTH_SAMPLER,
                     images.scene_depth_view,
                     self.scene_depth_sampler,
-                    vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 )?
                 .apply(rrdevice);
         }

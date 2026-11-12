@@ -11,8 +11,8 @@ use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct OverlayUpsampleDescriptorSet {
     sets: ReflectedDescriptorSets,
-    pub reduced_color_sampler: vk::Sampler,
-    pub scene_depth_sampler: vk::Sampler,
+    pub(crate) reduced_color_sampler: vk::Sampler,
+    pub(crate) scene_depth_sampler: vk::Sampler,
 }
 
 impl OverlayUpsampleDescriptorSet {
@@ -24,7 +24,7 @@ impl OverlayUpsampleDescriptorSet {
         let sets =
             ReflectedDescriptorSets::create(rrdevice, &Self::layout_spec(), frames_in_flight)?;
         let reduced_color_sampler = create_nearest_sampler(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?.raw();
 
         Ok(Self {
             sets,
@@ -37,7 +37,7 @@ impl OverlayUpsampleDescriptorSet {
         self.sets.layout()
     }
 
-    pub fn descriptor_set(&self, frame_slot: usize) -> vk::DescriptorSet {
+    pub fn descriptor_set(&self, frame_slot: usize) -> crate::types::DescriptorSet {
         self.sets.set(frame_slot)
     }
 
@@ -45,20 +45,20 @@ impl OverlayUpsampleDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        reduced_color_view: vk::ImageView,
-        scene_depth_view: vk::ImageView,
+        reduced_color_view: crate::types::ImageView,
+        scene_depth_view: crate::types::ImageView,
     ) -> Result<()> {
         self.sets
             .writer(frame_slot)
             .image(
                 overlay_upsample::REDUCED_COLOR_SAMPLER,
-                reduced_color_view,
+                reduced_color_view.raw(),
                 self.reduced_color_sampler,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
             .image(
                 overlay_upsample::SCENE_DEPTH_SAMPLER,
-                scene_depth_view,
+                scene_depth_view.raw(),
                 self.scene_depth_sampler,
                 vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?

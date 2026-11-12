@@ -1,14 +1,14 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
+use glam::Mat4;
 
 use crate::ecs::component::LightningEffect;
-use crate::ecs::resource::{
-    LightningGpuState, LightningRenderSettings, LightningRenderTargets, ProjectionData,
-};
+use crate::ecs::resource::{LightningGpuState, LightningRenderSettings, ProjectionData};
+use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse,
 };
 use crate::vulkanr::renderer::deferred::{compute_projected_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
@@ -16,13 +16,14 @@ use thyllore_effect_core::{
     LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_INSTANCES,
 };
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
 pub struct LightningPassNode;
 
 /// Every lightning instance the node draws this frame, in UBO slot order.
 struct LightningFrame {
     instances: Vec<(LightningUBO, LightningSegmentsUBO)>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
 }
 
 impl LightningFrame {
@@ -40,11 +41,11 @@ fn lightning_render_settings(ctx: &PassContext) -> LightningRenderSettings {
 
 pub(super) fn compute_lightning_scissor(
     projection: Option<&ProjectionData>,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     debug_view: LightningDebugView,
     effect: &LightningEffect,
     ubo: &LightningUBO,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     if debug_view == LightningDebugView::Coverage {
         return Some(full_extent_scissor(extent));
     }
@@ -52,7 +53,7 @@ pub(super) fn compute_lightning_scissor(
     if debug_view == LightningDebugView::Off && ubo.flash[0] > 0.0 {
         return Some(full_extent_scissor(extent));
     }
-    compute_projected_bounds_scissor(projection, extent, &ubo.model, corners)
+    compute_projected_bounds_scissor(projection, extent, &ubo.model.to_mat4(), corners)
 }
 
 fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
@@ -73,7 +74,7 @@ fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
     let inv_view_proj = projection
         .as_deref()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view))
-        .unwrap_or_else(cgmath::SquareMatrix::identity);
+        .unwrap_or(Mat4::IDENTITY);
     let debug_view = lightning_render_settings(ctx).debug_view;
 
     let mut instances = Vec::with_capacity(lightnings.len());
@@ -117,10 +118,7 @@ impl RenderPassNode for LightningPassNode {
             .map(|_| {
                 vec![TargetUse::new(
                     TargetRef::Core(CoreTarget::HdrColor),
-                    TargetAccess::Attachment {
-                        initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    },
+                    TargetAccess::Attachment(AttachmentStart::Sampled),
                 )]
             })
             .unwrap_or_default()
@@ -129,7 +127,7 @@ impl RenderPassNode for LightningPassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
@@ -139,7 +137,7 @@ impl RenderPassNode for LightningPassNode {
 
 unsafe fn record_lightning_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let Some(frame) = lightning_frame(ctx) else {
@@ -160,7 +158,6 @@ unsafe fn record_lightning_passes(
         return Ok(());
     };
     let render = ctx.frame_render_context(image_index);
-    let device = &render.device.device;
 
     let mut draws = Vec::with_capacity(frame.instances.len());
     for (slot, ((instance_ubo, instance_segments), scissor)) in
@@ -170,26 +167,26 @@ unsafe fn record_lightning_passes(
             continue;
         };
         ubo.record_update(
-            device,
+            render.device,
             command_buffer,
             slot,
             instance_ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            &[ShaderStage::Fragment],
         )?;
         segments_ubo.record_update(
-            device,
+            render.device,
             command_buffer,
             slot,
             instance_segments,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            &[ShaderStage::Fragment],
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![
+        draws.push(OverlayInstanceDraw::new(
+            vec![
                 ubo.slot_offset(slot)? as u32,
                 segments_ubo.slot_offset(slot)? as u32,
             ],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());
@@ -203,14 +200,14 @@ unsafe fn record_lightning_passes(
     );
     let pass = targets.overlay_pass();
     LIGHTNING_OVERLAY.record(
-        device,
+        render.device,
         command_buffer,
         &pass,
         pass.full_area(),
         pipeline,
         Some(push_constants.as_bytes()),
         &[
-            render.graphics.frame_set.sets[image_index],
+            render.graphics.frame_set.sets()[image_index],
             descriptor.descriptor_set(),
         ],
         &draws,

@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3};
+use glam::{vec4, Mat4, Vec3};
 use serde::Serialize;
 
 pub use thyllore_effect_core::inverse_view_proj_f64;
@@ -60,10 +60,10 @@ pub fn compute_water_probe_report(
     image_data: &[f32],
     width: u32,
     height: u32,
-    inv_view_proj: Matrix4<f32>,
-    inverse_model: Matrix4<f32>,
+    inv_view_proj: Mat4,
+    inverse_model: Mat4,
     torus_radius: f32,
-    camera_pos: Vector3<f32>,
+    camera_pos: Vec3,
     minor_over_major: f32,
     which: ProbeRoot,
 ) -> WaterProbeReport {
@@ -112,20 +112,20 @@ pub fn compute_water_probe_report(
             let ndc_y = (y as f32 + 0.5) / height as f32 * 2.0 - 1.0;
 
             // invViewProj * vec4(ndc, DEPTH_NEAR=1.0, 1.0)
-            let world = inv_view_proj * cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
-            let world_pos = Vector3::new(world.x / world.w, world.y / world.w, world.z / world.w);
+            let world = inv_view_proj * vec4(ndc_x, ndc_y, 1.0, 1.0);
+            let world_pos = Vec3::new(world.x / world.w, world.y / world.w, world.z / world.w);
 
             // Ray direction from camera position to world position
             let ray_dir = (world_pos - camera_pos).normalize();
 
             // Transform to local space: origin w=1, dir w=0 (same as shader)
             let p_local_origin =
-                inverse_model * cgmath::vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0);
+                inverse_model * vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0);
             let p_local =
-                Vector3::new(p_local_origin.x, p_local_origin.y, p_local_origin.z) / torus_radius;
+                Vec3::new(p_local_origin.x, p_local_origin.y, p_local_origin.z) / torus_radius;
 
-            let d_local_raw = inverse_model * cgmath::vec4(ray_dir.x, ray_dir.y, ray_dir.z, 0.0);
-            let d_local = Vector3::new(d_local_raw.x, d_local_raw.y, d_local_raw.z).normalize();
+            let d_local_raw = inverse_model * vec4(ray_dir.x, ray_dir.y, ray_dir.z, 0.0);
+            let d_local = Vec3::new(d_local_raw.x, d_local_raw.y, d_local_raw.z).normalize();
 
             // Solve in Rust using thyllore_effect_core's analytic solver
             let rust_hits =

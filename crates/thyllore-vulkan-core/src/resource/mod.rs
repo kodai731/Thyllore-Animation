@@ -1,5 +1,6 @@
 pub mod accumulation_target;
 pub mod auto_exposure_buffers;
+mod billboard;
 pub mod bloom_chain;
 pub mod buffer;
 pub mod buffer_registry;
@@ -11,6 +12,7 @@ pub mod graphics_resource;
 pub mod hdr_buffer;
 pub mod history_targets;
 pub mod hit_shading_table;
+pub mod host_buffer;
 pub mod image;
 pub mod image_readback;
 pub mod mesh_buffer;
@@ -26,19 +28,22 @@ pub mod volume_image;
 
 pub use accumulation_target::AccumulationTarget;
 pub use auto_exposure_buffers::{AutoExposureBuffers, AutoExposureReadback, LUMINANCE_BUFFER_SIZE};
+pub use billboard::BillboardRenderState;
 pub use bloom_chain::{BloomChain, BloomMipTarget};
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
 pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
-pub use gbuffer::{RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
+pub(crate) use gbuffer::READBACK_POSITION_OFFSET;
+pub use gbuffer::{read_picked_texel, RRGBuffer};
 pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
 pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
 pub use history_targets::{HistoryTargets, HistoryTargetsDesc};
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
+pub use host_buffer::{HostBuffer, HostBufferUsage};
 pub use image::*;
-pub use image_readback::{copy_image_to_host_buffer, write_host_buffer_bgra_png};
+pub use image_readback::{read_buffer_bytes, read_image_bytes, write_bgra_png, ReadbackLayout};
 pub use mesh_buffer::*;
 pub use offscreen::OffscreenFramebuffer;
 pub use onion_skin_pass::OnionSkinPassResources;
@@ -46,7 +51,7 @@ pub use pipeline_storage::PipelineStorage;
 pub use raytracing_data::RayTracingData;
 pub use render_target_storage::{RenderTargetEntry, RenderTargetKey, RenderTargetStorage};
 pub use render_target_transient::{
-    RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,
+    RenderTargetTransient, TransientDesc, TransientHandle, TransientImage, TransientUsage,
 };
 pub use sampled_texture::{PixelRegion, SampledTexture};
 pub use uniform_buffer::{Placement, UniformBuffer};

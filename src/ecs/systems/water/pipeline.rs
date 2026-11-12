@@ -1,26 +1,23 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
-use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
+use crate::ecs::resource::WaterGpuState;
+use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
-use crate::vulkanr::pipeline::{DepthTestConfig, RRPipeline};
+use crate::vulkanr::pipeline::{DepthCompare, DepthTestConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 /// Writes the shading into the HDR color and the history image where the torus is nearer than
 /// the scene depth.
 pub const WATER_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WATER_RESOLVE,
     blends: &[OverlayBlend::Opaque, OverlayBlend::Opaque],
-    depth_test: Some(DepthTestConfig {
-        test_enable: true,
-        write_enable: true,
-        compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-    }),
+    depth_test: Some(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual)),
     push_constants: OverlayPushConstants::of::<WaterPushConstants>(),
 };
 
@@ -31,7 +28,7 @@ pub unsafe fn create_water_pipeline(
     graphics_resources: &GraphicsResources,
     raytracing: &RayTracingData,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
     frames_in_flight: usize,
 ) -> Result<WaterGpuState> {
     let water_ubo = UniformBuffer::new(
@@ -46,7 +43,7 @@ pub unsafe fn create_water_pipeline(
     let water_shading_pipeline = WATER_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        water_targets.history.render_pass,
+        water_targets.history.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             water_descriptor.layout(),
@@ -79,7 +76,7 @@ pub unsafe fn water_trace_blocks(
         return Ok(crate::ecs::resource::WaterTraceBlocks::default());
     };
     let slot_addresses = (0..WATER_MAX_INSTANCES)
-        .map(|slot| water_ubo.slot_address(&rrdevice.device, slot))
+        .map(|slot| water_ubo.slot_address(rrdevice, slot))
         .collect::<Result<Vec<_>>>()?;
     Ok(crate::ecs::resource::WaterTraceBlocks::new(slot_addresses))
 }
@@ -91,7 +88,7 @@ unsafe fn create_water_caustic_pipelines(
     raytracing: &RayTracingData,
     gpu_state: &mut WaterGpuState,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
         raytracing.gbuffer.as_ref(),
@@ -104,13 +101,13 @@ unsafe fn create_water_caustic_pipelines(
     let tlas = raytracing
         .acceleration_structure
         .as_ref()
-        .and_then(|accel| accel.tlas.acceleration_structure);
+        .and_then(|accel| accel.tlas.acceleration_structure());
 
     let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
     descriptor.allocate_and_update(
         rrdevice,
-        water_targets.caustic_accum.view,
-        gbuffer.position_image_view,
+        water_targets.caustic_accum.view(),
+        gbuffer.position_image_view(),
         tlas,
         scene_buffer,
         water_ubo.handle(),

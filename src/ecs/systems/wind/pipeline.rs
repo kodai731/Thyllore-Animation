@@ -1,10 +1,10 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{BoundGenerations, WindGpuState, WindRenderTargets};
+use crate::ecs::resource::{BoundGenerations, WindGpuState};
 use crate::ecs::systems::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
 };
+use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{OverlayUpsampleDescriptorSet, WIND_RESOLVE, WIND_SHADOW_BAKE};
 use crate::vulkanr::pipeline::RRPipeline;
@@ -14,6 +14,7 @@ use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WIND_RESOLVE,
@@ -28,7 +29,7 @@ pub unsafe fn create_wind_gpu_state(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     targets: &WindRenderTargets,
-    scene_depth_view: vk::ImageView,
+    scene_depth_view: ImageView,
     frames_in_flight: usize,
 ) -> Result<WindGpuState> {
     let ubo = UniformBuffer::new(
@@ -55,7 +56,7 @@ pub unsafe fn create_wind_gpu_state(
     let resolve_pipeline = WIND_RESOLVE_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
             resolve_descriptor.layout(),
@@ -66,7 +67,7 @@ pub unsafe fn create_wind_gpu_state(
     let upsample_pipeline = UPSAMPLE_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
-        targets.render_pass,
+        targets.render_pass(),
         &[upsample_descriptor.layout()],
         targets.extent(),
     )?;

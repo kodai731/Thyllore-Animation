@@ -11,8 +11,9 @@ and in CI.
 | Wheel | Purpose | Source |
 |---|---|---|
 | `thyllore_ml_core-0.0.1-cp310-abi3-{win_amd64,manylinux_2_*,macosx_*}.whl` | PyO3 wheel for Curve Copilot | `crates/thyllore-ml-core` via maturin |
+| `thyllore_avatar_api-0.0.1-cp310-abi3-{win_amd64,manylinux_2_*,macosx_*}.whl` | PyO3 wheel for Avatar Setup | `crates/thyllore-avatar-api` via maturin |
 
-`thyllore_ml_core` is `abi3`, so a single cp310 wheel covers Python 3.10+
+Both wheels are `abi3`, so a single cp310 wheel covers Python 3.10+
 (Blender 4.0 = 3.10, 4.2 = 3.11, future = 3.12).
 
 ## Reproducible collection
@@ -28,13 +29,13 @@ with the host's glibc, e.g., Ubuntu 22 = `manylinux_2_35`, Ubuntu 24 =
 
 ## Supply-chain integrity
 
-The build trusts the `maturin build` output for `thyllore_ml_core`.
+The build trusts the `maturin build` output for both wheels.
 `HASHES.txt` is emitted locally by `collect_wheels` for debugging, but it is
 gitignored.
 
 ## ABI marker handshake
 
-`thyllore_ml_core` exports `__abi_marker__` (sourced from
+Both wheels export `__abi_marker__` (sourced from
 `crates/thyllore-ml-api/src/lib.rs::ABI_MARKER`). The build script verifies
 that this value matches `EXPECTED_ABI_MARKER` in `blender_addon/__init__.py`
 **before** producing a ZIP, so a wheel update without an addon update is

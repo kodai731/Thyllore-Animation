@@ -12,7 +12,7 @@
 //!   * mode 3 IGN jitter and the SDF billboard emitter (texture-bound)
 
 use crate::flame_fbm_mirror::fbm3;
-use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 use serde_json::{json, Value};
 use thyllore_effect_core::flame::analytic::slang::{
     flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang, flame_branch_pull_back_slang,
@@ -82,13 +82,13 @@ fn interleaved_gradient_noise(coord: [f32; 2]) -> f32 {
     glsl_fract(52.9829189 * glsl_fract(dot))
 }
 
-fn transform_point(matrix: &Matrix4<f32>, point: [f32; 3]) -> [f32; 3] {
-    let v = matrix * Vector4::new(point[0], point[1], point[2], 1.0);
+fn transform_point(matrix: &Mat4, point: [f32; 3]) -> [f32; 3] {
+    let v = matrix * Vec4::new(point[0], point[1], point[2], 1.0);
     [v.x, v.y, v.z]
 }
 
-fn transform_vector(matrix: &Matrix4<f32>, vector: [f32; 3]) -> [f32; 3] {
-    let v = matrix * Vector4::new(vector[0], vector[1], vector[2], 0.0);
+fn transform_vector(matrix: &Mat4, vector: [f32; 3]) -> [f32; 3] {
+    let v = matrix * Vec4::new(vector[0], vector[1], vector[2], 0.0);
     [v.x, v.y, v.z]
 }
 
@@ -512,7 +512,7 @@ impl<'a> UboCtx<'a> {
         if radius <= 0.0 {
             return 1.0;
         }
-        let pw = transform_point(&self.u.model, p_local);
+        let pw = transform_point(&self.u.model.to_mat4(), p_local);
         let d = [
             pw[0] - self.camera_world[0],
             pw[1] - self.camera_world[1],
@@ -1663,14 +1663,14 @@ pub fn trace_flame_field_ubo(ubo: &FlameUBO, view: &WallProbeView) -> Value {
     );
     let integrator = SegmentIntegrator::from_env();
     let apply_jitter = env_usize("THYLLORE_FLAME_TRACE_JITTER", 1) != 0;
-    let inverse_model = ubo.inverse_model;
+    let inverse_model = ubo.inverse_model.to_mat4();
     let ctx = UboCtx::new(ubo, view.position);
 
     let tan_half = (view.fov_y_radians * 0.5).tan();
     let aspect = (view.viewport_size_px[0] / view.viewport_size_px[1].max(1.0)).max(1e-3);
-    let forward = Vector3::from(view.forward);
-    let right = Vector3::from(view.right);
-    let up = Vector3::from(view.up);
+    let forward = Vec3::from(view.forward);
+    let right = Vec3::from(view.right);
+    let up = Vec3::from(view.up);
     let camera_local = transform_point(&inverse_model, view.position);
     let t_max = dot3(camera_local, camera_local).sqrt() + 4.0;
 
@@ -2116,7 +2116,7 @@ fn trace_ray(
             o[1] + t_mid * d[1],
             o[2] + t_mid * d[2],
         ];
-        let l = Vector3::new(
+        let l = Vec3::new(
             ctx.u.light_data.direction[0],
             ctx.u.light_data.direction[1],
             ctx.u.light_data.direction[2],

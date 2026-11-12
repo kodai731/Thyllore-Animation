@@ -3,17 +3,53 @@ use std::collections::HashMap;
 use crate::core::device::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
+use crate::types::Instance;
 use crate::vulkan::*;
 
 pub const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
 const MAX_FRAMEBUFFER_ATTACHMENTS: usize = 4;
 
+#[derive(Clone, Copy, Debug)]
+pub enum TransientUsage {
+    StorageSampled,
+    TransferDstSampled,
+}
+
+impl TransientUsage {
+    fn to_flags(self) -> vk::ImageUsageFlags {
+        match self {
+            TransientUsage::StorageSampled => {
+                vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED
+            }
+            TransientUsage::TransferDstSampled => {
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TransientDesc {
     pub width: u32,
     pub height: u32,
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
+}
+
+impl TransientDesc {
+    pub fn new(
+        width: u32,
+        height: u32,
+        format: crate::types::Format,
+        usage: TransientUsage,
+    ) -> Self {
+        Self {
+            width,
+            height,
+            format: format.raw(),
+            usage: usage.to_flags(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -24,10 +60,22 @@ pub struct TransientHandle {
 
 #[derive(Clone, Copy, Debug)]
 pub struct TransientImage {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
     pub desc: TransientDesc,
     pub generation: u64,
+}
+
+impl TransientImage {
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        crate::types::Image(self.image)
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -83,7 +131,8 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn begin_frame(&mut self, device: &Device, frame_index: usize) -> Result<()> {
+    pub unsafe fn begin_frame(&mut self, rrdevice: &RRDevice, frame_index: usize) -> Result<()> {
+        let device = &rrdevice.device();
         let evicted = self.advance_frame(frame_index)?;
 
         for pooled in evicted {
@@ -160,8 +209,8 @@ impl RenderTargetTransient {
             match create_image_view(rrdevice, image, desc.format, vk::ImageAspectFlags::COLOR, 1) {
                 Ok(view) => view,
                 Err(error) => {
-                    rrdevice.device.destroy_image(image, None);
-                    rrdevice.device.free_memory(memory, None);
+                    rrdevice.device().destroy_image(image, None);
+                    rrdevice.device().free_memory(memory, None);
                     return Err(error);
                 }
             };
@@ -291,37 +340,39 @@ impl RenderTargetTransient {
     /// The framebuffer `framebuffer()` cached for this render pass and attachment set, if any.
     pub fn cached_framebuffer(
         &self,
-        render_pass: vk::RenderPass,
-        views: &[vk::ImageView],
-    ) -> Option<vk::Framebuffer> {
-        let key = FramebufferKey::new(render_pass, views).ok()?;
-        self.framebuffers.get(&key).copied()
+        render_pass: crate::types::RenderPass,
+        views: &[crate::types::ImageView],
+    ) -> Option<crate::types::Framebuffer> {
+        let key = FramebufferKey::new(render_pass.raw(), views).ok()?;
+        self.framebuffers
+            .get(&key)
+            .map(|fb| crate::types::Framebuffer(*fb))
     }
 
     pub unsafe fn framebuffer(
         &mut self,
-        device: &Device,
-        render_pass: vk::RenderPass,
-        views: &[vk::ImageView],
+        rrdevice: &RRDevice,
+        render_pass: crate::types::RenderPass,
+        views: &[crate::types::ImageView],
         width: u32,
         height: u32,
-    ) -> Result<vk::Framebuffer> {
-        let key = FramebufferKey::new(render_pass, views)?;
+    ) -> Result<crate::types::Framebuffer> {
+        let key = FramebufferKey::new(render_pass.raw(), views)?;
 
         if let Some(framebuffer) = self.framebuffers.get(&key) {
-            return Ok(*framebuffer);
+            return Ok(crate::types::Framebuffer(*framebuffer));
         }
 
         let info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass)
-            .attachments(views)
+            .render_pass(render_pass.raw())
+            .attachments(key.attachments())
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = device.create_framebuffer(&info, None)?;
+        let framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         self.framebuffers.insert(key, framebuffer);
 
-        Ok(framebuffer)
+        Ok(crate::types::Framebuffer(framebuffer))
     }
 
     unsafe fn destroy_framebuffers_using(&mut self, device: &Device, view: vk::ImageView) {
@@ -339,7 +390,7 @@ impl RenderTargetTransient {
         }
     }
 
-    pub unsafe fn destroy_all(&mut self, device: &Device) {
+    pub(crate) unsafe fn destroy_all(&mut self, device: &Device) {
         for (_, framebuffer) in self.framebuffers.drain() {
             device.destroy_framebuffer(framebuffer, None);
         }
@@ -392,7 +443,7 @@ impl Drop for RenderTargetTransient {
 }
 
 impl FramebufferKey {
-    fn new(render_pass: vk::RenderPass, views: &[vk::ImageView]) -> Result<Self> {
+    fn new(render_pass: vk::RenderPass, views: &[crate::types::ImageView]) -> Result<Self> {
         if views.is_empty() || views.len() > MAX_FRAMEBUFFER_ATTACHMENTS {
             return Err(anyhow!(
                 "framebuffer attachment count {} is outside 1..={MAX_FRAMEBUFFER_ATTACHMENTS}",
@@ -401,7 +452,9 @@ impl FramebufferKey {
         }
 
         let mut padded = [vk::ImageView::null(); MAX_FRAMEBUFFER_ATTACHMENTS];
-        padded[..views.len()].copy_from_slice(views);
+        for (slot, view) in padded.iter_mut().zip(views) {
+            *slot = view.raw();
+        }
 
         Ok(Self {
             render_pass,
@@ -410,8 +463,12 @@ impl FramebufferKey {
         })
     }
 
+    fn attachments(&self) -> &[vk::ImageView] {
+        &self.views[..self.view_count as usize]
+    }
+
     fn contains(&self, view: vk::ImageView) -> bool {
-        self.views[..self.view_count as usize].contains(&view)
+        self.attachments().contains(&view)
     }
 }
 
@@ -429,7 +486,8 @@ unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
 
 impl GpuResource for RenderTargetTransient {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(&rrdevice.device);
+        let device = &rrdevice.device();
+        self.destroy_all(device);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -591,7 +649,8 @@ mod tests {
     fn test_framebuffer_key_rejects_empty_and_oversized_attachments() {
         let render_pass = vk::RenderPass::null();
         assert!(FramebufferKey::new(render_pass, &[]).is_err());
-        assert!(FramebufferKey::new(render_pass, &[vk::ImageView::null(); 5]).is_err());
-        assert!(FramebufferKey::new(render_pass, &[vk::ImageView::null(); 4]).is_ok());
+        let view = crate::types::ImageView::default();
+        assert!(FramebufferKey::new(render_pass, &[view; 5]).is_err());
+        assert!(FramebufferKey::new(render_pass, &[view; 4]).is_ok());
     }
 }

@@ -1,29 +1,25 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use crate::vulkanr::descriptor::{
-    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE,
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE,
     WIND_SHADOW_BAKE,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::GpuResource;
-use crate::vulkanr::resource::{UniformBuffer, VolumeImage};
 use thyllore_effect_core::WindUBO;
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
 
 #[derive(Clone, Debug, Default)]
 pub struct WindResolveDescriptorSet {
     sets: ReflectedDescriptorSets,
-    pub scene_depth_sampler: vk::Sampler,
+    pub scene_depth_sampler: thyllore_vulkan_core::types::Sampler,
 }
 
 impl WindResolveDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WIND_RESOLVE).with_override(
-            wind_resolve::WIND,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
+        ReflectedLayoutSpec::local(&WIND_RESOLVE)
+            .with_override(wind_resolve::WIND, DescriptorKind::UniformBufferDynamic)
     }
 
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
@@ -40,7 +36,7 @@ impl WindResolveDescriptorSet {
         self.sets.layout()
     }
 
-    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+    pub fn descriptor_set(&self) -> thyllore_vulkan_core::types::DescriptorSet {
         self.sets.set(0)
     }
 
@@ -49,7 +45,7 @@ impl WindResolveDescriptorSet {
         rrdevice: &RRDevice,
         wind_ubo: &UniformBuffer<WindUBO>,
         shadow_volume: &VolumeImage,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: thyllore_vulkan_core::types::ImageView,
     ) -> Result<()> {
         self.sets
             .writer(0)
@@ -66,11 +62,10 @@ impl WindResolveDescriptorSet {
     ) -> Result<()> {
         self.sets
             .writer(0)
-            .image(
+            .sampled_storage_image(
                 wind_resolve::SHADOW_VOLUME_SAMPLER,
-                shadow_volume.view,
-                shadow_volume.sampler,
-                vk::ImageLayout::GENERAL,
+                shadow_volume.view(),
+                shadow_volume.sampler(),
             )?
             .apply(rrdevice);
         Ok(())
@@ -79,15 +74,14 @@ impl WindResolveDescriptorSet {
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: thyllore_vulkan_core::types::ImageView,
     ) -> Result<()> {
         self.sets
             .writer(0)
-            .image(
+            .sampled_depth(
                 wind_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
                 self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
         Ok(())
@@ -106,10 +100,8 @@ pub struct WindShadowBakeDescriptorSet {
 
 impl WindShadowBakeDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE).with_override(
-            wind_shadow_bake::WIND,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
+        ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE)
+            .with_override(wind_shadow_bake::WIND, DescriptorKind::UniformBufferDynamic)
     }
 
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
@@ -121,7 +113,7 @@ impl WindShadowBakeDescriptorSet {
         self.sets.layout()
     }
 
-    pub fn descriptor_set(&self) -> vk::DescriptorSet {
+    pub fn descriptor_set(&self) -> thyllore_vulkan_core::types::DescriptorSet {
         self.sets.set(0)
     }
 
@@ -145,12 +137,7 @@ impl WindShadowBakeDescriptorSet {
     ) -> Result<()> {
         self.sets
             .writer(0)
-            .image(
-                wind_shadow_bake::SHADOW_VOLUME_IMAGE,
-                shadow_volume.view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
+            .storage_image(wind_shadow_bake::SHADOW_VOLUME_IMAGE, shadow_volume.view())?
             .apply(rrdevice);
         Ok(())
     }

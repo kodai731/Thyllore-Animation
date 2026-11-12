@@ -5,6 +5,7 @@ use crate::descriptor::reflected_layout::{
     DescriptorSetWriter, ReflectedLayoutSpec, ReflectedSetLayout,
 };
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::DescriptorSet;
 use crate::vulkan::vk;
 
 #[derive(Clone, Debug, Default)]
@@ -24,12 +25,12 @@ impl ReflectedDescriptorSets {
         Ok(Self { layout, sets })
     }
 
-    pub fn get(&self, index: usize) -> Option<vk::DescriptorSet> {
-        self.sets.get(index).copied()
+    pub fn get(&self, index: usize) -> Option<DescriptorSet> {
+        self.sets.get(index).copied().map(DescriptorSet)
     }
 
-    pub fn set(&self, index: usize) -> vk::DescriptorSet {
-        self.sets[index]
+    pub fn set(&self, index: usize) -> DescriptorSet {
+        DescriptorSet(self.sets[index])
     }
 
     pub fn writer(&self, index: usize) -> DescriptorSetWriter<'_> {
@@ -45,7 +46,7 @@ impl ReflectedDescriptorSets {
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.release_sets(rrdevice, self.sets.drain(..));
+        rrdevice.release_descriptor_sets(self.layout.handle, self.sets.drain(..));
         self.layout.destroy(rrdevice);
     }
 }

@@ -8,9 +8,11 @@ BUILD_MODE="A"
 VERSION="0.0.1"
 OUTPUT_DIR="dist"
 INCLUDE_ONNX_MODEL=0
+INCLUDE_ONNX_RUNTIME=1
 ONNX_SOURCE_PATH="${THYLLORE_CURVE_COPILOT_ONNX:-ml/model/curve_copilot.onnx}"
 ONNXRUNTIME_LIB_PATH=""
 DEBUG_BUILD=0
+PRODUCT="curve-copilot"
 SKIP_BLENDER_VALIDATE=0
 ENDPOINT_ENV=""
 
@@ -25,6 +27,12 @@ Required:
   --platform PLATFORM            One of: win_amd64, linux_x86_64, macosx_arm64
 
 Options:
+  --product curve-copilot|avatar-setup
+                                 Which addon to ship (default: curve-copilot).
+                                 curve-copilot excludes the Avatar Setup panels;
+                                 avatar-setup keeps only the Avatar Setup panels:
+                                 no curve copilot, skin weight transfer or
+                                 ONNX model, and its own extension id.
   --build-mode A|B|C             Distribution build mode (default: A).
                                  SSoT (behaviour, required env vars):
                                  crates/thyllore-ml-core/src/mode.rs
@@ -49,6 +57,12 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --platform)               PLATFORM="$2"; shift 2 ;;
+        --product)
+            case "$2" in
+                curve-copilot|avatar-setup) PRODUCT="$2" ;;
+                *) echo "invalid --product: $2 (expected curve-copilot or avatar-setup)" >&2; exit 2 ;;
+            esac
+            shift 2 ;;
         --build-mode)
             case "$2" in
                 A|B|C) BUILD_MODE="$2" ;;
@@ -145,9 +159,9 @@ if [[ "$BUILD_MODE" == "B" ]]; then
     echo "[build_blender_addon] Feedback endpoint (${ENDPOINT_ENV:-explicit}): $FEEDBACK_ENDPOINT"
 fi
 
-echo "[build_blender_addon] Platform: $PLATFORM -> Blender: $BLENDER_NAME, build mode: $BUILD_MODE"
+echo "[build_blender_addon] Platform: $PLATFORM -> Blender: $BLENDER_NAME, product: $PRODUCT, build mode: $BUILD_MODE"
 
-STAGE_DIR="$REPO_ROOT/build/blender_addon_stage_${PLATFORM}_${BUILD_MODE}"
+STAGE_DIR="$REPO_ROOT/build/blender_addon_stage_${PRODUCT}_${PLATFORM}_${BUILD_MODE}"
 SOURCE_DIR="$REPO_ROOT/blender_addon"
 
 rm -rf "$STAGE_DIR"
@@ -177,6 +191,26 @@ UNSHIPPED_REL_PATHS=(
     "grpc_client"
 )
 
+CURVE_COPILOT_ONLY_REL_PATHS=(
+    "operators/curve_copilot.py"
+    "_ghost_overlay.py"
+    "modal"
+)
+AVATAR_SETUP_ONLY_REL_PATHS=(
+    "avatar_setup"
+    "operators/skin_weight_transfer.py"
+)
+case "$PRODUCT" in
+    avatar-setup)
+        UNSHIPPED_REL_PATHS+=("${CURVE_COPILOT_ONLY_REL_PATHS[@]}")
+        INCLUDE_ONNX_MODEL=0
+        INCLUDE_ONNX_RUNTIME=0
+        ;;
+    curve-copilot)
+        UNSHIPPED_REL_PATHS+=("${AVATAR_SETUP_ONLY_REL_PATHS[@]}")
+        ;;
+esac
+
 for rel in "${UNSHIPPED_REL_PATHS[@]}"; do
     abs="$STAGE_DIR/$rel"
     if [[ -e "$abs" ]]; then
@@ -200,7 +234,10 @@ if [[ ! -d "$WHEELS_DIR" ]]; then
     exit 1
 fi
 
-ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core")
+case "$PRODUCT" in
+    curve-copilot)  ALLOWED_WHEEL_PREFIXES=("thyllore_ml_core") ;;
+    avatar-setup)   ALLOWED_WHEEL_PREFIXES=("thyllore_avatar_api") ;;
+esac
 
 wheel_matches_platform() {
     local name="$1"
@@ -272,11 +309,13 @@ WHEEL_LINES_JOINED="$WHEEL_LINES_JOINED" \
 MANIFEST_PATH="$MANIFEST_PATH" \
 BLENDER_NAME="$BLENDER_NAME" \
 BUILD_MODE="$BUILD_MODE" \
+PRODUCT="$PRODUCT" \
 "$PYTHON_BIN" - <<'PY'
 import os, re
 manifest_path = os.environ["MANIFEST_PATH"]
 blender_name = os.environ["BLENDER_NAME"]
 build_mode = os.environ["BUILD_MODE"]
+product = os.environ["PRODUCT"]
 wheel_lines = os.environ["WHEEL_LINES_JOINED"].replace("\\n", "\n").rstrip("\n")
 
 with open(manifest_path, "rb") as f:
@@ -302,6 +341,12 @@ if network_permission is None:
     text = re.sub(r'\nnetwork = "NETWORK_PERMISSION"', "", text)
 else:
     text = text.replace("NETWORK_PERMISSION", network_permission)
+
+if product == "avatar-setup":
+    text = re.sub(r'^id = ".*"$', 'id = "thyllore_avatar_setup"', text, flags=re.MULTILINE)
+    text = re.sub(r'^name = ".*"$', 'name = "Thyllore Avatar Setup"', text, flags=re.MULTILINE)
+    text = re.sub(r'^tagline = ".*"$', 'tagline = "Spring chains, colliders and Unity export for avatars"', text, flags=re.MULTILINE)
+    text = re.sub(r'^files = ".*"$', 'files = "Read models and write bones, weights and avatar sidecars"', text, flags=re.MULTILINE)
 
 with open(manifest_path, "w", encoding="utf-8", newline="") as f:
     f.write(text)
@@ -357,7 +402,9 @@ fi
 if [[ -z "$ONNXRUNTIME_LIB_PATH" ]]; then
     ONNXRUNTIME_LIB_PATH="$ORT_LIB_DEFAULT"
 fi
-if [[ -n "$ONNXRUNTIME_LIB_PATH" && -f "$ONNXRUNTIME_LIB_PATH" ]]; then
+if [[ "$INCLUDE_ONNX_RUNTIME" -eq 0 ]]; then
+    echo "[build_blender_addon] ONNX Runtime not bundled: $PRODUCT has no in-process inference"
+elif [[ -n "$ONNXRUNTIME_LIB_PATH" && -f "$ONNXRUNTIME_LIB_PATH" ]]; then
     mkdir -p "$STAGE_DIR/lib"
     cp -L -f "$ONNXRUNTIME_LIB_PATH" "$STAGE_DIR/lib/$ORT_LIB_DEST_NAME"
     echo "[build_blender_addon] Bundled ONNX Runtime: $ONNXRUNTIME_LIB_PATH -> lib/$ORT_LIB_DEST_NAME"
@@ -417,12 +464,16 @@ fi
 ABS_OUT_DIR="$REPO_ROOT/$OUTPUT_DIR"
 mkdir -p "$ABS_OUT_DIR"
 
-ZIP_BASENAME="thyllore_animation_curve_copilot"
-case "$BUILD_MODE" in
-    A) ZIP_BASENAME="${ZIP_BASENAME}_degraded" ;;
-    B) ZIP_BASENAME="${ZIP_BASENAME}_full" ;;
-    C) ZIP_BASENAME="${ZIP_BASENAME}_private" ;;
-esac
+if [[ "$PRODUCT" == "avatar-setup" ]]; then
+    ZIP_BASENAME="thyllore_avatar_setup"
+else
+    ZIP_BASENAME="thyllore_animation_curve_copilot"
+    case "$BUILD_MODE" in
+        A) ZIP_BASENAME="${ZIP_BASENAME}_degraded" ;;
+        B) ZIP_BASENAME="${ZIP_BASENAME}_full" ;;
+        C) ZIP_BASENAME="${ZIP_BASENAME}_private" ;;
+    esac
+fi
 if [[ "$ENDPOINT_ENV" == "test" ]]; then
     ZIP_BASENAME="${ZIP_BASENAME}_test"
 fi

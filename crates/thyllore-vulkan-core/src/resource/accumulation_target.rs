@@ -5,17 +5,46 @@ use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::types::Instance;
 
 /// A storage image from `RenderTargetStorage` that compute passes accumulate into, kept in
 /// GENERAL layout for its whole life. The storage owns the image; this only holds handles.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AccumulationTarget {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
 }
 
 impl AccumulationTarget {
-    pub unsafe fn new(
+    #[inline]
+    pub fn image(&self) -> crate::types::Image {
+        crate::types::Image(self.image)
+    }
+
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
+
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        storage: &mut RenderTargetStorage,
+        command_pool: crate::types::CommandPool,
+        key: RenderTargetKey,
+        format: crate::types::Format,
+    ) -> Result<Self> {
+        Self::new(
+            instance,
+            rrdevice,
+            storage,
+            command_pool.raw(),
+            key,
+            format.raw(),
+        )
+    }
+
+    pub(crate) unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
         storage: &mut RenderTargetStorage,
@@ -45,7 +74,7 @@ impl AccumulationTarget {
                 layer_count: 1,
             })
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::COMPUTE_SHADER,

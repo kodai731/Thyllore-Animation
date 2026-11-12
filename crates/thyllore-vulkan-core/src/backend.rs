@@ -2,21 +2,22 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::{Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use thyllore_render_core::{
-    BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
-    ObjectUBO, ProjectionData, RenderBackend, VertexBufferHandle, FRAMES_IN_FLIGHT,
+    BillboardMesh, BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh,
+    MeshId, ObjectUBO, ProjectionData, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
 use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
-use crate::data::{SceneUniformData, Vertex};
+use crate::data::{SceneUniformData, UniformBufferObject, Vertex};
 use crate::raytracing::RRAccelerationStructure;
 use crate::resource::graphics_resource::GraphicsResources;
+use crate::resource::image::RRImage;
 use crate::resource::raytracing_data::RayTracingData;
-use crate::resource::GpuBufferRegistry;
-use crate::vulkan::Instance;
+use crate::resource::{BillboardRenderState, GpuBufferRegistry};
+use crate::types::Instance;
 
 pub struct VulkanBackend<'a> {
     pub instance: &'a Instance,
@@ -46,32 +47,63 @@ impl<'a> VulkanBackend<'a> {
         }
     }
 
+    pub unsafe fn create_billboard_buffers(
+        &mut self,
+        mesh: &mut BillboardMesh,
+        render_state: &mut BillboardRenderState,
+    ) -> Result<()> {
+        mesh.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
+            self.instance,
+            self.device,
+            &mesh.vertices,
+            256,
+        )?;
+
+        mesh.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
+            self.instance,
+            self.device,
+            &mesh.indices,
+        )?;
+
+        let white_pixel: [u8; 4] = [255, 255, 255, 255];
+        render_state.texture = Some(
+            RRImage::new_from_pixels(
+                self.instance,
+                self.device,
+                &self.command_pool,
+                &white_pixel,
+                1,
+                1,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to create billboard texture: {}", e))?,
+        );
+
+        Ok(())
+    }
+
+    pub unsafe fn update_billboard_ubo(
+        &mut self,
+        render_state: &mut BillboardRenderState,
+        model: Mat4,
+        view: Mat4,
+        proj: Mat4,
+        image_index: usize,
+    ) -> Result<()> {
+        for i in 0..render_state.descriptor_set.rrdata.len() {
+            let rrdata = &mut render_state.descriptor_set.rrdata[i];
+
+            let ubo = UniformBufferObject { model, view, proj };
+            rrdata.rruniform_buffers[image_index].update(self.device, &ubo)?;
+        }
+
+        Ok(())
+    }
+
     fn acceleration_structure(&mut self) -> &mut Option<RRAccelerationStructure> {
         &mut self.raytracing.acceleration_structure
     }
-}
 
-/// BLAS list holds only gbuffer meshes, so mesh index and BLAS index diverge once a mesh is hidden.
-fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>> {
-    let mut next_blas_index = 0;
-
-    graphics
-        .meshes
-        .iter()
-        .map(|mesh| {
-            if !mesh.render_to_gbuffer {
-                return None;
-            }
-
-            let blas_index = next_blas_index;
-            next_blas_index += 1;
-            Some(blas_index)
-        })
-        .collect()
-}
-
-impl<'a> RenderBackend for VulkanBackend<'a> {
-    unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
+    pub unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
         self.graphics.upload_mesh_vertices(
             self.instance,
             self.device,
@@ -80,7 +112,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         )
     }
 
-    unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
+    pub unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
         let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
@@ -114,7 +146,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn rebuild_tlas(&mut self) -> Result<()> {
+    pub unsafe fn rebuild_tlas(&mut self) -> Result<()> {
         let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
@@ -132,68 +164,48 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn create_gizmo_buffers(
+    pub unsafe fn create_static_line_buffers(
         &mut self,
-        mesh: &mut LineMesh,
-        frame_slot: usize,
+        mesh: &mut StaticLineMesh,
         memory_type: BufferMemoryType,
     ) -> Result<()> {
-        let vertex_handle = if memory_type == BufferMemoryType::DeviceLocal {
-            self.buffer_registry.create_vertex_buffer(
+        mesh.vertex_buffer_handle = match memory_type {
+            BufferMemoryType::DeviceLocal => self.buffer_registry.create_vertex_buffer(
                 self.instance,
                 self.device,
                 self.command_pool.as_ref(),
                 &mesh.vertices,
                 BufferMemoryType::DeviceLocal,
-            )?
-        } else {
-            self.buffer_registry.create_host_visible_vertex_buffer(
-                self.instance,
-                self.device,
-                &mesh.vertices,
-                0,
-            )?
+            )?,
+            BufferMemoryType::HostVisible => self
+                .buffer_registry
+                .create_host_visible_vertex_buffer(self.instance, self.device, &mesh.vertices, 0)?,
         };
-        mesh.vertex_buffer_handles[frame_slot] = vertex_handle;
 
-        let index_handle = self.buffer_registry.create_index_buffer(
+        mesh.index_buffer_handle = self.buffer_registry.create_index_buffer(
             self.instance,
             self.device,
             self.command_pool.as_ref(),
             &mesh.indices,
         )?;
-        mesh.index_buffer_handles[frame_slot] = index_handle;
-
-        mesh.last_written_slot = frame_slot;
 
         Ok(())
     }
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()> {
-        self.buffer_registry.update_vertex_buffer(
-            self.device,
-            mesh.current_vertex_buffer_handle(),
-            &mesh.vertices,
-        )?;
-        Ok(())
-    }
-
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh) {
-        for slot in 0..FRAMES_IN_FLIGHT {
-            if mesh.vertex_buffer_handles[slot].is_valid() {
-                self.buffer_registry
-                    .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handles[slot]);
-                mesh.vertex_buffer_handles[slot] = VertexBufferHandle::INVALID;
-            }
-            if mesh.index_buffer_handles[slot].is_valid() {
-                self.buffer_registry
-                    .destroy_index_buffer(self.device, mesh.index_buffer_handles[slot]);
-                mesh.index_buffer_handles[slot] = IndexBufferHandle::INVALID;
-            }
+    pub unsafe fn destroy_static_line_buffers(&mut self, mesh: &mut StaticLineMesh) {
+        if mesh.vertex_buffer_handle.is_valid() {
+            self.buffer_registry
+                .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
+            mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
+        }
+        if mesh.index_buffer_handle.is_valid() {
+            self.buffer_registry
+                .destroy_index_buffer(self.device, mesh.index_buffer_handle);
+            mesh.index_buffer_handle = IndexBufferHandle::INVALID;
         }
     }
 
-    unsafe fn update_or_create_line_buffers(
+    pub unsafe fn update_or_create_line_buffers(
         &mut self,
         mesh: &mut LineMesh,
         frame_slot: usize,
@@ -245,12 +257,10 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 .update_index_buffer(self.device, *ihandle, &mesh.indices)?;
         }
 
-        mesh.last_written_slot = frame_slot;
-
         Ok(())
     }
 
-    unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh) {
+    pub unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh) {
         for slot in 0..FRAMES_IN_FLIGHT {
             if mesh.vertex_buffer_handles[slot].is_valid() {
                 self.buffer_registry
@@ -265,20 +275,20 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         }
     }
 
-    unsafe fn update_frame_ubo(
+    pub unsafe fn update_frame_ubo(
         &mut self,
         proj_data: &ProjectionData,
-        camera_pos: Vector3<f32>,
-        light_pos: Vector3<f32>,
-        light_color: Vector3<f32>,
+        camera_pos: Vec3,
+        light_pos: Vec3,
+        light_color: Vec3,
         image_index: usize,
     ) -> Result<()> {
         let ubo = FrameUBO {
             view: proj_data.view,
             proj: proj_data.proj,
-            camera_pos: Vector4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
-            light_pos: Vector4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
-            light_color: Vector4::new(light_color.x, light_color.y, light_color.z, 1.0),
+            camera_pos: Vec4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
+            light_pos: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 1.0),
         };
 
         self.graphics
@@ -288,9 +298,9 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn update_object_ubo(
+    pub unsafe fn update_object_ubo(
         &mut self,
-        model_matrix: Matrix4<f32>,
+        model_matrix: Mat4,
         object_index: usize,
         image_index: usize,
     ) -> Result<()> {
@@ -303,12 +313,12 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn update_scene_uniform(
+    pub unsafe fn update_scene_uniform(
         &mut self,
-        view: Matrix4<f32>,
-        proj: Matrix4<f32>,
-        light_pos: Vector3<f32>,
-        light_color: Vector3<f32>,
+        view: Mat4,
+        proj: Mat4,
+        light_pos: Vec3,
+        light_color: Vec3,
         debug_mode: i32,
         shadow_strength: f32,
         distance_attenuation: DistanceAttenuation,
@@ -319,13 +329,8 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         };
 
         let scene_data = SceneUniformData {
-            light_position: thyllore_math_core::Vec4::new(
-                light_pos.x,
-                light_pos.y,
-                light_pos.z,
-                1.0,
-            ),
-            light_color: thyllore_math_core::Vec4::new(
+            light_position: glam::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: glam::Vec4::new(
                 light_color.x,
                 light_color.y,
                 light_color.z,
@@ -341,4 +346,23 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
 
         scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)
     }
+}
+
+/// BLAS list holds only gbuffer meshes, so mesh index and BLAS index diverge once a mesh is hidden.
+fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>> {
+    let mut next_blas_index = 0;
+
+    graphics
+        .meshes
+        .iter()
+        .map(|mesh| {
+            if !mesh.render_to_gbuffer {
+                return None;
+            }
+
+            let blas_index = next_blas_index;
+            next_blas_index += 1;
+            Some(blas_index)
+        })
+        .collect()
 }

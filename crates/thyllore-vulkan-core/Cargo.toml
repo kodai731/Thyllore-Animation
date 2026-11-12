@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "thyllore-vulkan-core"
 version = "0.0.1"
 edition = "2021"
@@ -8,6 +9,7 @@ description = "Layer 2 Vulkan primitive wrapper for ThylloreAnimation (device, c
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-render-core = { path = "../thyllore-render-core" }
@@ -15,7 +17,7 @@ thyllore-log-core = { path = "../thyllore-log-core" }
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
 thyllore-vulkan-derive = { path = "../thyllore-vulkan-derive" }
 anyhow = "1"
-cgmath = "0.18"
+glam = "0.34"
 log = "0.4"
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 winit = "0.29"
@@ -24,7 +26,6 @@ png = "0.17"
 imgui = { package = "dear-imgui-rs", path = "../../vendor/dear-imgui-rs", features = ["build-from-source"] }
 
 [dev-dependencies]
-thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-shader-manifest = { path = "../thyllore-shader-manifest" }
 
 [build-dependencies]

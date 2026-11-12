@@ -14,3 +14,5 @@ impl Default for BoneSelectionState {
         }
     }
 }
+
+crate::startup_resource!(BoneSelectionState, Editor);

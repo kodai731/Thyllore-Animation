@@ -12,11 +12,14 @@ pub enum DialogRequest {
         format: ClipExportFormat,
     },
     ExportModelGltf,
+    ExportModelFbx,
     SaveSpringBoneBake,
     PickMaterialTexture {
         material: String,
     },
 }
+
+crate::startup_resource!(EventQueue<DialogRequest>, Editor);
 
 pub fn send_dialog_request(world: &World, request: DialogRequest) {
     world

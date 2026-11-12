@@ -1,12 +1,14 @@
-use crate::vulkanr::core::device::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::SceneUniformData;
-use crate::vulkanr::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
 use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
 use crate::vulkanr::descriptor::{
-    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout,
+    ReflectedDescriptorSets, ReflectedLayoutSpec, ReflectedSetLayout, WATER_CAUSTIC_APPLY,
+    WATER_CAUSTIC_SPLAT,
 };
-use crate::vulkanr::resource::gpu_resource::GpuResource;
-use crate::vulkanr::vulkan::*;
+use thyllore_vulkan_core::resource::GpuResource;
+use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, DescriptorSet, ImageView};
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {
@@ -27,7 +29,7 @@ impl RRWaterCausticDescriptorSet {
         self.splat.layout()
     }
 
-    pub fn splat_descriptor_set(&self) -> vk::DescriptorSet {
+    pub fn splat_descriptor_set(&self) -> DescriptorSet {
         self.splat.set(0)
     }
 
@@ -35,7 +37,7 @@ impl RRWaterCausticDescriptorSet {
         self.apply.layout()
     }
 
-    pub fn apply_descriptor_set(&self) -> vk::DescriptorSet {
+    pub fn apply_descriptor_set(&self) -> DescriptorSet {
         self.apply.set(0)
     }
 
@@ -49,70 +51,43 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
-        caustic_accum_view: vk::ImageView,
-        position_image_view: vk::ImageView,
-        tlas: Option<vk::AccelerationStructureKHR>,
-        scene_uniform_buffer: vk::Buffer,
-        water_ubo: vk::Buffer,
-        hdr_color_image_view: vk::ImageView,
+        caustic_accum_view: ImageView,
+        position_image_view: ImageView,
+        tlas: Option<AccelerationStructure>,
+        scene_uniform_buffer: Buffer,
+        water_ubo: Buffer,
+        hdr_color_image_view: ImageView,
     ) -> Result<()> {
-        let mut splat_writer = self.splat.writer(0).image(
-            water_caustic_splat::CAUSTIC_ACCUM_IMAGE,
-            caustic_accum_view,
-            vk::Sampler::null(),
-            vk::ImageLayout::GENERAL,
-        )?;
+        let mut splat_writer = self
+            .splat
+            .writer(0)
+            .storage_image(water_caustic_splat::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
+            .storage_image(water_caustic_splat::POSITION_IMAGE, position_image_view)?;
         if let Some(tlas) = tlas {
             splat_writer =
                 splat_writer.acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?;
         }
         splat_writer
-            .image(
-                water_caustic_splat::POSITION_IMAGE,
-                position_image_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .buffer(
+            .buffer_range(
                 water_caustic_splat::SCENE_DATA,
                 scene_uniform_buffer,
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
-            .buffer(
-                water_caustic_splat::WATER_BLOCK,
-                water_ubo,
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
+            .whole_buffer(water_caustic_splat::WATER_BLOCK, water_ubo)?
             .apply(rrdevice);
 
         self.apply
             .writer(0)
-            .image(
-                water_caustic_apply::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .image(
-                water_caustic_apply::HDR_COLOR_IMAGE,
-                hdr_color_image_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .buffer(
+            .storage_image(water_caustic_apply::CAUSTIC_ACCUM_IMAGE, caustic_accum_view)?
+            .storage_image(water_caustic_apply::HDR_COLOR_IMAGE, hdr_color_image_view)?
+            .buffer_range(
                 water_caustic_apply::SCENE_DATA,
                 scene_uniform_buffer,
                 0,
                 std::mem::size_of::<SceneUniformData>() as u64,
             )?
-            .buffer(
-                water_caustic_apply::WATER_BLOCK,
-                water_ubo,
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
+            .whole_buffer(water_caustic_apply::WATER_BLOCK, water_ubo)?
             .apply(rrdevice);
 
         Ok(())
@@ -121,7 +96,7 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn update_tlas(
         &mut self,
         rrdevice: &RRDevice,
-        tlas: vk::AccelerationStructureKHR,
+        tlas: AccelerationStructure,
     ) -> Result<()> {
         self.splat
             .writer(0)

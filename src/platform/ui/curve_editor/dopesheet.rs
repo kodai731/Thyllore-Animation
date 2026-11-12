@@ -2,15 +2,16 @@ use crate::animation::editable::{EditableKeyframe, PropertyCurve};
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe};
 
 use super::drag::{dragged_key_delta, dragged_key_position, TimeSnap};
-use super::draw::draw_time_grid;
+use super::draw::{draw_key_diamond, draw_time_grid, DiamondStyle, KeyDiamond};
 use super::hit_test::KEYFRAME_HIT_RADIUS;
-use super::view::ViewTransform;
+use super::view::{DrawnCurve, ViewTransform};
 
 pub(super) const DOPESHEET_ROW_HEIGHT: f32 = 22.0;
 const DIAMOND_HALF_SIZE: f32 = 6.0;
 const ROW_BAND_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.04];
 const SELECTED_KEY_FILL: [f32; 4] = [0.3, 0.6, 1.0, 1.0];
 const SELECTED_KEY_OUTLINE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const SELECTED_KEY_OUTLINE_THICKNESS: f32 = 1.5;
 const DRAG_PREVIEW_FILL: [f32; 4] = [1.0, 1.0, 0.0, 1.0];
 
 pub(super) fn dopesheet_row_center_y(curve_origin_y: f32, row_index: usize) -> f32 {
@@ -28,7 +29,7 @@ fn build_selected_key(curve: &PropertyCurve, kf: &EditableKeyframe) -> CurveSele
 
 pub(super) fn find_dopesheet_key(
     mouse_pos: [f32; 2],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> Option<CurveSelectedKeyframe> {
     curves
@@ -38,7 +39,7 @@ pub(super) fn find_dopesheet_key(
             let row_y = dopesheet_row_center_y(vt.curve_origin[1], *row_index);
             (mouse_pos[1] - row_y).abs() <= KEYFRAME_HIT_RADIUS
         })
-        .find_map(|(_, (curve, _, _))| {
+        .find_map(|(_, DrawnCurve { curve, .. })| {
             curve
                 .keyframes
                 .iter()
@@ -48,13 +49,13 @@ pub(super) fn find_dopesheet_key(
 }
 
 pub(super) fn collect_dopesheet_keys_in_rect(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     min: [f32; 2],
     max: [f32; 2],
 ) -> Vec<CurveSelectedKeyframe> {
     let mut keys = Vec::new();
-    for (row_index, (curve, _, _)) in curves.iter().enumerate() {
+    for (row_index, DrawnCurve { curve, .. }) in curves.iter().enumerate() {
         let row_y = dopesheet_row_center_y(vt.curve_origin[1], row_index);
         if row_y < min[1] || row_y > max[1] {
             continue;
@@ -72,7 +73,7 @@ pub(super) fn collect_dopesheet_keys_in_rect(
 
 pub(super) fn draw_dopesheet(
     draw_list: &imgui::DrawListMut,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     selected_keyframes: &[CurveSelectedKeyframe],
     width: f32,
@@ -92,7 +93,7 @@ pub(super) fn draw_dopesheet(
 
     draw_time_grid(draw_list, width, vt.curve_height, vt);
 
-    for (row_index, (curve, color, _)) in curves.iter().enumerate() {
+    for (row_index, DrawnCurve { curve, color, .. }) in curves.iter().enumerate() {
         let row_y = dopesheet_row_center_y(vt.curve_origin[1], row_index);
         for kf in &curve.keyframes {
             let center = [vt.time_to_x(kf.time), row_y];
@@ -100,46 +101,37 @@ pub(super) fn draw_dopesheet(
                 .iter()
                 .any(|s| s.property_type == curve.property_type && s.keyframe_id == kf.id);
             if is_selected {
-                draw_key_diamond(draw_list, center, SELECTED_KEY_FILL);
-                draw_key_diamond_outline(draw_list, center, SELECTED_KEY_OUTLINE);
+                draw_highlighted_key(draw_list, center, SELECTED_KEY_FILL);
             } else {
-                draw_key_diamond(draw_list, center, *color);
+                draw_key_diamond(
+                    draw_list,
+                    dopesheet_key(center),
+                    *color,
+                    DiamondStyle::Filled,
+                );
             }
         }
     }
 }
 
-fn diamond_corners(center: [f32; 2]) -> [[f32; 2]; 4] {
-    let [x, y] = center;
-    [
-        [x, y - DIAMOND_HALF_SIZE],
-        [x + DIAMOND_HALF_SIZE, y],
-        [x, y + DIAMOND_HALF_SIZE],
-        [x - DIAMOND_HALF_SIZE, y],
-    ]
-}
-
-fn draw_key_diamond(draw_list: &imgui::DrawListMut, center: [f32; 2], color: [f32; 4]) {
-    let [top, right, bottom, left] = diamond_corners(center);
-    draw_list
-        .add_triangle(top, right, bottom, color)
-        .filled(true)
-        .build();
-    draw_list
-        .add_triangle(top, bottom, left, color)
-        .filled(true)
-        .build();
-}
-
-fn draw_key_diamond_outline(draw_list: &imgui::DrawListMut, center: [f32; 2], color: [f32; 4]) {
-    let corners = diamond_corners(center);
-    for (index, corner) in corners.iter().enumerate() {
-        let next = corners[(index + 1) % corners.len()];
-        draw_list
-            .add_line(*corner, next, color)
-            .thickness(1.5)
-            .build();
+fn dopesheet_key(center: [f32; 2]) -> KeyDiamond {
+    KeyDiamond {
+        center,
+        half_size: DIAMOND_HALF_SIZE,
     }
+}
+
+fn draw_highlighted_key(draw_list: &imgui::DrawListMut, center: [f32; 2], fill: [f32; 4]) {
+    let diamond = dopesheet_key(center);
+    draw_key_diamond(draw_list, diamond, fill, DiamondStyle::Filled);
+    draw_key_diamond(
+        draw_list,
+        diamond,
+        SELECTED_KEY_OUTLINE,
+        DiamondStyle::Outline {
+            thickness: SELECTED_KEY_OUTLINE_THICKNESS,
+        },
+    );
 }
 
 pub(super) fn draw_dopesheet_drag_preview(
@@ -147,14 +139,14 @@ pub(super) fn draw_dopesheet_drag_preview(
     mouse_pos: [f32; 2],
     drag_start: [f32; 2],
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     selected_keyframes: &[CurveSelectedKeyframe],
     axis_lock: Option<AxisLock>,
     time_snap: TimeSnap,
 ) {
     let delta = dragged_key_delta(vt, drag_start, mouse_pos);
 
-    for (row_index, (curve, _, _)) in curves_to_draw.iter().enumerate() {
+    for (row_index, DrawnCurve { curve, .. }) in curves_to_draw.iter().enumerate() {
         let row_y = dopesheet_row_center_y(vt.curve_origin[1], row_index);
 
         for sel in selected_keyframes {
@@ -173,8 +165,7 @@ pub(super) fn draw_dopesheet_drag_preview(
                 .clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
             let preview_pos = [preview_x, row_y];
 
-            draw_key_diamond(draw_list, preview_pos, DRAG_PREVIEW_FILL);
-            draw_key_diamond_outline(draw_list, preview_pos, SELECTED_KEY_OUTLINE);
+            draw_highlighted_key(draw_list, preview_pos, DRAG_PREVIEW_FILL);
         }
     }
 }
@@ -220,7 +211,16 @@ mod tests {
     fn find_dopesheet_key_hits_by_row_and_time() {
         let (first, first_ids) = build_curve(PropertyType::TranslationX, &[0.2, 0.6]);
         let (second, second_ids) = build_curve(PropertyType::TranslationY, &[0.2]);
-        let curves = [(&first, [1.0; 4], "x"), (&second, [1.0; 4], "y")];
+        let curves = [
+            DrawnCurve {
+                curve: &first,
+                color: [1.0; 4],
+            },
+            DrawnCurve {
+                curve: &second,
+                color: [1.0; 4],
+            },
+        ];
         let vt = build_pixel_view(0.0);
 
         let hit = find_dopesheet_key([60.0, 11.0], &curves, &vt).expect("first row key");
@@ -235,7 +235,10 @@ mod tests {
     #[test]
     fn find_dopesheet_key_misses_beyond_the_radius_or_outside_the_rows() {
         let (curve, _) = build_curve(PropertyType::TranslationX, &[0.2]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
         let vt = build_pixel_view(0.0);
 
         assert!(
@@ -248,7 +251,16 @@ mod tests {
     fn collect_dopesheet_keys_in_rect_takes_only_keys_inside_rows_and_times() {
         let (first, first_ids) = build_curve(PropertyType::TranslationX, &[0.2, 0.5, 0.9]);
         let (second, _) = build_curve(PropertyType::TranslationY, &[0.2, 0.5]);
-        let curves = [(&first, [1.0; 4], "x"), (&second, [1.0; 4], "y")];
+        let curves = [
+            DrawnCurve {
+                curve: &first,
+                color: [1.0; 4],
+            },
+            DrawnCurve {
+                curve: &second,
+                color: [1.0; 4],
+            },
+        ];
         let vt = build_pixel_view(0.0);
 
         let keys = collect_dopesheet_keys_in_rect(&curves, &vt, [10.0, 0.0], [60.0, 20.0]);

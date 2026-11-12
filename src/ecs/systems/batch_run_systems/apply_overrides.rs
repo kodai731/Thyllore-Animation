@@ -1,11 +1,11 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
-    GpuTimingsSink, ModelState, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
+    GpuTimingsSink, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
-use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::world::World;
+use glam::Vec3;
 
 use super::anim_edits::batch_apply_anim_edits;
 use super::batch_action::BatchAction;
@@ -29,9 +29,6 @@ pub fn apply_engine_overrides(
     }
     if let Some(path) = overrides.exposure_dump_path.clone() {
         world.insert_resource(ExposureDumpSink::new(path));
-    }
-    if overrides.scene_path.is_some() {
-        request_scene_model_load(world);
     }
     if let Some(pixel) = overrides.pick_pixel {
         world.insert_resource(BatchPickRequest::new(pixel));
@@ -69,17 +66,8 @@ fn apply_camera_pose(world: &mut World, pose: BatchCameraPose) {
     camera.pitch = pose.pitch_degrees.to_radians();
     camera.distance = pose.distance;
     if let Some(pivot) = pose.pivot {
-        camera.pivot = cgmath::Vector3::new(pivot[0], pivot[1], pivot[2]);
+        camera.pivot = Vec3::new(pivot[0], pivot[1], pivot[2]);
     }
-}
-
-/// A scene file restores its model path into `ModelState`; loading it reuses the UI's event.
-fn request_scene_model_load(world: &mut World) {
-    let model_path = world.resource::<ModelState>().model_path.clone();
-    if model_path.is_empty() || model_path == "Generated Mesh" {
-        return;
-    }
-    world.send_command(CameraEvent::LoadModel { path: model_path });
 }
 
 /// Prefers a clip with bone tracks so an empty default clip never shadows the model animation.

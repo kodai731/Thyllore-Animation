@@ -2,6 +2,7 @@ use crate::command::*;
 use crate::core::device::*;
 use crate::resource::buffer::*;
 use crate::resource::gpu_resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -9,13 +10,23 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRImage {
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub(crate) image: vk::Image,
+    pub(crate) image_memory: vk::DeviceMemory,
+    pub(crate) image_view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
 }
 
 impl RRImage {
+    #[inline]
+    pub fn image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.image_view)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -104,19 +115,19 @@ impl RRImage {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.sampler != vk::Sampler::null() {
-            rrdevice.device.destroy_sampler(self.sampler, None);
+            rrdevice.device().destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
         if self.image_view != vk::ImageView::null() {
-            rrdevice.device.destroy_image_view(self.image_view, None);
+            rrdevice.device().destroy_image_view(self.image_view, None);
             self.image_view = vk::ImageView::null();
         }
         if self.image != vk::Image::null() {
-            rrdevice.device.destroy_image(self.image, None);
+            rrdevice.device().destroy_image(self.image, None);
             self.image = vk::Image::null();
         }
         if self.image_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.image_memory, None);
+            rrdevice.device().free_memory(self.image_memory, None);
             self.image_memory = vk::DeviceMemory::null();
         }
     }
@@ -130,7 +141,7 @@ impl Drop for RRImage {
     }
 }
 
-pub unsafe fn create_texture_image(
+pub(crate) unsafe fn create_texture_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
@@ -166,12 +177,14 @@ pub unsafe fn create_texture_image(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -218,13 +231,13 @@ pub unsafe fn create_texture_image(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
-pub unsafe fn create_texture_image_from_file(
+pub(crate) unsafe fn create_texture_image_from_file(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
@@ -296,12 +309,14 @@ pub unsafe fn create_texture_image_from_file(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(rgba_pixels.as_ptr(), memory.cast(), rgba_pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -348,13 +363,13 @@ pub unsafe fn create_texture_image_from_file(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
-pub unsafe fn create_image(
+pub(crate) unsafe fn create_image(
     instance: &Instance,
     rrdevice: &RRDevice,
     width: u32,
@@ -383,8 +398,8 @@ pub unsafe fn create_image(
         .samples(samples)
         .flags(vk::ImageCreateFlags::empty());
 
-    let image = rrdevice.device.create_image(&info, None)?;
-    let requirements = rrdevice.device.get_image_memory_requirements(image);
+    let image = rrdevice.device().create_image(&info, None)?;
+    let requirements = rrdevice.device().get_image_memory_requirements(image);
     let info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
         .memory_type_index(get_memory_type_index(
@@ -393,13 +408,15 @@ pub unsafe fn create_image(
             properties,
             requirements,
         )?);
-    let image_memory = rrdevice.device.allocate_memory(&info, None)?;
-    rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+    let image_memory = rrdevice.device().allocate_memory(&info, None)?;
+    rrdevice
+        .device()
+        .bind_image_memory(image, image_memory, 0)?;
 
     Ok((image, image_memory))
 }
 
-pub unsafe fn create_image_3d(
+pub(crate) unsafe fn create_image_3d(
     instance: &Instance,
     rrdevice: &RRDevice,
     extent: vk::Extent3D,
@@ -418,8 +435,8 @@ pub unsafe fn create_image_3d(
         .sharing_mode(vk::SharingMode::EXCLUSIVE)
         .samples(vk::SampleCountFlags::_1);
 
-    let image = rrdevice.device.create_image(&info, None)?;
-    let requirements = rrdevice.device.get_image_memory_requirements(image);
+    let image = rrdevice.device().create_image(&info, None)?;
+    let requirements = rrdevice.device().get_image_memory_requirements(image);
     let allocate_info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
         .memory_type_index(get_memory_type_index(
@@ -428,13 +445,15 @@ pub unsafe fn create_image_3d(
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
             requirements,
         )?);
-    let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
-    rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+    let image_memory = rrdevice.device().allocate_memory(&allocate_info, None)?;
+    rrdevice
+        .device()
+        .bind_image_memory(image, image_memory, 0)?;
 
     Ok((image, image_memory))
 }
 
-pub unsafe fn create_image_view_3d(
+pub(crate) unsafe fn create_image_view_3d(
     rrdevice: &RRDevice,
     image: vk::Image,
     format: vk::Format,
@@ -451,10 +470,10 @@ pub unsafe fn create_image_view_3d(
         .format(format)
         .subresource_range(subresource_range);
 
-    Ok(rrdevice.device.create_image_view(&info, None)?)
+    Ok(rrdevice.device().create_image_view(&info, None)?)
 }
 
-pub unsafe fn transition_image_layout(
+pub(crate) unsafe fn transition_image_layout(
     rrdevice: &RRDevice,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
@@ -536,7 +555,7 @@ pub unsafe fn transition_image_layout(
         .src_access_mask(src_access_mask)
         .dst_access_mask(dst_access_mask);
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         src_stage_mask, // perations will wait on the barrier.
         dst_stage_mask, //
@@ -563,7 +582,7 @@ pub unsafe fn transition_image_layout(
 //     Ok(())
 // }
 
-pub unsafe fn create_image_view(
+pub(crate) unsafe fn create_image_view(
     rrdevice: &RRDevice,
     image: vk::Image,
     format: vk::Format,
@@ -583,7 +602,7 @@ pub unsafe fn create_image_view(
         .format(format)
         .subresource_range(subresource_range);
 
-    Ok(rrdevice.device.create_image_view(&info, None)?)
+    Ok(rrdevice.device().create_image_view(&info, None)?)
 }
 
 unsafe fn generate_mipmaps(
@@ -597,6 +616,7 @@ unsafe fn generate_mipmaps(
     mip_levels: u32,
 ) -> Result<()> {
     if !instance
+        .raw()
         .get_physical_device_format_properties(rrdevice.physical_device, format)
         .optimal_tiling_features
         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
@@ -630,7 +650,7 @@ unsafe fn generate_mipmaps(
         barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
         barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
 
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::TRANSFER,
@@ -672,7 +692,7 @@ unsafe fn generate_mipmaps(
             ])
             .dst_subresource(dst_subresource);
 
-        rrdevice.device.cmd_blit_image(
+        rrdevice.device().cmd_blit_image(
             command_buffer,
             image,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -687,7 +707,7 @@ unsafe fn generate_mipmaps(
         barrier.src_access_mask = vk::AccessFlags::TRANSFER_READ;
         barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             command_buffer,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -711,7 +731,7 @@ unsafe fn generate_mipmaps(
     barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
     barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
 
-    rrdevice.device.cmd_pipeline_barrier(
+    rrdevice.device().cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::TRANSFER,
         vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -731,7 +751,7 @@ unsafe fn generate_mipmaps(
     Ok(())
 }
 
-pub unsafe fn create_texture_sampler(
+pub(crate) unsafe fn create_texture_sampler(
     rrdevice: &RRDevice,
     mip_levels: u32,
 ) -> Result<(vk::Sampler)> {
@@ -751,12 +771,12 @@ pub unsafe fn create_texture_sampler(
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(mip_levels as f32);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
     Ok((sampler))
 }
 
-pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub(crate) unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::NEAREST)
         .min_filter(vk::Filter::NEAREST)
@@ -773,12 +793,12 @@ pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler>
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(0.0);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
     Ok(sampler)
 }
 
-pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<crate::types::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
@@ -795,12 +815,12 @@ pub unsafe fn create_linear_clamp_sampler(rrdevice: &RRDevice) -> Result<vk::Sam
         .mip_lod_bias(0.0)
         .min_lod(0.0)
         .max_lod(1.0);
-    let sampler = rrdevice.device.create_sampler(&info, None)?;
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
 
-    Ok(sampler)
+    Ok(crate::types::Sampler(sampler))
 }
 
-pub unsafe fn create_texture_image_pixel(
+pub(crate) unsafe fn create_texture_image_pixel(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &Rc<RRCommandPool>,
@@ -819,7 +839,7 @@ pub unsafe fn create_texture_image_pixel(
     )
 }
 
-pub unsafe fn create_texture_image_pixel_with_format(
+pub(crate) unsafe fn create_texture_image_pixel_with_format(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &Rc<RRCommandPool>,
@@ -844,12 +864,14 @@ pub unsafe fn create_texture_image_pixel_with_format(
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
 
-    let memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(
         instance,
@@ -896,14 +918,14 @@ pub unsafe fn create_texture_image_pixel_with_format(
         mip_levels,
     )?;
 
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
 
 // Depth formats must not be sampled with LINEAR filtering.
-pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<crate::types::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::NEAREST)
         .min_filter(vk::Filter::NEAREST)
@@ -912,7 +934,90 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
         .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .build();
-    Ok(rrdevice.device.create_sampler(&info, None)?)
+    Ok(crate::types::Sampler(
+        rrdevice.device().create_sampler(&info, None)?,
+    ))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TextureColorSpace {
+    Srgb,
+    Linear,
+}
+
+fn format_for_color_space(color_space: TextureColorSpace) -> vk::Format {
+    match color_space {
+        TextureColorSpace::Srgb => vk::Format::R8G8B8A8_SRGB,
+        TextureColorSpace::Linear => vk::Format::R8G8B8A8_UNORM,
+    }
+}
+
+#[derive(Debug)]
+pub struct Rgba8Texture {
+    pub(crate) image: vk::Image,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) view: vk::ImageView,
+    pub(crate) sampler: vk::Sampler,
+    pub mip_levels: u32,
+}
+
+impl Rgba8Texture {
+    #[inline]
+    pub fn view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.view)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+}
+
+impl From<&Rgba8Texture> for RRImage {
+    fn from(texture: &Rgba8Texture) -> Self {
+        Self {
+            image: texture.image,
+            image_memory: texture.memory,
+            image_view: texture.view,
+            sampler: texture.sampler,
+        }
+    }
+}
+
+pub unsafe fn create_rgba8_texture(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    color_space: TextureColorSpace,
+) -> Result<Rgba8Texture> {
+    let format = format_for_color_space(color_space);
+    let (image, memory, mip_levels) = create_texture_image_pixel_with_format(
+        instance,
+        rrdevice,
+        command_pool,
+        &pixels.to_vec(),
+        width,
+        height,
+        format,
+    )?;
+    let view = create_image_view(
+        rrdevice,
+        image,
+        format,
+        vk::ImageAspectFlags::COLOR,
+        mip_levels,
+    )?;
+    let sampler = create_texture_sampler(rrdevice, mip_levels)?;
+    Ok(Rgba8Texture {
+        image,
+        memory,
+        view,
+        sampler,
+        mip_levels,
+    })
 }
 
 impl GpuResource for RRImage {
@@ -922,5 +1027,84 @@ impl GpuResource for RRImage {
 
     fn is_destroyed(&self) -> bool {
         self.image.is_destroyed()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerFilter {
+    Linear,
+    Nearest,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerAddress {
+    ClampToEdge,
+    ClampToBorder,
+    Repeat,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SamplerBorder {
+    OpaqueBlackFloat,
+    OpaqueBlackInt,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SamplerDesc {
+    pub filter: SamplerFilter,
+    pub address: SamplerAddress,
+    pub border: SamplerBorder,
+}
+
+impl SamplerDesc {
+    fn mag_filter(self) -> vk::Filter {
+        match self.filter {
+            SamplerFilter::Linear => vk::Filter::LINEAR,
+            SamplerFilter::Nearest => vk::Filter::NEAREST,
+        }
+    }
+
+    fn address_mode(self) -> vk::SamplerAddressMode {
+        match self.address {
+            SamplerAddress::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            SamplerAddress::ClampToBorder => vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            SamplerAddress::Repeat => vk::SamplerAddressMode::REPEAT,
+        }
+    }
+
+    fn border_color(self) -> vk::BorderColor {
+        match self.border {
+            SamplerBorder::OpaqueBlackFloat => vk::BorderColor::FLOAT_OPAQUE_BLACK,
+            SamplerBorder::OpaqueBlackInt => vk::BorderColor::INT_OPAQUE_BLACK,
+        }
+    }
+}
+
+pub unsafe fn create_sampler(
+    rrdevice: &RRDevice,
+    desc: SamplerDesc,
+) -> Result<crate::types::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(desc.mag_filter())
+        .min_filter(desc.mag_filter())
+        .address_mode_u(desc.address_mode())
+        .address_mode_v(desc.address_mode())
+        .address_mode_w(desc.address_mode())
+        .anisotropy_enable(false)
+        .border_color(desc.border_color())
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(0.0);
+    let sampler = rrdevice.device().create_sampler(&info, None)?;
+    Ok(crate::types::Sampler(sampler))
+}
+
+pub unsafe fn destroy_sampler(rrdevice: &RRDevice, sampler: &mut crate::types::Sampler) {
+    if sampler.raw() != vk::Sampler::null() {
+        rrdevice.device().destroy_sampler(sampler.raw(), None);
+        *sampler = crate::types::Sampler(vk::Sampler::null());
     }
 }

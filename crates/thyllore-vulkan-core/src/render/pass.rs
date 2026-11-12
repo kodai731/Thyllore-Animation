@@ -4,31 +4,58 @@ use crate::core::swapchain::*;
 use crate::render::framebuffer::{create_color_objects, create_framebuffers};
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::*;
+use crate::types::Instance;
 use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RRRender {
     // Main render pass (for final presentation)
-    pub render_pass: vk::RenderPass,
-    pub framebuffers: Vec<vk::Framebuffer>,
-    pub depth_image: vk::Image,
-    pub depth_image_memory: vk::DeviceMemory,
-    pub depth_image_view: vk::ImageView,
-    pub color_image: vk::Image,
-    pub color_image_view: vk::ImageView,
-    pub color_image_memory: vk::DeviceMemory,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) framebuffers: Vec<crate::types::Framebuffer>,
+    pub(crate) depth_image: vk::Image,
+    pub(crate) depth_image_memory: vk::DeviceMemory,
+    pub(crate) depth_image_view: vk::ImageView,
+    pub(crate) color_image: vk::Image,
+    pub(crate) color_image_view: vk::ImageView,
+    pub(crate) color_image_memory: vk::DeviceMemory,
 
     // G-Buffer render pass (for deferred rendering)
-    pub gbuffer_render_pass: vk::RenderPass,
-    pub gbuffer_framebuffer: vk::Framebuffer,
-    pub gbuffer_depth_image: vk::Image,
-    pub gbuffer_depth_image_memory: vk::DeviceMemory,
-    pub gbuffer_depth_image_view: vk::ImageView,
+    pub(crate) gbuffer_render_pass: vk::RenderPass,
+    pub(crate) gbuffer_framebuffer: vk::Framebuffer,
+    pub(crate) gbuffer_depth_image: vk::Image,
+    pub(crate) gbuffer_depth_image_memory: vk::DeviceMemory,
+    pub(crate) gbuffer_depth_image_view: vk::ImageView,
 }
 
 impl RRRender {
-    pub unsafe fn destroy_size_dependent(&mut self, device: &crate::core::device::Device) {
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    #[inline]
+    pub fn framebuffers(&self) -> &[crate::types::Framebuffer] {
+        &self.framebuffers
+    }
+
+    #[inline]
+    pub fn gbuffer_render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.gbuffer_render_pass)
+    }
+
+    #[inline]
+    pub fn gbuffer_framebuffer(&self) -> crate::types::Framebuffer {
+        crate::types::Framebuffer(self.gbuffer_framebuffer)
+    }
+
+    #[inline]
+    pub fn gbuffer_depth_image_view(&self) -> crate::types::ImageView {
+        crate::types::ImageView(self.gbuffer_depth_image_view)
+    }
+
+    pub unsafe fn destroy_size_dependent(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
         for fb in self.framebuffers.drain(..) {
-            device.destroy_framebuffer(fb, None);
+            device.destroy_framebuffer(fb.raw(), None);
         }
 
         destroy_image_objects(
@@ -45,7 +72,8 @@ impl RRRender {
         );
     }
 
-    pub unsafe fn destroy_gbuffer_attachments(&mut self, device: &crate::core::device::Device) {
+    pub unsafe fn destroy_gbuffer_attachments(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
         if self.gbuffer_framebuffer != vk::Framebuffer::null() {
             device.destroy_framebuffer(self.gbuffer_framebuffer, None);
             self.gbuffer_framebuffer = vk::Framebuffer::null();
@@ -58,9 +86,10 @@ impl RRRender {
         );
     }
 
-    pub unsafe fn destroy(&mut self, device: &crate::core::device::Device) {
-        self.destroy_size_dependent(device);
-        self.destroy_gbuffer_attachments(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
+        self.destroy_size_dependent(rrdevice);
+        self.destroy_gbuffer_attachments(rrdevice);
 
         if self.render_pass != vk::RenderPass::null() {
             device.destroy_render_pass(self.render_pass, None);
@@ -128,7 +157,7 @@ unsafe fn destroy_image_objects(
 
 impl GpuResource for RRRender {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -238,12 +267,15 @@ unsafe fn create_render_pass(
         .subpasses(subpasses)
         .dependencies(dependencies);
 
-    rrrender.render_pass = rrdevice.device.create_render_pass(&info, None)?;
+    rrrender.render_pass = rrdevice.device().create_render_pass(&info, None)?;
     println!("render pass {:?}", rrrender);
     Ok(())
 }
 
-pub unsafe fn get_depth_format(instance: &Instance, rrdevice: &RRDevice) -> Result<vk::Format> {
+pub(crate) unsafe fn get_depth_format(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+) -> Result<vk::Format> {
     let candidates = &[
         vk::Format::D32_SFLOAT,
         vk::Format::D32_SFLOAT_S8_UINT,
@@ -270,8 +302,9 @@ unsafe fn get_suppoted_format(
         .iter()
         .cloned()
         .find(|f| {
-            let properties =
-                instance.get_physical_device_format_properties(rrdevice.physical_device, *f);
+            let properties = instance
+                .raw()
+                .get_physical_device_format_properties(rrdevice.physical_device, *f);
             match tiling {
                 vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
                 vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
@@ -474,7 +507,7 @@ pub unsafe fn create_gbuffer_render_pass(
         .subpasses(&subpasses)
         .dependencies(&dependencies);
 
-    rrrender.gbuffer_render_pass = rrdevice.device.create_render_pass(&info, None)?;
+    rrrender.gbuffer_render_pass = rrdevice.device().create_render_pass(&info, None)?;
 
     log!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
@@ -483,16 +516,27 @@ pub unsafe fn create_gbuffer_render_pass(
 /// Load or clear of a single color attachment that a fragment pass draws into and a later
 /// fragment pass samples; the incoming edge covers a previous color write and a previous read.
 pub struct ColorOverlayPassDesc {
-    pub format: vk::Format,
-    pub load_op: vk::AttachmentLoadOp,
-    pub initial_layout: vk::ImageLayout,
-    pub final_layout: vk::ImageLayout,
+    pub(crate) format: vk::Format,
+    pub(crate) load_op: vk::AttachmentLoadOp,
+    pub(crate) initial_layout: vk::ImageLayout,
+    pub(crate) final_layout: vk::ImageLayout,
+}
+
+impl ColorOverlayPassDesc {
+    pub fn preserved(format: crate::types::Format) -> Self {
+        Self {
+            format: format.raw(),
+            load_op: vk::AttachmentLoadOp::LOAD,
+            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        }
+    }
 }
 
 pub unsafe fn create_color_overlay_render_pass(
     rrdevice: &RRDevice,
     desc: ColorOverlayPassDesc,
-) -> Result<vk::RenderPass> {
+) -> Result<crate::types::RenderPass> {
     let color_attachment = vk::AttachmentDescription::builder()
         .format(desc.format)
         .samples(vk::SampleCountFlags::_1)
@@ -543,5 +587,7 @@ pub unsafe fn create_color_overlay_render_pass(
         .subpasses(&subpasses)
         .dependencies(&dependencies);
 
-    Ok(rrdevice.device.create_render_pass(&info, None)?)
+    Ok(crate::types::RenderPass(
+        rrdevice.device().create_render_pass(&info, None)?,
+    ))
 }

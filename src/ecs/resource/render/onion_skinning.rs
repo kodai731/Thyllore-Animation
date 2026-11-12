@@ -1,6 +1,6 @@
 use crate::vulkanr::data::Vertex;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OnionSkinningConfig {
     pub enabled: bool,
     pub past_count: u32,
@@ -24,6 +24,8 @@ impl Default for OnionSkinningConfig {
         }
     }
 }
+
+crate::startup_resource!(OnionSkinningConfig, PostProcessing);
 
 #[derive(Clone, Debug)]
 pub struct GhostFrameInfo {

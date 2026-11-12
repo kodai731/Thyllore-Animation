@@ -2,13 +2,16 @@ pub mod auto_exposure;
 pub mod bloom;
 pub mod composite;
 pub mod dof;
+pub mod frame_commands;
 pub mod gbuffer;
+pub mod indexed_draw;
 pub mod line_mesh_draw;
 pub mod onion_skin;
 pub mod onion_skin_buffers;
 pub mod overlay;
 pub mod overlay_scale;
 pub mod pass_target;
+pub mod pipeline_dispatch;
 pub mod push_constants;
 pub mod rayquery;
 pub mod storage_image;
@@ -25,7 +28,16 @@ pub use composite::{
     record_composite_draw, record_composite_to_hdr_pass, BACKGROUND_RADIANCE,
 };
 pub use dof::record_dof_pass;
-pub use gbuffer::record_gbuffer_pass;
+pub use frame_commands::{
+    begin_frame_command_buffer, begin_render_pass_cleared, clear_shadow_mask_to_lit,
+    end_frame_command_buffer, end_render_pass, record_picked_texel_copy,
+    set_full_viewport_and_scissor,
+};
+pub use gbuffer::{create_gbuffer_framebuffer, record_gbuffer_pass};
+pub use indexed_draw::{
+    bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, push_vertex_constants,
+    set_scissor, set_viewport_size, IndexWidth,
+};
 pub use line_mesh_draw::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
 };
@@ -39,11 +51,19 @@ pub use overlay_scale::{
     union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
-    CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
-    TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
+    record_pending_barriers, AttachmentStart, CoreTarget, FrameTransients, ImageStateTracker,
+    PendingBarrier, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
+    TransientRequest, TransientSlot,
+};
+pub use pipeline_dispatch::{
+    bind_compute, bind_ray_tracing, clear_color_image, dispatch, push_constants_and_trace_rays,
+    ClearColor,
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
-pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
+pub use storage_image::{
+    copy_color_image, storage_image_read_barrier_for_fragment,
+    storage_image_write_barrier_for_fragment,
+};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use trace_push::TracePush;

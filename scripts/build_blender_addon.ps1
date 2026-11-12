@@ -9,6 +9,9 @@ param(
     [ValidateSet("A", "B", "C")]
     [string]$BuildMode = "A",
 
+    [ValidateSet("curve-copilot", "avatar-setup")]
+    [string]$Product = "curve-copilot",
+
     # Feedback endpoint to bake: reads THYLLORE_FEEDBACK_PROD_ENDPOINT or
     # THYLLORE_FEEDBACK_TEST_ENDPOINT. Empty keeps the CI-compatible
     # THYLLORE_FEEDBACK_ENDPOINT behaviour.
@@ -103,11 +106,11 @@ $PlatformConfig = @{
     }
 }[$Platform]
 
-Write-Host "[build_blender_addon] Platform: $Platform -> Blender: $($PlatformConfig.BlenderName), wheel: $($PlatformConfig.WheelSuffix), build mode: $BuildMode" -ForegroundColor Cyan
+Write-Host "[build_blender_addon] Platform: $Platform -> Blender: $($PlatformConfig.BlenderName), wheel: $($PlatformConfig.WheelSuffix), product: $Product, build mode: $BuildMode" -ForegroundColor Cyan
 
 # Stage directory (mirror blender_addon/ minus excluded paths)
 
-$StageDir = Join-Path $RepoRoot "build/blender_addon_stage_${Platform}_${BuildMode}"
+$StageDir = Join-Path $RepoRoot "build/blender_addon_stage_${Product}_${Platform}_${BuildMode}"
 if (Test-Path $StageDir) { Remove-Item -Recurse -Force $StageDir }
 New-Item -ItemType Directory -Path $StageDir -Force | Out-Null
 
@@ -121,6 +124,26 @@ $UnshippedRelPaths = @(
     "operators/text_to_motion.py",
     "grpc_client"
 )
+$CurveCopilotOnlyRelPaths = @(
+    "operators/curve_copilot.py",
+    "_ghost_overlay.py",
+    "modal"
+)
+$AvatarSetupOnlyRelPaths = @(
+    "avatar_setup",
+    "operators/skin_weight_transfer.py"
+)
+$IncludeOnnxRuntime = $true
+switch ($Product) {
+    "avatar-setup" {
+        $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
+        $IncludeOnnxModel = $false
+        $IncludeOnnxRuntime = $false
+    }
+    "curve-copilot" {
+        $UnshippedRelPaths += $AvatarSetupOnlyRelPaths
+    }
+}
 
 # robocopy on Windows, rsync/cp fallback on POSIX pwsh
 if ($IsWindows -or $env:OS -like "*Windows*") {
@@ -175,7 +198,10 @@ if (-not (Test-Path $WheelsDir)) {
     throw "Stage directory has no wheels/. Run scripts/collect_wheels.ps1 first."
 }
 
-$AllowedWheelPrefixes = @("thyllore_ml_core")
+$AllowedWheelPrefixes = switch ($Product) {
+    "curve-copilot"  { @("thyllore_ml_core") }
+    "avatar-setup"   { @("thyllore_avatar_api") }
+}
 
 $AllWheels = Get-ChildItem -Path $WheelsDir -Filter "*.whl"
 $KeptWheels = New-Object System.Collections.Generic.List[string]
@@ -227,6 +253,7 @@ if (-not (Test-Path $ManifestPath)) {
     throw "blender_manifest.toml missing from stage; expected at $ManifestPath"
 }
 $ManifestContent = [System.IO.File]::ReadAllText($ManifestPath, [System.Text.Encoding]::UTF8)
+$ManifestContent = $ManifestContent -replace "`r`n", "`n"
 $ManifestContent = $ManifestContent -replace 'PLATFORM_BLENDER_NAME', $PlatformConfig.BlenderName
 
 $WheelLines = ($KeptWheels | ForEach-Object { "    `"./wheels/$_`"," }) -join "`n"
@@ -242,6 +269,13 @@ if ($null -eq $NetworkPermission) {
     $ManifestContent = $ManifestContent -replace "`nnetwork = `"NETWORK_PERMISSION`"", ""
 } else {
     $ManifestContent = $ManifestContent.Replace("NETWORK_PERMISSION", $NetworkPermission)
+}
+
+if ($Product -eq "avatar-setup") {
+    $ManifestContent = $ManifestContent -replace '(?m)^id = ".*"$', 'id = "thyllore_avatar_setup"'
+    $ManifestContent = $ManifestContent -replace '(?m)^name = ".*"$', 'name = "Thyllore Avatar Setup"'
+    $ManifestContent = $ManifestContent -replace '(?m)^tagline = ".*"$', 'tagline = "Spring chains, colliders and Unity export for avatars"'
+    $ManifestContent = $ManifestContent -replace '(?m)^files = ".*"$', 'files = "Read models and write bones, weights and avatar sidecars"'
 }
 
 # UTF-8 without BOM: Blender's TOML parser rejects a BOM
@@ -287,7 +321,9 @@ if ($IncludeOnnxModel) {
 if (-not $OnnxruntimeLib) {
     $OnnxruntimeLib = $PlatformConfig.OrtLibDefault
 }
-if ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
+if (-not $IncludeOnnxRuntime) {
+    Write-Host "[build_blender_addon] ONNX Runtime not bundled: $Product has no in-process inference" -ForegroundColor Cyan
+} elseif ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
     $LibDir = Join-Path $StageDir "lib"
     New-Item -ItemType Directory -Path $LibDir -Force | Out-Null
     $OrtItem = Get-Item $OnnxruntimeLib
@@ -346,11 +382,15 @@ if (-not $SkipBlenderValidate) {
 $AbsOutDir = Join-Path $RepoRoot $OutputDir
 New-Item -ItemType Directory -Path $AbsOutDir -Force | Out-Null
 
-$ZipBaseName = "thyllore_animation_curve_copilot"
-$ZipBaseName = switch ($BuildMode) {
-    "A" { "${ZipBaseName}_degraded" }
-    "B" { "${ZipBaseName}_full" }
-    "C" { "${ZipBaseName}_private" }
+if ($Product -eq "avatar-setup") {
+    $ZipBaseName = "thyllore_avatar_setup"
+} else {
+    $ZipBaseName = "thyllore_animation_curve_copilot"
+    $ZipBaseName = switch ($BuildMode) {
+        "A" { "${ZipBaseName}_degraded" }
+        "B" { "${ZipBaseName}_full" }
+        "C" { "${ZipBaseName}_private" }
+    }
 }
 if ($EndpointEnv -eq "test") {
     $ZipBaseName = "${ZipBaseName}_test"

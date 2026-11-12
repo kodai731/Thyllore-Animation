@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy, Default)]
@@ -19,13 +19,13 @@ pub enum GizmoAxis {
 
 #[derive(Clone, Debug)]
 pub struct GizmoPosition {
-    pub position: Vector3<f32>,
+    pub position: Vec3,
 }
 
 impl Default for GizmoPosition {
     fn default() -> Self {
         Self {
-            position: Vector3::new(0.0, 0.0, 0.0),
+            position: Vec3::new(0.0, 0.0, 0.0),
         }
     }
 }
@@ -39,14 +39,14 @@ pub struct GizmoSelectable {
 #[derive(Clone, Debug)]
 pub struct GizmoDraggable {
     pub drag_axis: GizmoAxis,
-    pub initial_position: Vector3<f32>,
+    pub initial_position: Vec3,
 }
 
 impl Default for GizmoDraggable {
     fn default() -> Self {
         Self {
             drag_axis: GizmoAxis::None,
-            initial_position: Vector3::new(0.0, 0.0, 0.0),
+            initial_position: Vec3::new(0.0, 0.0, 0.0),
         }
     }
 }
@@ -58,6 +58,39 @@ pub enum BoneDisplayStyle {
     Octahedral,
     Box,
     Sphere,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BoneDrawMode {
+    #[default]
+    All,
+    Selected,
+    SelectedAndParents,
+    SelectedAndChildren,
+    SelectedWithParentsAndChildren,
+    None,
+}
+
+impl BoneDrawMode {
+    pub const ALL: [BoneDrawMode; 6] = [
+        BoneDrawMode::All,
+        BoneDrawMode::Selected,
+        BoneDrawMode::SelectedAndParents,
+        BoneDrawMode::SelectedAndChildren,
+        BoneDrawMode::SelectedWithParentsAndChildren,
+        BoneDrawMode::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            BoneDrawMode::All => "All",
+            BoneDrawMode::Selected => "Selected",
+            BoneDrawMode::SelectedAndParents => "Selected + Parents",
+            BoneDrawMode::SelectedAndChildren => "Selected + Children",
+            BoneDrawMode::SelectedWithParentsAndChildren => "Selected + Parents + Children",
+            BoneDrawMode::None => "None",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

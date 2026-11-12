@@ -1,8 +1,7 @@
 #![cfg(test)]
 mod support;
 
-use cgmath::Matrix;
-
+use glam::DVec3;
 use support::canonical_bones;
 use support::rig_convention::rig_convention;
 use support::rig_names::CONVENTIONS;
@@ -13,7 +12,7 @@ fn inverse_transform(
     file_pos: [f64; 3],
     convention: &support::rig_convention::RigConvention,
 ) -> [f64; 3] {
-    let mut p = cgmath::Vector3::new(file_pos[0], file_pos[1], file_pos[2]);
+    let mut p = DVec3::new(file_pos[0], file_pos[1], file_pos[2]);
     let inv_rot = character_to_file_rotation(convention.character_to_file).transpose();
     p = inv_rot * p;
     let meter_scale = convention.unit_scale_factor / 100.0 / convention.body_scale;

@@ -1,6 +1,11 @@
 use std::io::{Seek, Write};
 
+use fbxcel::low::v7400::ArrayAttributeEncoding;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
+
+/// Every array is zlib-compressed, as the FBX SDK writes them.
+pub(crate) const ARRAY_ENCODING: Option<ArrayAttributeEncoding> =
+    Some(ArrayAttributeEncoding::Zlib);
 
 use crate::fbx_animation::{
     write_anim_curve, write_anim_curve_node, write_anim_layer, write_anim_stack, write_bone_model,
@@ -178,14 +183,14 @@ pub(crate) fn write_geometry<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("Vertices")?;
-        va.append_arr_f64_from_iter(None, geo.positions.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, geo.positions.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("PolygonVertexIndex")?;
-        va.append_arr_i32_from_iter(None, geo.polygon_vertex_index.iter().copied())?;
+        va.append_arr_i32_from_iter(ARRAY_ENCODING, geo.polygon_vertex_index.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -251,7 +256,7 @@ pub(crate) fn write_layer_element_normal<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("Normals")?;
-        va.append_arr_f64_from_iter(None, normals.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, normals.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -296,7 +301,7 @@ fn write_layer_element_uv<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("UV")?;
-        va.append_arr_f64_from_iter(None, uv_values.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, uv_values.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -338,7 +343,7 @@ fn write_layer_element_material<W: Write + Seek>(writer: &mut Writer<W>) -> FbxW
 
     {
         let mut va = writer.new_node("Materials")?;
-        va.append_arr_i32_from_iter(None, [0].iter().copied())?;
+        va.append_arr_i32_from_iter(ARRAY_ENCODING, [0].iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -608,28 +613,28 @@ fn write_cluster<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("Indexes")?;
-        va.append_arr_i32_from_iter(None, cluster.indices.iter().copied())?;
+        va.append_arr_i32_from_iter(ARRAY_ENCODING, cluster.indices.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("Weights")?;
-        va.append_arr_f64_from_iter(None, cluster.weights.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, cluster.weights.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("Transform")?;
-        va.append_arr_f64_from_iter(None, cluster.transform.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, cluster.transform.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("TransformLink")?;
-        va.append_arr_f64_from_iter(None, cluster.transform_link.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, cluster.transform_link.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -685,7 +690,7 @@ fn write_blend_shape_channel<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("FullWeights")?;
-        va.append_arr_f64_from_iter(None, [100.0_f64])?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, [100.0_f64])?;
         drop(va);
         writer.close_node()?;
     }
@@ -713,21 +718,21 @@ fn write_shape_geometry<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("Indexes")?;
-        va.append_arr_i32_from_iter(None, channel.indexes.iter().copied())?;
+        va.append_arr_i32_from_iter(ARRAY_ENCODING, channel.indexes.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     {
         let mut va = writer.new_node("Vertices")?;
-        va.append_arr_f64_from_iter(None, channel.vertices.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, channel.vertices.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
 
     if !channel.normals.is_empty() {
         let mut va = writer.new_node("Normals")?;
-        va.append_arr_f64_from_iter(None, channel.normals.iter().copied())?;
+        va.append_arr_f64_from_iter(ARRAY_ENCODING, channel.normals.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }

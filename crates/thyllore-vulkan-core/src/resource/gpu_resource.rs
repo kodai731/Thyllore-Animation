@@ -25,7 +25,7 @@ macro_rules! raw_handle_resource {
         impl GpuResource for $handle {
             unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
                 if *self != <$handle>::null() {
-                    rrdevice.device.$destroy(*self, None);
+                    rrdevice.device().$destroy(*self, None);
                     *self = <$handle>::null();
                 }
             }
@@ -50,6 +50,46 @@ raw_handle_resource!(vk::Framebuffer, destroy_framebuffer);
 raw_handle_resource!(vk::ShaderModule, destroy_shader_module);
 raw_handle_resource!(vk::QueryPool, destroy_query_pool);
 
+impl GpuResource for crate::types::Pipeline {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::Sampler {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::RenderPass {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::Framebuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
 #[derive(Clone, Copy, Debug, Default)]
@@ -59,11 +99,11 @@ pub struct OwnedDescriptorSet {
 }
 
 impl OwnedDescriptorSet {
-    pub fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
+    pub(crate) fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
         Self { set, layout }
     }
 
-    pub fn handle(&self) -> vk::DescriptorSet {
+    pub(crate) fn handle(&self) -> vk::DescriptorSet {
         self.set
     }
 }

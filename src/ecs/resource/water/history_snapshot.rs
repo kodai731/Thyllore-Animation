@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 
 use super::WaterRenderSettings;
 use crate::ecs::component::WaterTorusEffect;
@@ -8,9 +8,11 @@ use crate::ecs::resource::HistorySnapshotState;
 /// consecutive frames invalidates the accumulated history.
 #[derive(Clone, PartialEq)]
 pub struct WaterHistorySnapshot {
-    pub view: Matrix4<f32>,
+    pub view: Mat4,
     pub effect: WaterTorusEffect,
     pub settings: WaterRenderSettings,
 }
 
 pub type WaterHistorySnapshotState = HistorySnapshotState<WaterHistorySnapshot>;
+
+crate::startup_resource!(WaterHistorySnapshotState, PostProcessing);

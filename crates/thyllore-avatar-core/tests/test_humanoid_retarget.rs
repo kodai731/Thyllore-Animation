@@ -2,8 +2,6 @@
 
 mod support;
 
-use cgmath::InnerSpace;
-
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
 

@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector2};
+use glam::{Mat4, Vec2};
 use thyllore_effect_core::burst_start_time;
 
 use crate::ecs::component::LightningEffect;
@@ -13,9 +13,11 @@ pub(super) fn lightning_inside_first_burst() -> LightningEffect {
 
 pub(super) fn orthographic_projection(half_size: f32) -> ProjectionData {
     ProjectionData {
-        view: Matrix4::identity(),
-        proj: cgmath::ortho(-half_size, half_size, -half_size, half_size, -100.0, 100.0),
-        screen_size: Vector2::new(200.0, 200.0),
+        view: Mat4::IDENTITY,
+        proj: glam::camera::rh::proj::opengl::orthographic(
+            -half_size, half_size, -half_size, half_size, -100.0, 100.0,
+        ),
+        screen_size: Vec2::new(200.0, 200.0),
         aspect: 1.0,
     }
 }

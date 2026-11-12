@@ -61,17 +61,15 @@ if (-not $NoMl) {
 
 Copy-Item "assets/shaders/*.spv" "$outDir/assets/shaders/"
 
-Copy-Item "assets/fonts/Roboto-Regular.ttf" "$outDir/assets/fonts/"
-Copy-Item "assets/fonts/mplus-1p-regular.ttf" "$outDir/assets/fonts/"
-Copy-Item "assets/fonts/Dokdo-Regular.ttf" "$outDir/assets/fonts/"
-Copy-Item "assets/fonts/LICENSE-Roboto.txt" "$outDir/assets/fonts/"
-Copy-Item "assets/fonts/LICENSE-Dokdo.txt" "$outDir/assets/fonts/"
+Copy-Item "assets/fonts/LICENSE-Inter.txt" "$outDir/assets/fonts/"
+Copy-Item "assets/fonts/LICENSE-Lucide.txt" "$outDir/assets/fonts/"
 
 Copy-Item "assets/textures/lightIcon.png" "$outDir/assets/textures/"
 Copy-Item "assets/textures/white.png" "$outDir/assets/textures/"
 
 Copy-Item "LICENSE" "$outDir/"
 Copy-Item "THIRD_PARTY_LICENSES.md" "$outDir/"
+Copy-Item "THIRD_PARTY_CARGO_LICENSES.md" "$outDir/"
 Copy-Item "README.md" "$outDir/"
 
 $zipPath = "dist/$packageName.zip"

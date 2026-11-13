@@ -1,62 +1,142 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::core::device::RRDevice;
 use crate::descriptor::reflected_layout::{
     DescriptorSetWriter, ReflectedLayoutSpec, ReflectedSetLayout,
 };
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
 use crate::types::DescriptorSet;
-use crate::vulkan::vk;
 
-#[derive(Clone, Debug, Default)]
+/// How many sets one layout owns: one row per frame slot, one column per history index.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SetGrid {
+    frame_slots: usize,
+    history_count: usize,
+}
+
+impl SetGrid {
+    pub const SINGLE: Self = Self::new(1, 1);
+
+    pub const fn new(frame_slots: usize, history_count: usize) -> Self {
+        Self {
+            frame_slots,
+            history_count,
+        }
+    }
+
+    pub const fn per_frame_slot(frame_slots: usize) -> Self {
+        Self::new(frame_slots, 1)
+    }
+
+    pub const fn per_history(history_count: usize) -> Self {
+        Self::new(1, history_count)
+    }
+
+    fn set_count(self) -> usize {
+        self.frame_slots * self.history_count
+    }
+
+    fn flat_index(self, slot: SetSlot) -> Result<usize> {
+        if slot.frame_slot >= self.frame_slots || slot.history_index >= self.history_count {
+            return Err(anyhow!(
+                "descriptor set slot (frame {}, history {}) is outside the {} x {} grid",
+                slot.frame_slot,
+                slot.history_index,
+                self.frame_slots,
+                self.history_count
+            ));
+        }
+        Ok(slot.frame_slot * self.history_count + slot.history_index)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SetSlot {
+    frame_slot: usize,
+    history_index: usize,
+}
+
+impl SetSlot {
+    pub const SINGLE: Self = Self::new(0, 0);
+
+    pub const fn new(frame_slot: usize, history_index: usize) -> Self {
+        Self {
+            frame_slot,
+            history_index,
+        }
+    }
+
+    pub const fn frame_slot(frame_slot: usize) -> Self {
+        Self::new(frame_slot, 0)
+    }
+
+    pub const fn history(history_index: usize) -> Self {
+        Self::new(0, history_index)
+    }
+}
+
+/// A reflected layout together with the grid of descriptor sets allocated from it.
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct ReflectedDescriptorSets {
     layout: ReflectedSetLayout,
-    sets: Vec<vk::DescriptorSet>,
+    sets: Vec<OwnedDescriptorSet>,
+    #[gpu_resource(skip)]
+    grid: SetGrid,
 }
 
 impl ReflectedDescriptorSets {
     pub unsafe fn create(
         rrdevice: &RRDevice,
         spec: &ReflectedLayoutSpec,
-        count: usize,
+        grid: SetGrid,
     ) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, spec)?;
-        let sets = layout.allocate_sets(rrdevice, count.max(1))?;
-        Ok(Self { layout, sets })
-    }
+        let sets = layout
+            .allocate_sets(rrdevice, grid.set_count())?
+            .into_iter()
+            .map(|set| OwnedDescriptorSet::new(set, layout.handle))
+            .collect();
 
-    pub fn get(&self, index: usize) -> Option<DescriptorSet> {
-        self.sets.get(index).copied().map(DescriptorSet)
-    }
-
-    pub fn set(&self, index: usize) -> DescriptorSet {
-        DescriptorSet(self.sets[index])
-    }
-
-    pub fn writer(&self, index: usize) -> DescriptorSetWriter<'_> {
-        self.layout.writer(self.sets[index])
-    }
-
-    pub fn len(&self) -> usize {
-        self.sets.len()
+        Ok(Self { layout, sets, grid })
     }
 
     pub fn layout(&self) -> &ReflectedSetLayout {
         &self.layout
     }
 
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        rrdevice.release_descriptor_sets(self.layout.handle, self.sets.drain(..));
-        self.layout.destroy(rrdevice);
+    pub fn set(&self, slot: SetSlot) -> Result<DescriptorSet> {
+        let index = self.grid.flat_index(slot)?;
+        Ok(DescriptorSet(self.sets[index].handle()))
+    }
+
+    pub fn writer(&self, slot: SetSlot) -> Result<DescriptorSetWriter<'_>> {
+        Ok(self.layout.descriptor_writer(self.set(slot)?))
     }
 }
 
-impl GpuResource for ReflectedDescriptorSets {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slots_of_a_grid_map_to_distinct_indices_in_frame_major_order() {
+        let grid = SetGrid::new(2, 3);
+
+        let indices: Vec<usize> = (0..2)
+            .flat_map(|frame_slot| (0..3).map(move |history| SetSlot::new(frame_slot, history)))
+            .map(|slot| grid.flat_index(slot).expect("slot inside the grid"))
+            .collect();
+
+        assert_eq!(indices, (0..grid.set_count()).collect::<Vec<_>>());
     }
 
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
+    #[test]
+    fn a_slot_outside_either_axis_is_rejected() {
+        let grid = SetGrid::per_frame_slot(2);
+
+        assert!(grid.flat_index(SetSlot::frame_slot(2)).is_err());
+        assert!(grid.flat_index(SetSlot::history(1)).is_err());
+        assert!(SetGrid::SINGLE.flat_index(SetSlot::SINGLE).is_ok());
     }
 }

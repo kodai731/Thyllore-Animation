@@ -57,7 +57,7 @@ pub unsafe fn create_flame_pipeline(
         flame_history.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
-            flame_descriptor.layout(),
+            flame_descriptor.sets.layout(),
         ],
         flame_history.extent(),
     )?;

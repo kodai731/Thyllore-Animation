@@ -1,6 +1,9 @@
 use anyhow::Result;
 
-use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
+use super::{
+    create_water_resolve_sets, RRWaterCausticDescriptorSet, WaterCausticBindings,
+    WaterPushConstants,
+};
 use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
 use crate::vulkanr::core::RRDevice;
@@ -39,7 +42,7 @@ pub unsafe fn create_water_pipeline(
     )?;
     water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
 
-    let water_descriptor = RRWaterDescriptorSet::new(rrdevice, frames_in_flight)?;
+    let water_descriptor = create_water_resolve_sets(rrdevice, frames_in_flight)?;
     let water_shading_pipeline = WATER_OVERLAY.build_pipeline(
         rrdevice,
         rrrender,
@@ -103,27 +106,23 @@ unsafe fn create_water_caustic_pipelines(
         .as_ref()
         .and_then(|accel| accel.tlas.acceleration_structure());
 
-    let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
-    descriptor.allocate_and_update(
+    let descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
+    descriptor.write_all(
         rrdevice,
-        water_targets.caustic_accum.view(),
-        gbuffer.position_image_view(),
-        tlas,
-        scene_buffer,
-        water_ubo.handle(),
-        hdr_color_view,
+        WaterCausticBindings {
+            caustic_accum_view: water_targets.caustic_accum.view(),
+            position_image_view: gbuffer.position_image_view(),
+            tlas,
+            scene_uniform_buffer: scene_buffer,
+            water_ubo: water_ubo.handle(),
+            hdr_color_image_view: hdr_color_view,
+        },
     )?;
 
-    let splat_pipeline = RRPipeline::new_compute(
-        rrdevice,
-        &WATER_CAUSTIC_SPLAT,
-        &[&descriptor.splat_layout()],
-    )?;
-    let apply_pipeline = RRPipeline::new_compute(
-        rrdevice,
-        &WATER_CAUSTIC_APPLY,
-        &[&descriptor.apply_layout()],
-    )?;
+    let splat_pipeline =
+        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_SPLAT, &[descriptor.splat.layout()])?;
+    let apply_pipeline =
+        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_APPLY, &[descriptor.apply.layout()])?;
 
     gpu_state.caustic_splat_pipeline = Some(splat_pipeline);
     gpu_state.caustic_apply_pipeline = Some(apply_pipeline);

@@ -15,6 +15,7 @@ use thyllore_effect_core::{
     build_lightning_ubo, compute_lightning_segment_aabb, inverse_view_proj_f64, LightningDebugView,
     LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
@@ -208,7 +209,7 @@ unsafe fn record_lightning_passes(
         Some(push_constants.as_bytes()),
         &[
             render.graphics.frame_set.sets()[image_index],
-            descriptor.descriptor_set(),
+            descriptor.sets.set(SetSlot::SINGLE)?,
         ],
         &draws,
     )

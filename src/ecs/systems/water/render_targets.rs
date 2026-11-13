@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
+use crate::ecs::systems::water::caustic_descriptors::WaterCausticBindings;
 use crate::ecs::systems::water::gpu_targets::{
     create_water_gpu_targets, is_depth_view_ready, WaterRenderTargets,
 };
@@ -143,18 +144,20 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
     ) else {
         return Ok(());
     };
-    let Some(descriptor) = gpu_state.caustic_descriptor.as_mut() else {
+    let Some(descriptor) = gpu_state.caustic_descriptor.as_ref() else {
         return Ok(());
     };
 
-    descriptor.allocate_and_update(
+    descriptor.write_all(
         ctx.rrdevice,
-        caustic_accum_view,
-        position_image_view,
-        tlas,
-        scene_buffer,
-        water_ubo,
-        hdr_color_view,
+        WaterCausticBindings {
+            caustic_accum_view,
+            position_image_view,
+            tlas,
+            scene_uniform_buffer: scene_buffer,
+            water_ubo,
+            hdr_color_image_view: hdr_color_view,
+        },
     )?;
     gpu_state.caustic_bound_tlas = tlas.unwrap_or_default();
     Ok(())

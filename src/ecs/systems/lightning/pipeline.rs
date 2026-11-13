@@ -49,7 +49,7 @@ pub unsafe fn create_lightning_gpu_state(
         targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
-            resolve_descriptor.layout(),
+            resolve_descriptor.sets.layout(),
         ],
         targets.extent(),
     )?;

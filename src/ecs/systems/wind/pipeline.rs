@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::ecs::resource::{BoundGenerations, WindGpuState};
 use crate::ecs::systems::wind::descriptors::{
-    WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
+    create_wind_shadow_bake_sets, write_wind_shadow_bake_set, WindResolveDescriptorSet,
 };
 use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
 use crate::vulkanr::core::RRDevice;
@@ -42,8 +42,13 @@ pub unsafe fn create_wind_gpu_state(
 
     let resolve_descriptor = WindResolveDescriptorSet::new(rrdevice)?;
     resolve_descriptor.write_all(rrdevice, &ubo, &targets.shadow_volume, scene_depth_view)?;
-    let shadow_bake_descriptor = WindShadowBakeDescriptorSet::new(rrdevice)?;
-    shadow_bake_descriptor.write_all(rrdevice, &ubo, &targets.shadow_volume)?;
+    let shadow_bake_descriptor = create_wind_shadow_bake_sets(rrdevice)?;
+    write_wind_shadow_bake_set(
+        &shadow_bake_descriptor,
+        rrdevice,
+        &ubo,
+        &targets.shadow_volume,
+    )?;
     let shadow_bake_pipeline = RRPipeline::new_compute(
         rrdevice,
         &WIND_SHADOW_BAKE,
@@ -59,7 +64,7 @@ pub unsafe fn create_wind_gpu_state(
         targets.render_pass(),
         &[
             &graphics_resources.frame_set.layout,
-            resolve_descriptor.layout(),
+            resolve_descriptor.sets.layout(),
         ],
         targets.extent(),
     )?;
@@ -68,7 +73,7 @@ pub unsafe fn create_wind_gpu_state(
         rrdevice,
         rrrender,
         targets.render_pass(),
-        &[upsample_descriptor.layout()],
+        &[upsample_descriptor.sets.layout()],
         targets.extent(),
     )?;
     log!("Created wind pipeline");

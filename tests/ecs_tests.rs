@@ -11,7 +11,6 @@ mod release_build_tests {
     use thyllore_animation::ecs::world::World;
     use thyllore_animation::loader::ModelLoadResult;
 
-    #[allow(deprecated)]
     #[test]
     fn test_grid_mesh_xz_toggle_in_release() {
         let (mesh, xz_only_index_count) = create_grid_mesh();
@@ -70,11 +69,7 @@ mod release_build_tests {
     fn test_ecs_world_resource_roundtrip_in_release() {
         let mut world = World::new();
 
-        let (mesh, xz_only_index_count) = {
-            #[allow(deprecated)]
-            let (m, c) = create_grid_mesh();
-            (m, c)
-        };
+        let (mesh, xz_only_index_count) = create_grid_mesh();
 
         world.insert_resource(GridMeshData {
             mesh,

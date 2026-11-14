@@ -1,8 +1,6 @@
 use anyhow::Result;
 use glam::{vec3, Vec2, Vec3};
 
-use crate::ecs::component::mesh::presets::{COLOR, POSITION};
-use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
     StaticLineMesh,
@@ -16,38 +14,6 @@ use crate::math::{
 use thyllore_render_core::FRAMES_IN_FLIGHT;
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 
-pub fn create_axis_gizmo_mesh_data(axis_length: f32, origin_color: [f32; 3]) -> MeshData {
-    let positions = vec![
-        [0.0, 0.0, 0.0],
-        [axis_length, 0.0, 0.0],
-        [0.0, axis_length, 0.0],
-        [0.0, 0.0, axis_length],
-    ];
-
-    let colors = vec![
-        origin_color,
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-    ];
-
-    let indices = vec![0, 1, 0, 2, 0, 3];
-
-    MeshData::new(PrimitiveTopology::LineList)
-        .with_inserted_attribute(POSITION, positions)
-        .with_inserted_attribute(COLOR, colors)
-        .with_indices(indices)
-}
-
-pub fn create_light_gizmo_mesh_data() -> MeshData {
-    create_axis_gizmo_mesh_data(1.0, [1.0, 1.0, 0.0])
-}
-
-pub fn create_grid_gizmo_mesh_data() -> MeshData {
-    create_axis_gizmo_mesh_data(0.15, [1.0, 1.0, 1.0])
-}
-
-#[deprecated(note = "Use create_light_gizmo_mesh_data() instead")]
 pub fn create_light_gizmo(position: Vec3) -> LightGizmoData {
     let axis_length = 1.0;
     let yellow = [1.0, 1.0, 0.0];
@@ -90,7 +56,6 @@ pub fn create_light_gizmo(position: Vec3) -> LightGizmoData {
     }
 }
 
-#[deprecated(note = "Use create_grid_gizmo_mesh_data() instead")]
 pub fn create_grid_gizmo() -> GridGizmoData {
     let axis_length = 0.15;
 

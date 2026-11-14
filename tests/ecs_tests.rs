@@ -402,7 +402,7 @@ mod component_registry_tests {
 
         let info = registry.register::<Position>();
 
-        assert!(info.size() >= 0);
+        assert_eq!(info.size(), std::mem::size_of::<Position>());
         assert!(registry.is_registered::<Position>());
     }
 

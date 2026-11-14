@@ -110,8 +110,6 @@ fn dispatch_curve_suggestion_events(
                 let mut state = world.resource_mut::<CurveSuggestionState>();
                 curve_suggestion_dismiss(&mut state);
             }
-
-            _ => {}
         }
     }
 }

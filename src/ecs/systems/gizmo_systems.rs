@@ -131,32 +131,22 @@ pub fn gizmo_try_select(
 
     let threshold = 0.05 * scale_factor;
 
-    let mut min_distance = center_distance;
-    let mut selected_axis = GizmoAxis::None;
+    let nearest_axis = [
+        (x_distance, GizmoAxis::X),
+        (y_distance, GizmoAxis::Y),
+        (z_distance, GizmoAxis::Z),
+    ]
+    .into_iter()
+    .filter(|(axis_distance, _)| *axis_distance < threshold && *axis_distance < center_distance)
+    .min_by(|a, b| a.0.total_cmp(&b.0))
+    .map(|(_, axis)| axis);
 
-    if billboard_clicked {
-        selected_axis = GizmoAxis::Center;
-        min_distance = 0.0;
-    } else {
-        if center_distance < threshold {
-            selected_axis = GizmoAxis::Center;
-        }
-
-        if x_distance < threshold && x_distance < min_distance {
-            min_distance = x_distance;
-            selected_axis = GizmoAxis::X;
-        }
-
-        if y_distance < threshold && y_distance < min_distance {
-            min_distance = y_distance;
-            selected_axis = GizmoAxis::Y;
-        }
-
-        if z_distance < threshold && z_distance < min_distance {
-            let _ = min_distance;
-            selected_axis = GizmoAxis::Z;
-        }
-    }
+    let center_hit = billboard_clicked || center_distance < threshold;
+    let selected_axis = match nearest_axis {
+        Some(axis) if !billboard_clicked => axis,
+        _ if center_hit => GizmoAxis::Center,
+        _ => GizmoAxis::None,
+    };
 
     if selected_axis != GizmoAxis::None {
         selectable.is_selected = true;

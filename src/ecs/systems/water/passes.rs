@@ -243,9 +243,9 @@ impl RenderPassNode for WaterTraceNode {
         _image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
-        let Some(frame) = water_frame(ctx).filter(|frame| frame.is_trace_enabled(ctx)) else {
+        if !water_frame(ctx).is_some_and(|frame| frame.is_trace_enabled(ctx)) {
             return Ok(());
-        };
+        }
         let Some(trace_state) = ctx.world.get_resource::<EffectTraceGpuState>() else {
             return Ok(());
         };
@@ -643,7 +643,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
     }
 
     fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
-        frame_uses(ctx, |frame, _| {
+        frame_uses(ctx, |_, _| {
             vec![TargetUse::new(SCENE_COLOR, TargetAccess::TransferDst)]
         })
     }

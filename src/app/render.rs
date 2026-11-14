@@ -13,7 +13,7 @@ use crate::vulkanr::descriptor::CompositeGBufferViews;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
@@ -31,7 +31,7 @@ use thyllore_vulkan_core::types::{
 
 pub struct BegunFrame {
     pub image_index: usize,
-    pub gpu_wait_ms: f32,
+    pub gpu_wait: Duration,
 }
 
 impl App {
@@ -72,7 +72,7 @@ impl App {
 
         Ok(BegunFrame {
             image_index,
-            gpu_wait_ms: (fence_wait + image_wait).as_secs_f32() * 1000.0,
+            gpu_wait: fence_wait + image_wait,
         })
     }
 
@@ -423,7 +423,7 @@ impl App {
         &mut self,
         image_index: usize,
         draw_data: &imgui::DrawData,
-    ) -> Result<f32> {
+    ) -> Result<Duration> {
         let frame_slot = self.resource::<FrameSync>().current_frame;
 
         Self::update_imgui_buffers(
@@ -454,7 +454,7 @@ impl App {
         let current_frame = self.resource::<FrameSync>().current_frame;
         self.frame = current_frame;
 
-        Ok(presentation.present_duration.as_secs_f32() * 1000.0)
+        Ok(presentation.present_duration)
     }
 
     pub unsafe fn begin_offscreen_render_pass(

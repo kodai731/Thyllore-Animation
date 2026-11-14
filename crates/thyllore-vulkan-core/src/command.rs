@@ -36,7 +36,7 @@ pub(crate) unsafe fn end_single_time_commands(
     rrdevice
         .device()
         .queue_submit(queue, &[info], vk::Fence::null())?;
-    rrdevice.device().queue_wait_idle(queue)?;
+    rrdevice.wait_queue_idle(queue)?;
 
     rrdevice
         .device()

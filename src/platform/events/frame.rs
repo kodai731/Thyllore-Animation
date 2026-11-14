@@ -1,6 +1,6 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use crate::app::frame::FrameInput;
+use crate::app::frame::{FrameInput, FrameStopwatch};
 use crate::app::App;
 
 use crate::ecs::resource::{ImGuiInputCapture, MouseInput, UiSettings};
@@ -21,7 +21,7 @@ pub(crate) fn handle_redraw_requested(
         0.0
     };
 
-    let imgui_build_start = Instant::now();
+    let stopwatch = FrameStopwatch::start(&app.rrdevice);
     apply_changed_ui_settings(imgui, app);
     super::injected_input::feed_injected_keys(imgui.io_mut(), &app.data.ecs_world);
     let ui = imgui.frame();
@@ -38,7 +38,7 @@ pub(crate) fn handle_redraw_requested(
 
     platform.prepare_render(ui, window);
 
-    if let Err(error) = render_ui_frame(imgui, window, app, dt_ms, imgui_build_start) {
+    if let Err(error) = render_ui_frame(imgui, window, app, dt_ms, stopwatch) {
         log_error!("ImGui frame failed: {error:?}");
     }
 
@@ -52,7 +52,7 @@ fn render_ui_frame(
     window: &winit::window::Window,
     app: &mut App,
     dt_ms: f32,
-    imgui_build_start: Instant,
+    mut stopwatch: FrameStopwatch,
 ) -> anyhow::Result<()> {
     let consumer = app
         .data
@@ -63,10 +63,15 @@ fn render_ui_frame(
     let pending = imgui.render(consumer);
     let feedback = unsafe { app.apply_imgui_texture_requests(pending.texture_requests())? };
     let frame = pending.reconcile_texture_feedback(feedback)?;
-    let imgui_build_ms = imgui_build_start.elapsed().as_secs_f32() * 1000.0;
+    let input = FrameInput {
+        draw_data: &frame,
+        dt_ms,
+        imgui_build: stopwatch.lap(&app.rrdevice, Duration::ZERO),
+        stopwatch,
+    };
 
     unsafe {
-        render_frame(app, window, &frame, dt_ms, imgui_build_ms);
+        render_frame(app, window, input);
     }
     Ok(())
 }
@@ -81,21 +86,8 @@ fn apply_changed_ui_settings(imgui: &mut imgui::Context, app: &mut App) {
     app.applied_ui_settings = Some(settings);
 }
 
-unsafe fn render_frame(
-    app: &mut App,
-    window: &winit::window::Window,
-    draw_data: &imgui::DrawData,
-    dt_ms: f32,
-    imgui_build_ms: f32,
-) {
-    let frame_result = app.drive_frame(
-        FrameInput {
-            draw_data,
-            dt_ms,
-            imgui_build_ms,
-        },
-        super::file_dialog::queue_file_dialog_commands,
-    );
+unsafe fn render_frame(app: &mut App, window: &winit::window::Window, input: FrameInput<'_>) {
+    let frame_result = app.drive_frame(input, super::file_dialog::queue_file_dialog_commands);
 
     if let Err(e) = frame_result {
         let msg = e.to_string();

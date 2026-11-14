@@ -1,10 +1,10 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    cpu_ms, wait_ms, Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState,
-    TimelineState, ValidationReport, ViewportInput,
+    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
+    ValidationReport, ViewportInput,
 };
-use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::{camera_fly_speed, sum_compute_ms, sum_wait_ms};
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
@@ -402,11 +402,16 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         &world.resource::<Camera>(),
     );
 
-    let (frame_ms, frame_cpu_ms, frame_wait_ms) = world
-        .get_resource::<CpuFrameTimings>()
-        .map_or((0.0, 0.0, 0.0), |timings| {
-            (timings.dt_ms, cpu_ms(&timings), wait_ms(&timings))
-        });
+    let (frame_ms, frame_cpu_ms, frame_wait_ms) =
+        world
+            .get_resource::<CpuFrameTimings>()
+            .map_or((0.0, 0.0, 0.0), |timings| {
+                (
+                    timings.dt_ms,
+                    sum_compute_ms(&timings.compute),
+                    sum_wait_ms(&timings.wait),
+                )
+            });
     let delta_time = (frame_ms / 1000.0).max(0.001);
     let times = FrameTimeValues {
         cpu_ms: frame_cpu_ms,

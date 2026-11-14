@@ -2,9 +2,10 @@ use super::descriptor_allocator::{DescriptorAllocator, PoolSignature};
 use super::swapchain::*;
 use crate::types::{Entry, Instance};
 use crate::vulkan::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use vulkanalia::vk::KhrAccelerationStructureExtension;
 use vulkanalia::Device as VulkanDevice;
@@ -69,6 +70,7 @@ pub struct RRDevice {
     pub timestamp_period: f32,
     pub wide_lines: bool,
     descriptor_allocator: RefCell<DescriptorAllocator>,
+    idle_wait: Cell<Duration>,
 }
 
 impl RRDevice {
@@ -111,6 +113,7 @@ impl RRDevice {
             timestamp_period: 1.0,
             wide_lines: false,
             descriptor_allocator: RefCell::default(),
+            idle_wait: Cell::default(),
         }
     }
 
@@ -160,6 +163,7 @@ impl RRDevice {
             timestamp_period,
             wide_lines,
             descriptor_allocator: RefCell::default(),
+            idle_wait: Cell::default(),
         })
     }
 
@@ -206,6 +210,7 @@ impl RRDevice {
             timestamp_period,
             wide_lines,
             descriptor_allocator: RefCell::default(),
+            idle_wait: Cell::default(),
         })
     }
 
@@ -767,13 +772,34 @@ impl RRDevice {
     }
 
     pub unsafe fn wait_graphics_queue_idle(&self) -> Result<()> {
-        self.device.queue_wait_idle(self.graphics_queue)?;
+        self.wait_queue_idle(self.graphics_queue)
+    }
+
+    pub(crate) unsafe fn wait_queue_idle(&self, queue: vk::Queue) -> Result<()> {
+        let wait_start = Instant::now();
+        let wait_result = self.device.queue_wait_idle(queue);
+        self.add_idle_wait(wait_start.elapsed());
+
+        wait_result?;
         Ok(())
     }
 
     pub unsafe fn wait_idle(&self) -> Result<()> {
-        self.device.device_wait_idle()?;
+        let wait_start = Instant::now();
+        let wait_result = self.device.device_wait_idle();
+        self.add_idle_wait(wait_start.elapsed());
+
+        wait_result?;
         Ok(())
+    }
+
+    fn add_idle_wait(&self, waited: Duration) {
+        self.idle_wait.set(self.idle_wait.get() + waited);
+    }
+
+    /// Time spent blocked in the idle waits above since the previous call.
+    pub fn take_idle_wait(&self) -> Duration {
+        self.idle_wait.take()
     }
 
     pub unsafe fn wait_for_fence(&self, fence: crate::types::Fence) -> Result<()> {

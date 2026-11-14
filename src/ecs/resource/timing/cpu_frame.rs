@@ -1,105 +1,28 @@
-use serde::{Deserialize, Serialize};
-
-pub const STAGE_IMGUI_BUILD: &str = "imgui_build";
-pub const STAGE_EVENT_DISPATCH: &str = "event_dispatch";
-pub const STAGE_FRAME_BEGIN: &str = "frame_begin";
-pub const STAGE_GPU_WAIT: &str = "gpu_wait";
-pub const STAGE_UPDATE: &str = "update";
-pub const STAGE_RENDER_CPU: &str = "render_cpu";
-pub const STAGE_PRESENT: &str = "present";
-pub const STAGE_LAST_PHASE: &str = "last_phase";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct CpuFrameTimings {
     pub frame: u64,
     pub dt_ms: f32,
-    pub stages: Vec<(String, f32)>,
+    pub compute: ComputeStageTimings,
+    pub wait: WaitStageTimings,
     pub imgui_vtx: u32,
     pub imgui_idx: u32,
 }
 
-fn get_stage(timings: &CpuFrameTimings, name: &str) -> f32 {
-    timings
-        .stages
-        .iter()
-        .find(|(k, _)| k == name)
-        .map(|(_, v)| *v)
-        .unwrap_or(0.0)
+/// Time the CPU spent working, per frame stage, with every GPU wait inside the stage removed.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ComputeStageTimings {
+    pub imgui_build_ms: f32,
+    pub event_dispatch_ms: f32,
+    pub frame_begin_ms: f32,
+    pub update_ms: f32,
+    pub render_cpu_ms: f32,
+    pub last_phase_ms: f32,
 }
 
-pub fn cpu_ms(timings: &CpuFrameTimings) -> f32 {
-    let measured_ms: f32 = timings.stages.iter().map(|(_, ms)| *ms).sum();
-    measured_ms - wait_ms(timings)
-}
-
-pub fn wait_ms(timings: &CpuFrameTimings) -> f32 {
-    get_stage(timings, STAGE_GPU_WAIT) + get_stage(timings, STAGE_PRESENT)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn timings(stages: &[(&str, f32)]) -> CpuFrameTimings {
-        CpuFrameTimings {
-            frame: 0,
-            dt_ms: 16.0,
-            stages: stages.iter().map(|(k, v)| ((*k).to_string(), *v)).collect(),
-            imgui_vtx: 0,
-            imgui_idx: 0,
-        }
-    }
-
-    #[test]
-    fn test_cpu_ms() {
-        let t = timings(&[
-            (STAGE_IMGUI_BUILD, 1.0),
-            (STAGE_EVENT_DISPATCH, 0.5),
-            (STAGE_UPDATE, 2.0),
-            (STAGE_RENDER_CPU, 3.0),
-        ]);
-        assert!((cpu_ms(&t) - 6.5).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cpu_ms_excludes_wait_stages() {
-        let t = timings(&[
-            (STAGE_FRAME_BEGIN, 0.25),
-            (STAGE_GPU_WAIT, 4.0),
-            (STAGE_UPDATE, 2.0),
-            (STAGE_PRESENT, 8.0),
-            (STAGE_LAST_PHASE, 0.5),
-        ]);
-        assert!((cpu_ms(&t) - 2.75).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cpu_ms_missing_stages() {
-        let t = timings(&[(STAGE_IMGUI_BUILD, 1.0), (STAGE_UPDATE, 2.0)]);
-        assert!((cpu_ms(&t) - 3.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_cpu_ms_empty() {
-        let t = timings(&[] as &[(&str, f32)]);
-        assert_eq!(cpu_ms(&t), 0.0);
-    }
-
-    #[test]
-    fn test_wait_ms() {
-        let t = timings(&[(STAGE_GPU_WAIT, 1.0), (STAGE_PRESENT, 0.5)]);
-        assert!((wait_ms(&t) - 1.5).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_wait_ms_missing_stages() {
-        let t = timings(&[(STAGE_GPU_WAIT, 1.0)]);
-        assert!((wait_ms(&t) - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_wait_ms_empty() {
-        let t = timings(&[] as &[(&str, f32)]);
-        assert_eq!(wait_ms(&t), 0.0);
-    }
+/// Time the CPU spent blocked on the GPU or the presentation engine.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WaitStageTimings {
+    pub gpu_wait_ms: f32,
+    pub present_ms: f32,
+    pub device_idle_ms: f32,
 }

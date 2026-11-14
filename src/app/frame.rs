@@ -1,19 +1,51 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use thyllore_vulkan_core::core::RRDevice;
 
 use crate::app::render::BegunFrame;
 use crate::app::App;
-use crate::ecs::resource::{
-    CpuFrameTimings, STAGE_EVENT_DISPATCH, STAGE_FRAME_BEGIN, STAGE_GPU_WAIT, STAGE_IMGUI_BUILD,
-    STAGE_LAST_PHASE, STAGE_PRESENT, STAGE_RENDER_CPU, STAGE_UPDATE,
-};
+use crate::ecs::resource::CpuFrameTimings;
 use crate::ecs::systems::phases::{run_event_dispatch_phase, run_last_phase};
 
 pub struct FrameInput<'a> {
     pub draw_data: &'a imgui::DrawData,
     pub dt_ms: f32,
-    pub imgui_build_ms: f32,
+    pub imgui_build: Duration,
+    pub stopwatch: FrameStopwatch,
+}
+
+/// Splits a frame into consecutive stages and separates each stage's device idle waits from its CPU time.
+pub struct FrameStopwatch {
+    stage_start: Instant,
+    device_idle: Duration,
+}
+
+impl FrameStopwatch {
+    pub fn start(rrdevice: &RRDevice) -> Self {
+        Self {
+            device_idle: rrdevice.take_idle_wait(),
+            stage_start: Instant::now(),
+        }
+    }
+
+    /// Ends the current stage and returns its CPU time: elapsed minus `measured_wait` and the device idle waits.
+    pub fn lap(&mut self, rrdevice: &RRDevice, measured_wait: Duration) -> Duration {
+        let stage_device_idle = rrdevice.take_idle_wait();
+        let stage_elapsed = self.stage_start.elapsed();
+
+        self.device_idle += stage_device_idle;
+        self.stage_start = Instant::now();
+        stage_elapsed.saturating_sub(measured_wait + stage_device_idle)
+    }
+
+    fn finish(self, rrdevice: &RRDevice) -> Duration {
+        self.device_idle + rrdevice.take_idle_wait()
+    }
+}
+
+fn to_ms(duration: Duration) -> f32 {
+    duration.as_secs_f32() * 1000.0
 }
 
 impl App {
@@ -23,50 +55,68 @@ impl App {
         input: FrameInput<'_>,
         queue_file_dialog_commands: impl FnOnce(&App),
     ) -> Result<()> {
-        let event_dispatch_ms = self.dispatch_ui_events(queue_file_dialog_commands);
+        let FrameInput {
+            draw_data,
+            dt_ms,
+            imgui_build,
+            mut stopwatch,
+        } = input;
+        let mut timings = CpuFrameTimings {
+            dt_ms,
+            imgui_vtx: draw_data.total_vtx_count() as u32,
+            imgui_idx: draw_data.total_idx_count() as u32,
+            ..Default::default()
+        };
+        timings.compute.imgui_build_ms = to_ms(imgui_build);
 
-        let frame_begin_start = Instant::now();
+        let frame_result = self.run_frame_stages(
+            draw_data,
+            &mut stopwatch,
+            &mut timings,
+            queue_file_dialog_commands,
+        );
+
+        timings.frame = self.frame as u64;
+        timings.wait.device_idle_ms = to_ms(stopwatch.finish(&self.rrdevice));
+        self.data.ecs_world.insert_resource(timings);
+        frame_result
+    }
+
+    unsafe fn run_frame_stages(
+        &mut self,
+        draw_data: &imgui::DrawData,
+        stopwatch: &mut FrameStopwatch,
+        timings: &mut CpuFrameTimings,
+        queue_file_dialog_commands: impl FnOnce(&App),
+    ) -> Result<()> {
+        self.dispatch_ui_events(queue_file_dialog_commands);
+        timings.compute.event_dispatch_ms = to_ms(stopwatch.lap(&self.rrdevice, Duration::ZERO));
+
         let BegunFrame {
             image_index,
-            gpu_wait_ms,
+            gpu_wait,
         } = self.begin_frame()?;
-        let frame_begin_ms = frame_begin_start.elapsed().as_secs_f32() * 1000.0 - gpu_wait_ms;
+        timings.wait.gpu_wait_ms = to_ms(gpu_wait);
+        timings.compute.frame_begin_ms = to_ms(stopwatch.lap(&self.rrdevice, gpu_wait));
 
-        let update_start = Instant::now();
         self.update(image_index)?;
-        let update_ms = update_start.elapsed().as_secs_f32() * 1000.0;
+        timings.compute.update_ms = to_ms(stopwatch.lap(&self.rrdevice, Duration::ZERO));
 
-        let render_cpu_start = Instant::now();
-        let present_ms = self.render(image_index, input.draw_data)?;
-        let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0 - present_ms;
+        let render_result = self.render(image_index, draw_data);
+        let present_wait = *render_result.as_ref().unwrap_or(&Duration::ZERO);
+        timings.wait.present_ms = to_ms(present_wait);
+        timings.compute.render_cpu_ms = to_ms(stopwatch.lap(&self.rrdevice, present_wait));
+        render_result?;
 
-        let last_phase_start = Instant::now();
         run_last_phase(&self.data.ecs_world, |slot| {
             self.capture_context(image_index, slot)
         })?;
-        let last_phase_ms = last_phase_start.elapsed().as_secs_f32() * 1000.0;
+        timings.compute.last_phase_ms = to_ms(stopwatch.lap(&self.rrdevice, Duration::ZERO));
 
-        self.data.ecs_world.insert_resource(CpuFrameTimings {
-            frame: self.frame as u64,
-            dt_ms: input.dt_ms,
-            stages: vec![
-                (STAGE_IMGUI_BUILD.to_string(), input.imgui_build_ms),
-                (STAGE_EVENT_DISPATCH.to_string(), event_dispatch_ms),
-                (STAGE_FRAME_BEGIN.to_string(), frame_begin_ms),
-                (STAGE_GPU_WAIT.to_string(), gpu_wait_ms),
-                (STAGE_UPDATE.to_string(), update_ms),
-                (STAGE_RENDER_CPU.to_string(), render_cpu_ms),
-                (STAGE_PRESENT.to_string(), present_ms),
-                (STAGE_LAST_PHASE.to_string(), last_phase_ms),
-            ],
-            imgui_vtx: input.draw_data.total_vtx_count() as u32,
-            imgui_idx: input.draw_data.total_idx_count() as u32,
-        });
         Ok(())
     }
 
-    unsafe fn dispatch_ui_events(&mut self, queue_file_dialog_commands: impl FnOnce(&App)) -> f32 {
-        let start = Instant::now();
+    unsafe fn dispatch_ui_events(&mut self, queue_file_dialog_commands: impl FnOnce(&App)) {
         run_event_dispatch_phase(
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
@@ -75,6 +125,5 @@ impl App {
         queue_file_dialog_commands(self);
 
         self.apply_app_commands();
-        start.elapsed().as_secs_f32() * 1000.0
     }
 }

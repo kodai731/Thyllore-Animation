@@ -8,6 +8,7 @@ use super::auto_rig::{
 
 fn drain_grpc_responses(
     world: &mut crate::ecs::world::World,
+    #[cfg_attr(not(feature = "auto-rig"), allow(unused_variables))]
     assets: &mut crate::asset::AssetStorage,
 ) {
     use crate::grpc::{GrpcResponse, GrpcThreadHandle};
@@ -105,7 +106,11 @@ fn drain_grpc_responses(
     }
 }
 
-fn route_grpc_error(world: &mut crate::ecs::world::World, message: &str) {
+fn route_grpc_error(
+    #[cfg_attr(not(feature = "auto-rig"), allow(unused_variables))]
+    world: &mut crate::ecs::world::World,
+    message: &str,
+) {
     #[cfg(feature = "auto-rig")]
     {
         use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};

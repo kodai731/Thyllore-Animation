@@ -30,6 +30,11 @@ unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()>
         ctx.viewport_height,
         hdr_view,
     )?;
+    ctx.world.insert_resource(targets);
+    let Some(targets) = ctx.world.get_resource::<WindRenderTargets>() else {
+        return Ok(());
+    };
+
     let gpu_state = super::pipeline::create_wind_gpu_state(
         ctx.instance,
         ctx.rrdevice,
@@ -39,7 +44,7 @@ unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()>
         rrrender.gbuffer_depth_image_view(),
         MAX_FRAMES_IN_FLIGHT,
     )?;
-    ctx.world.insert_resource(targets);
+    drop(targets);
     ctx.world.insert_resource(gpu_state);
 
     log!("Wind pipeline created successfully");

@@ -63,10 +63,15 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
-    ensure_effect_trace_pipeline(ctx.instance, ctx.rrdevice, ctx.world, MAX_FRAMES_IN_FLIGHT)?;
-    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
-    ctx.world.insert_resource(trace_blocks);
     ctx.world.insert_resource(gpu_state);
+    ensure_effect_trace_pipeline(ctx.instance, ctx.rrdevice, ctx.world, MAX_FRAMES_IN_FLIGHT)?;
+
+    let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+        return Ok(());
+    };
+    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
+    drop(gpu_state);
+    ctx.world.insert_resource(trace_blocks);
 
     log!("Water pipeline created successfully");
     Ok(())

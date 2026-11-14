@@ -29,6 +29,11 @@ unsafe fn setup_lightning(ctx: &mut EffectContext, rrrender: &RRRender) -> Resul
         ctx.viewport_height,
         hdr_view,
     )?;
+    ctx.world.insert_resource(targets);
+    let Some(targets) = ctx.world.get_resource::<LightningRenderTargets>() else {
+        return Ok(());
+    };
+
     let gpu_state = super::pipeline::create_lightning_gpu_state(
         ctx.instance,
         ctx.rrdevice,
@@ -37,7 +42,7 @@ unsafe fn setup_lightning(ctx: &mut EffectContext, rrrender: &RRRender) -> Resul
         &targets,
         rrrender.gbuffer_depth_image_view(),
     )?;
-    ctx.world.insert_resource(targets);
+    drop(targets);
     ctx.world.insert_resource(gpu_state);
 
     log!("Lightning pipeline created successfully");

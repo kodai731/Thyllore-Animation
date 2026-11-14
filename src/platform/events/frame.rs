@@ -21,6 +21,7 @@ pub(crate) fn handle_redraw_requested(
         0.0
     };
 
+    let imgui_build_start = Instant::now();
     apply_changed_ui_settings(imgui, app);
     super::injected_input::feed_injected_keys(imgui.io_mut(), &app.data.ecs_world);
     let ui = imgui.frame();
@@ -37,7 +38,7 @@ pub(crate) fn handle_redraw_requested(
 
     platform.prepare_render(ui, window);
 
-    if let Err(error) = render_ui_frame(imgui, window, app, dt_ms) {
+    if let Err(error) = render_ui_frame(imgui, window, app, dt_ms, imgui_build_start) {
         log_error!("ImGui frame failed: {error:?}");
     }
 
@@ -51,8 +52,8 @@ fn render_ui_frame(
     window: &winit::window::Window,
     app: &mut App,
     dt_ms: f32,
+    imgui_build_start: Instant,
 ) -> anyhow::Result<()> {
-    let imgui_build_start = Instant::now();
     let consumer = app
         .data
         .imgui

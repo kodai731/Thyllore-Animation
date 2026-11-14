@@ -13,6 +13,8 @@ use crate::vulkanr::descriptor::CompositeGBufferViews;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
+use std::time::Instant;
+
 use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
     acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
@@ -27,12 +29,19 @@ use thyllore_vulkan_core::types::{
     Buffer, CommandBuffer, Extent2D, Fence, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
 };
 
+pub struct BegunFrame {
+    pub image_index: usize,
+    pub gpu_wait_ms: f32,
+}
+
 impl App {
-    pub unsafe fn begin_frame(&mut self) -> Result<usize> {
+    pub unsafe fn begin_frame(&mut self) -> Result<BegunFrame> {
         self.handle_viewport_resize()?;
 
         let current_fence = self.resource::<FrameSync>().current_fence();
+        let fence_wait_start = Instant::now();
         self.rrdevice.wait_for_fence(current_fence)?;
+        let fence_wait = fence_wait_start.elapsed();
 
         let frame_slot = self.resource::<FrameSync>().current_frame;
         self.data
@@ -45,6 +54,7 @@ impl App {
 
         let swapchain = self.resource::<SwapchainState>().swapchain.swapchain();
         let image_available = self.resource::<FrameSync>().current_image_available();
+        let image_wait_start = Instant::now();
         let image_index = match acquire_swapchain_image(&self.rrdevice, swapchain, image_available)?
         {
             AcquireOutcome::Image(image_index) => image_index,
@@ -55,11 +65,15 @@ impl App {
         if image_in_flight != Fence::default() {
             self.rrdevice.wait_for_fence(image_in_flight)?;
         }
+        let image_wait = image_wait_start.elapsed();
 
         let current_fence = self.resource::<FrameSync>().current_fence();
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
-        Ok(image_index)
+        Ok(BegunFrame {
+            image_index,
+            gpu_wait_ms: (fence_wait + image_wait).as_secs_f32() * 1000.0,
+        })
     }
 
     unsafe fn handle_viewport_resize(&mut self) -> Result<()> {

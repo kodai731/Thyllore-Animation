@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 
 pub const STAGE_IMGUI_BUILD: &str = "imgui_build";
 pub const STAGE_EVENT_DISPATCH: &str = "event_dispatch";
+pub const STAGE_FRAME_BEGIN: &str = "frame_begin";
 pub const STAGE_GPU_WAIT: &str = "gpu_wait";
 pub const STAGE_UPDATE: &str = "update";
 pub const STAGE_RENDER_CPU: &str = "render_cpu";
 pub const STAGE_PRESENT: &str = "present";
+pub const STAGE_LAST_PHASE: &str = "last_phase";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CpuFrameTimings {
@@ -26,10 +28,8 @@ fn get_stage(timings: &CpuFrameTimings, name: &str) -> f32 {
 }
 
 pub fn cpu_ms(timings: &CpuFrameTimings) -> f32 {
-    get_stage(timings, STAGE_IMGUI_BUILD)
-        + get_stage(timings, STAGE_EVENT_DISPATCH)
-        + get_stage(timings, STAGE_UPDATE)
-        + get_stage(timings, STAGE_RENDER_CPU)
+    let measured_ms: f32 = timings.stages.iter().map(|(_, ms)| *ms).sum();
+    measured_ms - wait_ms(timings)
 }
 
 pub fn wait_ms(timings: &CpuFrameTimings) -> f32 {
@@ -59,6 +59,18 @@ mod tests {
             (STAGE_RENDER_CPU, 3.0),
         ]);
         assert!((cpu_ms(&t) - 6.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_cpu_ms_excludes_wait_stages() {
+        let t = timings(&[
+            (STAGE_FRAME_BEGIN, 0.25),
+            (STAGE_GPU_WAIT, 4.0),
+            (STAGE_UPDATE, 2.0),
+            (STAGE_PRESENT, 8.0),
+            (STAGE_LAST_PHASE, 0.5),
+        ]);
+        assert!((cpu_ms(&t) - 2.75).abs() < 1e-6);
     }
 
     #[test]

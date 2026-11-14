@@ -2,10 +2,11 @@ use std::time::Instant;
 
 use anyhow::Result;
 
+use crate::app::render::BegunFrame;
 use crate::app::App;
 use crate::ecs::resource::{
-    CpuFrameTimings, STAGE_EVENT_DISPATCH, STAGE_GPU_WAIT, STAGE_IMGUI_BUILD, STAGE_PRESENT,
-    STAGE_RENDER_CPU, STAGE_UPDATE,
+    CpuFrameTimings, STAGE_EVENT_DISPATCH, STAGE_FRAME_BEGIN, STAGE_GPU_WAIT, STAGE_IMGUI_BUILD,
+    STAGE_LAST_PHASE, STAGE_PRESENT, STAGE_RENDER_CPU, STAGE_UPDATE,
 };
 use crate::ecs::systems::phases::{run_event_dispatch_phase, run_last_phase};
 
@@ -24,9 +25,12 @@ impl App {
     ) -> Result<()> {
         let event_dispatch_ms = self.dispatch_ui_events(queue_file_dialog_commands);
 
-        let gpu_wait_start = Instant::now();
-        let image_index = self.begin_frame()?;
-        let gpu_wait_ms = gpu_wait_start.elapsed().as_secs_f32() * 1000.0;
+        let frame_begin_start = Instant::now();
+        let BegunFrame {
+            image_index,
+            gpu_wait_ms,
+        } = self.begin_frame()?;
+        let frame_begin_ms = frame_begin_start.elapsed().as_secs_f32() * 1000.0 - gpu_wait_ms;
 
         let update_start = Instant::now();
         self.update(image_index)?;
@@ -36,9 +40,11 @@ impl App {
         let present_ms = self.render(image_index, input.draw_data)?;
         let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0 - present_ms;
 
+        let last_phase_start = Instant::now();
         run_last_phase(&self.data.ecs_world, |slot| {
             self.capture_context(image_index, slot)
         })?;
+        let last_phase_ms = last_phase_start.elapsed().as_secs_f32() * 1000.0;
 
         self.data.ecs_world.insert_resource(CpuFrameTimings {
             frame: self.frame as u64,
@@ -46,10 +52,12 @@ impl App {
             stages: vec![
                 (STAGE_IMGUI_BUILD.to_string(), input.imgui_build_ms),
                 (STAGE_EVENT_DISPATCH.to_string(), event_dispatch_ms),
+                (STAGE_FRAME_BEGIN.to_string(), frame_begin_ms),
                 (STAGE_GPU_WAIT.to_string(), gpu_wait_ms),
                 (STAGE_UPDATE.to_string(), update_ms),
                 (STAGE_RENDER_CPU.to_string(), render_cpu_ms),
                 (STAGE_PRESENT.to_string(), present_ms),
+                (STAGE_LAST_PHASE.to_string(), last_phase_ms),
             ],
             imgui_vtx: input.draw_data.total_vtx_count() as u32,
             imgui_idx: input.draw_data.total_idx_count() as u32,

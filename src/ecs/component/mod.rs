@@ -14,6 +14,7 @@ pub use editor::*;
 pub use flame::*;
 pub use lightning::*;
 pub use mesh::*;
+#[cfg(feature = "ml")]
 pub use ml::*;
 pub use model::*;
 pub use render::*;

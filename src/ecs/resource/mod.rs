@@ -22,6 +22,7 @@ pub use editor::*;
 pub use gizmo::*;
 pub use gpu::*;
 pub use input::*;
+#[cfg(any(feature = "ml", feature = "text-to-motion"))]
 pub use ml::*;
 pub use model::*;
 pub use render::*;

@@ -13,6 +13,8 @@ use crate::vulkanr::descriptor::CompositeGBufferViews;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
+use std::time::{Duration, Instant};
+
 use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
     acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
@@ -27,12 +29,19 @@ use thyllore_vulkan_core::types::{
     Buffer, CommandBuffer, Extent2D, Fence, ImageView, Offset2D, Pipeline, PipelineLayout, Rect2D,
 };
 
+pub struct BegunFrame {
+    pub image_index: usize,
+    pub gpu_wait: Duration,
+}
+
 impl App {
-    pub unsafe fn begin_frame(&mut self) -> Result<usize> {
+    pub unsafe fn begin_frame(&mut self) -> Result<BegunFrame> {
         self.handle_viewport_resize()?;
 
         let current_fence = self.resource::<FrameSync>().current_fence();
+        let fence_wait_start = Instant::now();
         self.rrdevice.wait_for_fence(current_fence)?;
+        let fence_wait = fence_wait_start.elapsed();
 
         let frame_slot = self.resource::<FrameSync>().current_frame;
         self.data
@@ -45,6 +54,7 @@ impl App {
 
         let swapchain = self.resource::<SwapchainState>().swapchain.swapchain();
         let image_available = self.resource::<FrameSync>().current_image_available();
+        let image_wait_start = Instant::now();
         let image_index = match acquire_swapchain_image(&self.rrdevice, swapchain, image_available)?
         {
             AcquireOutcome::Image(image_index) => image_index,
@@ -55,11 +65,15 @@ impl App {
         if image_in_flight != Fence::default() {
             self.rrdevice.wait_for_fence(image_in_flight)?;
         }
+        let image_wait = image_wait_start.elapsed();
 
         let current_fence = self.resource::<FrameSync>().current_fence();
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
-        Ok(image_index)
+        Ok(BegunFrame {
+            image_index,
+            gpu_wait: fence_wait + image_wait,
+        })
     }
 
     unsafe fn handle_viewport_resize(&mut self) -> Result<()> {
@@ -405,7 +419,11 @@ impl App {
         }
     }
 
-    pub unsafe fn render(&mut self, image_index: usize, draw_data: &imgui::DrawData) -> Result<()> {
+    pub unsafe fn render(
+        &mut self,
+        image_index: usize,
+        draw_data: &imgui::DrawData,
+    ) -> Result<Duration> {
         let frame_slot = self.resource::<FrameSync>().current_frame;
 
         Self::update_imgui_buffers(
@@ -424,9 +442,9 @@ impl App {
             &self.resource::<SwapchainState>().swapchain,
             image_index,
         );
-        let outcome = submit_and_present(&self.rrdevice, frame_submit)?;
+        let presentation = submit_and_present(&self.rrdevice, frame_submit)?;
 
-        if matches!(outcome, PresentOutcome::OutOfDate) || self.resized {
+        if matches!(presentation.outcome, PresentOutcome::OutOfDate) || self.resized {
             self.resized = false;
             return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE"));
         }
@@ -436,7 +454,7 @@ impl App {
         let current_frame = self.resource::<FrameSync>().current_frame;
         self.frame = current_frame;
 
-        Ok(())
+        Ok(presentation.present_duration)
     }
 
     pub unsafe fn begin_offscreen_render_pass(

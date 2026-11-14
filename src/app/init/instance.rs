@@ -189,7 +189,6 @@ impl App {
             resized: false,
             start: Instant::now(),
             last_update_time: 0.0,
-            last_frame_interval: 0.0,
             gpu_timestamp_profiler,
             last_frame_instant: None,
             applied_ui_settings: None,

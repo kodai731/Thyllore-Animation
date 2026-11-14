@@ -34,11 +34,11 @@ pub(super) fn gpu_timings_write(world: &mut crate::ecs::World) {
         obj.insert("cpu_dt_ms".to_string(), serde_json::json!(cpu.dt_ms));
         obj.insert("imgui_vtx".to_string(), serde_json::json!(cpu.imgui_vtx));
         obj.insert("imgui_idx".to_string(), serde_json::json!(cpu.imgui_idx));
-        let cpu_map: serde_json::Map<String, serde_json::Value> = cpu
-            .stages
-            .iter()
-            .map(|(label, ms)| (label.clone(), serde_json::json!(ms)))
-            .collect();
+        let cpu_map: serde_json::Map<String, serde_json::Value> =
+            crate::ecs::systems::label_stage_timings(&cpu)
+                .into_iter()
+                .map(|(label, ms)| (label.to_string(), serde_json::json!(ms)))
+                .collect();
         obj.insert("cpu".to_string(), serde_json::Value::Object(cpu_map));
     }
     if let Some(up) = world.get_resource::<crate::ecs::resource::UpdatePhaseTimings>() {

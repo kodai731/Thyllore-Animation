@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use crate::command::{RRCommandBuffer, RRCommandPool};
 use crate::core::device::RRDevice;
@@ -65,10 +66,16 @@ pub enum PresentOutcome {
     OutOfDate,
 }
 
+#[derive(Debug)]
+pub struct FramePresentation {
+    pub outcome: PresentOutcome,
+    pub present_duration: Duration,
+}
+
 pub unsafe fn submit_and_present(
     rrdevice: &RRDevice,
     frame: FrameSubmit,
-) -> Result<PresentOutcome> {
+) -> Result<FramePresentation> {
     let wait_semaphores = &[frame.image_available];
     let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
     let command_buffers = &[frame.command_buffer];
@@ -90,17 +97,24 @@ pub unsafe fn submit_and_present(
         .wait_semaphores(signal_semaphores)
         .swapchains(swapchains)
         .image_indices(image_indices);
+    let present_start = Instant::now();
     let present_result = rrdevice
         .device()
         .queue_present_khr(rrdevice.present_queue, &present_info);
+    let present_duration = present_start.elapsed();
 
-    match present_result {
+    let outcome = match present_result {
         Ok(vk::SuccessCode::SUBOPTIMAL_KHR) | Err(vk::ErrorCode::OUT_OF_DATE_KHR) => {
-            Ok(PresentOutcome::OutOfDate)
+            PresentOutcome::OutOfDate
         }
-        Ok(_) => Ok(PresentOutcome::Presented),
-        Err(e) => Err(anyhow::anyhow!(e)),
-    }
+        Ok(_) => PresentOutcome::Presented,
+        Err(e) => return Err(anyhow::anyhow!(e)),
+    };
+
+    Ok(FramePresentation {
+        outcome,
+        present_duration,
+    })
 }
 
 pub struct FrameSync {

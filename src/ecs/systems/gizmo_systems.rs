@@ -14,6 +14,9 @@ use crate::math::{
 use thyllore_render_core::FRAMES_IN_FLIGHT;
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 
+const AXIS_LENGTH_PER_CAMERA_DISTANCE: f32 = 0.03;
+const PICK_THRESHOLD_PER_AXIS_LENGTH: f32 = 0.05;
+
 pub fn create_light_gizmo(position: Vec3) -> LightGizmoData {
     let axis_length = 1.0;
     let yellow = [1.0, 1.0, 0.0];
@@ -113,7 +116,7 @@ pub fn gizmo_try_select(
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
     let distance = (light_pos - camera_pos).length();
-    let scale_factor = distance * 0.03;
+    let scale_factor = distance * AXIS_LENGTH_PER_CAMERA_DISTANCE;
 
     let billboard_clicked = billboard_click_rect
         .map(|rect| is_point_in_rect(mouse_pos, rect))
@@ -129,7 +132,7 @@ pub fn gizmo_try_select(
     let y_distance = ray_to_line_segment_distance(ray_origin, ray_direction, light_pos, y_axis_end);
     let z_distance = ray_to_line_segment_distance(ray_origin, ray_direction, light_pos, z_axis_end);
 
-    let threshold = 0.05 * scale_factor;
+    let threshold = PICK_THRESHOLD_PER_AXIS_LENGTH * scale_factor;
 
     let nearest_axis = [
         (x_distance, GizmoAxis::X),
@@ -384,6 +387,159 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math::coordinate_system::world_to_screen;
+
+    const GIZMO_POSITION: Vec3 = vec3(1.0, 2.0, 3.0);
+    const CAMERA_DISTANCE: f32 = 10.0;
+    const AXIS_LENGTH: f32 = CAMERA_DISTANCE * AXIS_LENGTH_PER_CAMERA_DISTANCE;
+    const PICK_THRESHOLD: f32 = PICK_THRESHOLD_PER_AXIS_LENGTH * AXIS_LENGTH;
+    const SWAPCHAIN_EXTENT: (u32, u32) = (1600, 900);
+    const FOV_Y: f32 = std::f32::consts::FRAC_PI_4;
+    const NEAR_PLANE: f32 = 0.1;
+
+    struct Click {
+        direction_to_camera: Vec3,
+        offset_from_gizmo: Vec3,
+        billboard_click_rect: Option<[f32; 4]>,
+    }
+
+    fn project_to_screen(world_position: Vec3, camera_pos: Vec3, camera_direction: Vec3) -> Vec2 {
+        let screen_size = Vec2::new(SWAPCHAIN_EXTENT.0 as f32, SWAPCHAIN_EXTENT.1 as f32);
+        let view_mat = view(camera_pos, camera_direction, Vec3::Y);
+        let proj = perspective_infinite_reverse(FOV_Y, screen_size.x / screen_size.y, NEAR_PLANE);
+
+        world_to_screen(world_position, screen_size, view_mat, proj)
+            .expect("clicked point is in front of the camera")
+    }
+
+    fn select_with_click(click: Click) -> (GizmoSelectable, GizmoDraggable) {
+        let camera_pos = GIZMO_POSITION + click.direction_to_camera * CAMERA_DISTANCE;
+        let camera_direction = -click.direction_to_camera;
+        let mouse_pos = project_to_screen(
+            GIZMO_POSITION + click.offset_from_gizmo,
+            camera_pos,
+            camera_direction,
+        );
+
+        let mut selectable = GizmoSelectable::default();
+        let mut draggable = GizmoDraggable::default();
+        gizmo_try_select(
+            &GizmoPosition {
+                position: GIZMO_POSITION,
+            },
+            &mut selectable,
+            &mut draggable,
+            mouse_pos,
+            camera_pos,
+            camera_direction,
+            Vec3::Y,
+            SWAPCHAIN_EXTENT,
+            click.billboard_click_rect,
+            FOV_Y,
+            NEAR_PLANE,
+        );
+
+        (selectable, draggable)
+    }
+
+    fn select_axis_from_front(offset_from_gizmo: Vec3) -> GizmoAxis {
+        let (selectable, _) = select_with_click(Click {
+            direction_to_camera: Vec3::Z,
+            offset_from_gizmo,
+            billboard_click_rect: None,
+        });
+        selectable.selected_axis
+    }
+
+    #[test]
+    fn test_try_select_picks_the_axis_under_the_cursor() {
+        let half_axis = AXIS_LENGTH * 0.5;
+
+        assert_eq!(select_axis_from_front(Vec3::X * half_axis), GizmoAxis::X);
+        assert_eq!(select_axis_from_front(Vec3::Y * half_axis), GizmoAxis::Y);
+
+        let (selectable, _) = select_with_click(Click {
+            direction_to_camera: Vec3::X,
+            offset_from_gizmo: Vec3::Z * half_axis,
+            billboard_click_rect: None,
+        });
+        assert_eq!(selectable.selected_axis, GizmoAxis::Z);
+    }
+
+    #[test]
+    fn test_try_select_prefers_the_nearest_axis_when_two_are_within_threshold() {
+        let near = PICK_THRESHOLD * 0.2;
+        let far = PICK_THRESHOLD * 0.6;
+
+        assert_eq!(select_axis_from_front(vec3(far, near, 0.0)), GizmoAxis::X);
+        assert_eq!(select_axis_from_front(vec3(near, far, 0.0)), GizmoAxis::Y);
+    }
+
+    #[test]
+    fn test_try_select_picks_center_on_the_far_side_of_every_axis() {
+        let direction_seeing_axes_in_a_half_plane = vec3(-1.0, -1.0, 2.0).normalize();
+        let away_from_every_axis = vec3(-1.0, -1.0, -1.0).normalize();
+
+        for threshold_fraction in [0.2, 0.5, 0.9] {
+            let (selectable, _) = select_with_click(Click {
+                direction_to_camera: direction_seeing_axes_in_a_half_plane,
+                offset_from_gizmo: away_from_every_axis * PICK_THRESHOLD * threshold_fraction,
+                billboard_click_rect: None,
+            });
+
+            assert_eq!(selectable.selected_axis, GizmoAxis::Center);
+        }
+    }
+
+    #[test]
+    fn test_try_select_billboard_click_overrides_the_axis() {
+        let on_x_axis = Vec3::X * AXIS_LENGTH * 0.5;
+        let whole_screen = [
+            0.0,
+            0.0,
+            SWAPCHAIN_EXTENT.0 as f32,
+            SWAPCHAIN_EXTENT.1 as f32,
+        ];
+
+        let (selectable, _) = select_with_click(Click {
+            direction_to_camera: Vec3::Z,
+            offset_from_gizmo: on_x_axis,
+            billboard_click_rect: Some(whole_screen),
+        });
+
+        assert_eq!(selectable.selected_axis, GizmoAxis::Center);
+    }
+
+    #[test]
+    fn test_try_select_rejects_a_click_past_the_axis_tip_or_beside_the_axis() {
+        let past_the_tip = Vec3::X * (AXIS_LENGTH + PICK_THRESHOLD * 2.0);
+        let beside_the_axis = vec3(AXIS_LENGTH * 0.5, PICK_THRESHOLD * 2.0, 0.0);
+
+        for offset_from_gizmo in [past_the_tip, beside_the_axis] {
+            let (selectable, draggable) = select_with_click(Click {
+                direction_to_camera: Vec3::Z,
+                offset_from_gizmo,
+                billboard_click_rect: None,
+            });
+
+            assert!(!selectable.is_selected);
+            assert_eq!(selectable.selected_axis, GizmoAxis::None);
+            assert_eq!(draggable.drag_axis, GizmoAxis::None);
+        }
+    }
+
+    #[test]
+    fn test_try_select_starts_the_drag_from_the_gizmo_position() {
+        let (selectable, draggable) = select_with_click(Click {
+            direction_to_camera: Vec3::Z,
+            offset_from_gizmo: Vec3::Y * AXIS_LENGTH * 0.5,
+            billboard_click_rect: None,
+        });
+
+        assert!(selectable.is_selected);
+        assert_eq!(draggable.drag_axis, GizmoAxis::Y);
+        assert_eq!(draggable.initial_position, GIZMO_POSITION);
+    }
 
     #[test]
     fn test_selection_color_reports_change_only_once_per_axis() {

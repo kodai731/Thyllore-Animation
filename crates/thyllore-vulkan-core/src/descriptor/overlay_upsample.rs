@@ -1,85 +1,56 @@
-use crate::core::device::*;
+use anyhow::Result;
+
+use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::OVERLAY_UPSAMPLE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::overlay_upsample;
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::{ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot};
+use crate::resource::gpu_resource::{build_gpu_resource, GpuResource};
 use crate::resource::image::{create_nearest_sampler, create_scene_depth_sampler};
-use crate::vulkan::*;
+use crate::types::{ImageView, Sampler};
 
 /// One set per frame slot binding the reduced overlay color and the scene depth of that frame.
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct OverlayUpsampleDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub(crate) descriptor_sets: Vec<vk::DescriptorSet>,
-    pub(crate) reduced_color_sampler: vk::Sampler,
-    pub(crate) scene_depth_sampler: vk::Sampler,
+    pub sets: ReflectedDescriptorSets,
+    reduced_color_sampler: Sampler,
+    scene_depth_sampler: Sampler,
 }
 
 impl OverlayUpsampleDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&OVERLAY_UPSAMPLE)
-    }
-
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = (0..frames_in_flight)
-            .map(|_| layout.allocate_set(rrdevice))
-            .collect::<Result<Vec<_>>>()?;
-        let reduced_color_sampler = create_nearest_sampler(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?.raw();
-
-        Ok(Self {
-            layout,
-            descriptor_sets,
-            reduced_color_sampler,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets = ReflectedDescriptorSets::create(
+                rrdevice,
+                &ReflectedLayoutSpec::local(&OVERLAY_UPSAMPLE),
+                SetGrid::per_frame_slot(frames_in_flight),
+            )?;
+            descriptor.reduced_color_sampler = Sampler(create_nearest_sampler(rrdevice)?);
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
-    }
-
-    pub fn descriptor_set(&self, frame_slot: usize) -> crate::types::DescriptorSet {
-        crate::types::DescriptorSet(self.descriptor_sets[frame_slot])
     }
 
     pub unsafe fn update_image_views_at(
         &self,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        reduced_color_view: crate::types::ImageView,
-        scene_depth_view: crate::types::ImageView,
+        reduced_color_view: ImageView,
+        scene_depth_view: ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_sets[frame_slot])
-            .image(
+        self.sets
+            .writer(SetSlot::frame_slot(frame_slot))?
+            .sampled_image(
                 overlay_upsample::REDUCED_COLOR_SAMPLER,
-                reduced_color_view.raw(),
+                reduced_color_view,
                 self.reduced_color_sampler,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )?
-            .image(
+            .sampled_depth(
                 overlay_upsample::SCENE_DEPTH_SAMPLER,
-                scene_depth_view.raw(),
+                scene_depth_view,
                 self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.reduced_color_sampler.destroy_gpu(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for OverlayUpsampleDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-            && self.reduced_color_sampler.is_destroyed()
-            && self.scene_depth_sampler.is_destroyed()
     }
 }

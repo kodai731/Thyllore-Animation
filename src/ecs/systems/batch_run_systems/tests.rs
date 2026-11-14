@@ -1051,7 +1051,7 @@ fn role_key_keeps_earlier_keys_on_the_same_curve() {
 fn role_key_builds_the_rig_before_resolving_names() {
     use super::anim_edit_spec::anim_edit_parse_spec;
     use crate::ecs::systems::humanoid_rig_systems::{
-        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+        copy_test_humanoid_fixture, test_humanoid_world,
     };
     use tempfile::tempdir;
 

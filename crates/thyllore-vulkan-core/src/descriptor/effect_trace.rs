@@ -1,80 +1,33 @@
-use crate::core::*;
+use anyhow::Result;
+
+use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::EFFECT_TRACE;
 use crate::descriptor::shader_bindings::effect_trace;
-use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::resource::GpuResource;
-use crate::vulkan::*;
+use crate::descriptor::{ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot};
 
-#[derive(Clone, Debug, Default)]
-pub struct RREffectTraceDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    descriptor_sets: Vec<crate::types::DescriptorSet>,
+pub unsafe fn create_effect_trace_sets(
+    rrdevice: &RRDevice,
+    frames_in_flight: usize,
+) -> Result<ReflectedDescriptorSets> {
+    ReflectedDescriptorSets::create(
+        rrdevice,
+        &ReflectedLayoutSpec::local(&EFFECT_TRACE),
+        SetGrid::per_frame_slot(frames_in_flight),
+    )
 }
 
-impl RREffectTraceDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&EFFECT_TRACE)
-    }
-
-    pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_sets = layout
-            .allocate_sets(rrdevice, frames_in_flight.max(1))?
-            .into_iter()
-            .map(crate::types::DescriptorSet)
-            .collect();
-
-        Ok(Self {
-            layout,
-            descriptor_sets,
-        })
-    }
-
-    pub fn descriptor_set(&self, frame_slot: usize) -> Result<crate::types::DescriptorSet> {
-        self.descriptor_sets
-            .get(frame_slot)
-            .copied()
-            .ok_or_else(|| {
-                anyhow!(
-                    "effect trace descriptor slot {frame_slot} exceeds {} sets",
-                    self.descriptor_sets.len()
-                )
-            })
-    }
-
-    pub unsafe fn write_all_at(
-        &self,
-        rrdevice: &RRDevice,
-        frame_slot: usize,
-        tlas: crate::types::AccelerationStructure,
-        trace_image_view: crate::types::ImageView,
-        hit_table: crate::types::Buffer,
-    ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set(frame_slot)?.raw())
-            .acceleration_structure(effect_trace::TLAS, tlas)?
-            .storage_image(effect_trace::OUT_IMAGE, trace_image_view)?
-            .buffer(
-                effect_trace::HIT_TABLE,
-                hit_table.raw(),
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
-            .apply(rrdevice);
-        Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for RREffectTraceDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-    }
+pub unsafe fn write_effect_trace_set(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    frame_slot: usize,
+    tlas: crate::types::AccelerationStructure,
+    trace_image_view: crate::types::ImageView,
+    hit_table: crate::types::Buffer,
+) -> Result<()> {
+    sets.writer(SetSlot::frame_slot(frame_slot))?
+        .acceleration_structure(effect_trace::TLAS, tlas)?
+        .storage_image(effect_trace::OUT_IMAGE, trace_image_view)?
+        .whole_buffer(effect_trace::HIT_TABLE, hit_table)?
+        .apply(rrdevice);
+    Ok(())
 }

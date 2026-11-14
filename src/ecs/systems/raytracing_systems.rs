@@ -2,13 +2,14 @@ use anyhow::Result;
 use glam::Mat4;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
-use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
+use thyllore_vulkan_core::descriptor::{
+    create_effect_trace_sets, push_constant_range, EFFECT_TRACE,
+};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::EffectTraceGpuState;
-use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::{FrameContext, GpuSceneContext};
 use thyllore_vulkan_core::types::Instance;
@@ -175,12 +176,12 @@ pub unsafe fn ensure_effect_trace_pipeline(
         return Ok(());
     }
 
-    let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
+    let effect_trace_descriptor = create_effect_trace_sets(rrdevice, frames_in_flight)?;
     let effect_trace_pipeline = RRRayTracingPipeline::new(
         instance,
         rrdevice,
         &EFFECT_TRACE,
-        &[effect_trace_descriptor.layout.handle()],
+        &[effect_trace_descriptor.layout().handle()],
         &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;

@@ -1,6 +1,4 @@
-use thyllore_anim_core::spring_bone::{
-    ColliderGroupOrigin, SpringColliderGroup, SpringColliderGroupId,
-};
+use thyllore_anim_core::spring_bone::{SpringColliderGroup, SpringColliderGroupId};
 
 use crate::ecs::component::{RampScope, SpringChainId};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
@@ -211,6 +209,7 @@ pub fn collider_group_form_rows(origin: RampOrigin) -> Vec<UiRow<ColliderGroupFo
 mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use thyllore_anim_core::spring_bone::ColliderGroupOrigin;
 
     #[test]
     fn form_rows_label_order_and_no_duplicates() {

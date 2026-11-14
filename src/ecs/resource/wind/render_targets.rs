@@ -1,12 +1,10 @@
 use thyllore_effect_core::WindUBO;
-use thyllore_vulkan_core::descriptor::OverlayUpsampleDescriptorSet;
+use thyllore_vulkan_core::descriptor::{OverlayUpsampleDescriptorSet, ReflectedDescriptorSets};
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 
 use crate::ecs::resource::BoundGenerations;
-use crate::ecs::systems::wind::descriptors::{
-    WindResolveDescriptorSet, WindShadowBakeDescriptorSet,
-};
+use crate::ecs::systems::wind::descriptors::WindResolveDescriptorSet;
 pub use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
 use crate::gpu_resource;
 
@@ -18,7 +16,7 @@ pub struct WindGpuState {
     pub resolve_pipeline: Option<RRPipeline>,
     pub resolve_descriptor: Option<WindResolveDescriptorSet>,
     pub shadow_bake_pipeline: Option<RRPipeline>,
-    pub shadow_bake_descriptor: Option<WindShadowBakeDescriptorSet>,
+    pub shadow_bake_descriptor: Option<ReflectedDescriptorSets>,
     pub upsample_pipeline: Option<RRPipeline>,
     pub upsample_descriptor: Option<OverlayUpsampleDescriptorSet>,
     #[gpu_resource(skip)]

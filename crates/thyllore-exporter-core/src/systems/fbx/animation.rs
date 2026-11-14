@@ -1477,7 +1477,7 @@ mod tests {
         let mut ref_count = Vec::new();
         build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
 
-        let base_bezier = 0x0000_0408;
+        let _base_bezier = 0x0000_0408;
         let weighted_right = 0x0100_0000;
         let weighted_next_left = 0x0400_0000;
         for &flag in &flags {

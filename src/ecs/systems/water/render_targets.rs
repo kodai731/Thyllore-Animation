@@ -2,6 +2,9 @@ use anyhow::Result;
 
 use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
+use crate::ecs::systems::water::caustic_descriptors::{
+    write_water_caustic_apply_set, write_water_caustic_splat_set, WaterCausticBindings,
+};
 use crate::ecs::systems::water::gpu_targets::{
     create_water_gpu_targets, is_depth_view_ready, WaterRenderTargets,
 };
@@ -60,10 +63,15 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
-    ensure_effect_trace_pipeline(ctx.instance, ctx.rrdevice, ctx.world, MAX_FRAMES_IN_FLIGHT)?;
-    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
-    ctx.world.insert_resource(trace_blocks);
     ctx.world.insert_resource(gpu_state);
+    ensure_effect_trace_pipeline(ctx.instance, ctx.rrdevice, ctx.world, MAX_FRAMES_IN_FLIGHT)?;
+
+    let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+        return Ok(());
+    };
+    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
+    drop(gpu_state);
+    ctx.world.insert_resource(trace_blocks);
 
     log!("Water pipeline created successfully");
     Ok(())
@@ -143,19 +151,23 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
     ) else {
         return Ok(());
     };
-    let Some(descriptor) = gpu_state.caustic_descriptor.as_mut() else {
+    let (Some(splat_descriptor), Some(apply_descriptor)) = (
+        gpu_state.caustic_splat_descriptor.as_ref(),
+        gpu_state.caustic_apply_descriptor.as_ref(),
+    ) else {
         return Ok(());
     };
 
-    descriptor.allocate_and_update(
-        ctx.rrdevice,
+    let bindings = WaterCausticBindings {
         caustic_accum_view,
         position_image_view,
         tlas,
-        scene_buffer,
+        scene_uniform_buffer: scene_buffer,
         water_ubo,
-        hdr_color_view,
-    )?;
+        hdr_color_image_view: hdr_color_view,
+    };
+    write_water_caustic_splat_set(splat_descriptor, ctx.rrdevice, bindings)?;
+    write_water_caustic_apply_set(apply_descriptor, ctx.rrdevice, bindings)?;
     gpu_state.caustic_bound_tlas = tlas.unwrap_or_default();
     Ok(())
 }

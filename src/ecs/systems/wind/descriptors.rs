@@ -3,39 +3,32 @@ use anyhow::Result;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use crate::vulkanr::descriptor::{
-    DescriptorKind, ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE,
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WIND_RESOLVE,
+    WIND_SHADOW_BAKE,
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
 use thyllore_effect_core::WindUBO;
-use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
+use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer, VolumeImage};
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct WindResolveDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub(crate) descriptor_set: thyllore_vulkan_core::types::DescriptorSet,
-    pub scene_depth_sampler: thyllore_vulkan_core::types::Sampler,
+    pub sets: ReflectedDescriptorSets,
+    scene_depth_sampler: Sampler,
 }
 
 impl WindResolveDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WIND_RESOLVE)
-            .with_override(wind_resolve::WIND, DescriptorKind::UniformBufferDynamic)
-    }
-
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_descriptor_set(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+        let layout_spec = ReflectedLayoutSpec::local(&WIND_RESOLVE)
+            .with_override(wind_resolve::WIND, DescriptorKind::UniformBufferDynamic);
 
-        Ok(Self {
-            layout,
-            descriptor_set,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets =
+                ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)?;
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
-    }
-
-    pub fn descriptor_set(&self) -> thyllore_vulkan_core::types::DescriptorSet {
-        self.descriptor_set
     }
 
     pub unsafe fn write_all(
@@ -43,39 +36,27 @@ impl WindResolveDescriptorSet {
         rrdevice: &RRDevice,
         wind_ubo: &UniformBuffer<WindUBO>,
         shadow_volume: &VolumeImage,
-        scene_depth_view: thyllore_vulkan_core::types::ImageView,
+        scene_depth_view: ImageView,
     ) -> Result<()> {
-        self.layout
-            .descriptor_writer(self.descriptor_set)
+        self.sets
+            .writer(SetSlot::SINGLE)?
             .uniform_dynamic(wind_resolve::WIND, wind_ubo)?
-            .apply(rrdevice);
-        self.update_shadow_volume(rrdevice, shadow_volume)?;
-        self.update_scene_depth(rrdevice, scene_depth_view)
-    }
-
-    pub unsafe fn update_shadow_volume(
-        &self,
-        rrdevice: &RRDevice,
-        shadow_volume: &VolumeImage,
-    ) -> Result<()> {
-        self.layout
-            .descriptor_writer(self.descriptor_set)
             .sampled_storage_image(
                 wind_resolve::SHADOW_VOLUME_SAMPLER,
                 shadow_volume.view(),
                 shadow_volume.sampler(),
             )?
             .apply(rrdevice);
-        Ok(())
+        self.update_scene_depth(rrdevice, scene_depth_view)
     }
 
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: thyllore_vulkan_core::types::ImageView,
+        scene_depth_view: ImageView,
     ) -> Result<()> {
-        self.layout
-            .descriptor_writer(self.descriptor_set)
+        self.sets
+            .writer(SetSlot::SINGLE)?
             .sampled_depth(
                 wind_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
@@ -84,81 +65,23 @@ impl WindResolveDescriptorSet {
             .apply(rrdevice);
         Ok(())
     }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct WindShadowBakeDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_set: thyllore_vulkan_core::types::DescriptorSet,
+pub unsafe fn create_wind_shadow_bake_sets(rrdevice: &RRDevice) -> Result<ReflectedDescriptorSets> {
+    let layout_spec = ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE)
+        .with_override(wind_shadow_bake::WIND, DescriptorKind::UniformBufferDynamic);
+    ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)
 }
 
-impl WindShadowBakeDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE)
-            .with_override(wind_shadow_bake::WIND, DescriptorKind::UniformBufferDynamic)
-    }
-
-    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_descriptor_set(rrdevice)?;
-
-        Ok(Self {
-            layout,
-            descriptor_set,
-        })
-    }
-
-    pub unsafe fn write_all(
-        &self,
-        rrdevice: &RRDevice,
-        wind_ubo: &UniformBuffer<WindUBO>,
-        shadow_volume: &VolumeImage,
-    ) -> Result<()> {
-        self.layout
-            .descriptor_writer(self.descriptor_set)
-            .uniform_dynamic(wind_shadow_bake::WIND, wind_ubo)?
-            .apply(rrdevice);
-        self.update_shadow_volume(rrdevice, shadow_volume)
-    }
-
-    pub unsafe fn update_shadow_volume(
-        &self,
-        rrdevice: &RRDevice,
-        shadow_volume: &VolumeImage,
-    ) -> Result<()> {
-        self.layout
-            .descriptor_writer(self.descriptor_set)
-            .storage_image(wind_shadow_bake::SHADOW_VOLUME_IMAGE, shadow_volume.view())?
-            .apply(rrdevice);
-        Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
-}
-
-impl GpuResource for WindResolveDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed() && self.scene_depth_sampler.is_destroyed()
-    }
-}
-
-impl GpuResource for WindShadowBakeDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-    }
+pub unsafe fn write_wind_shadow_bake_set(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    wind_ubo: &UniformBuffer<WindUBO>,
+    shadow_volume: &VolumeImage,
+) -> Result<()> {
+    sets.writer(SetSlot::SINGLE)?
+        .uniform_dynamic(wind_shadow_bake::WIND, wind_ubo)?
+        .storage_image(wind_shadow_bake::SHADOW_VOLUME_IMAGE, shadow_volume.view())?
+        .apply(rrdevice);
+    Ok(())
 }

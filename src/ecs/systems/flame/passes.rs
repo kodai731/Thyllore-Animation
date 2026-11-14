@@ -10,6 +10,7 @@ use crate::hooks::pass::{
     TargetUse,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{
     OverlayAttachmentLoad, OverlayInstanceDraw, ShadingPushConstants,
 };
@@ -297,7 +298,7 @@ unsafe fn record_flame_passes(
         Some(push_constants.as_bytes()),
         &[
             render.graphics.frame_set.sets()[image_index],
-            descriptor.descriptor_set(frame.history_index),
+            descriptor.sets.set(SetSlot::history(frame.history_index))?,
         ],
         &draws,
     )

@@ -119,7 +119,7 @@ mod tests {
 
         for cluster in &clusters {
             let product = cluster.transform_link * cluster.inverse_bind_pose;
-            let identity: Mat4 = Mat4::IDENTITY;
+            let _identity: Mat4 = Mat4::IDENTITY;
             for r in 0..4 {
                 for c in 0..4 {
                     let expected = if r == c { 1.0 } else { 0.0 };

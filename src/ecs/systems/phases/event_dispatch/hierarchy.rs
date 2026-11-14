@@ -15,8 +15,8 @@ use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_reveal_bone, hierarchy_select,
     hierarchy_select_bone, hierarchy_toggle_selection, navigate_hierarchy, rename_entity,
-    resolve_mesh_bone_id, resolve_transform_entity, uniform_scale_factor, update_entity_scale,
-    update_entity_translation, update_entity_visible, TreeNavigation, TreeSelection,
+    resolve_mesh_bone_id, resolve_transform_entity, update_entity_scale, update_entity_translation,
+    update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};

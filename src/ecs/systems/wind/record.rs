@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use crate::ecs::systems::wind::descriptors::WindShadowBakeDescriptorSet;
 use crate::ecs::systems::wind::gpu_targets::{wind_shadow_volume_extent, WindRenderTargets};
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
+use thyllore_vulkan_core::descriptor::{ReflectedDescriptorSets, SetSlot};
 use thyllore_vulkan_core::renderer::{
     bind_compute, dispatch, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,
@@ -19,7 +19,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
     ctx: &FrameRenderContext,
     targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &WindShadowBakeDescriptorSet,
+    descriptor: &ReflectedDescriptorSets,
     draws: &[OverlayInstanceDraw],
     image_index: usize,
     cmd: CommandBuffer,
@@ -32,7 +32,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
         (extent.width / WIND_SHADOW_VOLUME_SLOTS).div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let group_count_y = extent.height.div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let frame_set = ctx.graphics.frame_set.sets()[image_index];
-    let bake_set = descriptor.descriptor_set;
+    let bake_set = descriptor.set(SetSlot::SINGLE)?;
     for draw in draws {
         bind_compute(
             &ctx.device,

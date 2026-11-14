@@ -197,8 +197,7 @@ pub fn engine_bone_name_to_id(
 mod tests {
     use super::*;
     use crate::animation::editable::SourceClip;
-    use crate::asset::SkeletonAsset;
-    use crate::ecs::resource::ModelState;
+
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
 
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
@@ -289,7 +288,7 @@ mod tests {
         };
 
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
-        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
         let revision_after_first = world.resource::<HumanoidRigState>().revision;
@@ -317,7 +316,7 @@ mod tests {
         };
 
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
-        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
         assert_eq!(world.resource::<HumanoidRigState>().revision, 1);
@@ -392,7 +391,7 @@ mod tests {
         let (fbx_path, sidecar_path) = copy_test_humanoid_fixture(temp_dir.path());
         save_generic_rig(&sidecar_path).expect("failed to save generic sidecar");
 
-        let (mut world, mut assets) = test_humanoid_world(&fbx_path);
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
 
         sync_humanoid_rig(&mut world, &assets);
         {

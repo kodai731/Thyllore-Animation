@@ -377,7 +377,7 @@ impl RRAccelerationStructure {
 
         let aabb_addr = rrdevice.buffer_address(*aabb_buffer);
 
-        let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+        let _aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
             .data(vk::DeviceOrHostAddressConstKHR {
                 device_address: aabb_addr,
             })

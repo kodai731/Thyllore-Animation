@@ -754,7 +754,7 @@ unsafe fn generate_mipmaps(
 pub(crate) unsafe fn create_texture_sampler(
     rrdevice: &RRDevice,
     mip_levels: u32,
-) -> Result<(vk::Sampler)> {
+) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
@@ -773,7 +773,7 @@ pub(crate) unsafe fn create_texture_sampler(
         .max_lod(mip_levels as f32);
     let sampler = rrdevice.device().create_sampler(&info, None)?;
 
-    Ok((sampler))
+    Ok(sampler)
 }
 
 pub(crate) unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {

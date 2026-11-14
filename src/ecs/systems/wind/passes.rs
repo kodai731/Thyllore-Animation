@@ -17,6 +17,7 @@ use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
@@ -286,7 +287,7 @@ unsafe fn record_wind_passes(
 
     let resolve_sets = [
         render.graphics.frame_set.sets()[image_index],
-        descriptor.descriptor_set(),
+        descriptor.sets.set(SetSlot::SINGLE)?,
     ];
     match reduced_scale(ctx) {
         None => {
@@ -386,7 +387,9 @@ unsafe fn record_reduced_scale_wind_passes(
         upsample_scissor,
         upsample_pipeline,
         None,
-        &[upsample_descriptor.descriptor_set(frame_slot)],
+        &[upsample_descriptor
+            .sets
+            .set(SetSlot::frame_slot(frame_slot))?],
         &[OverlayInstanceDraw::new(Vec::new(), upsample_scissor)],
     )
 }

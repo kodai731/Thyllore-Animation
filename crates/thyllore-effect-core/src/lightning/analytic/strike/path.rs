@@ -101,8 +101,8 @@ pub(super) fn displace_path(
             let (u, v) = perpendicular_basis(chord);
 
             let node = i as u32;
-            let mut hash_base: [u32; 5] = [seed, strike, l, node, 0];
-            let mut hash_base_angle: [u32; 5] = [seed, strike, l, node, 1];
+            let hash_base: [u32; 5] = [seed, strike, l, node, 0];
+            let hash_base_angle: [u32; 5] = [seed, strike, l, node, 1];
 
             let (dist_hash, angle_hash) = if l >= effect.timing.reseed_level {
                 let mut extended_dist: [u32; 6] = [0; 6];

@@ -1,6 +1,6 @@
 use super::*;
 use crate::animation::spring_bone::{
-    JointForce, SpringCollisionMode, SpringForceModel, VrmJointForce,
+    JointForce, SpringCollisionMode, SpringForceModel, SpringSpace, VrmJointForce,
 };
 use crate::animation::{Bone, Keyframe, TransformChannel};
 use crate::ecs::component::SpringJointParam;

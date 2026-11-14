@@ -149,7 +149,7 @@ pub(crate) unsafe fn create_swapchain(
     instance: &Instance,
     surface: &vk::SurfaceKHR,
     rrdevice: &RRDevice,
-) -> Result<(RRSwapchain)> {
+) -> Result<RRSwapchain> {
     let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
     let support = SwapchainSupport::get(instance, surface, &rrdevice.physical_device)?;
     let surface_format = SwapchainSupport::get_swapchain_surface_format(&support.formats);
@@ -198,7 +198,7 @@ pub(crate) unsafe fn create_swapchain(
         .collect();
     rrswapchain.swapchain_format = surface_format.format;
     rrswapchain.swapchain_extent = extent;
-    Ok((rrswapchain))
+    Ok(rrswapchain)
 }
 
 pub unsafe fn create_swapchain_image_view(

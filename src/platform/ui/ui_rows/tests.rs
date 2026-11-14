@@ -1,5 +1,3 @@
-use crate::ecs::events::UiCommand;
-
 use super::*;
 
 fn toggle(label: &'static str) -> UiRow<()> {

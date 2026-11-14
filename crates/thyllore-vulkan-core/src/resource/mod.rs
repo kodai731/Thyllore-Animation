@@ -36,7 +36,7 @@ pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
 pub(crate) use gbuffer::READBACK_POSITION_OFFSET;
 pub use gbuffer::{read_picked_texel, RRGBuffer};
-pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
+pub use gpu_resource::{build_gpu_resource, destroy_all_in_reverse, GpuResource};
 pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
 pub use history_targets::{HistoryTargets, HistoryTargetsDesc};

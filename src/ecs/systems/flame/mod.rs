@@ -34,7 +34,6 @@ pub use object_pick::*;
 pub use passes::*;
 pub use paths::*;
 pub use pipeline::*;
-pub use preset::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use style::*;

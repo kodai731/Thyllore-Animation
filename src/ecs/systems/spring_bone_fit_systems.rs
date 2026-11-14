@@ -1,6 +1,5 @@
 use crate::animation::spring_bone::{
-    compare_tail_trajectories, shared_force_model, JointForce, SpringBoneSetup, SpringSpace,
-    SpringTailSample,
+    compare_tail_trajectories, shared_force_model, JointForce, SpringBoneSetup, SpringTailSample,
 };
 use crate::animation::{AnimationClip, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringChain};

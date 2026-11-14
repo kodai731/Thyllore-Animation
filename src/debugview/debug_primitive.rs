@@ -51,7 +51,7 @@ impl App {
             crate::ecs::component::DebugPrimitiveTag { kind },
         );
 
-        let mut transform = self
+        let transform = self
             .data
             .ecs_world
             .get_component_mut::<crate::ecs::world::Transform>(parent_entity)

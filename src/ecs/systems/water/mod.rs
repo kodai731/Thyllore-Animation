@@ -28,7 +28,6 @@ pub use descriptors::*;
 pub use history_accumulate::*;
 pub use object_pick::*;
 pub use pipeline::*;
-pub use preset::*;
 pub use probe::*;
 pub use record::*;
 pub use render_targets::*;

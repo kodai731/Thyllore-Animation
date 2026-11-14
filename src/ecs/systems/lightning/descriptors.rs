@@ -8,7 +8,7 @@ use crate::vulkanr::descriptor::{
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
-use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
+use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 #[must_use]
@@ -29,12 +29,12 @@ impl LightningResolveDescriptorSet {
                 lightning_resolve::SEGMENTS,
                 DescriptorKind::UniformBufferDynamic,
             );
-        let sets = ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
-        Ok(Self {
-            sets,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets =
+                ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)?;
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
     }
 

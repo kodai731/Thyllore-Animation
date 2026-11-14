@@ -3,6 +3,7 @@ use glam::Mat4;
 
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{EffectTraceGpuState, WaterGpuState};
+use crate::ecs::systems::water::caustic_descriptors::update_water_caustic_splat_tlas;
 use crate::ecs::systems::water::descriptors::{write_water_resolve_sets, WaterResolveBindings};
 use crate::ecs::systems::water::gpu_targets::{WaterBindingKey, WaterRenderTargets};
 use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
@@ -184,7 +185,8 @@ impl WaterFrame {
         caustic_strength > 0.0
             && gpu_state.caustic_splat_pipeline.is_some()
             && gpu_state.caustic_apply_pipeline.is_some()
-            && gpu_state.caustic_descriptor.is_some()
+            && gpu_state.caustic_splat_descriptor.is_some()
+            && gpu_state.caustic_apply_descriptor.is_some()
     }
 
     fn has_visible_instance(&self) -> bool {
@@ -368,11 +370,9 @@ impl RenderPassNode for WaterFrameNode {
                 water_ubo,
                 WaterResolveBindings {
                     scene_color_view: scene_color_image.view(),
-                    scene_color_sampler: history_sampler,
                     history_image_views: history_views,
-                    history_sampler,
                     trace_image_view: trace_image.view(),
-                    trace_sampler: history_sampler,
+                    sampler: history_sampler,
                     tlas,
                     hit_table,
                 },
@@ -502,11 +502,11 @@ impl RenderPassNode for WaterCausticSplatNode {
         if gpu_state.caustic_bound_tlas == tlas {
             return Ok(());
         }
-        let Some(caustic_descriptor) = gpu_state.caustic_descriptor.as_ref() else {
+        let Some(splat_descriptor) = gpu_state.caustic_splat_descriptor.as_ref() else {
             return Ok(());
         };
 
-        caustic_descriptor.update_tlas(ctx.rrdevice, tlas)?;
+        update_water_caustic_splat_tlas(splat_descriptor, ctx.rrdevice, tlas)?;
         gpu_state.caustic_bound_tlas = tlas;
         Ok(())
     }
@@ -526,7 +526,7 @@ impl RenderPassNode for WaterCausticSplatNode {
         };
         let (Some(splat_pipeline), Some(descriptor)) = (
             gpu_state.caustic_splat_pipeline.as_ref(),
-            gpu_state.caustic_descriptor.as_ref(),
+            gpu_state.caustic_splat_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
@@ -536,7 +536,7 @@ impl RenderPassNode for WaterCausticSplatNode {
             &ctx.rrdevice,
             command_buffer,
             splat_pipeline,
-            &[descriptor.splat.set(SetSlot::SINGLE)?],
+            &[descriptor.set(SetSlot::SINGLE)?],
             &[],
         );
         thyllore_vulkan_core::renderer::dispatch(
@@ -601,7 +601,7 @@ impl RenderPassNode for WaterCausticApplyNode {
         };
         let (Some(apply_pipeline), Some(descriptor), Some(hdr_buffer)) = (
             gpu_state.caustic_apply_pipeline.as_ref(),
-            gpu_state.caustic_descriptor.as_ref(),
+            gpu_state.caustic_apply_descriptor.as_ref(),
             ctx.hdr_buffer,
         ) else {
             return Ok(());
@@ -611,7 +611,7 @@ impl RenderPassNode for WaterCausticApplyNode {
             &ctx.rrdevice,
             command_buffer,
             apply_pipeline,
-            &[descriptor.apply.set(SetSlot::SINGLE)?],
+            &[descriptor.set(SetSlot::SINGLE)?],
             &[],
         );
         thyllore_vulkan_core::renderer::dispatch(

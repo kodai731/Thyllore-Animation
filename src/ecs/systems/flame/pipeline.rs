@@ -3,7 +3,7 @@ use crate::ecs::systems::flame::descriptors::{FlameImageBindings, RRFlameDescrip
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
+use crate::vulkanr::resource::{build_gpu_resource, GraphicsResources, Placement, UniformBuffer};
 use anyhow::Result;
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{
@@ -30,42 +30,42 @@ pub unsafe fn create_flame_pipeline(
     position_sampler: Sampler,
     scene_depth_view: ImageView,
 ) -> Result<FlameGpuState> {
-    let flame_ubo = UniformBuffer::new(
-        instance,
-        rrdevice,
-        FLAME_MAX_INSTANCES,
-        Placement::DeviceUpdated,
-    )?;
-    flame_ubo.write_slot(rrdevice, 0, &FlameUBO::default())?;
+    let gpu_state = build_gpu_resource(rrdevice, |gpu_state: &mut FlameGpuState| {
+        let flame_ubo = gpu_state.ubo.insert(UniformBuffer::new(
+            instance,
+            rrdevice,
+            FLAME_MAX_INSTANCES,
+            Placement::DeviceUpdated,
+        )?);
+        flame_ubo.write_slot(rrdevice, 0, &FlameUBO::default())?;
 
-    let flame_descriptor = RRFlameDescriptorSet::new(rrdevice)?;
-    flame_descriptor.write_all(
-        rrdevice,
-        &flame_ubo,
-        FlameImageBindings {
-            history_image_views: flame_history.views(),
-            flame_sampler: flame_history.sampler(),
-            sdf_image_view: position_image_view,
-            sdf_sampler: position_sampler,
-            scene_depth_view,
-        },
-    )?;
+        let flame_descriptor = gpu_state
+            .descriptor
+            .insert(RRFlameDescriptorSet::new(rrdevice)?);
+        flame_descriptor.write_all(
+            rrdevice,
+            flame_ubo,
+            FlameImageBindings {
+                history_image_views: flame_history.views(),
+                flame_sampler: flame_history.sampler(),
+                sdf_image_view: position_image_view,
+                sdf_sampler: position_sampler,
+                scene_depth_view,
+            },
+        )?;
+        gpu_state.shading_pipeline = Some(FLAME_OVERLAY.build_pipeline(
+            rrdevice,
+            rrrender,
+            flame_history.render_pass(),
+            &[
+                &graphics_resources.frame_set.layout,
+                flame_descriptor.sets.layout(),
+            ],
+            flame_history.extent(),
+        )?);
+        Ok(())
+    })?;
 
-    let flame_shading_pipeline = FLAME_OVERLAY.build_pipeline(
-        rrdevice,
-        rrrender,
-        flame_history.render_pass(),
-        &[
-            &graphics_resources.frame_set.layout,
-            flame_descriptor.sets.layout(),
-        ],
-        flame_history.extent(),
-    )?;
     log!("Created flame pipelines");
-
-    let mut gpu_state = FlameGpuState::default();
-    gpu_state.shading_pipeline = Some(flame_shading_pipeline);
-    gpu_state.descriptor = Some(flame_descriptor);
-    gpu_state.ubo = Some(flame_ubo);
     Ok(gpu_state)
 }

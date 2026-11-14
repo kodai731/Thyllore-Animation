@@ -14,11 +14,9 @@ const WATER_HISTORY_SET_COUNT: usize = 2;
 #[derive(Clone, Copy, Debug)]
 pub struct WaterResolveBindings {
     pub scene_color_view: ImageView,
-    pub scene_color_sampler: Sampler,
     pub history_image_views: [ImageView; WATER_HISTORY_SET_COUNT],
-    pub history_sampler: Sampler,
     pub trace_image_view: ImageView,
-    pub trace_sampler: Sampler,
+    pub sampler: Sampler,
     pub tlas: AccelerationStructure,
     pub hit_table: Buffer,
 }
@@ -53,17 +51,17 @@ pub unsafe fn write_water_resolve_sets(
             .sampled_image(
                 water_resolve::SCENE_COLOR_SAMPLER,
                 bindings.scene_color_view,
-                bindings.scene_color_sampler,
+                bindings.sampler,
             )?
             .sampled_image(
                 water_resolve::WATER_HISTORY_SAMPLER,
                 previous_history_view,
-                bindings.history_sampler,
+                bindings.sampler,
             )?
             .sampled_storage_image(
                 water_resolve::WATER_TRACE_SAMPLER,
                 bindings.trace_image_view,
-                bindings.trace_sampler,
+                bindings.sampler,
             )?
             .acceleration_structure(water_resolve::SCENE_TLAS, bindings.tlas)?
             .whole_buffer(water_resolve::HIT_TABLE, bindings.hit_table)?

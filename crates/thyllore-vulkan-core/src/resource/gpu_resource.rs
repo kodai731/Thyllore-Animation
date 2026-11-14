@@ -1,3 +1,4 @@
+use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
@@ -161,6 +162,26 @@ fn destroy_all_in_reverse_with(
     }
 }
 
+/// Builds a resource field by field; a failed build destroys the fields it had already stored.
+pub unsafe fn build_gpu_resource<T: GpuResource + Default>(
+    rrdevice: &RRDevice,
+    build: impl FnOnce(&mut T) -> Result<()>,
+) -> Result<T> {
+    build_gpu_resource_with(build, |resource| resource.destroy_gpu(rrdevice))
+}
+
+fn build_gpu_resource_with<T: Default>(
+    build: impl FnOnce(&mut T) -> Result<()>,
+    destroy: impl FnOnce(&mut T),
+) -> Result<T> {
+    let mut resource = T::default();
+    if let Err(error) = build(&mut resource) {
+        destroy(&mut resource);
+        return Err(error);
+    }
+    Ok(resource)
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
@@ -216,6 +237,35 @@ mod tests {
         });
 
         assert_eq!(destroyed_order.borrow().as_slice(), ["second", "first"]);
+    }
+
+    #[test]
+    fn a_failed_build_destroys_the_fields_it_had_stored() {
+        let destroyed_fields: Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let built = build_gpu_resource_with(
+            |fields: &mut Vec<u32>| {
+                fields.push(1);
+                Err(anyhow::anyhow!("second field failed"))
+            },
+            |fields| destroyed_fields.borrow_mut().append(fields),
+        );
+
+        assert!(built.is_err());
+        assert_eq!(destroyed_fields.borrow().as_slice(), [1]);
+    }
+
+    #[test]
+    fn a_successful_build_is_returned_without_destroying() {
+        let built = build_gpu_resource_with(
+            |fields: &mut Vec<u32>| {
+                fields.push(1);
+                Ok(())
+            },
+            |_| unreachable!("a successful build is never destroyed"),
+        );
+
+        assert_eq!(built.ok(), Some(vec![1]));
     }
 
     #[test]

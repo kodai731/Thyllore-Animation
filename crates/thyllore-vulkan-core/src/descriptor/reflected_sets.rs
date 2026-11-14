@@ -4,7 +4,7 @@ use crate::core::device::RRDevice;
 use crate::descriptor::reflected_layout::{
     DescriptorSetWriter, ReflectedLayoutSpec, ReflectedSetLayout,
 };
-use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
+use crate::resource::gpu_resource::{build_gpu_resource, GpuResource, OwnedDescriptorSet};
 use crate::types::DescriptorSet;
 
 /// How many sets one layout owns: one row per frame slot, one column per history index.
@@ -91,14 +91,18 @@ impl ReflectedDescriptorSets {
         spec: &ReflectedLayoutSpec,
         grid: SetGrid,
     ) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, spec)?;
-        let sets = layout
-            .allocate_sets(rrdevice, grid.set_count())?
-            .into_iter()
-            .map(|set| OwnedDescriptorSet::new(set, layout.handle))
-            .collect();
+        build_gpu_resource(rrdevice, |descriptor_sets: &mut Self| {
+            descriptor_sets.grid = grid;
+            descriptor_sets.layout = ReflectedSetLayout::create(rrdevice, spec)?;
+            let layout = &descriptor_sets.layout;
 
-        Ok(Self { layout, sets, grid })
+            descriptor_sets.sets = layout
+                .allocate_sets(rrdevice, grid.set_count())?
+                .into_iter()
+                .map(|set| OwnedDescriptorSet::new(set, layout.handle))
+                .collect();
+            Ok(())
+        })
     }
 
     pub fn layout(&self) -> &ReflectedSetLayout {

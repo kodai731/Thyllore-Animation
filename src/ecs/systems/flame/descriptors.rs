@@ -8,7 +8,7 @@ use crate::vulkanr::descriptor::{
 };
 use crate::vulkanr::image::create_scene_depth_sampler;
 use thyllore_effect_core::FlameUBO;
-use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
+use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 const FLAME_HISTORY_SET_COUNT: usize = 2;
@@ -34,16 +34,15 @@ impl RRFlameDescriptorSet {
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
         let layout_spec = ReflectedLayoutSpec::local(&FLAME_RESOLVE)
             .with_override(flame_resolve::FLAME, DescriptorKind::UniformBufferDynamic);
-        let sets = ReflectedDescriptorSets::create(
-            rrdevice,
-            &layout_spec,
-            SetGrid::per_history(FLAME_HISTORY_SET_COUNT),
-        )?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
-        Ok(Self {
-            sets,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets = ReflectedDescriptorSets::create(
+                rrdevice,
+                &layout_spec,
+                SetGrid::per_history(FLAME_HISTORY_SET_COUNT),
+            )?;
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
     }
 

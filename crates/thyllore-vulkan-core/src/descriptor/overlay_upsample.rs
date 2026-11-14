@@ -4,7 +4,7 @@ use crate::core::device::RRDevice;
 use crate::descriptor::pass_manifest::OVERLAY_UPSAMPLE;
 use crate::descriptor::shader_bindings::overlay_upsample;
 use crate::descriptor::{ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot};
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::gpu_resource::{build_gpu_resource, GpuResource};
 use crate::resource::image::{create_nearest_sampler, create_scene_depth_sampler};
 use crate::types::{ImageView, Sampler};
 
@@ -19,18 +19,15 @@ pub struct OverlayUpsampleDescriptorSet {
 
 impl OverlayUpsampleDescriptorSet {
     pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let sets = ReflectedDescriptorSets::create(
-            rrdevice,
-            &ReflectedLayoutSpec::local(&OVERLAY_UPSAMPLE),
-            SetGrid::per_frame_slot(frames_in_flight),
-        )?;
-        let reduced_color_sampler = Sampler(create_nearest_sampler(rrdevice)?);
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
-
-        Ok(Self {
-            sets,
-            reduced_color_sampler,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets = ReflectedDescriptorSets::create(
+                rrdevice,
+                &ReflectedLayoutSpec::local(&OVERLAY_UPSAMPLE),
+                SetGrid::per_frame_slot(frames_in_flight),
+            )?;
+            descriptor.reduced_color_sampler = Sampler(create_nearest_sampler(rrdevice)?);
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
     }
 

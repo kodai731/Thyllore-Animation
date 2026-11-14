@@ -1,3 +1,4 @@
+mod bone_entity;
 mod clip_schedule;
 mod clip_track_snapshot;
 mod constraint_set;
@@ -7,6 +8,7 @@ mod motion_path;
 mod scalar_channel;
 mod spring_bone;
 
+pub use bone_entity::*;
 pub use clip_schedule::*;
 pub use clip_track_snapshot::*;
 pub use constraint_set::*;

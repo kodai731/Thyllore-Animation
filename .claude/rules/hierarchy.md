@@ -207,7 +207,7 @@ primitive spawn / delete) it lives in `src/debugview/`.
 | `render/` | camera state, render handles, field-driven look |
 | `model/` | GLB source, morph weights |
 | `ml/` | inference actor |
-| `mesh/` | GPU mesh types and vertex attribute presets |
+| `mesh/` | GPU mesh types |
 | `flame/` | Flame effect components |
 | `lightning/` | Lightning effect components |
 | `water/` | Water effect components |

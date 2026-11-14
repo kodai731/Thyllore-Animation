@@ -1,5 +1,5 @@
 use anyhow::Result;
-use glam::{vec3, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
@@ -116,7 +116,7 @@ pub fn gizmo_try_select(
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
     let distance = (light_pos - camera_pos).length();
-    let scale_factor = distance * AXIS_LENGTH_PER_CAMERA_DISTANCE;
+    let axis_length = distance * AXIS_LENGTH_PER_CAMERA_DISTANCE;
 
     let billboard_clicked = billboard_click_rect
         .map(|rect| is_point_in_rect(mouse_pos, rect))
@@ -124,15 +124,15 @@ pub fn gizmo_try_select(
 
     let center_distance = ray_to_point_distance(ray_origin, ray_direction, light_pos);
 
-    let x_axis_end = light_pos + vec3(1.0 * scale_factor, 0.0, 0.0);
-    let y_axis_end = light_pos + vec3(0.0, 1.0 * scale_factor, 0.0);
-    let z_axis_end = light_pos + vec3(0.0, 0.0, 1.0 * scale_factor);
+    let x_axis_end = light_pos + Vec3::X * axis_length;
+    let y_axis_end = light_pos + Vec3::Y * axis_length;
+    let z_axis_end = light_pos + Vec3::Z * axis_length;
 
     let x_distance = ray_to_line_segment_distance(ray_origin, ray_direction, light_pos, x_axis_end);
     let y_distance = ray_to_line_segment_distance(ray_origin, ray_direction, light_pos, y_axis_end);
     let z_distance = ray_to_line_segment_distance(ray_origin, ray_direction, light_pos, z_axis_end);
 
-    let threshold = PICK_THRESHOLD_PER_AXIS_LENGTH * scale_factor;
+    let threshold = PICK_THRESHOLD_PER_AXIS_LENGTH * axis_length;
 
     let nearest_axis = [
         (x_distance, GizmoAxis::X),
@@ -144,11 +144,15 @@ pub fn gizmo_try_select(
     .min_by(|a, b| a.0.total_cmp(&b.0))
     .map(|(_, axis)| axis);
 
-    let center_hit = billboard_clicked || center_distance < threshold;
-    let selected_axis = match nearest_axis {
-        Some(axis) if !billboard_clicked => axis,
-        _ if center_hit => GizmoAxis::Center,
-        _ => GizmoAxis::None,
+    let center_or_none = if center_distance < threshold {
+        GizmoAxis::Center
+    } else {
+        GizmoAxis::None
+    };
+    let selected_axis = if billboard_clicked {
+        GizmoAxis::Center
+    } else {
+        nearest_axis.unwrap_or(center_or_none)
     };
 
     if selected_axis != GizmoAxis::None {
@@ -388,6 +392,7 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
 mod tests {
     use super::*;
     use crate::math::coordinate_system::world_to_screen;
+    use glam::vec3;
 
     const GIZMO_POSITION: Vec3 = vec3(1.0, 2.0, 3.0);
     const CAMERA_DISTANCE: f32 = 10.0;

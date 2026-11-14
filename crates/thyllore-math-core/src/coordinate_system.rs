@@ -147,20 +147,17 @@ pub fn ray_to_line_segment_distance(
 
     let denom = a * c - b * b;
 
-    let (s, t) = if denom.abs() < f32::EPSILON {
-        (0.0, e / c)
+    let nearest_on_infinite_line = if denom.abs() < f32::EPSILON {
+        e / c
     } else {
-        let s = (b * e - c * d) / denom;
-        let t = (a * e - b * d) / denom;
-        (s, t)
+        (a * e - b * d) / denom
     };
 
-    let t_clamped = t.max(0.0).min((line_end - line_start).length());
+    let segment_length = (line_end - line_start).length();
+    let nearest_on_segment =
+        line_start + line_dir * nearest_on_infinite_line.max(0.0).min(segment_length);
 
-    let point_on_ray = ray_origin + ray_direction * s;
-    let point_on_line = line_start + line_dir * t_clamped;
-
-    (point_on_ray - point_on_line).length()
+    ray_to_point_distance(ray_origin, ray_direction, nearest_on_segment)
 }
 
 pub fn ray_plane_intersection(
@@ -437,5 +434,39 @@ mod tests {
         assert!(!origin.x.is_nan() && !origin.y.is_nan() && !origin.z.is_nan());
         assert!(!dir.x.is_nan() && !dir.y.is_nan() && !dir.z.is_nan());
         assert!((dir.length() - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_ray_to_line_segment_distance_measures_the_gap_when_the_ray_crosses_the_segment() {
+        let ray_origin = vec3(0.5, 0.25, 5.0);
+        let ray_direction = vec3(0.0, 0.0, -1.0);
+
+        let distance = ray_to_line_segment_distance(ray_origin, ray_direction, Vec3::ZERO, Vec3::X);
+
+        assert!((distance - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ray_to_line_segment_distance_measures_to_the_end_point_past_the_end() {
+        let ray_origin = vec3(3.0, 0.0, 1.0);
+        let ray_direction = vec3(-1.0, 0.0, -1.0).normalize();
+
+        let distance = ray_to_line_segment_distance(ray_origin, ray_direction, Vec3::ZERO, Vec3::X);
+
+        assert!((distance - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ray_to_line_segment_distance_equals_the_start_point_distance_before_the_start() {
+        let line_start = vec3(1.0, 2.0, 3.0);
+        let line_end = line_start + Vec3::X;
+        let ray_origin = line_start + vec3(-0.7, 0.3, 4.0);
+        let ray_direction = vec3(-0.2, -0.1, -1.0).normalize();
+
+        let segment_distance =
+            ray_to_line_segment_distance(ray_origin, ray_direction, line_start, line_end);
+        let start_distance = ray_to_point_distance(ray_origin, ray_direction, line_start);
+
+        assert_eq!(segment_distance, start_distance);
     }
 }

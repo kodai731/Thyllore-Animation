@@ -1,9 +1,6 @@
 use glam::Vec3;
 
-use crate::ecs::component::mesh::MeshData;
 use crate::ecs::resource::MeshAssets;
-
-pub use thyllore_model_core::mesh::{compute_vertex_layout, create_interleaved_buffer};
 
 pub fn mesh_calculate_model_bounds(assets: &MeshAssets) -> Option<(Vec3, Vec3, Vec3)> {
     if assets.meshes.is_empty() {
@@ -37,46 +34,4 @@ pub fn mesh_calculate_model_bounds(assets: &MeshAssets) -> Option<(Vec3, Vec3, V
     );
 
     Some((min, max, center))
-}
-
-pub fn validate_mesh_data(mesh: &MeshData) -> Result<(), String> {
-    if mesh.vertex_count() == 0 && mesh.attribute_ids().next().is_none() {
-        return Err("MeshData has no attributes".to_string());
-    }
-
-    let vertex_count = mesh.vertex_count();
-    for id in mesh.attribute_ids() {
-        if let Some(values) = mesh.attribute(*id) {
-            if values.len() != vertex_count {
-                return Err(format!(
-                    "Attribute {:?} has {} vertices, expected {}",
-                    id,
-                    values.len(),
-                    vertex_count
-                ));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ecs::component::mesh::presets::{COLOR, POSITION};
-    use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
-
-    #[test]
-    fn test_interleaved_buffer_creation() {
-        let mesh = MeshData::new(PrimitiveTopology::TriangleList)
-            .with_inserted_attribute(POSITION, vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
-            .with_inserted_attribute(COLOR, vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
-
-        let layout = compute_vertex_layout(&mesh);
-        assert_eq!(layout.stride, 24);
-
-        let buffer = create_interleaved_buffer(&mesh, &layout);
-        assert_eq!(buffer.len(), 48);
-    }
 }

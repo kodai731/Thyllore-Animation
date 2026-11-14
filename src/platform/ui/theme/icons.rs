@@ -1,5 +1,6 @@
 use crate::ecs::component::EntityIcon;
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Icon {
     Play,

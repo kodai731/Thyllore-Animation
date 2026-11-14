@@ -384,12 +384,14 @@ mod resources_tests {
 mod component_registry_tests {
     use super::*;
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Position {
         x: f32,
         y: f32,
     }
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Velocity {
         dx: f32,

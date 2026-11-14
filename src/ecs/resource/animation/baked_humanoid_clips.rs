@@ -63,8 +63,8 @@ mod tests {
     use super::*;
 
     fn make_entry(
-        source_id: SourceClipId,
-        entity: crate::ecs::world::Entity,
+        _source_id: SourceClipId,
+        _entity: crate::ecs::world::Entity,
         asset_id: AssetId,
     ) -> BakedHumanoidClip {
         BakedHumanoidClip {

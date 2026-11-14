@@ -1,5 +1,3 @@
-use crate::ecs::events::UiCommand;
-
 use super::row::*;
 
 /// Widget ids that collide inside one row list, fields included as `scope/label`.

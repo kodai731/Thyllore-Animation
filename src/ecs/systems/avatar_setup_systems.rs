@@ -299,7 +299,6 @@ mod tests {
     use glam::Vec3;
 
     use super::*;
-    use crate::ecs::component::{SpringChain, SpringJointParam};
 
     fn make_chain_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::new("chain");

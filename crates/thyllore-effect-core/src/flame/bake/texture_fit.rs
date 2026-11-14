@@ -984,7 +984,8 @@ mod tests {
 
         // All white image (no flame structure)
         let white_pixels: Vec<[f32; 3]> = vec![[1.0, 1.0, 1.0]; width * height];
-        let result = fit_flame_texture(&white_pixels, width, height, &initial, &Default::default());
+        let _result =
+            fit_flame_texture(&white_pixels, width, height, &initial, &Default::default());
         // Should be None (mask covers everything, no flame structure) or finite values
 
         // Uniform noise image

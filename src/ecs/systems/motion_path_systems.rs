@@ -37,7 +37,7 @@ pub fn sync_motion_paths(world: &mut World) {
 
         let new_pos = motion_path_position(&path, current_time);
 
-        if let Some(mut transform) = world.get_component_mut::<Transform>(entity) {
+        if let Some(transform) = world.get_component_mut::<Transform>(entity) {
             transform.translation = new_pos;
         } else {
             let transform = Transform {

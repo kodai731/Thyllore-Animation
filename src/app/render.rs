@@ -216,7 +216,7 @@ impl App {
 
         {
             let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-            let mut billboard = self.resource_mut::<BillboardData>();
+            let billboard = self.resource_mut::<BillboardData>();
             billboard
                 .render_state
                 .descriptor_set

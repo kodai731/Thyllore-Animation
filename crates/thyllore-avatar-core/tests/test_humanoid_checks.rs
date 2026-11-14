@@ -177,8 +177,6 @@ fn test_asymmetric_hand_has_asymmetric() {
 
 #[test]
 fn test_bone_in_three_roles_has_bone_in_two_roles() {
-    use std::collections::BTreeMap;
-
     let (bones, mut mapping) = test_humanoid_bone_inputs();
     let head_idx = *mapping
         .by_role

@@ -4,7 +4,7 @@ use std::path::Path;
 use winit::dpi::LogicalSize;
 use winit::event_loop::{EventLoop, EventLoopBuilder};
 
-use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
+use crate::hooks::external_command::ExternalCommand;
 use crate::platform::ui::theme::UiFonts;
 use winit::window::{Window, WindowBuilder};
 

@@ -23,7 +23,6 @@ pub use debug_dump::*;
 pub use object_pick::*;
 pub use path::*;
 pub use pipeline::*;
-pub use preset::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use target::*;

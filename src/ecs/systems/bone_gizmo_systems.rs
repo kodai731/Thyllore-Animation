@@ -1425,8 +1425,6 @@ mod tests {
         result: &ModelLoadResult,
         skeleton: &Skeleton,
     ) -> Vec<Mat4> {
-        use crate::vulkanr::resource::graphics_resource::NodeData;
-
         let pose = create_pose_from_rest(skeleton);
         let mut nodes = to_node_data(&result.nodes);
         crate::ecs::systems::animation::apply::compute_node_global_transforms(

@@ -437,8 +437,9 @@ mod tests {
                 [0.2, 0.95, -0.6],
                 [1.0, 0.0, 1.0],
             ] {
-                let baseline = evaluate_ring_smooth_density(p, &height, taper, 4.0, 0.75, 1.1, 1.0);
-                let displaced = evaluate_ring_smooth_density_displaced(
+                let _baseline =
+                    evaluate_ring_smooth_density(p, &height, taper, 4.0, 0.75, 1.1, 1.0);
+                let _displaced = evaluate_ring_smooth_density_displaced(
                     p,
                     &height,
                     taper,

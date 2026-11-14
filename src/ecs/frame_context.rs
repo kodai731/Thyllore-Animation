@@ -65,23 +65,23 @@ impl<'a> FrameContext<'a> {
         )
     }
 
-    pub fn camera(&self) -> ResRef<Camera> {
+    pub fn camera(&self) -> ResRef<'_, Camera> {
         self.world.resource::<Camera>()
     }
 
-    pub fn camera_mut(&self) -> ResMut<Camera> {
+    pub fn camera_mut(&self) -> ResMut<'_, Camera> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn light_state(&self) -> ResRef<LightState> {
+    pub fn light_state(&self) -> ResRef<'_, LightState> {
         self.world.resource::<LightState>()
     }
 
-    pub fn light_state_mut(&self) -> ResMut<LightState> {
+    pub fn light_state_mut(&self) -> ResMut<'_, LightState> {
         self.world.resource_mut::<LightState>()
     }
 
-    pub fn debug_view_state(&self) -> ResRef<DebugViewState> {
+    pub fn debug_view_state(&self) -> ResRef<'_, DebugViewState> {
         self.world.resource::<DebugViewState>()
     }
 
@@ -104,51 +104,51 @@ impl<'a> FrameContext<'a> {
         self.light_state().light_position
     }
 
-    pub fn grid_mesh(&self) -> ResRef<GridMeshData> {
+    pub fn grid_mesh(&self) -> ResRef<'_, GridMeshData> {
         self.world.resource::<GridMeshData>()
     }
 
-    pub fn grid_mesh_mut(&self) -> ResMut<GridMeshData> {
+    pub fn grid_mesh_mut(&self) -> ResMut<'_, GridMeshData> {
         self.world.resource_mut::<GridMeshData>()
     }
 
-    pub fn gizmo(&self) -> ResRef<GridGizmoData> {
+    pub fn gizmo(&self) -> ResRef<'_, GridGizmoData> {
         self.world.resource::<GridGizmoData>()
     }
 
-    pub fn gizmo_mut(&self) -> ResMut<GridGizmoData> {
+    pub fn gizmo_mut(&self) -> ResMut<'_, GridGizmoData> {
         self.world.resource_mut::<GridGizmoData>()
     }
 
-    pub fn light_gizmo(&self) -> ResRef<LightGizmoData> {
+    pub fn light_gizmo(&self) -> ResRef<'_, LightGizmoData> {
         self.world.resource::<LightGizmoData>()
     }
 
-    pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
+    pub fn light_gizmo_mut(&self) -> ResMut<'_, LightGizmoData> {
         self.world.resource_mut::<LightGizmoData>()
     }
 
-    pub fn bone_gizmo(&self) -> ResRef<BoneGizmoData> {
+    pub fn bone_gizmo(&self) -> ResRef<'_, BoneGizmoData> {
         self.world.resource::<BoneGizmoData>()
     }
 
-    pub fn bone_gizmo_mut(&self) -> ResMut<BoneGizmoData> {
+    pub fn bone_gizmo_mut(&self) -> ResMut<'_, BoneGizmoData> {
         self.world.resource_mut::<BoneGizmoData>()
     }
 
-    pub fn billboard(&self) -> ResRef<BillboardData> {
+    pub fn billboard(&self) -> ResRef<'_, BillboardData> {
         self.world.resource::<BillboardData>()
     }
 
-    pub fn billboard_mut(&self) -> ResMut<BillboardData> {
+    pub fn billboard_mut(&self) -> ResMut<'_, BillboardData> {
         self.world.resource_mut::<BillboardData>()
     }
 
-    pub fn transform_gizmo(&self) -> ResRef<TransformGizmoData> {
+    pub fn transform_gizmo(&self) -> ResRef<'_, TransformGizmoData> {
         self.world.resource::<TransformGizmoData>()
     }
 
-    pub fn transform_gizmo_mut(&self) -> ResMut<TransformGizmoData> {
+    pub fn transform_gizmo_mut(&self) -> ResMut<'_, TransformGizmoData> {
         self.world.resource_mut::<TransformGizmoData>()
     }
 

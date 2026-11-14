@@ -3,11 +3,9 @@ use std::io::Write;
 
 use serde_json::{json, Value};
 
-use crate::ecs::resource::{Camera, FlameDumpSink, FlameHistorySnapshotState, FlameRenderSettings};
-use crate::ecs::World;
+use crate::ecs::resource::{FlameDumpSink, FlameHistorySnapshotState};
 use thyllore_effect_core::{
-    build_flame_ubo, probe_flame_wall, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
-    WallProbeView,
+    build_flame_ubo, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO, WallProbeView,
 };
 
 /// Dumps are written under fixed names, overwritten on the next dump, so the directory never grows.

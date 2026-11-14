@@ -1,4 +1,3 @@
-use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
@@ -8,7 +7,6 @@ use thyllore_avatar_core::cloth_setup::components::submesh_role::{
 };
 
 use super::chain_gen::*;
-use super::model::*;
 use super::morph::*;
 use super::spring::*;
 

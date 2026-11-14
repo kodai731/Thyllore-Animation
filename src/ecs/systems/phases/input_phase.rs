@@ -952,19 +952,19 @@ fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vec3)
         Some(inverse) => (inverse * new_pos.extend(1.0)).truncate(),
         None => new_pos,
     };
-    if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
+    if let Some(transform) = ctx.world.get_component_mut::<Transform>(entity) {
         transform.translation = local_pos;
     }
 }
 
 fn apply_entity_rotation(ctx: &mut EcsContext, entity: Entity, rotation: Quat) {
-    if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
+    if let Some(transform) = ctx.world.get_component_mut::<Transform>(entity) {
         transform.rotation = rotation * transform.rotation;
     }
 }
 
 fn apply_entity_scale(ctx: &mut EcsContext, entity: Entity, scale: Vec3) {
-    if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
+    if let Some(transform) = ctx.world.get_component_mut::<Transform>(entity) {
         transform.scale = scale;
     }
 }
@@ -1132,7 +1132,7 @@ fn process_pending_mesh_selection(ctx: &mut EcsContext) {
         return;
     }
 
-    let mut readback = ctx.object_id_readback_mut();
+    let readback = ctx.object_id_readback_mut();
     let readback_clone = (*readback).clone();
     drop(readback);
 

@@ -9,7 +9,6 @@ use crate::ecs::systems::{
 };
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::resource::graphics_resource::NodeData;
-use thyllore_model_core::apply_skinning;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]

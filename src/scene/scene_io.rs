@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn registered_resources_roundtrip_through_the_file() {
         let scene_path = scene_path_in("resources");
-        let mut world = world_with_resources();
+        let world = world_with_resources();
         {
             let mut camera = world.resource_mut::<Camera>();
             camera.distance = 12.5;

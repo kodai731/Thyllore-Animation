@@ -48,15 +48,15 @@ pub struct App {
 }
 
 impl App {
-    pub fn resource<R: Resource>(&self) -> ResRef<R> {
+    pub fn resource<R: Resource>(&self) -> ResRef<'_, R> {
         self.data.ecs_world.resource::<R>()
     }
 
-    pub fn resource_mut<R: Resource>(&self) -> ResMut<R> {
+    pub fn resource_mut<R: Resource>(&self) -> ResMut<'_, R> {
         self.data.ecs_world.resource_mut::<R>()
     }
 
-    pub fn get_resource<R: Resource>(&self) -> Option<ResRef<R>> {
+    pub fn get_resource<R: Resource>(&self) -> Option<ResRef<'_, R>> {
         self.data.ecs_world.get_resource::<R>()
     }
 

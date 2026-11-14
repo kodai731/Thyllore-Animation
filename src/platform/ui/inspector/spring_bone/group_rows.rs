@@ -1,4 +1,4 @@
-use thyllore_anim_core::spring_bone::{ColliderGroupOrigin, SpringColliderGroup, SpringColliderId};
+use thyllore_anim_core::spring_bone::{SpringColliderGroup, SpringColliderId};
 
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
@@ -148,6 +148,7 @@ pub fn group_rows(view: &GroupView) -> Vec<UiRow<GroupView>> {
 mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use thyllore_anim_core::spring_bone::ColliderGroupOrigin;
 
     #[test]
     fn group_rows_label_order_with_available() {

@@ -427,7 +427,7 @@ mod tests {
     }
 
     fn add_group(world: &mut World, entity: Entity, id: SpringColliderGroupId) {
-        let mut setup = world.get_component_mut::<SpringBoneSetup>(entity).unwrap();
+        let setup = world.get_component_mut::<SpringBoneSetup>(entity).unwrap();
         setup.collider_groups.push(SpringColliderGroup {
             id,
             name: format!("group_{id}"),

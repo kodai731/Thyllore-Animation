@@ -13,7 +13,7 @@ pub use fbx::{
 };
 pub use gltf::{load_gltf_file, GltfLoadResult, GltfMeshData, ImageData, NodeInfo};
 pub use model_result::{LoadedMesh, LoadedNode, ModelLoadResult, TextureData, TextureSource};
-pub use texture::{find_texture_file, load_png_image};
+pub use texture::{find_texture_file, load_png_image, resolve_mesh_texture, DecodedTextureFiles};
 
 #[cfg(feature = "auto-rig")]
 pub use gltf::load_gltf_from_slice;

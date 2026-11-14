@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "thyllore-scene-core"
 version = "0.0.1"
 edition = "2021"
@@ -8,6 +9,7 @@ description = "Scene persistence core for ThylloreAnimation — the SceneFields 
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
 [dependencies]
+glam = "0.34"
 serde = { version = "1", features = ["derive"] }
 thyllore-color-core = { path = "../thyllore-color-core" }
 thyllore-scene-derive = { path = "derive" }

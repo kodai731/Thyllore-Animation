@@ -47,6 +47,11 @@ impl ClipLibrary {
         self.model_clip_ids.clear();
     }
 
+    /// A loaded clip the model did not bring stays selected across a model load.
+    pub fn is_user_clip_selected(&self, selected: Option<SourceClipId>) -> bool {
+        selected.is_some_and(|id| self.get(id).is_some() && !self.model_clip_ids.contains(&id))
+    }
+
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
         self.source_clips.get(&id).map(|s| &s.editable_clip)
     }

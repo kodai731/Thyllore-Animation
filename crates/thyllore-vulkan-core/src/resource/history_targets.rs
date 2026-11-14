@@ -5,8 +5,9 @@ use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::renderer::{OverlayAttachmentLoad, OverlayPass};
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::types::Instance;
+use crate::types::HDR_FORMAT;
 
 const COLOR_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
     aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -22,11 +23,44 @@ const COLOR_RANGE: vk::ImageSubresourceRange = vk::ImageSubresourceRange {
 #[derive(Clone, Copy, Debug)]
 pub struct HistoryTargetsDesc {
     pub keys: [RenderTargetKey; 2],
-    pub format: vk::Format,
-    pub usage: vk::ImageUsageFlags,
-    pub sampler: vk::SamplerCreateInfo,
-    pub history_load_op: vk::AttachmentLoadOp,
-    pub depth_view: Option<vk::ImageView>,
+    pub(crate) format: vk::Format,
+    pub(crate) usage: vk::ImageUsageFlags,
+    pub(crate) sampler: crate::resource::image::SamplerDesc,
+    pub(crate) history_load_op: vk::AttachmentLoadOp,
+    pub(crate) depth_view: Option<vk::ImageView>,
+}
+
+impl HistoryTargetsDesc {
+    pub fn cleared_readback(
+        keys: [RenderTargetKey; 2],
+        format: crate::types::Format,
+        sampler: crate::resource::image::SamplerDesc,
+    ) -> Self {
+        Self {
+            keys,
+            format: format.raw(),
+            usage: vk::ImageUsageFlags::TRANSFER_SRC,
+            sampler,
+            history_load_op: vk::AttachmentLoadOp::CLEAR,
+            depth_view: None,
+        }
+    }
+
+    pub fn with_depth(
+        keys: [RenderTargetKey; 2],
+        format: crate::types::Format,
+        sampler: crate::resource::image::SamplerDesc,
+        depth_view: crate::types::ImageView,
+    ) -> Self {
+        Self {
+            keys,
+            format: format.raw(),
+            usage: vk::ImageUsageFlags::empty(),
+            sampler,
+            history_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            depth_view: Some(depth_view.raw()),
+        }
+    }
 }
 
 /// A history ping-pong pair from `RenderTargetStorage` plus the render pass and the two
@@ -34,17 +68,59 @@ pub struct HistoryTargetsDesc {
 /// history[1 - i]. The images belong to the storage; `destroy` only owns the pass objects.
 #[derive(Clone, Debug, Default)]
 pub struct HistoryTargets {
-    pub images: [vk::Image; 2],
-    pub views: [vk::ImageView; 2],
-    pub sampler: vk::Sampler,
-    pub render_pass: vk::RenderPass,
-    pub framebuffers: [vk::Framebuffer; 2],
+    pub(crate) images: [vk::Image; 2],
+    pub(crate) views: [vk::ImageView; 2],
+    pub(crate) sampler: vk::Sampler,
+    pub(crate) render_pass: vk::RenderPass,
+    pub(crate) framebuffers: [vk::Framebuffer; 2],
     pub width: u32,
     pub height: u32,
 }
 
 impl HistoryTargets {
-    pub unsafe fn new(
+    #[inline]
+    pub fn images(&self) -> [crate::types::Image; 2] {
+        self.images.map(crate::types::Image)
+    }
+
+    #[inline]
+    pub fn views(&self) -> [crate::types::ImageView; 2] {
+        self.views.map(crate::types::ImageView)
+    }
+
+    #[inline]
+    pub fn sampler(&self) -> crate::types::Sampler {
+        crate::types::Sampler(self.sampler)
+    }
+
+    #[inline]
+    pub fn render_pass(&self) -> crate::types::RenderPass {
+        crate::types::RenderPass(self.render_pass)
+    }
+
+    pub unsafe fn create(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        storage: &mut RenderTargetStorage,
+        command_pool: crate::types::CommandPool,
+        width: u32,
+        height: u32,
+        hdr_view: crate::types::ImageView,
+        desc: HistoryTargetsDesc,
+    ) -> Result<Self> {
+        Self::new(
+            instance,
+            rrdevice,
+            storage,
+            command_pool.raw(),
+            width,
+            height,
+            hdr_view.raw(),
+            desc,
+        )
+    }
+
+    pub(crate) unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
         storage: &mut RenderTargetStorage,
@@ -54,7 +130,7 @@ impl HistoryTargets {
         hdr_view: vk::ImageView,
         desc: HistoryTargetsDesc,
     ) -> Result<Self> {
-        storage.ensure_extent(&rrdevice.device, width, height);
+        storage.ensure_extent(rrdevice, width, height);
 
         let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT
             | vk::ImageUsageFlags::SAMPLED
@@ -86,7 +162,7 @@ impl HistoryTargets {
                 .width(width)
                 .height(height)
                 .layers(1);
-            *framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
+            *framebuffer = rrdevice.device().create_framebuffer(&info, None)?;
         }
 
         Ok(Self {
@@ -100,8 +176,8 @@ impl HistoryTargets {
         })
     }
 
-    pub fn extent(&self) -> vk::Extent2D {
-        vk::Extent2D {
+    pub fn extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D {
             width: self.width,
             height: self.height,
         }
@@ -112,12 +188,12 @@ impl HistoryTargets {
         OverlayPass {
             render_pass: self.render_pass,
             framebuffer: self.framebuffers[history_index],
-            extent: self.extent(),
+            extent: self.extent().raw(),
             load,
         }
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for framebuffer in &mut self.framebuffers {
             if *framebuffer != vk::Framebuffer::null() {
                 device.destroy_framebuffer(*framebuffer, None);
@@ -151,7 +227,7 @@ impl Drop for HistoryTargets {
 
 impl GpuResource for HistoryTargets {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
     }
 
     fn is_destroyed(&self) -> bool {
@@ -176,7 +252,7 @@ unsafe fn clear_to_shader_read_only(
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .subresource_range(COLOR_RANGE)
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
@@ -189,7 +265,7 @@ unsafe fn clear_to_shader_read_only(
         let clear_value = vk::ClearColorValue {
             float32: [0.0f32; 4],
         };
-        rrdevice.device.cmd_clear_color_image(
+        rrdevice.device().cmd_clear_color_image(
             cmd,
             image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -207,7 +283,7 @@ unsafe fn clear_to_shader_read_only(
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .subresource_range(COLOR_RANGE)
             .build();
-        rrdevice.device.cmd_pipeline_barrier(
+        rrdevice.device().cmd_pipeline_barrier(
             cmd,
             vk::PipelineStageFlags::TRANSFER,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -225,7 +301,7 @@ unsafe fn create_history_render_pass(
     desc: &HistoryTargetsDesc,
 ) -> Result<vk::RenderPass> {
     let hdr_attachment = vk::AttachmentDescription::builder()
-        .format(HDR_FORMAT)
+        .format(HDR_FORMAT.raw())
         .samples(vk::SampleCountFlags::_1)
         .load_op(vk::AttachmentLoadOp::LOAD)
         .store_op(vk::AttachmentStoreOp::STORE)
@@ -285,7 +361,7 @@ unsafe fn create_history_render_pass(
         .attachments(&attachments)
         .subpasses(&subpasses)
         .dependencies(&dependencies);
-    Ok(rrdevice.device.create_render_pass(&info, None)?)
+    Ok(rrdevice.device().create_render_pass(&info, None)?)
 }
 
 fn history_pass_dependencies(with_depth: bool) -> [vk::SubpassDependency; 2] {

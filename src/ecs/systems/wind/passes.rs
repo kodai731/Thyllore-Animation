@@ -1,14 +1,14 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::WindTornadoEffect;
-use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings, WindRenderTargets};
+use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings};
+use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
 use crate::ecs::systems::wind::pipeline::WIND_RESOLVE_OVERLAY;
 use crate::ecs::systems::wind::record::record_wind_shadow_bake_pass;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse, TransientRequest,
-    TransientSlot,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -17,9 +17,11 @@ use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
+use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
+use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet, Rect2D};
 use thyllore_vulkan_core::FrameRenderContext;
 
 const REDUCED_COLOR_SLOT: TransientSlot = TransientSlot("wind.reduced_color");
@@ -29,7 +31,7 @@ pub struct WindPassNode;
 /// Everything the wind node agrees on for one frame. `None` means nothing records this frame.
 struct WindFrame {
     ubos: Vec<WindUBO>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
 }
 
 impl WindFrame {
@@ -69,7 +71,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
         let effect = ctx.world.get_component::<WindTornadoEffect>(wind)?;
         let mut ubo = build_wind_ubo(&effect, WindShadowSlot(slot as u32));
         if let Some(inv_view_proj) = inv_view_proj {
-            ubo.inv_view_proj = inv_view_proj;
+            ubo.inv_view_proj = inv_view_proj.into();
         }
         let scissor = if settings.debug_view == WindDebugView::Coverage {
             Some(full_extent_scissor(extent))
@@ -77,7 +79,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
             compute_bounds_scissor(
                 ctx.world,
                 extent,
-                &ubo.model,
+                &ubo.model.to_mat4(),
                 wind_local_bounds_corners(&ubo),
             )
         };
@@ -110,7 +112,7 @@ unsafe fn prepare_reduced_color_target(
         .get_resource::<WindRenderTargets>()
         .map(|targets| {
             (
-                targets.reduced.render_pass,
+                targets.reduced.render_pass(),
                 scale.reduce_extent(targets.extent()),
             )
         })
@@ -120,15 +122,15 @@ unsafe fn prepare_reduced_color_target(
     let Some(scene_depth_view) = ctx
         .world
         .get_resource::<RenderTargets>()
-        .map(|targets| targets.render.gbuffer_depth_image_view)
+        .map(|targets| targets.render.gbuffer_depth_image_view())
     else {
         return Ok(());
     };
     let reduced_color = ctx.transient_image(REDUCED_COLOR_SLOT)?;
     ctx.transient.framebuffer(
-        &ctx.rrdevice.device,
+        &ctx.rrdevice,
         reduced_render_pass,
-        &[reduced_color.view],
+        &[reduced_color.view()],
         reduced_extent.width,
         reduced_extent.height,
     )?;
@@ -144,7 +146,7 @@ unsafe fn prepare_reduced_color_target(
         upsample_descriptor.update_image_views_at(
             ctx.rrdevice,
             frame_slot,
-            reduced_color.view,
+            reduced_color.view(),
             scene_depth_view,
         )?;
     }
@@ -170,18 +172,12 @@ impl RenderPassNode for WindPassNode {
         }
         let mut uses = vec![TargetUse::new(
             TargetRef::Core(CoreTarget::HdrColor),
-            TargetAccess::Attachment {
-                initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            },
+            TargetAccess::Attachment(AttachmentStart::Sampled),
         )];
         if reduced_scale(ctx).is_some() {
             uses.push(TargetUse::new(
                 TargetRef::Transient(REDUCED_COLOR_SLOT),
-                TargetAccess::Attachment {
-                    initial_layout: vk::ImageLayout::UNDEFINED,
-                    final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                },
+                TargetAccess::Attachment(AttachmentStart::Discard),
             ));
         }
         uses
@@ -213,7 +209,7 @@ impl RenderPassNode for WindPassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -223,7 +219,7 @@ impl RenderPassNode for WindPassNode {
 
 unsafe fn record_wind_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
@@ -259,16 +255,16 @@ unsafe fn record_wind_passes(
             continue;
         };
         wind_ubo.record_update(
-            &render.device.device,
+            render.device,
             command_buffer,
             slot,
             ubo,
-            vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER,
+            &[ShaderStage::Compute, ShaderStage::Fragment],
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![wind_ubo.slot_offset(slot)? as u32],
+        draws.push(OverlayInstanceDraw::new(
+            vec![wind_ubo.slot_offset(slot)? as u32],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());
@@ -290,18 +286,18 @@ unsafe fn record_wind_passes(
     }
 
     let resolve_sets = [
-        render.graphics.frame_set.sets[image_index],
-        descriptor.descriptor_set,
+        render.graphics.frame_set.sets()[image_index],
+        descriptor.sets.set(SetSlot::SINGLE)?,
     ];
     match reduced_scale(ctx) {
         None => {
             let pass = wind_buffer.overlay_pass();
             for draw in &draws {
                 WIND_RESOLVE_OVERLAY.record(
-                    &render.device.device,
+                    render.device,
                     command_buffer,
                     &pass,
-                    draw.scissor,
+                    draw.scissor(),
                     shading_pipeline,
                     Some(push_constants.as_bytes()),
                     &resolve_sets,
@@ -335,11 +331,11 @@ unsafe fn record_reduced_scale_wind_passes(
     wind_buffer: &WindRenderTargets,
     scale: OverlayResolveScale,
     shading_pipeline: &RRPipeline,
-    resolve_sets: &[vk::DescriptorSet],
+    resolve_sets: &[DescriptorSet],
     draws: &[OverlayInstanceDraw],
     push_constants: ShadingPushConstants,
     frame_slot: usize,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<()> {
     let (Some(upsample_pipeline), Some(upsample_descriptor)) = (
         gpu_state.upsample_pipeline.as_ref(),
@@ -350,11 +346,11 @@ unsafe fn record_reduced_scale_wind_passes(
     let reduced_color = pass_ctx.transient_image(REDUCED_COLOR_SLOT)?;
     let Some(reduced_framebuffer) = pass_ctx
         .transient
-        .cached_framebuffer(wind_buffer.reduced.render_pass, &[reduced_color.view])
+        .cached_framebuffer(wind_buffer.reduced.render_pass(), &[reduced_color.view()])
     else {
         return Ok(());
     };
-    let device = &ctx.device.device;
+    let rrdevice = ctx.device;
 
     let reduced_pass =
         wind_buffer
@@ -362,13 +358,15 @@ unsafe fn record_reduced_scale_wind_passes(
             .overlay_pass(reduced_framebuffer, scale, wind_buffer.extent());
     let reduced_draws: Vec<OverlayInstanceDraw> = draws
         .iter()
-        .map(|draw| OverlayInstanceDraw {
-            dynamic_offsets: draw.dynamic_offsets.clone(),
-            scissor: scale.reduce_scissor(draw.scissor, reduced_pass.extent),
+        .map(|draw| {
+            OverlayInstanceDraw::new(
+                draw.dynamic_offsets.clone(),
+                scale.reduce_scissor(draw.scissor(), reduced_pass.extent()),
+            )
         })
         .collect();
     WIND_RESOLVE_OVERLAY.record(
-        device,
+        rrdevice,
         command_buffer,
         &reduced_pass,
         reduced_pass.full_area(),
@@ -378,19 +376,20 @@ unsafe fn record_reduced_scale_wind_passes(
         &reduced_draws,
     )?;
 
-    let upsample_scissor =
-        union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent());
+    let upsample_scissor = union_scissor(
+        draws.iter().map(|draw| draw.scissor()),
+        wind_buffer.extent(),
+    );
     UPSAMPLE_OVERLAY.record(
-        device,
+        rrdevice,
         command_buffer,
         &wind_buffer.overlay_pass(),
         upsample_scissor,
         upsample_pipeline,
         None,
-        &[upsample_descriptor.descriptor_set(frame_slot)],
-        &[OverlayInstanceDraw {
-            dynamic_offsets: Vec::new(),
-            scissor: upsample_scissor,
-        }],
+        &[upsample_descriptor
+            .sets
+            .set(SetSlot::frame_slot(frame_slot))?],
+        &[OverlayInstanceDraw::new(Vec::new(), upsample_scissor)],
     )
 }

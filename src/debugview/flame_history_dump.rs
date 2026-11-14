@@ -4,9 +4,10 @@ use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{FlameDumpSink, FlameRenderTargets};
 use crate::ecs::systems::flame_dump_npy_path;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
-use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::{build_flame_ubo, FlameUBO};
 use thyllore_math_core::{f16_to_f32, write_npy_f32};
+use thyllore_vulkan_core::resource::ReadbackLayout;
+use thyllore_vulkan_core::types::DeviceSize;
 
 /// With `--flame-dump`, writes the current flame history image and the first flame's UBO next to
 /// the dump file (`flame_XX.npy` in sequence mode).
@@ -51,7 +52,6 @@ fn write_first_flame_ubo(ctx: &CaptureContext, path: &std::path::Path) -> Result
 }
 
 unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -> Result<()> {
-    let device = &ctx.device.device;
     let flame_targets = ctx
         .world
         .get_resource::<FlameRenderTargets>()
@@ -65,24 +65,19 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
         .and_then(|&first| ctx.world.get_component::<FlameTemporalAccum>(first))
         .map(|temporal| (temporal.frame_index as usize) & 1)
         .unwrap_or(0);
-    let history_image = flame_history.images[history_index];
+    let history_image = flame_history.images()[history_index];
     let width = flame_history.width;
     let height = flame_history.height;
-    let image_size = (width * height * 8) as vk::DeviceSize;
+    let image_size = (width * height * 8) as DeviceSize;
 
-    let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
+    let bytes = ctx.read_image_bytes(
         history_image,
         width,
         height,
         image_size,
-        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        ReadbackLayout::ShaderReadOnly,
     )?;
-    let data_ptr = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
-    let slice = std::slice::from_raw_parts(data_ptr as *const u8, image_size as usize);
-    let f32_data = decode_rgba16f(slice);
-    device.unmap_memory(buffer_memory);
-    device.free_memory(buffer_memory, None);
-    device.destroy_buffer(buffer, None);
+    let f32_data = decode_rgba16f(&bytes);
 
     write_npy_f32(path, &[height as usize, width as usize, 4], &f32_data)?;
     Ok(())

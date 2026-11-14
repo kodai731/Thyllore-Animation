@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+crate::startup_resource!(UiWidgetState, Editor);
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelVisibility {
     #[default]

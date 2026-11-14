@@ -37,7 +37,7 @@ pub fn sync_motion_paths(world: &mut World) {
 
         let new_pos = motion_path_position(&path, current_time);
 
-        if let Some(mut transform) = world.get_component_mut::<Transform>(entity) {
+        if let Some(transform) = world.get_component_mut::<Transform>(entity) {
             transform.translation = new_pos;
         } else {
             let transform = Transform {
@@ -57,6 +57,7 @@ pub fn motion_path_sync(ctx: &mut FrameContext) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glam::Vec3;
 
     #[test]
     fn test_batch_run_inserts_transform_and_moves_along_orbit() {
@@ -69,7 +70,7 @@ mod tests {
         world.insert_component(
             entity,
             MotionPath {
-                center: cgmath::Vector3::new(0.0, 0.0, 0.0),
+                center: Vec3::new(0.0, 0.0, 0.0),
                 radius: 5.0,
                 angular_speed: 1.0,
                 phase_offset: 0.0,

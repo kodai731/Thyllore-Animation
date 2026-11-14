@@ -1,15 +1,15 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::WindRenderTargets;
-use crate::ecs::systems::wind::descriptors::WindShadowBakeDescriptorSet;
-use crate::ecs::systems::wind::render_targets::wind_shadow_volume_extent;
+use crate::ecs::systems::wind::gpu_targets::{wind_shadow_volume_extent, WindRenderTargets};
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
-use thyllore_vulkan_core::{
-    insert_storage_image_read_barrier, insert_storage_image_write_barrier, FrameRenderContext,
-    OverlayInstanceDraw,
+use thyllore_vulkan_core::descriptor::{ReflectedDescriptorSets, SetSlot};
+use thyllore_vulkan_core::renderer::{
+    bind_compute, dispatch, storage_image_read_barrier_for_fragment,
+    storage_image_write_barrier_for_fragment,
 };
+use thyllore_vulkan_core::types::CommandBuffer;
+use thyllore_vulkan_core::{FrameRenderContext, OverlayInstanceDraw};
 
 /// Must match local_size in shadowBake.comp.
 const SHADOW_BAKE_WORKGROUP_SIZE: u32 = 8;
@@ -19,45 +19,31 @@ pub unsafe fn record_wind_shadow_bake_pass(
     ctx: &FrameRenderContext,
     targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &WindShadowBakeDescriptorSet,
+    descriptor: &ReflectedDescriptorSets,
     draws: &[OverlayInstanceDraw],
     image_index: usize,
-    cmd: vk::CommandBuffer,
+    cmd: CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
     let volume = &targets.shadow_volume;
-    insert_storage_image_write_barrier(
-        device,
-        cmd,
-        volume.image,
-        volume.subresource_range(),
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-    );
+    storage_image_write_barrier_for_fragment(&ctx.device, cmd, volume);
 
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, pipeline.pipeline);
     let extent = wind_shadow_volume_extent();
     let group_count_x =
         (extent.width / WIND_SHADOW_VOLUME_SLOTS).div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
     let group_count_y = extent.height.div_ceil(SHADOW_BAKE_WORKGROUP_SIZE);
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
+    let frame_set = ctx.graphics.frame_set.sets()[image_index];
+    let bake_set = descriptor.set(SetSlot::SINGLE)?;
     for draw in draws {
-        device.cmd_bind_descriptor_sets(
+        bind_compute(
+            &ctx.device,
             cmd,
-            vk::PipelineBindPoint::COMPUTE,
-            pipeline.pipeline_layout,
-            0,
-            &[frame_set, descriptor.descriptor_set],
+            pipeline,
+            &[frame_set, bake_set],
             &draw.dynamic_offsets,
         );
-        device.cmd_dispatch(cmd, group_count_x, group_count_y, extent.depth);
+        dispatch(&ctx.device, cmd, group_count_x, group_count_y, extent.depth);
     }
 
-    insert_storage_image_read_barrier(
-        device,
-        cmd,
-        volume.image,
-        volume.subresource_range(),
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-    );
+    storage_image_read_barrier_for_fragment(&ctx.device, cmd, volume);
     Ok(())
 }

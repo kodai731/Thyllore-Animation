@@ -114,7 +114,7 @@ pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
     let mut bones: Vec<BoneInput> = canonical
         .iter()
         .enumerate()
-        .map(|(i, cb)| BoneInput {
+        .map(|(_i, cb)| BoneInput {
             name: cb.role.unity_name().to_string(),
             parent: cb.parent,
             rest_position: [
@@ -125,7 +125,7 @@ pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
         })
         .collect();
 
-    for (i, eb) in extra_bones().iter().enumerate() {
+    for (_i, eb) in extra_bones().iter().enumerate() {
         let parent_index = match eb.parent {
             ExtraParent::Role(role) => canonical
                 .iter()

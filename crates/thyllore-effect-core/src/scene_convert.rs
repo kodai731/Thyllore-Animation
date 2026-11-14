@@ -1,12 +1,12 @@
 /// Scene form of a rotation: `[w, x, y, z]`, matching the Python placement argument.
 pub mod quaternion_wxyz {
-    use cgmath::Quaternion;
+    use glam::Quat;
 
-    pub fn get(rotation: &Quaternion<f32>) -> [f32; 4] {
-        [rotation.s, rotation.v.x, rotation.v.y, rotation.v.z]
+    pub fn get(rotation: &Quat) -> [f32; 4] {
+        [rotation.w, rotation.x, rotation.y, rotation.z]
     }
 
-    pub fn set(rotation: &mut Quaternion<f32>, value: [f32; 4]) {
-        *rotation = Quaternion::new(value[0], value[1], value[2], value[3]);
+    pub fn set(rotation: &mut Quat, value: [f32; 4]) {
+        *rotation = Quat::from_xyzw(value[1], value[2], value[3], value[0]);
     }
 }

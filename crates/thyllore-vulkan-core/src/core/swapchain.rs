@@ -1,39 +1,41 @@
 use super::device::*;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::*;
+use crate::types::Instance;
 use crate::vulkan::*;
 use winit::window::Window;
 
 #[derive(Clone, Debug)]
 pub struct SwapchainSupport {
-    pub capabilities: vk::SurfaceCapabilitiesKHR,
-    pub formats: Vec<vk::SurfaceFormatKHR>,
-    pub present_modes: Vec<vk::PresentModeKHR>,
+    pub(crate) capabilities: vk::SurfaceCapabilitiesKHR,
+    pub(crate) formats: Vec<vk::SurfaceFormatKHR>,
+    pub(crate) present_modes: Vec<vk::PresentModeKHR>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRSwapchain {
-    pub swapchain: vk::SwapchainKHR,
-    pub swapchain_images: Vec<vk::Image>,
-    pub swapchain_format: vk::Format,
-    pub swapchain_extent: vk::Extent2D,
-    pub swapchain_image_views: Vec<vk::ImageView>,
+    pub(crate) swapchain: vk::SwapchainKHR,
+    pub(crate) swapchain_images: Vec<crate::types::Image>,
+    pub(crate) swapchain_format: vk::Format,
+    pub(crate) swapchain_extent: vk::Extent2D,
+    pub(crate) swapchain_image_views: Vec<vk::ImageView>,
 }
 
 impl RRSwapchain {
     pub unsafe fn new(
         window: &Window,
         instance: &Instance,
-        surface: &vk::SurfaceKHR,
+        surface: &crate::types::Surface,
         rrdevice: &RRDevice,
     ) -> Result<Self> {
-        let mut rrswapchain = create_swapchain(window, instance, surface, rrdevice)?;
+        let mut rrswapchain = create_swapchain(window, instance, &surface.raw(), rrdevice)?;
         create_swapchain_image_view(rrdevice, &mut rrswapchain)?;
         log!("Created swapchain");
         Ok(rrswapchain)
     }
 
-    pub unsafe fn destroy(&mut self, device: &super::device::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
         for view in self.swapchain_image_views.drain(..) {
             device.destroy_image_view(view, None);
         }
@@ -43,11 +45,31 @@ impl RRSwapchain {
             self.swapchain = vk::SwapchainKHR::null();
         }
     }
+
+    #[inline]
+    pub fn swapchain(&self) -> crate::types::Swapchain {
+        crate::types::Swapchain(self.swapchain)
+    }
+
+    #[inline]
+    pub fn swapchain_images(&self) -> &[crate::types::Image] {
+        &self.swapchain_images
+    }
+
+    #[inline]
+    pub fn swapchain_format(&self) -> crate::types::Format {
+        crate::types::Format(self.swapchain_format)
+    }
+
+    #[inline]
+    pub fn swapchain_extent(&self) -> crate::types::Extent2D {
+        crate::types::Extent2D::from_raw(self.swapchain_extent)
+    }
 }
 
 impl GpuResource for RRSwapchain {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {
@@ -56,22 +78,27 @@ impl GpuResource for RRSwapchain {
 }
 
 impl SwapchainSupport {
-    pub unsafe fn get(
+    pub(crate) unsafe fn get(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
     ) -> Result<Self> {
         Ok(Self {
             capabilities: instance
+                .raw()
                 .get_physical_device_surface_capabilities_khr(*physical_device, *surface)?,
             formats: instance
+                .raw()
                 .get_physical_device_surface_formats_khr(*physical_device, *surface)?,
             present_modes: instance
+                .raw()
                 .get_physical_device_surface_present_modes_khr(*physical_device, *surface)?,
         })
     }
 
-    pub fn get_swapchain_surface_format(formats: &[vk::SurfaceFormatKHR]) -> vk::SurfaceFormatKHR {
+    pub(crate) fn get_swapchain_surface_format(
+        formats: &[vk::SurfaceFormatKHR],
+    ) -> vk::SurfaceFormatKHR {
         formats
             .iter()
             .cloned()
@@ -82,7 +109,9 @@ impl SwapchainSupport {
             .unwrap_or_else(|| formats[0])
     }
 
-    pub fn get_swapchain_present_mode(present_modes: &[vk::PresentModeKHR]) -> vk::PresentModeKHR {
+    pub(crate) fn get_swapchain_present_mode(
+        present_modes: &[vk::PresentModeKHR],
+    ) -> vk::PresentModeKHR {
         present_modes
             .iter()
             .cloned()
@@ -90,7 +119,7 @@ impl SwapchainSupport {
             .unwrap_or(vk::PresentModeKHR::FIFO)
     }
 
-    pub fn get_swapchain_extent(
+    pub(crate) fn get_swapchain_extent(
         window: &Window,
         capabilities: vk::SurfaceCapabilitiesKHR,
     ) -> vk::Extent2D {
@@ -115,12 +144,12 @@ impl SwapchainSupport {
     }
 }
 
-pub unsafe fn create_swapchain(
+pub(crate) unsafe fn create_swapchain(
     window: &Window,
     instance: &Instance,
     surface: &vk::SurfaceKHR,
     rrdevice: &RRDevice,
-) -> Result<(RRSwapchain)> {
+) -> Result<RRSwapchain> {
     let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
     let support = SwapchainSupport::get(instance, surface, &rrdevice.physical_device)?;
     let surface_format = SwapchainSupport::get_swapchain_surface_format(&support.formats);
@@ -160,13 +189,16 @@ pub unsafe fn create_swapchain(
         .old_swapchain(vk::SwapchainKHR::null());
 
     let mut rrswapchain = RRSwapchain::default();
-    rrswapchain.swapchain = rrdevice.device.create_swapchain_khr(&info, None)?;
+    rrswapchain.swapchain = rrdevice.device().create_swapchain_khr(&info, None)?;
     rrswapchain.swapchain_images = rrdevice
-        .device
-        .get_swapchain_images_khr(rrswapchain.swapchain)?;
+        .device()
+        .get_swapchain_images_khr(rrswapchain.swapchain)?
+        .into_iter()
+        .map(crate::types::Image)
+        .collect();
     rrswapchain.swapchain_format = surface_format.format;
     rrswapchain.swapchain_extent = extent;
-    Ok((rrswapchain))
+    Ok(rrswapchain)
 }
 
 pub unsafe fn create_swapchain_image_view(
@@ -179,7 +211,7 @@ pub unsafe fn create_swapchain_image_view(
         .map(|i| {
             create_image_view(
                 rrdevice,
-                *i,
+                i.raw(),
                 rrswapchain.swapchain_format,
                 vk::ImageAspectFlags::COLOR,
                 1,

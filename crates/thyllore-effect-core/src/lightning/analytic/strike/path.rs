@@ -1,22 +1,22 @@
 use super::segment::{compute_distance, push_segment, Segment};
 use crate::lightning::effect::LIGHTNING_MAX_WAYPOINTS;
 use crate::LightningEffect;
-use cgmath::{InnerSpace, Quaternion, Rad, Rotation, Rotation3, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_math_core::{hash_f32, hash_u32};
 
 pub(super) fn perpendicular_basis(dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
-    let axis = Vector3::from(dir);
-    let axis = if axis.magnitude2() > 0.0 {
+    let axis = Vec3::from(dir);
+    let axis = if axis.length_squared() > 0.0 {
         axis.normalize()
     } else {
-        Vector3::unit_z()
+        Vec3::Z
     };
 
-    let canonical_down = -Vector3::unit_y();
+    let canonical_down = -Vec3::Y;
     let u = if axis.dot(canonical_down) < -1.0 + 1e-6 {
-        Vector3::unit_x()
+        Vec3::X
     } else {
-        Quaternion::from_arc(canonical_down, axis, None).rotate_vector(Vector3::unit_x())
+        Quat::from_rotation_arc(canonical_down, axis).mul_vec3(Vec3::X)
     };
 
     let v = axis.cross(u);
@@ -42,13 +42,13 @@ pub(super) fn scatter_end_offset(
 }
 
 pub(super) fn rotate_around_axis(v: [f32; 3], axis: [f32; 3], angle: f32) -> [f32; 3] {
-    let axis = Vector3::from(axis);
-    if axis.magnitude2() <= 0.0 {
+    let axis = Vec3::from(axis);
+    if axis.length_squared() <= 0.0 {
         return v;
     }
 
-    let rotation = Quaternion::from_axis_angle(axis.normalize(), Rad(angle));
-    rotation.rotate_vector(Vector3::from(v)).into()
+    let rotation = Quat::from_axis_angle(axis.normalize(), angle);
+    rotation.mul_vec3(Vec3::from(v)).into()
 }
 
 pub(super) fn compute_branch_tangent(
@@ -59,7 +59,7 @@ pub(super) fn compute_branch_tangent(
 ) -> [f32; 3] {
     let (u, v) = perpendicular_basis(parent_tangent);
     let azimuth = azimuth_hash * std::f32::consts::TAU;
-    let axis = Vector3::from(u) * azimuth.cos() + Vector3::from(v) * azimuth.sin();
+    let axis = Vec3::from(u) * azimuth.cos() + Vec3::from(v) * azimuth.sin();
 
     let angle = branch_angle * (0.5 + angle_hash);
     rotate_around_axis(parent_tangent, axis.into(), angle)
@@ -101,8 +101,8 @@ pub(super) fn displace_path(
             let (u, v) = perpendicular_basis(chord);
 
             let node = i as u32;
-            let mut hash_base: [u32; 5] = [seed, strike, l, node, 0];
-            let mut hash_base_angle: [u32; 5] = [seed, strike, l, node, 1];
+            let hash_base: [u32; 5] = [seed, strike, l, node, 0];
+            let hash_base_angle: [u32; 5] = [seed, strike, l, node, 1];
 
             let (dist_hash, angle_hash) = if l >= effect.timing.reseed_level {
                 let mut extended_dist: [u32; 6] = [0; 6];

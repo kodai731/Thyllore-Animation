@@ -1,47 +1,48 @@
-use crate::vulkanr::core::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::{
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot,
+};
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::{GpuResource, UniformBuffer};
 use thyllore_effect_core::FlameUBO;
-use thyllore_vulkan_core::vulkan::*;
+use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 const FLAME_HISTORY_SET_COUNT: usize = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlameImageBindings {
-    pub history_image_views: [vk::ImageView; FLAME_HISTORY_SET_COUNT],
-    pub flame_sampler: vk::Sampler,
-    pub sdf_image_view: vk::ImageView,
-    pub sdf_sampler: vk::Sampler,
-    pub scene_depth_view: vk::ImageView,
+    pub history_image_views: [ImageView; FLAME_HISTORY_SET_COUNT],
+    pub flame_sampler: Sampler,
+    pub sdf_image_view: ImageView,
+    pub sdf_sampler: Sampler,
+    pub scene_depth_view: ImageView,
 }
 
-#[derive(Clone, Debug, Default)]
+/// One set per history index; each samples the history image the other index wrote.
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct RRFlameDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_sets: [vk::DescriptorSet; FLAME_HISTORY_SET_COUNT],
-    pub scene_depth_sampler: vk::Sampler,
+    pub sets: ReflectedDescriptorSets,
+    scene_depth_sampler: Sampler,
 }
 
 impl RRFlameDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&FLAME_RESOLVE).with_override(
-            flame_resolve::FLAME,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
-    }
-
     pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let sets = layout.allocate_sets(rrdevice, FLAME_HISTORY_SET_COUNT)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+        let layout_spec = ReflectedLayoutSpec::local(&FLAME_RESOLVE)
+            .with_override(flame_resolve::FLAME, DescriptorKind::UniformBufferDynamic);
 
-        Ok(Self {
-            layout,
-            descriptor_sets: [sets[0], sets[1]],
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets = ReflectedDescriptorSets::create(
+                rrdevice,
+                &layout_spec,
+                SetGrid::per_history(FLAME_HISTORY_SET_COUNT),
+            )?;
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
     }
 
@@ -51,9 +52,9 @@ impl RRFlameDescriptorSet {
         flame_ubo: &UniformBuffer<FlameUBO>,
         images: FlameImageBindings,
     ) -> Result<()> {
-        for descriptor_set in self.descriptor_sets {
-            self.layout
-                .writer(descriptor_set)
+        for history_index in 0..FLAME_HISTORY_SET_COUNT {
+            self.sets
+                .writer(SetSlot::history(history_index))?
                 .uniform_dynamic(flame_resolve::FLAME, flame_ubo)?
                 .apply(rrdevice);
         }
@@ -65,45 +66,27 @@ impl RRFlameDescriptorSet {
         rrdevice: &RRDevice,
         images: FlameImageBindings,
     ) -> Result<()> {
-        for (history_index, descriptor_set) in self.descriptor_sets.into_iter().enumerate() {
+        for history_index in 0..FLAME_HISTORY_SET_COUNT {
             let previous_history_view = images.history_image_views[1 - history_index];
-            self.layout
-                .writer(descriptor_set)
-                .image(
+            self.sets
+                .writer(SetSlot::history(history_index))?
+                .sampled_image(
                     flame_resolve::FLAME_HISTORY_SAMPLER,
                     previous_history_view,
                     images.flame_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_image(
                     flame_resolve::FLAME_SDF_SAMPLER,
                     images.sdf_image_view,
                     images.sdf_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 )?
-                .image(
+                .sampled_depth(
                     flame_resolve::SCENE_DEPTH_SAMPLER,
                     images.scene_depth_view,
                     self.scene_depth_sampler,
-                    vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                 )?
                 .apply(rrdevice);
         }
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for RRFlameDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed() && self.scene_depth_sampler.is_destroyed()
     }
 }

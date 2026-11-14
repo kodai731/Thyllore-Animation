@@ -2,8 +2,6 @@
 
 mod support;
 
-use cgmath::InnerSpace;
-
 use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
 use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
 
@@ -11,7 +9,7 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::systems::bake::bake_humanoid_clip;
 use thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoid_pose;
 use thyllore_avatar_core::motion::systems::retarget_pose::{
-    build_retarget_context, retarget_from_bones, retarget_to_bones,
+    retarget_from_bones, retarget_to_bones,
 };
 use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_thyllore;
 

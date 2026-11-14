@@ -115,22 +115,26 @@ impl StatusBarState {
     }
 }
 
-fn draw_status_bar(
-    ui: &imgui::Ui,
-    state: &mut StatusBarState,
+struct StatusBarInputs<'a> {
     delta_time: f32,
     times: FrameTimeValues,
-    viewport: &ViewportInput,
-    model: &ModelState,
-    timeline_state: &TimelineState,
+    viewport: &'a ViewportInput,
+    model: &'a ModelState,
+    timeline_state: &'a TimelineState,
     clip_duration: f32,
     errors: usize,
     warnings: usize,
+}
+
+fn draw_status_bar(
+    ui: &imgui::Ui,
+    state: &mut StatusBarState,
+    inputs: &StatusBarInputs,
 ) -> Option<OverlayEvent> {
-    state.update_frame(delta_time, times.cpu_ms, times.wait_ms);
+    state.update_frame(inputs.delta_time, inputs.times.cpu_ms, inputs.times.wait_ms);
     state.update_memory();
 
-    let gpu_ms = match times.gpu_ms {
+    let gpu_ms = match inputs.times.gpu_ms {
         Some(ms) => {
             state.last_gpu_ms = ms;
             ms
@@ -139,19 +143,23 @@ fn draw_status_bar(
     };
 
     let fps = state.average_fps();
-    let frame_rate = timeline_state.snap_settings.frame_rate;
-    let current_frame = (timeline_state.current_time * frame_rate).round() as i32;
-    let total_frames = (clip_duration * frame_rate).round() as i32;
-    let current_time = timeline_state.current_time;
-    let playback_icon = if timeline_state.playing { ">" } else { "||" };
+    let frame_rate = inputs.timeline_state.snap_settings.frame_rate;
+    let current_frame = (inputs.timeline_state.current_time * frame_rate).round() as i32;
+    let total_frames = (inputs.clip_duration * frame_rate).round() as i32;
+    let current_time = inputs.timeline_state.current_time;
+    let playback_icon = if inputs.timeline_state.playing {
+        ">"
+    } else {
+        "||"
+    };
 
     let model_text = format!(
         "{}  {}",
-        model_file_name(&model.model_path),
-        model.load_status
+        model_file_name(&inputs.model.model_path),
+        inputs.model.load_status
     );
-    let validation_text = format_validation_status(errors, warnings);
-    let validation_color = validation_status_color(errors, warnings);
+    let validation_text = format_validation_status(inputs.errors, inputs.warnings);
+    let validation_color = validation_status_color(inputs.errors, inputs.warnings);
 
     let fps_text = format!("FPS:{:.0}", fps);
     let cpu_text = format!("CPU {:.1}ms", state.average_cpu_ms());
@@ -175,8 +183,8 @@ fn draw_status_bar(
     let item_x = stable_item_offsets(ui, items.iter().map(|(text, _)| *text));
     let last_item_end = item_x[items.len() - 1] + stable_text_width(ui, validation_text.as_str());
 
-    let vp_right = viewport.position[0] + viewport.size[0];
-    let vp_bottom = viewport.position[1] + viewport.size[1];
+    let vp_right = inputs.viewport.position[0] + inputs.viewport.size[0];
+    let vp_bottom = inputs.viewport.position[1] + inputs.viewport.size[1];
     let window_width = last_item_end + OVERLAY_PADDING;
     let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
@@ -197,8 +205,8 @@ fn draw_status_bar(
                 for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
                     ui.set_cursor_pos([x, text_y]);
                     ui.text_colored(*color, text);
-                    if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
-                        ui.tooltip_text(&model.model_path);
+                    if index == 0 && ui.is_item_hovered() && !inputs.model.model_path.is_empty() {
+                        ui.tooltip_text(&inputs.model.model_path);
                     }
                     if index == items.len() - 1 {
                         validation_clicked = ui.is_item_clicked();
@@ -423,14 +431,16 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
     if let Some(event) = draw_status_bar(
         ui,
         &mut state,
-        delta_time,
-        times,
-        &viewport,
-        &model,
-        &timeline_state,
-        clip_duration,
-        errors,
-        warnings,
+        &StatusBarInputs {
+            delta_time,
+            times,
+            viewport: &viewport,
+            model: &model,
+            timeline_state: &timeline_state,
+            clip_duration,
+            errors,
+            warnings,
+        },
     ) {
         world.send_command(event);
     }

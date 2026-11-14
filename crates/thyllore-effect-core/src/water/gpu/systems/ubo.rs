@@ -6,18 +6,19 @@ use crate::water::analytic::laplace_beltrami_basis::{
 use crate::water::analytic::{generate_water_wave_modes, WATER_WAVE_MODE_COUNT};
 use crate::water::effect::WaterTorusEffect;
 use crate::water::*;
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
+use thyllore_math_core::GpuMat4;
 use thyllore_math_core::LinearCongruentialGenerator;
 
 /// Compute inverse(proj * view) using f64 precision to minimize fp32 rounding error.
-/// Returns the result as Matrix4<f32>.
-pub fn inverse_view_proj_f64(proj: Matrix4<f32>, view: Matrix4<f32>) -> Matrix4<f32> {
-    let p: Matrix4<f64> = proj.cast().unwrap();
-    let v: Matrix4<f64> = view.cast().unwrap();
+/// Returns the result as Mat4.
+pub fn inverse_view_proj_f64(proj: Mat4, view: Mat4) -> Mat4 {
+    let p = proj.as_dmat4();
+    let v = view.as_dmat4();
     let inv = (p * v)
-        .invert()
+        .try_inverse()
         .expect("view-proj matrix must be invertible");
-    inv.cast().unwrap()
+    inv.as_mat4()
 }
 
 const LAPLACE_BELTRAMI_PHASE_SEED: u64 = 999;
@@ -60,7 +61,7 @@ pub fn build_laplace_beltrami_modes(effect: &WaterTorusEffect) -> [[f32; 4]; 20]
 
 pub fn build_water_ubo(effect: &WaterTorusEffect, frame_index: u32) -> WaterUBO {
     let model = build_water_model_matrix(effect);
-    let inverse_model = model.invert().unwrap_or(Matrix4::identity());
+    let inverse_model = model.try_inverse().unwrap_or(Mat4::IDENTITY);
 
     let modes = generate_water_wave_modes(
         effect.wave_amplitude * (1.0 - effect.wave_lb_blend),
@@ -86,8 +87,8 @@ pub fn build_water_ubo(effect: &WaterTorusEffect, frame_index: u32) -> WaterUBO 
     }
 
     let mut ubo = WaterUBO {
-        model,
-        inverse_model,
+        model: model.into(),
+        inverse_model: inverse_model.into(),
         radii: [0.0; 4],
         absorption: [0.0; 4],
         flow: [0.0; 4],
@@ -97,7 +98,7 @@ pub fn build_water_ubo(effect: &WaterTorusEffect, frame_index: u32) -> WaterUBO 
         scattering: [0.0; 4],
         temporal: [0.0; 4],
         wave_modes,
-        inv_view_proj: Matrix4::identity(),
+        inv_view_proj: GpuMat4::IDENTITY,
         lb_modes: build_laplace_beltrami_modes(effect),
     };
 

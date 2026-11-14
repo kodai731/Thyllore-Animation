@@ -32,7 +32,7 @@ fn probe_wall_scene(world: &World, viewport_size: [f32; 2]) -> Option<WallProbeS
         forward: compute_camera_direction(&camera).into(),
         right: compute_camera_right(&camera).into(),
         up: compute_camera_up(&camera).into(),
-        fov_y_radians: camera.fov_y.0.to_radians(),
+        fov_y_radians: camera.fov_y,
         viewport_size_px: viewport_size,
     };
 

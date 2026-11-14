@@ -2,6 +2,7 @@ use crate::ecs::component::{EntityIcon, WaterTorusEffect};
 use crate::ecs::resource::TimelineState;
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
+use glam::{vec4, Vec2, Vec3};
 
 use super::test_support::{spawn_default_water, timeline_time_sources};
 use super::*;
@@ -129,8 +130,8 @@ fn pick_ray_hits_water_torus() {
     // Ray from (0, 0, -5) going +Z hits the torus outer edge at z = -(1.0 + 0.3) = -1.3
     // Distance from (0, 0, -5) to (0, 0, -1.3) = 3.7
     let ray = crate::ecs::resource::PickRay {
-        origin: cgmath::Vector3::new(0.0, 0.0, -5.0),
-        direction: cgmath::Vector3::new(0.0, 0.0, 1.0),
+        origin: Vec3::new(0.0, 0.0, -5.0),
+        direction: Vec3::new(0.0, 0.0, 1.0),
     };
 
     let hit = find_water_by_pick_ray(&world, &ray);
@@ -146,19 +147,19 @@ fn pick_ray_hits_water_torus() {
 
 #[test]
 fn compute_water_probe_report_matches_rust_solver() {
-    use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
+    use glam::{Mat4, Vec3};
 
     // Known torus: R=1.2, r=0.35 (matching the actual scene — R≠1 so unit mismatch is caught)
     let major_radius: f32 = 1.2;
     let minor_radius: f32 = 0.35;
     let minor_over_major = minor_radius / major_radius;
-    let inverse_model = Matrix4::identity();
+    let inverse_model = Mat4::IDENTITY;
 
     // Identity inv_view_proj: camera at origin, rays go through NDC positions
-    let inv_view_proj = Matrix4::identity();
+    let inv_view_proj = Mat4::IDENTITY;
 
     // Camera position at origin (matching identity view)
-    let camera_pos = Vector3::new(0.0, 0.0, 0.0);
+    let camera_pos = Vec3::new(0.0, 0.0, 0.0);
 
     let width: u32 = 32;
     let height: u32 = 32;
@@ -176,23 +177,20 @@ fn compute_water_probe_report_matches_rust_solver() {
             let ndc_y = (y as f32 + 0.5) / height as f32 * 2.0 - 1.0;
 
             // invViewProj * vec4(ndc, DEPTH_NEAR=1.0, 1.0)
-            let world = inv_view_proj * cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
-            let world_pos =
-                cgmath::Vector3::new(world.x / world.w, world.y / world.w, world.z / world.w);
+            let world = inv_view_proj * vec4(ndc_x, ndc_y, 1.0, 1.0);
+            let world_pos = Vec3::new(world.x / world.w, world.y / world.w, world.z / world.w);
 
             // Ray direction from camera position to world position
             let ray_dir = (world_pos - camera_pos).normalize();
 
             // Transform to local space: origin w=1, dir w=0 (same as compute_water_probe_report)
             let p_local_origin =
-                inverse_model * cgmath::vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0);
+                inverse_model * vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0);
             let p_local =
-                cgmath::Vector3::new(p_local_origin.x, p_local_origin.y, p_local_origin.z)
-                    / major_radius;
+                Vec3::new(p_local_origin.x, p_local_origin.y, p_local_origin.z) / major_radius;
 
-            let d_local_raw = inverse_model * cgmath::vec4(ray_dir.x, ray_dir.y, ray_dir.z, 0.0);
-            let d_local =
-                cgmath::Vector3::new(d_local_raw.x, d_local_raw.y, d_local_raw.z).normalize();
+            let d_local_raw = inverse_model * vec4(ray_dir.x, ray_dir.y, ray_dir.z, 0.0);
+            let d_local = Vec3::new(d_local_raw.x, d_local_raw.y, d_local_raw.z).normalize();
 
             // Solve with Rust's analytic solver (same as compute_water_probe_report)
             let rust_hits =
@@ -260,18 +258,18 @@ fn compute_water_probe_report_matches_rust_solver() {
 
 #[test]
 fn compute_water_probe_report_count_mismatch_no_panic() {
-    use cgmath::{Matrix4, SquareMatrix, Vector3};
+    use glam::{Mat4, Vec3};
 
     // Known torus: R=1, identity model
     let major_radius: f32 = 1.0;
     let minor_over_major: f32 = 0.3;
-    let inverse_model = Matrix4::identity();
-    let inv_view_proj = Matrix4::identity();
+    let inverse_model = Mat4::IDENTITY;
+    let inv_view_proj = Mat4::IDENTITY;
 
     // Camera at (0, 0, 100) far along Z axis. The single pixel at ndc=(0,0) maps to
     // world=(0,0,1), so the ray goes from (0,0,100) to (0,0,1) = direction (0,0,-1).
     // This passes through the torus hole along Z axis — no intersection, Rust finds count=0.
-    let camera_pos = Vector3::new(0.0, 0.0, 100.0);
+    let camera_pos = Vec3::new(0.0, 0.0, 100.0);
 
     let width: u32 = 1;
     let height: u32 = 1;
@@ -314,29 +312,29 @@ fn compute_water_probe_report_count_mismatch_no_panic() {
 
 #[test]
 fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
-    use cgmath::{Matrix4, SquareMatrix};
+    use glam::Mat4;
 
     // Build a real view/proj pair using perspective + translation (like frame_systems.rs)
-    let fov = cgmath::Deg(std::f32::consts::FRAC_PI_4);
+    let fov = f32::to_radians(std::f32::consts::FRAC_PI_4);
     let aspect = 16.0 / 9.0;
     let proj = crate::math::coordinate_system::perspective_infinite_reverse(fov, aspect, 0.1);
 
     // View matrix: camera at (0, 0, 5) looking at origin
     // view = inverse(translation(0, 0, 5)) = translation(0, 0, -5)
-    let view = cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.0, 0.0, -5.0));
+    let view = Mat4::from_translation(Vec3::new(0.0, 0.0, -5.0));
 
     // Compute inverse using our function
     let inv = super::inverse_view_proj_f64(proj, view);
 
-    // Reference: (proj * view).invert() in f32
+    // Reference: (proj * view).try_inverse() in f32
     let product = proj * view;
-    let reference = product.invert().unwrap();
+    let reference = product.try_inverse().unwrap();
 
     // Assert all components differ by less than 1e-3 in relative terms
     for i in 0..4 {
         for j in 0..4 {
-            let diff = (inv[i][j] - reference[i][j]).abs();
-            let rel = diff / (reference[i][j].abs() + 1e-8);
+            let diff = (inv.col(i)[j] - reference.col(i)[j]).abs();
+            let rel = diff / (reference.col(i)[j].abs() + 1e-8);
             assert!(
                 rel < 1e-3,
                 "component [{}][{}] diff={:.6} rel={:.6}: inv={:.6} ref={:.6}",
@@ -344,19 +342,19 @@ fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
                 j,
                 diff,
                 rel,
-                inv[i][j],
-                reference[i][j]
+                inv.col(i)[j],
+                reference.col(i)[j]
             );
         }
     }
 
     // Assert inv * (proj * view) is identity within 1e-5
     let identity_check = inv * product;
-    let identity = Matrix4::identity();
+    let identity = Mat4::IDENTITY;
     for i in 0..4 {
         for j in 0..4 {
-            let val: f32 = identity_check[i][j];
-            let expected: f32 = identity[i][j];
+            let val: f32 = identity_check.col(i)[j];
+            let expected: f32 = identity.col(i)[j];
             let diff = (val - expected).abs();
             assert!(
                 diff < 1e-5,
@@ -375,13 +373,13 @@ fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
 fn water_temporal_same_snapshot_twice_weight_0_85() {
     use crate::ecs::component::WaterTemporalAccum;
     use crate::ecs::resource::{WaterHistorySnapshotState, WaterRenderSettings};
-    use cgmath::{Matrix4, SquareMatrix};
+    use glam::Mat4;
 
     let mut world = World::new();
     world.insert_resource(thyllore_render_core::ProjectionData {
-        view: Matrix4::identity(),
-        proj: Matrix4::identity(),
-        screen_size: cgmath::Vector2::new(800.0, 600.0),
+        view: Mat4::IDENTITY,
+        proj: Mat4::IDENTITY,
+        screen_size: Vec2::new(800.0, 600.0),
         aspect: 800.0 / 600.0,
     });
     world.insert_resource(WaterRenderSettings::default());
@@ -408,13 +406,13 @@ fn water_temporal_same_snapshot_twice_weight_0_85() {
 fn water_temporal_view_change_weight_0() {
     use crate::ecs::component::WaterTemporalAccum;
     use crate::ecs::resource::{WaterHistorySnapshotState, WaterRenderSettings};
-    use cgmath::{Matrix4, SquareMatrix};
+    use glam::Mat4;
 
     let mut world = World::new();
     world.insert_resource(thyllore_render_core::ProjectionData {
-        view: Matrix4::identity(),
-        proj: Matrix4::identity(),
-        screen_size: cgmath::Vector2::new(800.0, 600.0),
+        view: Mat4::IDENTITY,
+        proj: Mat4::IDENTITY,
+        screen_size: Vec2::new(800.0, 600.0),
         aspect: 800.0 / 600.0,
     });
     world.insert_resource(WaterRenderSettings::default());
@@ -430,7 +428,7 @@ fn water_temporal_view_change_weight_0() {
 
     // Change the view matrix
     let mut proj = world.resource_mut::<thyllore_render_core::ProjectionData>();
-    proj.view = Matrix4::from_translation(cgmath::Vector3::new(1.0, 0.0, 0.0));
+    proj.view = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
     drop(proj);
 
     // Second call: view changed, so weight should be 0.0

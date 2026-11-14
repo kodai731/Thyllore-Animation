@@ -1,117 +1,71 @@
-use crate::vulkanr::core::device::*;
-use crate::vulkanr::descriptor::pass_manifest::WATER_RESOLVE;
-use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::water_resolve;
-use crate::vulkanr::resource::gpu_resource::GpuResource;
-use crate::vulkanr::resource::uniform_buffer::UniformBuffer;
-use crate::vulkanr::vulkan::*;
+use crate::vulkanr::descriptor::{
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WATER_RESOLVE,
+};
 use thyllore_effect_core::WaterUBO;
+use thyllore_vulkan_core::resource::UniformBuffer;
+use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, ImageView, Sampler};
 
 const WATER_HISTORY_SET_COUNT: usize = 2;
 
-#[derive(Clone, Debug, Default)]
-pub struct RRWaterDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    frames: Vec<[vk::DescriptorSet; WATER_HISTORY_SET_COUNT]>,
+#[derive(Clone, Copy, Debug)]
+pub struct WaterResolveBindings {
+    pub scene_color_view: ImageView,
+    pub history_image_views: [ImageView; WATER_HISTORY_SET_COUNT],
+    pub trace_image_view: ImageView,
+    pub sampler: Sampler,
+    pub tlas: AccelerationStructure,
+    pub hit_table: Buffer,
 }
 
-impl RRWaterDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
-            water_resolve::WATER_BLOCK,
-            vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-        )
-    }
-
-    pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-
-        let mut frames = Vec::with_capacity(frames_in_flight.max(1));
-        for _ in 0..frames_in_flight.max(1) {
-            let sets = layout.allocate_sets(rrdevice, WATER_HISTORY_SET_COUNT)?;
-            frames.push([sets[0], sets[1]]);
-        }
-
-        Ok(Self { layout, frames })
-    }
-
-    pub fn descriptor_set(
-        &self,
-        frame_slot: usize,
-        history_index: usize,
-    ) -> Result<vk::DescriptorSet> {
-        let sets = self.frames.get(frame_slot).ok_or_else(|| {
-            anyhow!(
-                "water descriptor slot {frame_slot} exceeds {} frames",
-                self.frames.len()
-            )
-        })?;
-        sets.get(history_index)
-            .copied()
-            .ok_or_else(|| anyhow!("water history index {history_index} is out of range"))
-    }
-
-    pub unsafe fn write_all_at(
-        &self,
-        rrdevice: &RRDevice,
-        frame_slot: usize,
-        water_ubo: &UniformBuffer<WaterUBO>,
-        scene_color_view: vk::ImageView,
-        scene_color_sampler: vk::Sampler,
-        history_image_views: [vk::ImageView; 2],
-        history_sampler: vk::Sampler,
-        trace_image_view: vk::ImageView,
-        trace_sampler: vk::Sampler,
-        tlas: vk::AccelerationStructureKHR,
-        hit_table: vk::Buffer,
-    ) -> Result<()> {
-        for i in 0..WATER_HISTORY_SET_COUNT {
-            let descriptor_set = self.descriptor_set(frame_slot, i)?;
-            let previous_history_view = history_image_views[1 - i];
-            self.layout
-                .writer(descriptor_set)
-                .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
-                .image(
-                    water_resolve::SCENE_COLOR_SAMPLER,
-                    scene_color_view,
-                    scene_color_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                )?
-                .image(
-                    water_resolve::WATER_HISTORY_SAMPLER,
-                    previous_history_view,
-                    history_sampler,
-                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                )?
-                .image(
-                    water_resolve::WATER_TRACE_SAMPLER,
-                    trace_image_view,
-                    trace_sampler,
-                    vk::ImageLayout::GENERAL,
-                )?
-                .acceleration_structure(water_resolve::SCENE_TLAS, tlas)?
-                .buffer(
-                    water_resolve::HIT_TABLE,
-                    hit_table,
-                    0,
-                    vk::WHOLE_SIZE as u64,
-                )?
-                .apply(rrdevice);
-        }
-        Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-    }
+pub unsafe fn create_water_resolve_sets(
+    rrdevice: &RRDevice,
+    frames_in_flight: usize,
+) -> Result<ReflectedDescriptorSets> {
+    let layout_spec = ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
+        water_resolve::WATER_BLOCK,
+        DescriptorKind::UniformBufferDynamic,
+    );
+    ReflectedDescriptorSets::create(
+        rrdevice,
+        &layout_spec,
+        SetGrid::new(frames_in_flight, WATER_HISTORY_SET_COUNT),
+    )
 }
 
-impl GpuResource for RRWaterDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
+/// Writes both history sets of a frame slot; each samples the history image the other index wrote.
+pub unsafe fn write_water_resolve_sets(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    frame_slot: usize,
+    water_ubo: &UniformBuffer<WaterUBO>,
+    bindings: WaterResolveBindings,
+) -> Result<()> {
+    for history_index in 0..WATER_HISTORY_SET_COUNT {
+        let previous_history_view = bindings.history_image_views[1 - history_index];
+        sets.writer(SetSlot::new(frame_slot, history_index))?
+            .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
+            .sampled_image(
+                water_resolve::SCENE_COLOR_SAMPLER,
+                bindings.scene_color_view,
+                bindings.sampler,
+            )?
+            .sampled_image(
+                water_resolve::WATER_HISTORY_SAMPLER,
+                previous_history_view,
+                bindings.sampler,
+            )?
+            .sampled_storage_image(
+                water_resolve::WATER_TRACE_SAMPLER,
+                bindings.trace_image_view,
+                bindings.sampler,
+            )?
+            .acceleration_structure(water_resolve::SCENE_TLAS, bindings.tlas)?
+            .whole_buffer(water_resolve::HIT_TABLE, bindings.hit_table)?
+            .apply(rrdevice);
     }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed()
-    }
+    Ok(())
 }

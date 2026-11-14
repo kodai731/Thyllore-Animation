@@ -1,149 +1,109 @@
-use crate::vulkanr::core::device::*;
+use anyhow::Result;
+
+use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::SceneUniformData;
-use crate::vulkanr::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
-use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::vulkanr::resource::gpu_resource::GpuResource;
-use crate::vulkanr::vulkan::*;
+use crate::vulkanr::descriptor::{
+    ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WATER_CAUSTIC_APPLY,
+    WATER_CAUSTIC_SPLAT,
+};
+use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, ImageView};
 
-#[derive(Clone, Debug, Default)]
-pub struct RRWaterCausticDescriptorSet {
-    pub splat_layout: ReflectedSetLayout,
-    pub splat_descriptor_set: vk::DescriptorSet,
-    pub apply_layout: ReflectedSetLayout,
-    pub apply_descriptor_set: vk::DescriptorSet,
+const SCENE_DATA_SIZE: u64 = std::mem::size_of::<SceneUniformData>() as u64;
+
+#[derive(Clone, Copy, Debug)]
+pub struct WaterCausticBindings {
+    pub caustic_accum_view: ImageView,
+    pub position_image_view: ImageView,
+    pub tlas: Option<AccelerationStructure>,
+    pub scene_uniform_buffer: Buffer,
+    pub water_ubo: Buffer,
+    pub hdr_color_image_view: ImageView,
 }
 
-impl RRWaterCausticDescriptorSet {
-    pub fn splat_layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WATER_CAUSTIC_SPLAT)
-    }
-
-    pub fn apply_layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&WATER_CAUSTIC_APPLY)
-    }
-
-    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let splat_layout = ReflectedSetLayout::create(rrdevice, &Self::splat_layout_spec())?;
-        let apply_layout = ReflectedSetLayout::create(rrdevice, &Self::apply_layout_spec())?;
-
-        Ok(Self {
-            splat_layout,
-            splat_descriptor_set: vk::DescriptorSet::null(),
-            apply_layout,
-            apply_descriptor_set: vk::DescriptorSet::null(),
-        })
-    }
-
-    pub unsafe fn allocate_and_update(
-        &mut self,
-        rrdevice: &RRDevice,
-        caustic_accum_view: vk::ImageView,
-        position_image_view: vk::ImageView,
-        tlas: Option<vk::AccelerationStructureKHR>,
-        scene_uniform_buffer: vk::Buffer,
-        water_ubo: vk::Buffer,
-        hdr_color_image_view: vk::ImageView,
-    ) -> Result<()> {
-        if self.splat_descriptor_set == vk::DescriptorSet::null() {
-            self.splat_descriptor_set = self.splat_layout.allocate_set(rrdevice)?;
-        }
-        if self.apply_descriptor_set == vk::DescriptorSet::null() {
-            self.apply_descriptor_set = self.apply_layout.allocate_set(rrdevice)?;
-        }
-
-        let mut splat_writer = self
-            .splat_layout
-            .writer(self.splat_descriptor_set)
-            .image(
-                water_caustic_splat::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .image(
-                water_caustic_splat::POSITION_IMAGE,
-                position_image_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?;
-        if let Some(tlas) = tlas {
-            splat_writer =
-                splat_writer.acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?;
-        }
-        splat_writer
-            .buffer(
-                water_caustic_splat::SCENE_DATA,
-                scene_uniform_buffer,
-                0,
-                std::mem::size_of::<SceneUniformData>() as u64,
-            )?
-            .buffer(
-                water_caustic_splat::WATER_BLOCK,
-                water_ubo,
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
-            .apply(rrdevice);
-
-        self.apply_layout
-            .writer(self.apply_descriptor_set)
-            .image(
-                water_caustic_apply::CAUSTIC_ACCUM_IMAGE,
-                caustic_accum_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .image(
-                water_caustic_apply::HDR_COLOR_IMAGE,
-                hdr_color_image_view,
-                vk::Sampler::null(),
-                vk::ImageLayout::GENERAL,
-            )?
-            .buffer(
-                water_caustic_apply::SCENE_DATA,
-                scene_uniform_buffer,
-                0,
-                std::mem::size_of::<SceneUniformData>() as u64,
-            )?
-            .buffer(
-                water_caustic_apply::WATER_BLOCK,
-                water_ubo,
-                0,
-                vk::WHOLE_SIZE as u64,
-            )?
-            .apply(rrdevice);
-
-        Ok(())
-    }
-
-    pub unsafe fn update_tlas(
-        &mut self,
-        rrdevice: &RRDevice,
-        tlas: vk::AccelerationStructureKHR,
-    ) -> Result<()> {
-        if self.splat_descriptor_set == vk::DescriptorSet::null() {
-            return Ok(());
-        }
-        self.splat_layout
-            .writer(self.splat_descriptor_set)
-            .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?
-            .apply(rrdevice);
-        Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.splat_layout.destroy(rrdevice);
-        self.apply_layout.destroy(rrdevice);
-    }
+pub unsafe fn create_water_caustic_splat_sets(
+    rrdevice: &RRDevice,
+) -> Result<ReflectedDescriptorSets> {
+    ReflectedDescriptorSets::create(
+        rrdevice,
+        &ReflectedLayoutSpec::local(&WATER_CAUSTIC_SPLAT),
+        SetGrid::SINGLE,
+    )
 }
 
-impl GpuResource for RRWaterCausticDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
+pub unsafe fn create_water_caustic_apply_sets(
+    rrdevice: &RRDevice,
+) -> Result<ReflectedDescriptorSets> {
+    ReflectedDescriptorSets::create(
+        rrdevice,
+        &ReflectedLayoutSpec::local(&WATER_CAUSTIC_APPLY),
+        SetGrid::SINGLE,
+    )
+}
 
-    fn is_destroyed(&self) -> bool {
-        self.splat_layout.is_destroyed() && self.apply_layout.is_destroyed()
-    }
+pub unsafe fn write_water_caustic_splat_set(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    bindings: WaterCausticBindings,
+) -> Result<()> {
+    let writer = sets
+        .writer(SetSlot::SINGLE)?
+        .storage_image(
+            water_caustic_splat::CAUSTIC_ACCUM_IMAGE,
+            bindings.caustic_accum_view,
+        )?
+        .storage_image(
+            water_caustic_splat::POSITION_IMAGE,
+            bindings.position_image_view,
+        )?
+        .buffer_range(
+            water_caustic_splat::SCENE_DATA,
+            bindings.scene_uniform_buffer,
+            0,
+            SCENE_DATA_SIZE,
+        )?
+        .whole_buffer(water_caustic_splat::WATER_BLOCK, bindings.water_ubo)?;
+    let writer = match bindings.tlas {
+        Some(tlas) => writer.acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?,
+        None => writer,
+    };
+
+    writer.apply(rrdevice);
+    Ok(())
+}
+
+pub unsafe fn update_water_caustic_splat_tlas(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    tlas: AccelerationStructure,
+) -> Result<()> {
+    sets.writer(SetSlot::SINGLE)?
+        .acceleration_structure(water_caustic_splat::TOP_LEVEL_AS, tlas)?
+        .apply(rrdevice);
+    Ok(())
+}
+
+pub unsafe fn write_water_caustic_apply_set(
+    sets: &ReflectedDescriptorSets,
+    rrdevice: &RRDevice,
+    bindings: WaterCausticBindings,
+) -> Result<()> {
+    sets.writer(SetSlot::SINGLE)?
+        .storage_image(
+            water_caustic_apply::CAUSTIC_ACCUM_IMAGE,
+            bindings.caustic_accum_view,
+        )?
+        .storage_image(
+            water_caustic_apply::HDR_COLOR_IMAGE,
+            bindings.hdr_color_image_view,
+        )?
+        .buffer_range(
+            water_caustic_apply::SCENE_DATA,
+            bindings.scene_uniform_buffer,
+            0,
+            SCENE_DATA_SIZE,
+        )?
+        .whole_buffer(water_caustic_apply::WATER_BLOCK, bindings.water_ubo)?
+        .apply(rrdevice);
+    Ok(())
 }

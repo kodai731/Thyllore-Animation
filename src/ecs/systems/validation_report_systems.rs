@@ -1,5 +1,5 @@
 use crate::ecs::resource::ValidationReport;
-use thyllore_log_core::validation_stats::{ValidationSeverity, ValidationStats};
+use thyllore_log_core::validation_stats::ValidationStats;
 
 pub fn validation_report_sync(report: &mut ValidationReport, snapshot: ValidationStats) {
     let frame = report.frames_seen + 1;
@@ -32,6 +32,7 @@ pub fn format_validation_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_log_core::validation_stats::ValidationSeverity;
 
     fn make_snapshot(errors: usize, warnings: usize) -> ValidationStats {
         let mut stats = ValidationStats::default();

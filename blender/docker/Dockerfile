@@ -1,6 +1,7 @@
 FROM ubuntu:24.04
 
 ARG BLENDER_VERSION=5.1.2
+ARG VRM_ADDON_VERSION=4.10.3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils \
@@ -18,6 +19,10 @@ RUN BLENDER_SERIES="$(echo "${BLENDER_VERSION}" | cut -d. -f1,2)" \
     && tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1 \
     && rm /tmp/blender.tar.xz \
     && /opt/blender/blender --version
+
+RUN mkdir -p /opt/blender-extensions \
+    && curl -L --fail --retry 3 --retry-delay 2 -o /opt/blender-extensions/vrm.zip \
+        "https://github.com/saturday06/VRM-Addon-for-Blender/releases/download/v${VRM_ADDON_VERSION}/VRM_Addon_for_Blender-Extension-$(echo "${VRM_ADDON_VERSION}" | tr . _).zip"
 
 ENV PATH="/opt/blender:${PATH}"
 WORKDIR /workspace

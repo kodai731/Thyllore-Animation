@@ -1,12 +1,10 @@
-use crate::animation::editable::{
-    curve_sample, EditableAnimationClip, PropertyCurve, PropertyType,
-};
+use crate::animation::editable::{curve_sample, EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
-    ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState, CurveEditorTarget,
-    CurveInteractionMode, CurveTrackRef, CurveValueDisplay, CurveViewMode, FrameRequest,
-    PoseLibrary, TimelineState,
+    AxisLock, ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState,
+    CurveEditorTarget, CurveInteractionMode, CurveTrackRef, CurveValueDisplay, CurveViewMode,
+    FrameRequest, PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
@@ -43,6 +41,7 @@ const TRACK_LIST_WIDTH: f32 = 180.0;
 pub(super) const TIME_RULER_HEIGHT: f32 = 30.0;
 pub(super) const CURVE_PADDING: f32 = 10.0;
 pub(super) const Y_AXIS_WIDTH: f32 = 50.0;
+const MORPH_CURVE_COLOR: [f32; 4] = [1.0, 0.5, 0.2, 1.0];
 
 pub(super) const ALL_PROPERTY_TYPES: &[(PropertyType, [f32; 4], &str)] = &[
     (PropertyType::TranslationX, [1.0, 0.3, 0.3, 1.0], "Pos.X"),
@@ -143,26 +142,8 @@ pub(super) fn build_curve_view(
         return;
     };
 
-    let curves_to_draw = match editor_state.selected_target {
-        Some(CurveEditorTarget::Bone(bone_id)) => clip
-            .tracks
-            .get(&bone_id)
-            .map(|track| collect_visible_curves(track, editor_state))
-            .unwrap_or_default(),
-        Some(CurveEditorTarget::Scalars) => collect_visible_scalar_curves(clip, editor_state),
-        Some(CurveEditorTarget::Morph(i)) => {
-            let Some(morph_track) = clip.morph_tracks.get(i) else {
-                ui.separator();
-                ui.text("Morph track not found");
-                return;
-            };
-            vec![(&morph_track.curve, [1.0, 0.5, 0.2, 1.0], "Weight")]
-        }
-        None => {
-            ui.separator();
-            ui.text("Select a track from the list");
-            return;
-        }
+    let Some(curves_to_draw) = collect_target_curves(ui, clip, editor_state) else {
+        return;
     };
     let Some(track_ref) = editor_state.selected_track_ref() else {
         ui.separator();
@@ -189,18 +170,11 @@ pub(super) fn build_curve_view(
         cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
     ];
 
-    let vt = ViewTransform {
+    let vt = build_view_transform(
+        editor_state,
         curve_origin,
-        curve_width: curve_area_width,
-        curve_height: curve_area_height,
-        duration: editor_state.view_duration,
-        val_range: editor_state.view_val_range,
-        zoom_x: editor_state.zoom_x,
-        zoom_y: editor_state.zoom_y,
-        view_time_offset: editor_state.view_time_offset,
-        view_value_offset: editor_state.view_value_offset,
-        value_display: editor_state.value_display,
-    };
+        [curve_area_width, curve_area_height],
+    );
 
     draw_curve_area(
         ui,
@@ -258,10 +232,63 @@ pub(super) fn build_curve_view(
     }
 }
 
+fn collect_target_curves<'a>(
+    ui: &imgui::Ui,
+    clip: &'a EditableAnimationClip,
+    editor_state: &CurveEditorState,
+) -> Option<Vec<DrawnCurve<'a>>> {
+    let unavailable_message = match editor_state.selected_target {
+        Some(CurveEditorTarget::Bone(bone_id)) => {
+            return Some(
+                clip.tracks
+                    .get(&bone_id)
+                    .map(|track| collect_visible_curves(track, editor_state))
+                    .unwrap_or_default(),
+            );
+        }
+        Some(CurveEditorTarget::Scalars) => {
+            return Some(collect_visible_scalar_curves(clip, editor_state));
+        }
+        Some(CurveEditorTarget::Morph(morph_index)) => match clip.morph_tracks.get(morph_index) {
+            Some(morph_track) => {
+                return Some(vec![DrawnCurve {
+                    curve: &morph_track.curve,
+                    color: MORPH_CURVE_COLOR,
+                }]);
+            }
+            None => "Morph track not found",
+        },
+        None => "Select a track from the list",
+    };
+
+    ui.separator();
+    ui.text(unavailable_message);
+    None
+}
+
+fn build_view_transform(
+    editor_state: &CurveEditorState,
+    curve_origin: [f32; 2],
+    curve_area_size: [f32; 2],
+) -> ViewTransform {
+    ViewTransform {
+        curve_origin,
+        curve_width: curve_area_size[0],
+        curve_height: curve_area_size[1],
+        duration: editor_state.view_duration,
+        val_range: editor_state.view_val_range,
+        zoom_x: editor_state.zoom_x,
+        zoom_y: editor_state.zoom_y,
+        view_time_offset: editor_state.view_time_offset,
+        view_value_offset: editor_state.view_value_offset,
+        value_display: editor_state.value_display,
+    }
+}
+
 pub(super) fn draw_normalized_value_tooltip(
     ui: &imgui::Ui,
     vt: &ViewTransform,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
 ) {
     if vt.value_display != CurveValueDisplay::Normalized {
         return;
@@ -271,9 +298,7 @@ pub(super) fn draw_normalized_value_tooltip(
     let Some(property_type) = find_curve_at_position(mouse_pos, curves_to_draw, vt) else {
         return;
     };
-    let Some((curve, color, _)) = curves_to_draw
-        .iter()
-        .find(|(curve, _, _)| curve.property_type == property_type)
+    let Some(DrawnCurve { curve, color, .. }) = find_drawn_curve(curves_to_draw, property_type)
     else {
         return;
     };
@@ -287,7 +312,7 @@ pub(super) fn draw_normalized_value_tooltip(
 pub(super) fn collect_visible_scalar_curves<'a>(
     clip: &'a EditableAnimationClip,
     editor_state: &CurveEditorState,
-) -> Vec<(&'a PropertyCurve, [f32; 4], &'static str)> {
+) -> Vec<DrawnCurve<'a>> {
     let mut curves = Vec::new();
     for curve in &clip.scalar_curves {
         if !editor_state.visible_curves.contains(&curve.property_type) {
@@ -296,8 +321,8 @@ pub(super) fn collect_visible_scalar_curves<'a>(
         if curve.is_empty() {
             continue;
         }
-        let (color, name) = scalar_curve_style(curve.property_type);
-        curves.push((curve, color, name));
+        let (color, _) = scalar_curve_style(curve.property_type);
+        curves.push(DrawnCurve { curve, color });
     }
     curves
 }
@@ -305,13 +330,16 @@ pub(super) fn collect_visible_scalar_curves<'a>(
 pub(super) fn collect_visible_curves<'a>(
     track: &'a crate::animation::editable::BoneTrack,
     editor_state: &CurveEditorState,
-) -> Vec<(&'a PropertyCurve, [f32; 4], &'static str)> {
+) -> Vec<DrawnCurve<'a>> {
     let mut curves = Vec::new();
-    for (prop_type, color, name) in ALL_PROPERTY_TYPES {
+    for (prop_type, color, _) in ALL_PROPERTY_TYPES {
         if editor_state.visible_curves.contains(prop_type) {
             let curve = track.get_curve(*prop_type);
             if !curve.is_empty() {
-                curves.push((curve, *color, *name));
+                curves.push(DrawnCurve {
+                    curve,
+                    color: *color,
+                });
             }
         }
     }
@@ -326,7 +354,7 @@ pub(super) fn draw_curve_area(
     curve_area_height: f32,
     timeline_state: &TimelineState,
     editor_state: &CurveEditorState,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
     track_ref: CurveTrackRef,
@@ -390,7 +418,7 @@ pub(super) fn draw_clipped_curve_content(
     curve_area_height: f32,
     timeline_state: &TimelineState,
     editor_state: &CurveEditorState,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
     track_ref: CurveTrackRef,
@@ -427,31 +455,15 @@ pub(super) fn draw_clipped_curve_content(
         .build();
 
     if let CurveInteractionMode::DraggingKeyframe { axis_lock } = editor_state.interaction {
-        let mouse_pos = read_ui_pointer(ui).pos;
-        let drag_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
-        let time_snap = current_time_snap(ui, timeline_state.snap_settings.frame_rate);
-        match editor_state.view_mode {
-            CurveViewMode::Curves => draw_keyframe_drag_preview(
-                draw_list,
-                mouse_pos,
-                editor_state.drag_start_mouse_pos,
-                vt,
-                curves_to_draw,
-                &editor_state.selected_keyframes,
-                drag_lock,
-                time_snap,
-            ),
-            CurveViewMode::Dopesheet => draw_dopesheet_drag_preview(
-                draw_list,
-                mouse_pos,
-                editor_state.drag_start_mouse_pos,
-                vt,
-                curves_to_draw,
-                &editor_state.selected_keyframes,
-                drag_lock,
-                time_snap,
-            ),
-        }
+        draw_key_drag_preview(
+            ui,
+            draw_list,
+            vt,
+            timeline_state,
+            editor_state,
+            curves_to_draw,
+            axis_lock,
+        );
     }
 
     if let CurveInteractionMode::DraggingTangent(ref dragging) = editor_state.interaction {
@@ -490,22 +502,68 @@ pub(super) fn draw_clipped_curve_content(
     );
 
     if let CurveInteractionMode::BoxSelecting { start, .. } = editor_state.interaction {
-        let mouse_pos = read_ui_pointer(ui).pos;
-        let min: [f32; 2] = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
-        let max: [f32; 2] = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
-        let width = (max[0] - min[0]).abs();
-        let height = (max[1] - min[1]).abs();
-        if width > 1.0 || height > 1.0 {
-            draw_list
-                .add_rect(min, max, [0.3, 0.6, 1.0, 0.15])
-                .filled(true)
-                .build();
-            draw_list
-                .add_rect(min, max, [0.3, 0.6, 1.0, 1.0])
-                .thickness(1.0)
-                .build();
-        }
+        draw_box_selection(draw_list, start, read_ui_pointer(ui).pos);
     }
+}
+
+fn draw_key_drag_preview(
+    ui: &imgui::Ui,
+    draw_list: &imgui::DrawListMut,
+    vt: &ViewTransform,
+    timeline_state: &TimelineState,
+    editor_state: &CurveEditorState,
+    curves_to_draw: &[DrawnCurve<'_>],
+    axis_lock: Option<AxisLock>,
+) {
+    let mouse_pos = read_ui_pointer(ui).pos;
+    let drag_lock = effective_axis_lock(editor_state.view_mode, axis_lock);
+    let time_snap = current_time_snap(ui, timeline_state.snap_settings.frame_rate);
+
+    match editor_state.view_mode {
+        CurveViewMode::Curves => draw_keyframe_drag_preview(
+            draw_list,
+            mouse_pos,
+            editor_state.drag_start_mouse_pos,
+            vt,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            drag_lock,
+            time_snap,
+        ),
+        CurveViewMode::Dopesheet => draw_dopesheet_drag_preview(
+            draw_list,
+            mouse_pos,
+            editor_state.drag_start_mouse_pos,
+            vt,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            drag_lock,
+            time_snap,
+        ),
+    }
+}
+
+const BOX_SELECTION_FILL: [f32; 4] = [0.3, 0.6, 1.0, 0.15];
+const BOX_SELECTION_BORDER: [f32; 4] = [0.3, 0.6, 1.0, 1.0];
+const BOX_SELECTION_MIN_EXTENT_PX: f32 = 1.0;
+
+fn draw_box_selection(draw_list: &imgui::DrawListMut, start: [f32; 2], mouse_pos: [f32; 2]) {
+    let min = [start[0].min(mouse_pos[0]), start[1].min(mouse_pos[1])];
+    let max = [start[0].max(mouse_pos[0]), start[1].max(mouse_pos[1])];
+    let width = max[0] - min[0];
+    let height = max[1] - min[1];
+    if width <= BOX_SELECTION_MIN_EXTENT_PX && height <= BOX_SELECTION_MIN_EXTENT_PX {
+        return;
+    }
+
+    draw_list
+        .add_rect(min, max, BOX_SELECTION_FILL)
+        .filled(true)
+        .build();
+    draw_list
+        .add_rect(min, max, BOX_SELECTION_BORDER)
+        .thickness(1.0)
+        .build();
 }
 
 fn draw_curves_with_selection(
@@ -514,13 +572,13 @@ fn draw_curves_with_selection(
     curve_area_width: f32,
     curve_area_height: f32,
     editor_state: &CurveEditorState,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
 ) {
     draw_grid(draw_list, curve_area_width, curve_area_height, vt);
     draw_normalized_range_shade(draw_list, curve_area_width, curve_area_height, vt);
 
     let sample_count = calculate_sample_count(curve_area_width);
-    for (curve, color, _name) in curves_to_draw {
+    for DrawnCurve { curve, color, .. } in curves_to_draw {
         let curve_vt = vt.for_curve(curve);
         draw_curve_with_keyframes(draw_list, curve, *color, sample_count, &curve_vt, None);
     }

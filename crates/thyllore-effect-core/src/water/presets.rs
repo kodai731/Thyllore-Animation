@@ -1,13 +1,13 @@
 use crate::water::WaterTorusEffect;
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 pub const WATER_PRESET_NAMES: &[&str] = &["pond", "sea", "glass"];
 
-fn runtime_state(effect: &WaterTorusEffect) -> (Vector3<f32>, Quaternion<f32>, f32) {
+fn runtime_state(effect: &WaterTorusEffect) -> (Vec3, Quat, f32) {
     (effect.position, effect.rotation, effect.time)
 }
 
-fn apply_runtime_state(effect: &mut WaterTorusEffect, state: (Vector3<f32>, Quaternion<f32>, f32)) {
+fn apply_runtime_state(effect: &mut WaterTorusEffect, state: (Vec3, Quat, f32)) {
     let (position, rotation, time) = state;
     effect.position = position;
     effect.rotation = rotation;
@@ -131,26 +131,26 @@ mod tests {
     #[test]
     fn test_preset_preserves_runtime_state() {
         let mut effect = WaterTorusEffect::default();
-        effect.position = Vector3::new(1.0, 2.0, 3.0);
-        effect.rotation = Quaternion::new(0.99, 0.1, 0.0, 0.0);
+        effect.position = Vec3::new(1.0, 2.0, 3.0);
+        effect.rotation = Quat::from_xyzw(0.1, 0.0, 0.0, 0.99);
         effect.time = 5.0;
 
         apply_water_preset(&mut effect, "sea");
 
-        assert_eq!(effect.position, Vector3::new(1.0, 2.0, 3.0));
-        assert_eq!(effect.rotation, Quaternion::new(0.99, 0.1, 0.0, 0.0));
+        assert_eq!(effect.position, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(effect.rotation, Quat::from_xyzw(0.1, 0.0, 0.0, 0.99));
         assert_eq!(effect.time, 5.0);
     }
 
     #[test]
     fn test_unknown_preset_returns_false() {
         let mut effect = WaterTorusEffect::default();
-        effect.position = Vector3::new(1.0, 2.0, 3.0);
+        effect.position = Vec3::new(1.0, 2.0, 3.0);
         effect.time = 5.0;
 
         let result = apply_water_preset(&mut effect, "unknown");
         assert!(!result);
-        assert_eq!(effect.position, Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(effect.position, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(effect.time, 5.0);
     }
 }

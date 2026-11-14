@@ -1,3 +1,4 @@
+use glam::Vec3;
 use std::path::PathBuf;
 
 use super::anim_edit_spec::anim_edits_resolve_from_args;
@@ -221,7 +222,7 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     let motion_path = world
         .get_component::<MotionPath>(e)
         .expect("MotionPath should have been inserted");
-    assert_eq!(motion_path.center, cgmath::Vector3::new(0.0, 0.0, 0.0));
+    assert_eq!(motion_path.center, Vec3::new(0.0, 0.0, 0.0));
     assert!((motion_path.radius - 2.0).abs() < 1e-5);
     assert!((motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5);
 
@@ -240,7 +241,7 @@ fn orbit_offset_matches_motion_path_position() {
     use crate::ecs::component::motion_path_position;
     use std::f32::consts::PI;
 
-    let center = cgmath::Vector3::new(1.0, 2.0, 3.0);
+    let center = Vec3::new(1.0, 2.0, 3.0);
     let radius = 1.5;
     let period = 2.0;
     let path = MotionPath {
@@ -254,7 +255,7 @@ fn orbit_offset_matches_motion_path_position() {
     for &t in &[0.0, 0.7, 1.9, 3.3] {
         let mp_pos = motion_path_position(&path, t);
         let offset = compute_orbit_offset(radius, period, t);
-        let orbit_pos = cgmath::Vector3::new(
+        let orbit_pos = Vec3::new(
             center.x + offset[0],
             center.y + offset[1],
             center.z + offset[2],
@@ -1050,7 +1051,7 @@ fn role_key_keeps_earlier_keys_on_the_same_curve() {
 fn role_key_builds_the_rig_before_resolving_names() {
     use super::anim_edit_spec::anim_edit_parse_spec;
     use crate::ecs::systems::humanoid_rig_systems::{
-        build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
+        copy_test_humanoid_fixture, test_humanoid_world,
     };
     use tempfile::tempdir;
 

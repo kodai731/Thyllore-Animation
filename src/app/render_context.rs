@@ -3,12 +3,13 @@ use std::rc::Rc;
 use crate::app::{App, AppData};
 use crate::ecs::PassContext;
 use crate::vulkanr::command::RRCommandPool;
+use crate::vulkanr::context::FrameSync;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
 use thyllore_vulkan_core::FrameRenderContext;
 
 pub fn build_frame_render_context(app: &App, image_index: usize) -> FrameRenderContext<'_> {
@@ -18,6 +19,7 @@ pub fn build_frame_render_context(app: &App, image_index: usize) -> FrameRenderC
         buffers: &app.data.buffer_registry,
         pipelines: &app.data.pipeline_storage,
         image_index,
+        frame_slot: app.resource::<FrameSync>().current_frame,
     }
 }
 
@@ -37,6 +39,7 @@ pub fn build_pass_context<'a>(rrdevice: &'a RRDevice, data: &'a mut AppData) -> 
         transient: &mut data.viewport.transient,
         frame_transients: &data.frame_transients,
         onion_skin_gpu: data.onion_skin_gpu.as_ref(),
+        frame_slot: data.ecs_world.resource::<FrameSync>().current_frame,
         world: &data.ecs_world,
         assets: &data.ecs_assets,
     }

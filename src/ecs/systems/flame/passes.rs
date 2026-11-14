@@ -1,19 +1,21 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, SquareMatrix, Vector3};
-use vulkanalia::prelude::v1_0::*;
+use glam::{Mat4, Vec3};
 
 use crate::ecs::component::FlameEffect;
 use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
+    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    TargetUse,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{
     OverlayAttachmentLoad, OverlayInstanceDraw, ShadingPushConstants,
 };
 use thyllore_vulkan_core::resource::RenderTargetKey;
+use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
 const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(0),
@@ -36,7 +38,7 @@ fn flame_history_index(ctx: &PassContext, flames: &[Entity]) -> usize {
 /// Everything the flame node agrees on for one frame. `None` means nothing records this frame.
 struct FlameFrame {
     ubos: Vec<thyllore_effect_core::FlameUBO>,
-    scissors: Vec<Option<vk::Rect2D>>,
+    scissors: Vec<Option<Rect2D>>,
     history_index: usize,
 }
 
@@ -90,19 +92,20 @@ fn sort_flames_back_to_front(ctx: &PassContext, flames: &mut [Entity]) {
     else {
         return;
     };
-    let view_inverse = projection
-        .view
-        .invert()
-        .unwrap_or_else(cgmath::Matrix4::identity);
-    let camera_pos = Vector3::new(view_inverse[3][0], view_inverse[3][1], view_inverse[3][2]);
+    let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
+    let camera_pos = Vec3::new(
+        view_inverse.col(3)[0],
+        view_inverse.col(3)[1],
+        view_inverse.col(3)[2],
+    );
 
     let camera_distance = |flame: &Entity| {
         ctx.world
             .get_component::<crate::ecs::component::FlameEffect>(*flame)
             .map(|effect| {
                 let position =
-                    Vector3::new(effect.position[0], effect.position[1], effect.position[2]);
-                (position - camera_pos).magnitude()
+                    Vec3::new(effect.position[0], effect.position[1], effect.position[2]);
+                (position - camera_pos).length()
             })
     };
     flames.sort_by(|a, b| match (camera_distance(a), camera_distance(b)) {
@@ -141,9 +144,9 @@ fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effec
 
 fn instance_scissor(
     ctx: &PassContext,
-    extent: vk::Extent2D,
+    extent: Extent2D,
     ubo: &thyllore_effect_core::FlameUBO,
-) -> Option<vk::Rect2D> {
+) -> Option<Rect2D> {
     let bend_offset = [
         ubo.wind_bend.wind_direction[0] * ubo.wind_bend.bend_amount,
         ubo.wind_bend.wind_direction[1] * ubo.wind_bend.bend_amount,
@@ -168,7 +171,7 @@ fn instance_scissor(
     compute_bounds_scissor(
         ctx.world,
         extent,
-        &ubo.model,
+        &ubo.model.to_mat4(),
         thyllore_effect_core::flame_local_bounds_corners(&bounds),
     )
 }
@@ -204,17 +207,11 @@ impl RenderPassNode for FlamePassNode {
                 vec![
                     TargetUse::new(
                         TargetRef::Core(CoreTarget::HdrColor),
-                        TargetAccess::Attachment {
-                            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        },
+                        TargetAccess::Attachment(AttachmentStart::Sampled),
                     ),
                     TargetUse::new(
                         TargetRef::Storage(HISTORY_KEYS[history_index]),
-                        TargetAccess::Attachment {
-                            initial_layout: vk::ImageLayout::UNDEFINED,
-                            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        },
+                        TargetAccess::Attachment(AttachmentStart::Discard),
                     ),
                 ]
             })
@@ -224,7 +221,7 @@ impl RenderPassNode for FlamePassNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        command_buffer: vk::CommandBuffer,
+        command_buffer: CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
@@ -234,7 +231,7 @@ impl RenderPassNode for FlamePassNode {
 
 unsafe fn record_flame_passes(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let Some(frame) = flame_frame(ctx) else {
@@ -256,7 +253,6 @@ unsafe fn record_flame_passes(
         return Ok(());
     };
     let render = ctx.frame_render_context(image_index);
-    let device = &render.device.device;
 
     let settings = ctx
         .world
@@ -275,16 +271,16 @@ unsafe fn record_flame_passes(
             continue;
         };
         flame_ubo.record_update(
-            device,
+            render.device,
             command_buffer,
             slot,
             ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            &[ShaderStage::Fragment],
         )?;
-        draws.push(OverlayInstanceDraw {
-            dynamic_offsets: vec![flame_ubo.slot_offset(slot)? as u32],
+        draws.push(OverlayInstanceDraw::new(
+            vec![flame_ubo.slot_offset(slot)? as u32],
             scissor,
-        });
+        ));
     }
     if draws.is_empty() {
         return Ok(());
@@ -294,15 +290,15 @@ unsafe fn record_flame_passes(
         .history
         .overlay_pass(frame.history_index, OverlayAttachmentLoad::Clear([0.0; 4]));
     FLAME_OVERLAY.record(
-        device,
+        render.device,
         command_buffer,
         &pass,
         pass.full_area(),
         shading_pipeline,
         Some(push_constants.as_bytes()),
         &[
-            render.graphics.frame_set.sets[image_index],
-            descriptor.descriptor_sets[frame.history_index],
+            render.graphics.frame_set.sets()[image_index],
+            descriptor.sets.set(SetSlot::history(frame.history_index))?,
         ],
         &draws,
     )

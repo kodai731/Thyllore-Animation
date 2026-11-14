@@ -1,43 +1,40 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::shader_bindings::lightning_resolve;
-use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout, LIGHTNING_RESOLVE};
+use crate::vulkanr::descriptor::{
+    DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot,
+    LIGHTNING_RESOLVE,
+};
 use crate::vulkanr::image::create_scene_depth_sampler;
-use crate::vulkanr::resource::GpuResource;
-use crate::vulkanr::resource::UniformBuffer;
 use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
+use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
+use thyllore_vulkan_core::types::{ImageView, Sampler};
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Debug, Default, GpuResource)]
 pub struct LightningResolveDescriptorSet {
-    pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
-    pub scene_depth_sampler: vk::Sampler,
+    pub sets: ReflectedDescriptorSets,
+    scene_depth_sampler: Sampler,
 }
 
 impl LightningResolveDescriptorSet {
-    pub fn layout_spec() -> ReflectedLayoutSpec {
-        ReflectedLayoutSpec::local(&LIGHTNING_RESOLVE)
+    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
+        let layout_spec = ReflectedLayoutSpec::local(&LIGHTNING_RESOLVE)
             .with_override(
                 lightning_resolve::LIGHTNING,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                DescriptorKind::UniformBufferDynamic,
             )
             .with_override(
                 lightning_resolve::SEGMENTS,
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-            )
-    }
+                DescriptorKind::UniformBufferDynamic,
+            );
 
-    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
-        let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
-        let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
-
-        Ok(Self {
-            layout,
-            descriptor_set,
-            scene_depth_sampler,
+        build_gpu_resource(rrdevice, |descriptor: &mut Self| {
+            descriptor.sets =
+                ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)?;
+            descriptor.scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
+            Ok(())
         })
     }
 
@@ -46,10 +43,10 @@ impl LightningResolveDescriptorSet {
         rrdevice: &RRDevice,
         lightning_ubo: &UniformBuffer<LightningUBO>,
         segments_ubo: &UniformBuffer<LightningSegmentsUBO>,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
+        self.sets
+            .writer(SetSlot::SINGLE)?
             .uniform_dynamic(lightning_resolve::LIGHTNING, lightning_ubo)?
             .uniform_dynamic(lightning_resolve::SEGMENTS, segments_ubo)?
             .apply(rrdevice);
@@ -59,32 +56,16 @@ impl LightningResolveDescriptorSet {
     pub unsafe fn update_scene_depth(
         &self,
         rrdevice: &RRDevice,
-        scene_depth_view: vk::ImageView,
+        scene_depth_view: ImageView,
     ) -> Result<()> {
-        self.layout
-            .writer(self.descriptor_set)
-            .image(
+        self.sets
+            .writer(SetSlot::SINGLE)?
+            .sampled_depth(
                 lightning_resolve::SCENE_DEPTH_SAMPLER,
                 scene_depth_view,
                 self.scene_depth_sampler,
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
             )?
             .apply(rrdevice);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        self.layout.destroy(rrdevice);
-        self.scene_depth_sampler.destroy_gpu(rrdevice);
-    }
-}
-
-impl GpuResource for LightningResolveDescriptorSet {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(rrdevice);
-    }
-
-    fn is_destroyed(&self) -> bool {
-        self.layout.is_destroyed() && self.scene_depth_sampler.is_destroyed()
     }
 }

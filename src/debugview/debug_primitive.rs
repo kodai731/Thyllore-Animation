@@ -1,8 +1,8 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
-use crate::vulkanr::context::{CommandState, SwapchainState};
-use crate::vulkanr::vulkan::*;
+use crate::vulkanr::context::CommandState;
 use anyhow::Result;
+use glam::Vec3;
 
 impl App {
     pub unsafe fn spawn_debug_primitive(&mut self, kind: DebugPrimitiveKind) -> Result<()> {
@@ -13,14 +13,9 @@ impl App {
     pub unsafe fn spawn_debug_primitive_at(
         &mut self,
         kind: DebugPrimitiveKind,
-        position: cgmath::Vector3<f32>,
+        position: Vec3,
     ) -> Result<()> {
         log!("Spawning debug primitive: {:?}", kind);
-        self.rrdevice.device.device_wait_idle()?;
-
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-
         let (load_result, part_name) = match kind {
             DebugPrimitiveKind::Cube => (
                 thyllore_importer_core::primitive::build_cube_model(1.0),
@@ -40,25 +35,23 @@ impl App {
                 "Floor",
             ),
         };
-        let parent_entity = crate::app::model::append_model_to_scene(
-            &load_result,
-            part_name,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
-        )?;
+        let parent_entity = self.rebuild_scene(|gpu, swapchain, world, assets| {
+            crate::ecs::systems::model_load_systems::append_model_to_scene(
+                &load_result,
+                part_name,
+                gpu,
+                swapchain,
+                world,
+                assets,
+            )
+        })?;
 
         self.data.ecs_world.insert_component(
             parent_entity,
             crate::ecs::component::DebugPrimitiveTag { kind },
         );
 
-        let mut transform = self
+        let transform = self
             .data
             .ecs_world
             .get_component_mut::<crate::ecs::world::Transform>(parent_entity)
@@ -95,7 +88,7 @@ impl App {
     }
 
     pub unsafe fn delete_entities(&mut self, entities: &[u64]) -> Result<()> {
-        self.rrdevice.device.device_wait_idle()?;
+        self.rrdevice.wait_idle()?;
 
         for &entity in entities {
             let mesh_ref = self
@@ -123,33 +116,20 @@ impl App {
         }
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        let procedural_primitives =
-            crate::app::raytracing::scene_build::collect_procedural_primitives(
-                &self.data.ecs_world,
-            );
-        let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
-            &self.data.ecs_world,
-            &self.data.ecs_assets,
-        );
-        crate::app::raytracing::scene_build::rebuild_acceleration_structures(
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &procedural_primitives,
-            &mesh_transforms,
-        )?;
+        let (mut gpu, world, assets) =
+            self.data
+                .scene_parts(&self.instance, &self.rrdevice, &command_pool);
+        crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
         log!("Deleted {} entities with GPU cleanup", entities.len());
         Ok(())
     }
 }
 
-fn default_debug_primitive_position(kind: DebugPrimitiveKind) -> cgmath::Vector3<f32> {
+fn default_debug_primitive_position(kind: DebugPrimitiveKind) -> Vec3 {
     match kind {
-        DebugPrimitiveKind::Cube => cgmath::Vector3::new(3.0, 0.5, 0.0),
-        DebugPrimitiveKind::Sphere => cgmath::Vector3::new(-3.0, 0.6, 0.0),
-        DebugPrimitiveKind::Floor => cgmath::Vector3::new(0.0, -1.6, 0.0),
+        DebugPrimitiveKind::Cube => Vec3::new(3.0, 0.5, 0.0),
+        DebugPrimitiveKind::Sphere => Vec3::new(-3.0, 0.6, 0.0),
+        DebugPrimitiveKind::Floor => Vec3::new(0.0, -1.6, 0.0),
     }
 }

@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 use serde_json::{json, Value};
 
 use crate::ecs::resource::{
@@ -80,7 +80,7 @@ pub fn build_camera_json(world: &World) -> Value {
         "yaw_degrees": camera.yaw.to_degrees(),
         "pitch_degrees": camera.pitch.to_degrees(),
         "distance": camera.distance,
-        "fov_y_degrees": camera.fov_y.0,
+        "fov_y_degrees": camera.fov_y.to_degrees(),
         "near_plane": camera.near_plane,
         "position": [position.x, position.y, position.z],
         "forward": [forward.x, forward.y, forward.z],
@@ -114,8 +114,8 @@ pub fn build_light_json(world: &World) -> Value {
     })
 }
 
-pub fn matrix_json(matrix: &Matrix4<f32>) -> Value {
-    let columns: [[f32; 4]; 4] = (*matrix).into();
+pub fn matrix_json(matrix: &Mat4) -> Value {
+    let columns: [[f32; 4]; 4] = (*matrix).to_cols_array_2d();
     json!(columns)
 }
 

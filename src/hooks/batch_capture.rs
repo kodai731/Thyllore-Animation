@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Result};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::world::{Resource, World};
 use crate::vulkanr::context::SwapchainState;
@@ -9,7 +8,8 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::hdr_buffer::HdrBuffer;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-use thyllore_vulkan_core::resource::{copy_image_to_host_buffer, write_host_buffer_bgra_png};
+use thyllore_vulkan_core::resource::{read_image_bytes, write_bgra_png, ReadbackLayout};
+use thyllore_vulkan_core::types::{CommandPool, DeviceSize, Image, Instance};
 
 /// Which capture of the schedule is being taken; `sequence_dir` is set in sequence mode.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,7 +33,7 @@ impl CaptureSlot {
 pub struct CaptureContext<'a> {
     pub instance: &'a Instance,
     pub device: &'a RRDevice,
-    pub command_pool: vk::CommandPool,
+    pub command_pool: CommandPool,
     pub world: &'a World,
     pub graphics: &'a GraphicsResources,
     pub raytracing: &'a RayTracingData,
@@ -43,23 +43,22 @@ pub struct CaptureContext<'a> {
 }
 
 impl CaptureContext<'_> {
-    pub unsafe fn copy_image_to_buffer(
+    pub unsafe fn read_image_bytes(
         &self,
-        image: vk::Image,
+        image: Image,
         width: u32,
         height: u32,
-        image_size: vk::DeviceSize,
-        layout: vk::ImageLayout,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
-        copy_image_to_host_buffer(
+        byte_size: DeviceSize,
+        layout: ReadbackLayout,
+    ) -> Result<Vec<u8>> {
+        read_image_bytes(
             self.instance,
             self.device,
-            self.device.graphics_queue,
             self.command_pool,
             image,
             width,
             height,
-            image_size,
+            byte_size,
             layout,
         )
     }
@@ -67,28 +66,18 @@ impl CaptureContext<'_> {
     /// Saves this frame's swapchain image as PNG and returns the absolute path written.
     pub unsafe fn save_screenshot_to(&self, path: &Path) -> Result<String> {
         let swapchain = &self.world.resource::<SwapchainState>().swapchain;
-        let image = swapchain.swapchain_images[self.image_index];
-        let extent = swapchain.swapchain_extent;
-        let image_size = (extent.width * extent.height * 4) as vk::DeviceSize;
+        let image = swapchain.swapchain_images()[self.image_index];
+        let extent = swapchain.swapchain_extent();
+        let image_size = (extent.width * extent.height * 4) as DeviceSize;
 
-        let (buffer, buffer_memory) = self.copy_image_to_buffer(
+        let bytes = self.read_image_bytes(
             image,
             extent.width,
             extent.height,
             image_size,
-            vk::ImageLayout::PRESENT_SRC_KHR,
+            ReadbackLayout::PresentSrc,
         )?;
-        let written = write_host_buffer_bgra_png(
-            &self.device.device,
-            buffer_memory,
-            image_size,
-            extent.width,
-            extent.height,
-            path,
-        );
-        self.device.device.free_memory(buffer_memory, None);
-        self.device.device.destroy_buffer(buffer, None);
-        written?;
+        write_bgra_png(&bytes, extent.width, extent.height, path)?;
 
         let absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         let saved = absolute.to_string_lossy().to_string();

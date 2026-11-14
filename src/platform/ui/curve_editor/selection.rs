@@ -1,7 +1,7 @@
 use super::hit_test::*;
 use super::interaction::SelectionModifier;
 use super::view::*;
-use crate::animation::editable::{KeyframeId, PropertyCurve, PropertyType};
+use crate::animation::editable::{KeyframeId, PropertyType};
 use crate::ecs::resource::{
     BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveViewMode,
     DraggingTangent,
@@ -10,7 +10,7 @@ use crate::ecs::resource::{
 pub(super) fn handle_curve_area_click(
     editor_state: &mut CurveEditorState,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     modifier: SelectionModifier,
 ) -> Option<PropertyType> {
@@ -72,7 +72,7 @@ pub(super) fn handle_curve_area_click(
 fn try_hit_tangent_handle(
     editor_state: &mut CurveEditorState,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
 ) -> bool {
     if editor_state.view_mode != CurveViewMode::Curves {
@@ -102,7 +102,7 @@ fn try_hit_tangent_handle(
 fn handle_curve_area_miss(
     editor_state: &mut CurveEditorState,
     mouse_pos: [f32; 2],
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     modifier: SelectionModifier,
 ) -> Option<PropertyType> {
@@ -167,25 +167,21 @@ fn handle_replace_selection(
 
 pub(super) fn refresh_selected_keyframe_positions(
     selected: &mut [CurveSelectedKeyframe],
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
 ) {
     for sel in selected.iter_mut() {
-        for (curve, _, _) in curves {
-            if curve.property_type != sel.property_type {
-                continue;
-            }
-            if let Some(kf) = curve.get_keyframe(sel.keyframe_id) {
-                sel.original_time = kf.time;
-                sel.original_value = kf.value;
-            }
-            break;
+        let current_key = find_drawn_curve(curves, sel.property_type)
+            .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(sel.keyframe_id));
+        if let Some(kf) = current_key {
+            sel.original_time = kf.time;
+            sel.original_value = kf.value;
         }
     }
 }
 
 pub(super) fn apply_shift_range_selection(
     editor_state: &mut CurveEditorState,
-    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curves_to_draw: &[DrawnCurve<'_>],
     property_type: &PropertyType,
     keyframe_id: KeyframeId,
     time: f32,
@@ -230,7 +226,7 @@ fn push_if_unselected(selected: &mut Vec<CurveSelectedKeyframe>, key: CurveSelec
 }
 
 pub(super) fn collect_keyframes_in_range(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     property_type: &PropertyType,
     time_a: f32,
     time_b: f32,
@@ -238,33 +234,32 @@ pub(super) fn collect_keyframes_in_range(
     let min_time = time_a.min(time_b);
     let max_time = time_a.max(time_b);
 
-    for (curve, _, _) in curves {
-        if curve.property_type == *property_type {
-            return curve
-                .keyframes
-                .iter()
-                .filter(|kf| kf.time >= min_time && kf.time <= max_time)
-                .map(|kf| CurveSelectedKeyframe {
-                    property_type: property_type.clone(),
-                    keyframe_id: kf.id,
-                    original_time: kf.time,
-                    original_value: kf.value,
-                })
-                .collect();
-        }
-    }
-    Vec::new()
+    let Some(DrawnCurve { curve, .. }) = find_drawn_curve(curves, *property_type) else {
+        return Vec::new();
+    };
+
+    curve
+        .keyframes
+        .iter()
+        .filter(|kf| kf.time >= min_time && kf.time <= max_time)
+        .map(|kf| CurveSelectedKeyframe {
+            property_type: property_type.clone(),
+            keyframe_id: kf.id,
+            original_time: kf.time,
+            original_value: kf.value,
+        })
+        .collect()
 }
 
 pub(super) fn collect_keyframes_in_screen_rect(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     vt: &ViewTransform,
     min: [f32; 2],
     max: [f32; 2],
 ) -> Vec<CurveSelectedKeyframe> {
     curves
         .iter()
-        .flat_map(|(curve, _, _)| {
+        .flat_map(|DrawnCurve { curve, .. }| {
             let curve_vt = vt.for_curve(curve);
             curve.keyframes.iter().filter_map(move |kf| {
                 let x = curve_vt.time_to_x(kf.time);
@@ -309,7 +304,7 @@ pub(super) fn apply_box_selection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::curve_add_keyframe;
+    use crate::animation::editable::{curve_add_keyframe, PropertyCurve};
 
     use super::super::test_fixtures::*;
 
@@ -342,7 +337,10 @@ mod tests {
     #[test]
     fn box_selection_collects_only_keys_inside_the_rect() {
         let (curve, ids) = build_curve_with_keys(&[(0.2, 0.2), (0.4, 0.4), (0.8, 0.8)]);
-        let curves = [(&curve, [1.0; 4], "x")];
+        let curves = [DrawnCurve {
+            curve: &curve,
+            color: [1.0; 4],
+        }];
 
         let boxed =
             collect_keyframes_in_screen_rect(&curves, &build_unit_view(), [0.1, 0.5], [0.5, 0.9]);

@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::{DVec3, Vec3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TorusHits {
@@ -7,31 +7,31 @@ pub struct TorusHits {
     pub fallback_used: bool,
 }
 
-pub fn torus_implicit(p: Vector3<f32>, r_hat: f32) -> f32 {
+pub fn torus_implicit(p: Vec3, r_hat: f32) -> f32 {
     let mag_sq = p.dot(p);
     (mag_sq + 1.0 - r_hat * r_hat).powi(2) - 4.0 * (p.x * p.x + p.z * p.z)
 }
 
-pub fn torus_gradient(p: Vector3<f32>, r_hat: f32) -> Vector3<f32> {
+pub fn torus_gradient(p: Vec3, r_hat: f32) -> Vec3 {
     let mag_sq = p.dot(p);
     let factor = 4.0 * (mag_sq + 1.0 - r_hat * r_hat);
-    Vector3::new(
+    Vec3::new(
         factor * p.x - 8.0 * p.x,
         factor * p.y,
         factor * p.z - 8.0 * p.z,
     )
 }
 
-pub fn torus_local_bounds(major_radius: f32, minor_radius: f32) -> (Vector3<f32>, Vector3<f32>) {
+pub fn torus_local_bounds(major_radius: f32, minor_radius: f32) -> (Vec3, Vec3) {
     let radius = major_radius + minor_radius;
-    let min = Vector3::new(-radius, -minor_radius, -radius);
-    let max = Vector3::new(radius, minor_radius, radius);
+    let min = Vec3::new(-radius, -minor_radius, -radius);
+    let max = Vec3::new(radius, minor_radius, radius);
     (min, max)
 }
 
-pub fn torus_local_bounds_corners(major_radius: f32, minor_radius: f32) -> [Vector3<f32>; 8] {
+pub fn torus_local_bounds_corners(major_radius: f32, minor_radius: f32) -> [Vec3; 8] {
     let (min, max) = torus_local_bounds(major_radius, minor_radius);
-    let mut corners = [Vector3::new(0.0, 0.0, 0.0); 8];
+    let mut corners = [Vec3::new(0.0, 0.0, 0.0); 8];
     for (index, corner) in corners.iter_mut().enumerate() {
         corner.x = if index & 1 == 0 { min.x } else { max.x };
         corner.y = if index & 2 == 0 { min.y } else { max.y };
@@ -40,7 +40,7 @@ pub fn torus_local_bounds_corners(major_radius: f32, minor_radius: f32) -> [Vect
     corners
 }
 
-fn quartic_coefficients(origin: Vector3<f64>, dir: Vector3<f64>, r_hat: f64) -> [f64; 5] {
+fn quartic_coefficients(origin: DVec3, dir: DVec3, r_hat: f64) -> [f64; 5] {
     let ox = origin.x;
     let oy = origin.y;
     let oz = origin.z;
@@ -205,7 +205,7 @@ fn solve_quartic_ferrari(coefficients_high_to_low: [f64; 5]) -> ([f64; 4], usize
     (out, count)
 }
 
-fn sphere_tracing(origin: Vector3<f64>, dir: Vector3<f64>, r_hat: f64) -> Option<f64> {
+fn sphere_tracing(origin: DVec3, dir: DVec3, r_hat: f64) -> Option<f64> {
     let mut t = 0.0f64;
     for _ in 0..128 {
         let px = origin.x + dir.x * t;
@@ -224,22 +224,12 @@ fn sphere_tracing(origin: Vector3<f64>, dir: Vector3<f64>, r_hat: f64) -> Option
     None
 }
 
-pub fn intersect_torus(
-    origin: Vector3<f32>,
-    dir: Vector3<f32>,
-    major_radius: f32,
-    minor_radius: f32,
-) -> TorusHits {
+pub fn intersect_torus(origin: Vec3, dir: Vec3, major_radius: f32, minor_radius: f32) -> TorusHits {
     let r_hat = minor_radius / major_radius;
     let bounding_radius: f64 = 1.0 + r_hat as f64;
 
-    let o_norm = Vector3::new(
-        origin.x as f64 / major_radius as f64,
-        origin.y as f64 / major_radius as f64,
-        origin.z as f64 / major_radius as f64,
-    );
-    let d_unit = dir.normalize();
-    let d_norm = Vector3::new(d_unit.x as f64, d_unit.y as f64, d_unit.z as f64);
+    let o_norm = origin.as_dvec3() / major_radius as f64;
+    let d_norm = dir.normalize().as_dvec3();
 
     let o_mag_sq = o_norm.dot(o_norm);
     let oc = o_norm.dot(d_norm);
@@ -348,8 +338,8 @@ mod tests {
     #[test]
     fn torus_behind_the_ray_origin_is_not_hit() {
         let hits = intersect_torus(
-            Vector3::new(0.0, 0.5, 12.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.5, 12.0),
+            Vec3::new(0.0, 0.0, 1.0),
             1.2,
             0.35,
         );
@@ -359,8 +349,8 @@ mod tests {
     #[test]
     fn torus_in_front_of_the_ray_origin_is_hit() {
         let hits = intersect_torus(
-            Vector3::new(1.2, 0.0, 12.0),
-            Vector3::new(0.0, 0.0, -1.0),
+            Vec3::new(1.2, 0.0, 12.0),
+            Vec3::new(0.0, 0.0, -1.0),
             1.2,
             0.35,
         );

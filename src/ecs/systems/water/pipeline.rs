@@ -1,26 +1,29 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
-use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
+use super::{
+    create_water_caustic_apply_sets, create_water_caustic_splat_sets, create_water_resolve_sets,
+    write_water_caustic_apply_set, write_water_caustic_splat_set, WaterCausticBindings,
+    WaterPushConstants,
+};
+use crate::ecs::resource::WaterGpuState;
+use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
-use crate::vulkanr::pipeline::{DepthTestConfig, RRPipeline};
+use crate::vulkanr::pipeline::{DepthCompare, DepthTestConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
+use crate::vulkanr::resource::{
+    build_gpu_resource, GraphicsResources, Placement, RayTracingData, UniformBuffer,
+};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::{OverlayBlend, OverlayNodeSpec, OverlayPushConstants};
+use thyllore_vulkan_core::types::{ImageView, Instance};
 
 /// Writes the shading into the HDR color and the history image where the torus is nearer than
 /// the scene depth.
 pub const WATER_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WATER_RESOLVE,
     blends: &[OverlayBlend::Opaque, OverlayBlend::Opaque],
-    depth_test: Some(DepthTestConfig {
-        test_enable: true,
-        write_enable: true,
-        compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-    }),
+    depth_test: Some(DepthTestConfig::read_write(DepthCompare::GreaterOrEqual)),
     push_constants: OverlayPushConstants::of::<WaterPushConstants>(),
 };
 
@@ -31,41 +34,40 @@ pub unsafe fn create_water_pipeline(
     graphics_resources: &GraphicsResources,
     raytracing: &RayTracingData,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
     frames_in_flight: usize,
 ) -> Result<WaterGpuState> {
-    let water_ubo = UniformBuffer::new(
-        instance,
-        rrdevice,
-        WATER_MAX_INSTANCES,
-        Placement::DeviceUpdated,
-    )?;
-    water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
+    let gpu_state = build_gpu_resource(rrdevice, |gpu_state: &mut WaterGpuState| {
+        let water_ubo = gpu_state.ubo.insert(UniformBuffer::new(
+            instance,
+            rrdevice,
+            WATER_MAX_INSTANCES,
+            Placement::DeviceUpdated,
+        )?);
+        water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
 
-    let water_descriptor = RRWaterDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let water_shading_pipeline = WATER_OVERLAY.build_pipeline(
-        rrdevice,
-        rrrender,
-        water_targets.history.render_pass,
-        &[
-            &graphics_resources.frame_set.layout,
-            &water_descriptor.layout,
-        ],
-        water_targets.extent(),
-    )?;
+        let water_descriptor = gpu_state
+            .descriptor
+            .insert(create_water_resolve_sets(rrdevice, frames_in_flight)?);
+        gpu_state.shading_pipeline = Some(WATER_OVERLAY.build_pipeline(
+            rrdevice,
+            rrrender,
+            water_targets.history.render_pass(),
+            &[
+                &graphics_resources.frame_set.layout,
+                water_descriptor.layout(),
+            ],
+            water_targets.extent(),
+        )?);
 
-    let mut gpu_state = WaterGpuState::default();
-    gpu_state.shading_pipeline = Some(water_shading_pipeline);
-    gpu_state.descriptor = Some(water_descriptor);
-    gpu_state.ubo = Some(water_ubo);
-
-    create_water_caustic_pipelines(
-        rrdevice,
-        raytracing,
-        &mut gpu_state,
-        water_targets,
-        hdr_color_view,
-    )?;
+        create_water_caustic_pipelines(
+            rrdevice,
+            raytracing,
+            gpu_state,
+            water_targets,
+            hdr_color_view,
+        )
+    })?;
 
     log!("Created water pipelines");
     Ok(gpu_state)
@@ -79,7 +81,7 @@ pub unsafe fn water_trace_blocks(
         return Ok(crate::ecs::resource::WaterTraceBlocks::default());
     };
     let slot_addresses = (0..WATER_MAX_INSTANCES)
-        .map(|slot| water_ubo.slot_address(&rrdevice.device, slot))
+        .map(|slot| water_ubo.slot_address(rrdevice, slot))
         .collect::<Result<Vec<_>>>()?;
     Ok(crate::ecs::resource::WaterTraceBlocks::new(slot_addresses))
 }
@@ -91,7 +93,7 @@ unsafe fn create_water_caustic_pipelines(
     raytracing: &RayTracingData,
     gpu_state: &mut WaterGpuState,
     water_targets: &WaterRenderTargets,
-    hdr_color_view: vk::ImageView,
+    hdr_color_view: ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
         raytracing.gbuffer.as_ref(),
@@ -104,27 +106,37 @@ unsafe fn create_water_caustic_pipelines(
     let tlas = raytracing
         .acceleration_structure
         .as_ref()
-        .and_then(|accel| accel.tlas.acceleration_structure);
+        .and_then(|accel| accel.tlas.acceleration_structure());
 
-    let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
-    descriptor.allocate_and_update(
-        rrdevice,
-        water_targets.caustic_accum.view,
-        gbuffer.position_image_view,
+    let bindings = WaterCausticBindings {
+        caustic_accum_view: water_targets.caustic_accum.view(),
+        position_image_view: gbuffer.position_image_view(),
         tlas,
-        scene_buffer,
-        water_ubo.handle(),
-        hdr_color_view,
-    )?;
+        scene_uniform_buffer: scene_buffer,
+        water_ubo: water_ubo.handle(),
+        hdr_color_image_view: hdr_color_view,
+    };
 
-    let splat_pipeline =
-        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_SPLAT, &[&descriptor.splat_layout])?;
-    let apply_pipeline =
-        RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_APPLY, &[&descriptor.apply_layout])?;
+    let splat_descriptor = gpu_state
+        .caustic_splat_descriptor
+        .insert(create_water_caustic_splat_sets(rrdevice)?);
+    write_water_caustic_splat_set(splat_descriptor, rrdevice, bindings)?;
+    gpu_state.caustic_splat_pipeline = Some(RRPipeline::new_compute(
+        rrdevice,
+        &WATER_CAUSTIC_SPLAT,
+        &[splat_descriptor.layout()],
+    )?);
 
-    gpu_state.caustic_splat_pipeline = Some(splat_pipeline);
-    gpu_state.caustic_apply_pipeline = Some(apply_pipeline);
-    gpu_state.caustic_descriptor = Some(descriptor);
+    let apply_descriptor = gpu_state
+        .caustic_apply_descriptor
+        .insert(create_water_caustic_apply_sets(rrdevice)?);
+    write_water_caustic_apply_set(apply_descriptor, rrdevice, bindings)?;
+    gpu_state.caustic_apply_pipeline = Some(RRPipeline::new_compute(
+        rrdevice,
+        &WATER_CAUSTIC_APPLY,
+        &[apply_descriptor.layout()],
+    )?);
+
     gpu_state.caustic_bound_tlas = tlas.unwrap_or_default();
 
     log!("Created water caustic pipelines");

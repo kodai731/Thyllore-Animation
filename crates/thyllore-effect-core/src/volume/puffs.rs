@@ -1,6 +1,6 @@
 use crate::volume::knots::RayKnots;
 use crate::volume::shell::VolumeShell;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{biweight, biweight_sphere_piece_integral};
 
 // Mirror of shaders/include/volume_puffs.slang.
@@ -32,8 +32,8 @@ impl RayPuffs {
     /// Adds the entry and exit of every sphere (xyz centre, w radius) the ray crosses as knots.
     pub fn collect(
         spheres: &[[f32; 4]],
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
         knots: &mut RayKnots,
@@ -48,7 +48,7 @@ impl RayPuffs {
             if radius <= 0.0 {
                 continue;
             }
-            let dx = origin - Vector3::new(sphere[0], sphere[1], sphere[2]);
+            let dx = origin - Vec3::new(sphere[0], sphere[1], sphere[2]);
             let b = 2.0 * dx.dot(direction);
             let c = dx.dot(dx) - radius * radius;
             let discriminant = b * b - 4.0 * a * c;
@@ -76,8 +76,8 @@ impl RayPuffs {
         &self,
         spheres: &[[f32; 4]],
         sigma: f32,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         s0: f32,
         s1: f32,
     ) -> f32 {
@@ -93,8 +93,8 @@ impl RayPuffs {
     pub fn piece_integral(
         &self,
         spheres: &[[f32; 4]],
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         s0: f32,
         s1: f32,
     ) -> f32 {
@@ -111,7 +111,7 @@ impl RayPuffs {
                 continue;
             }
             let sphere = &spheres[self.index[k]];
-            let center = Vector3::new(sphere[0], sphere[1], sphere[2]);
+            let center = Vec3::new(sphere[0], sphere[1], sphere[2]);
             total += biweight_sphere_piece_integral(center, sphere[3], start, direction, length);
         }
         length * total
@@ -122,8 +122,8 @@ impl RayPuffs {
 pub fn shell_and_puff_knots(
     shell: &VolumeShell,
     spheres: &[[f32; 4]],
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> (RayKnots, RayPuffs) {
@@ -135,14 +135,14 @@ pub fn shell_and_puff_knots(
 }
 
 /// Sum of the biweight kernels, scaled by `strength`, of every sphere containing `point`.
-pub fn puff_density(spheres: &[[f32; 4]], strength: f32, point: Vector3<f32>) -> f32 {
+pub fn puff_density(spheres: &[[f32; 4]], strength: f32, point: Vec3) -> f32 {
     let mut density = 0.0f32;
     for sphere in spheres {
         let radius = sphere[3];
         if radius <= 0.0 {
             continue;
         }
-        let offset = point - Vector3::new(sphere[0], sphere[1], sphere[2]);
+        let offset = point - Vec3::new(sphere[0], sphere[1], sphere[2]);
         let u = offset.dot(offset) / (radius * radius);
         if u < 1.0 {
             density += strength * biweight(u);
@@ -156,7 +156,7 @@ pub fn shell_and_puff_density(
     shell: &VolumeShell,
     spheres: &[[f32; 4]],
     puff_strength: f32,
-    local: Vector3<f32>,
+    local: Vec3,
 ) -> f32 {
     let h = local.y / shell.height;
     let envelope = shell.envelope_height(h);

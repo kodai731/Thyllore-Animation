@@ -1,7 +1,5 @@
 use pyo3::prelude::*;
 
-#[cfg(feature = "debug-log")]
-mod debuglog;
 mod error;
 mod feedback;
 mod v2_curve_copilot;
@@ -39,10 +37,7 @@ fn thyllore_ml_core(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(feedback::send_message, m)?)?;
 
     #[cfg(feature = "debug-log")]
-    {
-        m.add_function(wrap_pyfunction!(debuglog::debug_log_init, m)?)?;
-        m.add_function(wrap_pyfunction!(debuglog::debug_log, m)?)?;
-    }
+    thyllore_ml_api::debug_log::register(m)?;
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+use glam::{Quat, Vec3};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -323,10 +324,10 @@ fn verify_animation_channels(
             if let Some(reloaded_kf) =
                 find_nearest_keyframe_quat(&reloaded_channel.rotation, orig_kf.time)
             {
-                let dot = (orig_kf.value.s * reloaded_kf.value.s
-                    + orig_kf.value.v.x * reloaded_kf.value.v.x
-                    + orig_kf.value.v.y * reloaded_kf.value.v.y
-                    + orig_kf.value.v.z * reloaded_kf.value.v.z)
+                let dot = (orig_kf.value.w * reloaded_kf.value.w
+                    + orig_kf.value.x * reloaded_kf.value.x
+                    + orig_kf.value.y * reloaded_kf.value.y
+                    + orig_kf.value.z * reloaded_kf.value.z)
                     .abs();
                 let error = 1.0 - dot.min(1.0);
                 max_rotation_error = max_rotation_error.max(error);
@@ -535,9 +536,9 @@ fn build_skeletal_roundtrip_test_clip(skeleton: &Skeleton) -> EditableAnimationC
 }
 
 fn find_nearest_keyframe_vec3<'a>(
-    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>],
+    keyframes: &'a [thyllore_animation::animation::Keyframe<Vec3>],
     target_time: f32,
-) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>> {
+) -> Option<&'a thyllore_animation::animation::Keyframe<Vec3>> {
     keyframes
         .iter()
         .min_by(|a, b| {
@@ -549,9 +550,9 @@ fn find_nearest_keyframe_vec3<'a>(
 }
 
 fn find_nearest_keyframe_quat<'a>(
-    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>],
+    keyframes: &'a [thyllore_animation::animation::Keyframe<Quat>],
     target_time: f32,
-) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>> {
+) -> Option<&'a thyllore_animation::animation::Keyframe<Quat>> {
     keyframes
         .iter()
         .min_by(|a, b| {

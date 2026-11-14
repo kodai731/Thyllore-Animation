@@ -1,11 +1,12 @@
 mod cli;
 mod debug_dump;
-mod descriptors;
+pub(crate) mod descriptors;
+pub(crate) mod gpu_targets;
 mod object_pick;
 pub mod passes;
 mod pipeline;
 mod preset;
-mod record;
+pub(crate) mod record;
 mod render_targets;
 mod spawn;
 #[cfg(test)]
@@ -16,9 +17,7 @@ mod ui_command;
 
 pub use cli::*;
 pub use debug_dump::*;
-pub use descriptors::*;
 pub use object_pick::*;
-pub use preset::*;
 pub use record::*;
 pub use render_targets::*;
 pub use spawn::*;

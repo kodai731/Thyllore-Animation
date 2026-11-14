@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,7 +9,6 @@ use crate::ecs::systems::{
 };
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::resource::graphics_resource::NodeData;
-use thyllore_model_core::apply_skinning;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -97,10 +96,7 @@ fn run_blender_bounds(blender_path: &str, model_path: &str) -> BlenderBounds {
     serde_json::from_str(&json_str).expect("Failed to parse Blender bounds JSON")
 }
 
-fn compute_skinned_bounds(
-    load_result: &ModelLoadResult,
-    time: f32,
-) -> (Vector3<f32>, Vector3<f32>) {
+fn compute_skinned_bounds(load_result: &ModelLoadResult, time: f32) -> (Vec3, Vec3) {
     let skeleton = load_result
         .skeletons
         .first()
@@ -111,8 +107,8 @@ fn compute_skinned_bounds(
     sample_clip_to_pose(clip, time, skeleton, &mut pose, false);
     let global_transforms = compute_pose_global_transforms(skeleton, &pose);
 
-    let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-    let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+    let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+    let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
     let mut has_vertex = false;
 
     for mesh in &load_result.meshes {
@@ -122,8 +118,8 @@ fn compute_skinned_bounds(
         };
 
         let vertex_count = skin_data.base_positions.len();
-        let mut out_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-        let mut out_normals = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut out_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut out_normals = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
 
         thyllore_model_core::apply_skinning(
             skin_data,
@@ -145,16 +141,13 @@ fn compute_skinned_bounds(
     }
 
     if !has_vertex {
-        return (Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 0.0));
+        return (Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0));
     }
 
     (min, max)
 }
 
-fn compute_node_animation_bounds(
-    load_result: &ModelLoadResult,
-    time: f32,
-) -> (Vector3<f32>, Vector3<f32>) {
+fn compute_node_animation_bounds(load_result: &ModelLoadResult, time: f32) -> (Vec3, Vec3) {
     let skeleton = load_result
         .skeletons
         .first()
@@ -172,7 +165,7 @@ fn compute_node_animation_bounds(
             name: n.name.clone(),
             parent_index: n.parent_index,
             local_transform: n.local_transform,
-            global_transform: Matrix4::identity(),
+            global_transform: Mat4::IDENTITY,
         })
         .collect();
 
@@ -180,8 +173,8 @@ fn compute_node_animation_bounds(
         &mut nodes, skeleton, &pose,
     );
 
-    let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-    let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+    let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+    let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
     let mut has_vertex = false;
 
     for mesh in &load_result.meshes {
@@ -199,10 +192,10 @@ fn compute_node_animation_bounds(
 
         for v in &mesh.local_vertices {
             has_vertex = true;
-            let pos = Vector4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
+            let pos = Vec4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
             let world_pos = transform * pos;
             // Compare in world-space (no node_animation_scale) to match Blender's coordinates
-            let p = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+            let p = Vec3::new(world_pos.x, world_pos.y, world_pos.z);
             min.x = min.x.min(p.x);
             min.y = min.y.min(p.y);
             min.z = min.z.min(p.z);
@@ -213,27 +206,27 @@ fn compute_node_animation_bounds(
     }
 
     if !has_vertex {
-        return (Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 0.0));
+        return (Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0));
     }
 
     (min, max)
 }
 
-fn diagonal_length(min: &Vector3<f32>, max: &Vector3<f32>) -> f32 {
+fn diagonal_length(min: &Vec3, max: &Vec3) -> f32 {
     let diff = max - min;
     (diff.x * diff.x + diff.y * diff.y + diff.z * diff.z).sqrt()
 }
 
-fn blender_to_yup(blender_min: &[f32; 3], blender_max: &[f32; 3]) -> (Vector3<f32>, Vector3<f32>) {
+fn blender_to_yup(blender_min: &[f32; 3], blender_max: &[f32; 3]) -> (Vec3, Vec3) {
     let corners = [
-        Vector3::new(blender_min[0], blender_min[2], -blender_min[1]),
-        Vector3::new(blender_min[0], blender_min[2], -blender_max[1]),
-        Vector3::new(blender_min[0], blender_max[2], -blender_min[1]),
-        Vector3::new(blender_min[0], blender_max[2], -blender_max[1]),
-        Vector3::new(blender_max[0], blender_min[2], -blender_min[1]),
-        Vector3::new(blender_max[0], blender_min[2], -blender_max[1]),
-        Vector3::new(blender_max[0], blender_max[2], -blender_min[1]),
-        Vector3::new(blender_max[0], blender_max[2], -blender_max[1]),
+        Vec3::new(blender_min[0], blender_min[2], -blender_min[1]),
+        Vec3::new(blender_min[0], blender_min[2], -blender_max[1]),
+        Vec3::new(blender_min[0], blender_max[2], -blender_min[1]),
+        Vec3::new(blender_min[0], blender_max[2], -blender_max[1]),
+        Vec3::new(blender_max[0], blender_min[2], -blender_min[1]),
+        Vec3::new(blender_max[0], blender_min[2], -blender_max[1]),
+        Vec3::new(blender_max[0], blender_max[2], -blender_min[1]),
+        Vec3::new(blender_max[0], blender_max[2], -blender_max[1]),
     ];
 
     let mut new_min = corners[0];
@@ -252,8 +245,8 @@ fn blender_to_yup(blender_min: &[f32; 3], blender_max: &[f32; 3]) -> (Vector3<f3
 
 fn assert_bounds_similar(
     label: &str,
-    rust_min: &Vector3<f32>,
-    rust_max: &Vector3<f32>,
+    rust_min: &Vec3,
+    rust_max: &Vec3,
     blender_min: &[f32; 3],
     blender_max: &[f32; 3],
     tolerance_ratio: f32,
@@ -309,7 +302,7 @@ fn frame_to_time(frame: i32, fps: f32) -> f32 {
 
 fn run_bounds_test(
     model_path: &str,
-    compute_bounds_fn: fn(&ModelLoadResult, f32) -> (Vector3<f32>, Vector3<f32>),
+    compute_bounds_fn: fn(&ModelLoadResult, f32) -> (Vec3, Vec3),
     load_result: &ModelLoadResult,
     blender_bounds: &BlenderBounds,
 ) {
@@ -454,14 +447,16 @@ fn test_fbx_stickman_bone_vs_node_positions() {
     let skeleton = load_result.skeletons.first().expect("No skeleton");
     eprintln!(
         "skeleton.root_transform diagonal: ({}, {}, {}, {})",
-        skeleton.root_transform[0][0],
-        skeleton.root_transform[1][1],
-        skeleton.root_transform[2][2],
-        skeleton.root_transform[3][3]
+        skeleton.root_transform.col(0)[0],
+        skeleton.root_transform.col(1)[1],
+        skeleton.root_transform.col(2)[2],
+        skeleton.root_transform.col(3)[3]
     );
     eprintln!(
         "skeleton.root_transform translation: ({}, {}, {})",
-        skeleton.root_transform[3][0], skeleton.root_transform[3][1], skeleton.root_transform[3][2]
+        skeleton.root_transform.col(3)[0],
+        skeleton.root_transform.col(3)[1],
+        skeleton.root_transform.col(3)[2]
     );
 
     let rest_pose = create_pose_from_rest(skeleton);
@@ -475,7 +470,7 @@ fn test_fbx_stickman_bone_vs_node_positions() {
             name: n.name.clone(),
             parent_index: n.parent_index,
             local_transform: n.local_transform,
-            global_transform: Matrix4::identity(),
+            global_transform: Mat4::IDENTITY,
         })
         .collect();
     crate::ecs::systems::animation::apply::compute_node_global_transforms(
@@ -489,7 +484,11 @@ fn test_fbx_stickman_bone_vs_node_positions() {
             let t = &bone_globals[idx];
             eprintln!(
                 "  bone[{}] '{}': pos=({:.4}, {:.4}, {:.4})",
-                idx, bone.name, t[3][0], t[3][1], t[3][2]
+                idx,
+                bone.name,
+                t.col(3)[0],
+                t.col(3)[1],
+                t.col(3)[2]
             );
         }
     }
@@ -499,7 +498,11 @@ fn test_fbx_stickman_bone_vs_node_positions() {
         let t = &node.global_transform;
         eprintln!(
             "  node[{}] '{}': pos=({:.4}, {:.4}, {:.4})",
-            node.index, node.name, t[3][0], t[3][1], t[3][2]
+            node.index,
+            node.name,
+            t.col(3)[0],
+            t.col(3)[1],
+            t.col(3)[2]
         );
     }
 
@@ -510,17 +513,17 @@ fn test_fbx_stickman_bone_vs_node_positions() {
         if idx >= bone_globals.len() {
             continue;
         }
-        let bone_pos = Vector3::new(
-            bone_globals[idx][3][0],
-            bone_globals[idx][3][1],
-            bone_globals[idx][3][2],
+        let bone_pos = Vec3::new(
+            bone_globals[idx].col(3)[0],
+            bone_globals[idx].col(3)[1],
+            bone_globals[idx].col(3)[2],
         );
 
         if let Some(node) = nodes.iter().find(|n| n.name == bone.name) {
-            let node_pos = Vector3::new(
-                node.global_transform[3][0],
-                node.global_transform[3][1],
-                node.global_transform[3][2],
+            let node_pos = Vec3::new(
+                node.global_transform.col(3)[0],
+                node.global_transform.col(3)[1],
+                node.global_transform.col(3)[2],
             );
             let diff = ((bone_pos.x - node_pos.x).powi(2)
                 + (bone_pos.y - node_pos.y).powi(2)
@@ -549,8 +552,8 @@ fn test_fbx_stickman_bone_vs_node_positions() {
 
     eprintln!("\n--- Mesh vertex ranges ---");
     for (i, mesh) in load_result.meshes.iter().enumerate() {
-        let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
-        let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+        let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
         for v in &mesh.local_vertices {
             min.x = min.x.min(v.pos.x);
             min.y = min.y.min(v.pos.y);
@@ -585,7 +588,7 @@ fn test_bone_pose_override_roundtrip() {
     eprintln!(
         "Skeleton: {} bones, root_transform_is_identity={}",
         skeleton.bones.len(),
-        skeleton.root_transform == Matrix4::identity()
+        skeleton.root_transform == Mat4::IDENTITY
     );
 
     for bone in &skeleton.bones {
@@ -594,12 +597,12 @@ fn test_bone_pose_override_roundtrip() {
             continue;
         }
 
-        let original_pos = Vector3::new(
-            rest_globals[idx][3][0],
-            rest_globals[idx][3][1],
-            rest_globals[idx][3][2],
+        let original_pos = Vec3::new(
+            rest_globals[idx].col(3)[0],
+            rest_globals[idx].col(3)[1],
+            rest_globals[idx].col(3)[2],
         );
-        let new_pos = original_pos + Vector3::new(0.5, 0.0, 0.0);
+        let new_pos = original_pos + Vec3::new(0.5, 0.0, 0.0);
 
         let override_local = compute_local_override_from_global_translation(
             skeleton,
@@ -631,7 +634,7 @@ fn test_bone_pose_override_roundtrip() {
                 name: n.name.clone(),
                 parent_index: n.parent_index,
                 local_transform: n.local_transform,
-                global_transform: Matrix4::identity(),
+                global_transform: Mat4::IDENTITY,
             })
             .collect();
         crate::ecs::systems::animation::apply::compute_node_global_transforms(
@@ -640,17 +643,17 @@ fn test_bone_pose_override_roundtrip() {
             &overridden_pose,
         );
 
-        let pose_pos = Vector3::new(
-            pose_globals[idx][3][0],
-            pose_globals[idx][3][1],
-            pose_globals[idx][3][2],
+        let pose_pos = Vec3::new(
+            pose_globals[idx].col(3)[0],
+            pose_globals[idx].col(3)[1],
+            pose_globals[idx].col(3)[2],
         );
 
         let node_pos = nodes.iter().find(|n| n.name == bone.name).map(|n| {
-            Vector3::new(
-                n.global_transform[3][0],
-                n.global_transform[3][1],
-                n.global_transform[3][2],
+            Vec3::new(
+                n.global_transform.col(3)[0],
+                n.global_transform.col(3)[1],
+                n.global_transform.col(3)[2],
             )
         });
 
@@ -732,7 +735,7 @@ fn test_gltf_bone_pose_override_roundtrip() {
     let rest_pose = create_pose_from_rest(skeleton);
     let rest_globals = compute_pose_global_transforms(skeleton, &rest_pose);
 
-    let root_is_identity = skeleton.root_transform == Matrix4::identity();
+    let root_is_identity = skeleton.root_transform == Mat4::IDENTITY;
     eprintln!(
         "glTF Skeleton: {} bones, root_transform_is_identity={}, node_animation_scale={}",
         skeleton.bones.len(),
@@ -742,12 +745,12 @@ fn test_gltf_bone_pose_override_roundtrip() {
     if !root_is_identity {
         eprintln!(
             "  root_transform diag=({:.4},{:.4},{:.4}), trans=({:.4},{:.4},{:.4})",
-            skeleton.root_transform[0][0],
-            skeleton.root_transform[1][1],
-            skeleton.root_transform[2][2],
-            skeleton.root_transform[3][0],
-            skeleton.root_transform[3][1],
-            skeleton.root_transform[3][2],
+            skeleton.root_transform.col(0)[0],
+            skeleton.root_transform.col(1)[1],
+            skeleton.root_transform.col(2)[2],
+            skeleton.root_transform.col(3)[0],
+            skeleton.root_transform.col(3)[1],
+            skeleton.root_transform.col(3)[2],
         );
     }
 
@@ -762,12 +765,12 @@ fn test_gltf_bone_pose_override_roundtrip() {
             continue;
         }
 
-        let original_pos = Vector3::new(
-            rest_globals[idx][3][0],
-            rest_globals[idx][3][1],
-            rest_globals[idx][3][2],
+        let original_pos = Vec3::new(
+            rest_globals[idx].col(3)[0],
+            rest_globals[idx].col(3)[1],
+            rest_globals[idx].col(3)[2],
         );
-        let new_pos = original_pos + Vector3::new(0.5, 0.0, 0.0);
+        let new_pos = original_pos + Vec3::new(0.5, 0.0, 0.0);
 
         let override_local = compute_local_override_from_global_translation(
             skeleton,
@@ -795,7 +798,7 @@ fn test_gltf_bone_pose_override_roundtrip() {
                 name: n.name.clone(),
                 parent_index: n.parent_index,
                 local_transform: n.local_transform,
-                global_transform: Matrix4::identity(),
+                global_transform: Mat4::IDENTITY,
             })
             .collect();
         crate::ecs::systems::animation::apply::compute_node_global_transforms(
@@ -804,17 +807,17 @@ fn test_gltf_bone_pose_override_roundtrip() {
             &overridden_pose,
         );
 
-        let pose_pos = Vector3::new(
-            pose_globals[idx][3][0],
-            pose_globals[idx][3][1],
-            pose_globals[idx][3][2],
+        let pose_pos = Vec3::new(
+            pose_globals[idx].col(3)[0],
+            pose_globals[idx].col(3)[1],
+            pose_globals[idx].col(3)[2],
         );
 
         let node_pos = nodes.iter().find(|n| n.name == bone.name).map(|n| {
-            Vector3::new(
-                n.global_transform[3][0],
-                n.global_transform[3][1],
-                n.global_transform[3][2],
+            Vec3::new(
+                n.global_transform.col(3)[0],
+                n.global_transform.col(3)[1],
+                n.global_transform.col(3)[2],
             )
         });
 
@@ -877,7 +880,9 @@ fn test_gltf_bone_pose_override_roundtrip() {
                 let pose_g = &rest_globals[idx];
                 eprintln!(
                     "  pose_global[root] trans=({:.4},{:.4},{:.4})",
-                    pose_g[3][0], pose_g[3][1], pose_g[3][2]
+                    pose_g.col(3)[0],
+                    pose_g.col(3)[1],
+                    pose_g.col(3)[2]
                 );
             }
 
@@ -889,16 +894,16 @@ fn test_gltf_bone_pose_override_roundtrip() {
                     name: n.name.clone(),
                     parent_index: n.parent_index,
                     local_transform: n.local_transform,
-                    global_transform: Matrix4::identity(),
+                    global_transform: Mat4::IDENTITY,
                 })
                 .collect();
             if let Some(rn) = test_nodes.iter().find(|n| n.name == rb.name) {
                 eprintln!(
                     "  node '{}' orig local trans=({:.4},{:.4},{:.4}), parent={:?}",
                     rn.name,
-                    rn.local_transform[3][0],
-                    rn.local_transform[3][1],
-                    rn.local_transform[3][2],
+                    rn.local_transform.col(3)[0],
+                    rn.local_transform.col(3)[1],
+                    rn.local_transform.col(3)[2],
                     rn.parent_index
                 );
             }

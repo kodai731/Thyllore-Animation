@@ -1,10 +1,10 @@
-use super::ui_command::WaterUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
-use crate::ecs::resource::{HierarchyState, WaterHistorySnapshotState, WaterRenderSettings};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
@@ -24,7 +24,7 @@ fn water_entities(world: &World) -> Vec<Entity> {
 
 fn spawn_water_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
     let effect = WaterTorusEffect {
-        position: cgmath::Vector3::new(0.0, -0.5, 2.5 * ordinal as f32),
+        position: Vec3::new(0.0, -0.5, 2.5 * ordinal as f32),
         ..WaterTorusEffect::default()
     };
     spawn_water_with_clip(
@@ -76,14 +76,3 @@ pub fn resolve_selected_water(world: &World) -> Option<Entity> {
 
     world.entities_with::<WaterTorusEffect>().first().copied()
 }
-
-fn insert_water_default_resources(world: &mut World) {
-    if !world.contains_resource::<WaterRenderSettings>() {
-        world.insert_resource(WaterRenderSettings::default());
-    }
-    if !world.contains_resource::<WaterHistorySnapshotState>() {
-        world.insert_resource(WaterHistorySnapshotState::default());
-    }
-}
-
-crate::effect_default_resource!("water", insert_water_default_resources);

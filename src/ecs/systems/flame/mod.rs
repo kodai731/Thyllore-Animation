@@ -1,10 +1,11 @@
 mod attach;
 mod batch_actions;
 mod cli;
-mod descriptors;
+pub(crate) mod descriptors;
 mod dump;
 mod field;
 mod frame_prep;
+pub(crate) mod gpu_targets;
 mod heat_distortion;
 mod history_accumulate;
 mod object_pick;
@@ -25,7 +26,6 @@ mod ui_command;
 
 pub use attach::*;
 pub use cli::*;
-pub use descriptors::*;
 pub use dump::*;
 pub use field::*;
 pub use heat_distortion::*;
@@ -34,7 +34,6 @@ pub use object_pick::*;
 pub use passes::*;
 pub use paths::*;
 pub use pipeline::*;
-pub use preset::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use style::*;

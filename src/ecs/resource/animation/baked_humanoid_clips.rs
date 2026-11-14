@@ -14,6 +14,8 @@ pub struct BakedHumanoidClips {
     pub last_view: Option<(Option<SourceClipId>, ClipPreview, u32)>,
 }
 
+crate::startup_resource!(BakedHumanoidClips, Editor);
+
 pub struct BakedHumanoidClip {
     pub fps: u32,
     pub asset_id: AssetId,
@@ -61,8 +63,8 @@ mod tests {
     use super::*;
 
     fn make_entry(
-        source_id: SourceClipId,
-        entity: crate::ecs::world::Entity,
+        _source_id: SourceClipId,
+        _entity: crate::ecs::world::Entity,
         asset_id: AssetId,
     ) -> BakedHumanoidClip {
         BakedHumanoidClip {

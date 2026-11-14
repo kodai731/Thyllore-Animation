@@ -1,11 +1,10 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
-use crate::ecs::resource::{
-    FlameHistorySnapshotState, FlameRenderSettings, FlameUIState, HierarchyState,
-};
+use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
@@ -28,7 +27,7 @@ fn spawn_flame_instance(world: &mut World, assets: &mut AssetStorage, ordinal: u
         return spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
     }
     let effect = FlameEffect {
-        position: cgmath::Vector3::new(1.5 * ordinal as f32, 0.0, 0.0),
+        position: Vec3::new(1.5 * ordinal as f32, 0.0, 0.0),
         ..FlameEffect::default()
     };
     spawn_flame_with_clip(
@@ -80,17 +79,3 @@ pub fn resolve_selected_flame(world: &World) -> Option<Entity> {
 
     world.entities_with::<FlameEffect>().first().copied()
 }
-
-fn insert_flame_default_resources(world: &mut World) {
-    if !world.contains_resource::<FlameRenderSettings>() {
-        world.insert_resource(FlameRenderSettings::default());
-    }
-    if !world.contains_resource::<FlameHistorySnapshotState>() {
-        world.insert_resource(FlameHistorySnapshotState::default());
-    }
-    if !world.contains_resource::<FlameUIState>() {
-        world.insert_resource(FlameUIState::default());
-    }
-}
-
-crate::effect_default_resource!("flame", insert_flame_default_resources);

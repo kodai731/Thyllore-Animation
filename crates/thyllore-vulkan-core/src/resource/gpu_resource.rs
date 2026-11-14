@@ -1,3 +1,4 @@
+use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
@@ -25,7 +26,7 @@ macro_rules! raw_handle_resource {
         impl GpuResource for $handle {
             unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
                 if *self != <$handle>::null() {
-                    rrdevice.device.$destroy(*self, None);
+                    rrdevice.device().$destroy(*self, None);
                     *self = <$handle>::null();
                 }
             }
@@ -50,6 +51,46 @@ raw_handle_resource!(vk::Framebuffer, destroy_framebuffer);
 raw_handle_resource!(vk::ShaderModule, destroy_shader_module);
 raw_handle_resource!(vk::QueryPool, destroy_query_pool);
 
+impl GpuResource for crate::types::Pipeline {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::Sampler {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::RenderPass {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
+impl GpuResource for crate::types::Framebuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.0.destroy_gpu(rrdevice);
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.0.is_destroyed()
+    }
+}
+
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
 #[derive(Clone, Copy, Debug, Default)]
@@ -59,11 +100,11 @@ pub struct OwnedDescriptorSet {
 }
 
 impl OwnedDescriptorSet {
-    pub fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
+    pub(crate) fn new(set: vk::DescriptorSet, layout: vk::DescriptorSetLayout) -> Self {
         Self { set, layout }
     }
 
-    pub fn handle(&self) -> vk::DescriptorSet {
+    pub(crate) fn handle(&self) -> vk::DescriptorSet {
         self.set
     }
 }
@@ -121,6 +162,26 @@ fn destroy_all_in_reverse_with(
     }
 }
 
+/// Builds a resource field by field; a failed build destroys the fields it had already stored.
+pub unsafe fn build_gpu_resource<T: GpuResource + Default>(
+    rrdevice: &RRDevice,
+    build: impl FnOnce(&mut T) -> Result<()>,
+) -> Result<T> {
+    build_gpu_resource_with(build, |resource| resource.destroy_gpu(rrdevice))
+}
+
+fn build_gpu_resource_with<T: Default>(
+    build: impl FnOnce(&mut T) -> Result<()>,
+    destroy: impl FnOnce(&mut T),
+) -> Result<T> {
+    let mut resource = T::default();
+    if let Err(error) = build(&mut resource) {
+        destroy(&mut resource);
+        return Err(error);
+    }
+    Ok(resource)
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
@@ -176,6 +237,35 @@ mod tests {
         });
 
         assert_eq!(destroyed_order.borrow().as_slice(), ["second", "first"]);
+    }
+
+    #[test]
+    fn a_failed_build_destroys_the_fields_it_had_stored() {
+        let destroyed_fields: Rc<RefCell<Vec<u32>>> = Rc::new(RefCell::new(Vec::new()));
+
+        let built = build_gpu_resource_with(
+            |fields: &mut Vec<u32>| {
+                fields.push(1);
+                Err(anyhow::anyhow!("second field failed"))
+            },
+            |fields| destroyed_fields.borrow_mut().append(fields),
+        );
+
+        assert!(built.is_err());
+        assert_eq!(destroyed_fields.borrow().as_slice(), [1]);
+    }
+
+    #[test]
+    fn a_successful_build_is_returned_without_destroying() {
+        let built = build_gpu_resource_with(
+            |fields: &mut Vec<u32>| {
+                fields.push(1);
+                Ok(())
+            },
+            |_| unreachable!("a successful build is never destroyed"),
+        );
+
+        assert_eq!(built.ok(), Some(vec![1]));
     }
 
     #[test]

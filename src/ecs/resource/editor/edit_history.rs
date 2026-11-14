@@ -1,5 +1,8 @@
+use glam::Vec3;
+
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
+use crate::ecs::resource::SkeletonSnapshot;
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -23,6 +26,15 @@ pub enum EditCommand {
         removed: SourceClip,
         description: &'static str,
     },
+    SkeletonModified {
+        before: SkeletonSnapshot,
+        description: &'static str,
+    },
+    ModelScaled {
+        factor: f32,
+        root_scales: Vec<(Entity, Vec3)>,
+        description: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +42,7 @@ pub enum EditCommandAfter {
     Clip(EditableAnimationClip),
     Schedule(ClipSchedule),
     ClipCreated(SourceClip),
+    Skeleton(SkeletonSnapshot),
     Empty,
 }
 
@@ -39,11 +52,21 @@ pub struct EditEntry {
     pub after: EditCommandAfter,
 }
 
+pub const DEFAULT_MAX_HISTORY: usize = 100;
+
 #[derive(Debug)]
 pub struct EditHistory {
     undo_stack: Vec<EditEntry>,
     redo_stack: Vec<EditEntry>,
     max_history: usize,
+}
+
+crate::startup_resource!(EditHistory, Editor);
+
+impl Default for EditHistory {
+    fn default() -> Self {
+        Self::new(DEFAULT_MAX_HISTORY)
+    }
 }
 
 impl EditHistory {
@@ -128,6 +151,38 @@ impl EditHistory {
         self.push_entry(entry);
     }
 
+    pub fn push_skeleton_edit(
+        &mut self,
+        before: SkeletonSnapshot,
+        after: SkeletonSnapshot,
+        description: &'static str,
+    ) {
+        let entry = EditEntry {
+            command: EditCommand::SkeletonModified {
+                before,
+                description,
+            },
+            after: EditCommandAfter::Skeleton(after),
+        };
+        self.push_entry(entry);
+    }
+
+    pub fn push_model_scale(
+        &mut self,
+        factor: f32,
+        root_scales: Vec<(Entity, Vec3)>,
+        description: &'static str,
+    ) {
+        self.push_entry(EditEntry {
+            command: EditCommand::ModelScaled {
+                factor,
+                root_scales,
+                description,
+            },
+            after: EditCommandAfter::Empty,
+        });
+    }
+
     fn push_entry(&mut self, entry: EditEntry) {
         self.redo_stack.clear();
         self.undo_stack.push(entry);
@@ -177,6 +232,8 @@ impl EditCommand {
             EditCommand::ScheduleModified { description, .. } => description,
             EditCommand::ClipAdded { description, .. } => description,
             EditCommand::ClipRemoved { description, .. } => description,
+            EditCommand::SkeletonModified { description, .. } => description,
+            EditCommand::ModelScaled { description, .. } => description,
         }
     }
 }
@@ -191,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_push_and_undo_clip_edit() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
 
@@ -218,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_push_and_redo() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
 
@@ -234,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_redo_cleared_on_new_edit() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("b1");
         let after = make_dummy_clip("a1");
         history.push_clip_edit(1, before, after, "first");
@@ -269,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_returns_entry() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         let before = make_dummy_clip("before");
         let after = make_dummy_clip("after");
         history.push_clip_edit(1, before, after, "edit");
@@ -279,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_empty() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         assert!(history.last_undo_mut().is_none());
     }
 
@@ -305,12 +362,29 @@ mod tests {
                 removed: SourceClip::new(1, make_dummy_clip("removed")),
                 description: "Remove clip",
             },
+            EditCommand::SkeletonModified {
+                before: SkeletonSnapshot {
+                    skeleton: crate::animation::Skeleton::new("s"),
+                    skins: Vec::new(),
+                    spring_setups: Vec::new(),
+                    constraint_sets: Vec::new(),
+                    clip_tracks: Vec::new(),
+                    humanoid_mapping: Default::default(),
+                },
+                description: "Remove bone",
+            },
         ];
 
         let descriptions: Vec<&str> = commands.iter().map(EditCommand::description).collect();
         assert_eq!(
             descriptions,
-            ["Move keyframe", "Move clip", "Add clip", "Remove clip"]
+            [
+                "Move keyframe",
+                "Move clip",
+                "Add clip",
+                "Remove clip",
+                "Remove bone"
+            ]
         );
     }
 }

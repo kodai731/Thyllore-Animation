@@ -140,18 +140,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
-
-[[package]]
-name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "approx"
@@ -160,15 +151,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
 ]
 
 [[package]]
@@ -688,14 +670,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
-name = "cgmath"
-version = "0.18.0"
+name = "cfg_aliases"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
-dependencies = [
- "approx 0.4.0",
- "num-traits",
-]
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "chrono"
@@ -982,10 +960,10 @@ dependencies = [
 name = "dear-imgui-rs"
 version = "0.18.0"
 dependencies = [
- "approx 0.5.1",
+ "approx",
  "bitflags 2.11.0",
  "dear-imgui-sys",
- "glam",
+ "glam 0.32.1",
  "mint",
  "once_cell",
  "parking_lot",
@@ -1005,7 +983,7 @@ dependencies = [
  "cc",
  "dear-imgui-build-support",
  "flate2",
- "glam",
+ "glam 0.32.1",
  "mint",
  "tar",
 ]
@@ -1028,17 +1006,6 @@ checksum = "a878c850e9e421b20262e9b41f9c860e4785fa07541c266b62ff9d1ef998a80a"
 dependencies = [
  "pem-rfc7468",
  "zeroize",
-]
-
-[[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1279,6 +1246,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -1476,10 +1444,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "139ef39800118c7683f2fd3c98c1b23c09ae076556b435f8e9064ae108aaeeec"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasip2",
  "wasip3",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1487,6 +1457,15 @@ name = "glam"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+
+[[package]]
+name = "glam"
+version = "0.34.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54af5066834d6c2d404eb26ea036a15b15d9ff80db510b9a73ff95ab07f30831"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "glob"
@@ -2017,9 +1996,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
-version = "0.2.182"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "libflate"
@@ -2358,10 +2337,8 @@ checksum = "7b313788c468c49141a9d9b6131fc15f403e6ef4e8446a0b2e18f664ddb278a9"
 dependencies = [
  "byteorder",
  "ndarray 0.16.1",
- "num-complex",
  "num-traits",
  "py_literal",
- "zip",
 ]
 
 [[package]]
@@ -2404,6 +2381,18 @@ dependencies = [
  "cfg-if",
  "libc",
  "memoffset 0.6.5",
+]
+
+[[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.11.0",
+ "cfg-if",
+ "cfg_aliases 0.2.2",
+ "libc",
 ]
 
 [[package]]
@@ -3178,9 +3167,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+checksum = "e660451e55124f798a69a5af3f49ccfbefbd41910eefd25caf2393e1f3473ec1"
 dependencies = [
  "memchr",
 ]
@@ -3426,9 +3415,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.41"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b92b125634d9b795e7beca796cc790df15a7fb38323bf3196fda83292d06b1f"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "log",
  "once_cell",
@@ -3450,9 +3439,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -3551,6 +3540,16 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -3693,7 +3692,7 @@ dependencies = [
  "lazy_static",
  "log",
  "memmap2 0.5.10",
- "nix",
+ "nix 0.24.3",
  "pkg-config",
  "wayland-client 0.29.5",
  "wayland-cursor 0.29.5",
@@ -3721,7 +3720,7 @@ dependencies = [
  "wayland-cursor 0.31.12",
  "wayland-protocols 0.31.2",
  "wayland-protocols-wlr",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
  "xkeysym",
 ]
 
@@ -3808,6 +3807,27 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "subtle"
@@ -3918,12 +3938,14 @@ name = "thyllore-anim-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "thyllore-math-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
 ]
 
 [[package]]
@@ -3932,16 +3954,17 @@ version = "0.0.1-preview"
 dependencies = [
  "anyhow",
  "bincode",
- "cgmath",
  "chrono",
  "clap",
  "copypasta",
  "dear-imgui-rs",
  "env_logger",
  "fbxcel",
+ "glam 0.34.2",
  "gltf",
  "imgui-winit-support",
  "inventory",
+ "libloading 0.8.9",
  "log",
  "once_cell",
  "ort",
@@ -3961,6 +3984,7 @@ dependencies = [
  "thyllore-color-core",
  "thyllore-effect-core",
  "thyllore-exporter-core",
+ "thyllore-file-format-core",
  "thyllore-grpc-client",
  "thyllore-importer-core",
  "thyllore-log-core",
@@ -3973,8 +3997,29 @@ dependencies = [
  "thyllore-texture-fit-core",
  "thyllore-vulkan-core",
  "ufbx",
- "vulkanalia",
  "winit",
+]
+
+[[package]]
+name = "thyllore-avatar-api"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "glam 0.34.2",
+ "pyo3",
+ "pythonize",
+ "ron",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "strum",
+ "thyllore-anim-core",
+ "thyllore-avatar-core",
+ "thyllore-exporter-core",
+ "thyllore-math-core",
+ "thyllore-ml-api",
+ "thyllore-model-core",
+ "thyllore-scene-core",
 ]
 
 [[package]]
@@ -3982,14 +4027,17 @@ name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "tempfile",
  "thyllore-anim-core",
  "thyllore-importer-core",
  "thyllore-math-core",
+ "thyllore-model-core",
+ "thyllore-scene-core",
  "toml",
 ]
 
@@ -4009,8 +4057,8 @@ name = "thyllore-effect-core"
 version = "0.0.1"
 dependencies = [
  "cc",
- "cgmath",
  "fastrand",
+ "glam 0.34.2",
  "numpy",
  "pyo3",
  "pythonize",
@@ -4040,13 +4088,14 @@ name = "thyllore-exporter-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "fbxcel",
+ "glam 0.34.2",
  "gltf",
  "ron",
  "serde_json",
  "serde_yaml",
  "thyllore-anim-core",
+ "thyllore-avatar-core",
  "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-log-core",
@@ -4059,8 +4108,9 @@ dependencies = [
 name = "thyllore-file-format-core"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "thyllore-anim-core",
+ "thyllore-math-core",
  "thyllore-model-core",
 ]
 
@@ -4089,7 +4139,7 @@ name = "thyllore-importer-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "gltf",
  "png 0.17.16",
  "serde",
@@ -4116,13 +4166,20 @@ name = "thyllore-math-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "fastrand",
+ "glam 0.34.2",
 ]
 
 [[package]]
 name = "thyllore-ml-api"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "pyo3",
+ "pythonize",
+ "serde",
+]
 
 [[package]]
 name = "thyllore-ml-core"
@@ -4130,8 +4187,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cgmath",
- "chrono",
  "ed25519-dalek",
  "flate2",
  "ndarray 0.16.1",
@@ -4146,6 +4201,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-math-core",
  "thyllore-ml-api",
  "thyllore-model-core",
  "ureq 2.12.1",
@@ -4155,7 +4211,7 @@ dependencies = [
 name = "thyllore-model-core"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "thyllore-math-core",
 ]
 
@@ -4164,7 +4220,7 @@ name = "thyllore-render-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "thyllore-anim-core",
@@ -4177,7 +4233,7 @@ dependencies = [
 name = "thyllore-render-debug"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "serde_json",
  "thyllore-effect-core",
  "thyllore-math-core",
@@ -4188,6 +4244,7 @@ dependencies = [
 name = "thyllore-scene-core"
 version = "0.0.1"
 dependencies = [
+ "glam 0.34.2",
  "serde",
  "thyllore-color-core",
  "thyllore-scene-derive",
@@ -4200,6 +4257,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thyllore-scratch"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thyllore-animation",
 ]
 
 [[package]]
@@ -4232,8 +4298,8 @@ name = "thyllore-vulkan-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "dear-imgui-rs",
+ "glam 0.34.2",
  "log",
  "png 0.17.16",
  "thiserror 1.0.69",
@@ -4548,6 +4614,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
+name = "typed-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
+
+[[package]]
 name = "typenum"
 version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4656,7 +4728,7 @@ dependencies = [
  "ureq-proto",
  "utf8-zero",
  "webpki-root-certs",
- "webpki-roots 1.0.8",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -4919,7 +4991,7 @@ dependencies = [
  "bitflags 1.3.2",
  "downcast-rs",
  "libc",
- "nix",
+ "nix 0.24.3",
  "scoped-tls",
  "wayland-commons",
  "wayland-scanner 0.29.5",
@@ -4935,7 +5007,7 @@ dependencies = [
  "bitflags 2.11.0",
  "rustix 1.1.4",
  "wayland-backend",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -4944,7 +5016,7 @@ version = "0.29.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8691f134d584a33a6606d9d717b95c4fa20065605f798a3f350d78dced02a902"
 dependencies = [
- "nix",
+ "nix 0.24.3",
  "once_cell",
  "smallvec",
  "wayland-sys 0.29.5",
@@ -4967,7 +5039,7 @@ version = "0.29.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6865c6b66f13d6257bef1cd40cbfe8ef2f150fb8ebbdb1e8e873455931377661"
 dependencies = [
- "nix",
+ "nix 0.24.3",
  "wayland-client 0.29.5",
  "xcursor",
 ]
@@ -5004,7 +5076,7 @@ dependencies = [
  "bitflags 2.11.0",
  "wayland-backend",
  "wayland-client 0.31.12",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5016,7 +5088,7 @@ dependencies = [
  "bitflags 2.11.0",
  "wayland-backend",
  "wayland-client 0.31.12",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5029,7 +5101,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client 0.31.12",
  "wayland-protocols 0.31.2",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5042,7 +5114,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client 0.31.12",
  "wayland-protocols 0.31.2",
- "wayland-scanner 0.31.8",
+ "wayland-scanner 0.31.11",
 ]
 
 [[package]]
@@ -5058,9 +5130,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.31.8"
+version = "0.31.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5423e94b6a63e68e439803a3e153a9252d5ead12fd853334e2ad33997e3889e3"
+checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
 dependencies = [
  "proc-macro2",
  "quick-xml",
@@ -5112,9 +5184,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-root-certs"
-version = "1.0.6"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804f18a4ac2676ffb4e8b5b5fa9ae38af06df08162314f96a68d2a363e21a8ca"
+checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -5125,14 +5197,14 @@ version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
 dependencies = [
- "webpki-roots 1.0.8",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.8"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -5545,7 +5617,7 @@ dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
  "calloop",
- "cfg_aliases",
+ "cfg_aliases 0.1.1",
  "core-foundation 0.9.4",
  "core-graphics",
  "cursor-icon",
@@ -5711,7 +5783,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "592b4883219f345e712b3209c62654ebda0bb50887f330cbd018d0f654bfd507"
 dependencies = [
  "gethostname 0.2.3",
- "nix",
+ "nix 0.24.3",
  "winapi",
  "winapi-wsapoll",
  "x11rb-protocol 0.10.0",
@@ -5738,7 +5810,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56b245751c0ac9db0e006dc812031482784e434630205a93c73cfefcaabeac67"
 dependencies = [
- "nix",
+ "nix 0.24.3",
 ]
 
 [[package]]
@@ -5960,20 +6032,26 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "2.4.2"
+version = "9.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
+checksum = "3f5b58784007ff6e5f280ec82c8596686a3b9b5dd5836c63288d4479f84728b9"
 dependencies = [
- "arbitrary",
  "crc32fast",
- "crossbeam-utils",
- "displaydoc",
  "flate2",
+ "getrandom 0.4.1",
  "indexmap 2.13.0",
  "memchr",
- "thiserror 2.0.18",
+ "nix 0.31.3",
+ "typed-path",
+ "windows-sys 0.61.2",
  "zopfli",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"

@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "thyllore-anim-core"
 version = "0.0.1"
 edition = "2021"
@@ -10,10 +11,12 @@ repository = "https://github.com/kodai731/Thyllore-Animation"
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }
-cgmath = "0.18"
+thyllore-scene-core = { path = "../thyllore-scene-core" }
+glam = { version = "0.34", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 ron = "0.8"
 anyhow = "1"
+strum = { version = "0.28", features = ["derive"] }
 
 [dev-dependencies]
 serde_json = "1"

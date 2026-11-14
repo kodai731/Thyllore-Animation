@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::flame::{flame_bounding_radius, flame_proxy_pad, FlameEffect, FlameProxyPad};
 use crate::flame_shell::{flame_shell_outer_radius, flame_shell_support_scale};
@@ -8,8 +8,8 @@ use crate::flame_shell::{flame_shell_outer_radius, flame_shell_support_scale};
 /// ask the same question, so the bend and taper only have to be tracked in one place.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLocalBounds {
-    pub min: Vector3<f32>,
-    pub max: Vector3<f32>,
+    pub min: Vec3,
+    pub max: Vec3,
 }
 
 /// Emitter-dependent proxy widening for an effect (ring tubes reach past the
@@ -41,12 +41,12 @@ pub fn flame_local_bounds(
         + pad.radial;
 
     FlameLocalBounds {
-        min: Vector3::new(
+        min: Vec3::new(
             -radius + bend_offset[0].min(0.0),
             0.0,
             -radius + bend_offset[1].min(0.0),
         ),
-        max: Vector3::new(
+        max: Vec3::new(
             radius + bend_offset[0].max(0.0),
             1.0 + pad.top,
             radius + bend_offset[1].max(0.0),
@@ -54,8 +54,8 @@ pub fn flame_local_bounds(
     }
 }
 
-pub fn flame_local_bounds_corners(bounds: &FlameLocalBounds) -> [Vector3<f32>; 8] {
-    let mut corners = [Vector3::new(0.0, 0.0, 0.0); 8];
+pub fn flame_local_bounds_corners(bounds: &FlameLocalBounds) -> [Vec3; 8] {
+    let mut corners = [Vec3::new(0.0, 0.0, 0.0); 8];
     for (index, corner) in corners.iter_mut().enumerate() {
         corner.x = if index & 1 == 0 {
             bounds.min.x
@@ -82,8 +82,8 @@ pub fn flame_local_bounds_corners(bounds: &FlameLocalBounds) -> [Vector3<f32>; 8
 /// renormalizing, so the returned parameter is still measured in world units.
 pub fn intersect_flame_bounds(
     bounds: &FlameLocalBounds,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
 ) -> Option<f32> {
     let mut t_enter = f32::NEG_INFINITY;
     let mut t_exit = f32::INFINITY;
@@ -115,13 +115,13 @@ pub fn intersect_flame_bounds(
 /// matrix, which keeps a rotated or scaled flame from being tested against an inflated box.
 pub fn intersect_flame_proxy(
     effect: &FlameEffect,
-    inverse_model: &Matrix4<f32>,
-    ray_origin: Vector3<f32>,
-    ray_direction: Vector3<f32>,
+    inverse_model: &Mat4,
+    ray_origin: Vec3,
+    ray_direction: Vec3,
 ) -> Option<f32> {
-    let local_origin = inverse_model * Vector4::new(ray_origin.x, ray_origin.y, ray_origin.z, 1.0);
+    let local_origin = inverse_model * Vec4::new(ray_origin.x, ray_origin.y, ray_origin.z, 1.0);
     let local_direction =
-        inverse_model * Vector4::new(ray_direction.x, ray_direction.y, ray_direction.z, 0.0);
+        inverse_model * Vec4::new(ray_direction.x, ray_direction.y, ray_direction.z, 0.0);
 
     intersect_flame_bounds(
         &flame_local_bounds(
@@ -139,7 +139,6 @@ pub fn intersect_flame_proxy(
 mod tests {
     use super::*;
     use crate::flame::FlameWind;
-    use cgmath::SquareMatrix;
 
     fn unit_bounds() -> FlameLocalBounds {
         flame_local_bounds([0.0, 0.0], 1.0, 1.0, FlameProxyPad::default())
@@ -150,8 +149,8 @@ mod tests {
         let bounds = unit_bounds();
         let hit = intersect_flame_bounds(
             &bounds,
-            Vector3::new(0.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         assert_eq!(hit, Some(10.0 + bounds.min.z));
     }
@@ -160,8 +159,8 @@ mod tests {
     fn ray_beside_the_proxy_misses() {
         let hit = intersect_flame_bounds(
             &unit_bounds(),
-            Vector3::new(5.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(5.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         assert_eq!(hit, None);
     }
@@ -170,8 +169,8 @@ mod tests {
     fn ray_above_the_proxy_misses() {
         let hit = intersect_flame_bounds(
             &unit_bounds(),
-            Vector3::new(0.0, 2.0, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 2.0, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         assert_eq!(hit, None);
     }
@@ -180,8 +179,8 @@ mod tests {
     fn ray_pointing_away_misses() {
         let hit = intersect_flame_bounds(
             &unit_bounds(),
-            Vector3::new(0.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, -1.0),
         );
         assert_eq!(hit, None);
     }
@@ -190,8 +189,8 @@ mod tests {
     fn origin_inside_the_proxy_enters_at_zero() {
         let hit = intersect_flame_bounds(
             &unit_bounds(),
-            Vector3::new(0.0, 0.5, 0.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.5, 0.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         assert_eq!(hit, Some(0.0));
     }
@@ -226,9 +225,9 @@ mod tests {
         };
         let hit = intersect_flame_proxy(
             &effect,
-            &Matrix4::identity(),
-            Vector3::new(0.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            &Mat4::IDENTITY,
+            Vec3::new(0.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         assert_eq!(hit, Some(10.0 + unit_bounds().min.z));
     }
@@ -242,20 +241,20 @@ mod tests {
             },
             ..FlameEffect::default()
         };
-        let model = Matrix4::from_translation(Vector3::new(4.0, 0.0, 0.0));
-        let inverse_model = model.invert().unwrap();
+        let model = Mat4::from_translation(Vec3::new(4.0, 0.0, 0.0));
+        let inverse_model = model.try_inverse().unwrap();
 
         let missed = intersect_flame_proxy(
             &effect,
             &inverse_model,
-            Vector3::new(0.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
         let hit = intersect_flame_proxy(
             &effect,
             &inverse_model,
-            Vector3::new(4.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(4.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         );
 
         assert_eq!(missed, None);
@@ -271,14 +270,14 @@ mod tests {
             },
             ..FlameEffect::default()
         };
-        let model = Matrix4::from_nonuniform_scale(2.0, 1.0, 2.0);
-        let inverse_model = model.invert().unwrap();
+        let model = Mat4::from_scale(Vec3::new(2.0, 1.0, 2.0));
+        let inverse_model = model.try_inverse().unwrap();
 
         let hit = intersect_flame_proxy(
             &effect,
             &inverse_model,
-            Vector3::new(0.0, 0.5, -10.0),
-            Vector3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.5, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
         )
         .unwrap();
 

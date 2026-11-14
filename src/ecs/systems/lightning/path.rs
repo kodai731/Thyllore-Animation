@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_effect_core::LIGHTNING_MAX_WAYPOINTS;
 
 use super::target::find_entity_named;
@@ -25,7 +25,7 @@ pub fn adopt_lightning_child(world: &mut World, lightning: Entity, child: Entity
 pub fn spawn_lightning_waypoint(world: &mut World, lightning: Entity) -> Option<Entity> {
     let end_offset = world
         .get_component::<LightningEffect>(lightning)
-        .map(|effect| Vector3::from(effect.shape.end_offset))?;
+        .map(|effect| Vec3::from(effect.shape.end_offset))?;
     let lightning_name = world
         .get_component::<Name>(lightning)
         .map(|name| name.0.clone())
@@ -42,7 +42,7 @@ pub fn spawn_lightning_waypoint(world: &mut World, lightning: Entity) -> Option<
         .iter()
         .rev()
         .find_map(|name| find_waypoint_translation(world, name))
-        .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+        .unwrap_or(Vec3::new(0.0, 0.0, 0.0));
     let midpoint = (previous_point + end_offset) * 0.5;
 
     let waypoint_name = find_unused_waypoint_name(world, &lightning_name, waypoint_names.len() + 1);
@@ -98,7 +98,7 @@ pub fn follow_lightning_path(world: &mut World) {
     }
 }
 
-fn find_waypoint_translation(world: &World, name: &str) -> Option<Vector3<f32>> {
+fn find_waypoint_translation(world: &World, name: &str) -> Option<Vec3> {
     let waypoint = find_entity_named(world, name)?;
     world
         .get_component::<Transform>(waypoint)

@@ -4,3 +4,5 @@ pub struct ValidationReport {
     pub frames_seen: u64,
     pub first_issue_frame: Option<u64>,
 }
+
+crate::startup_resource!(ValidationReport, CoreResources);

@@ -27,45 +27,18 @@ mod tests {
         ((x * (a * x + b)) / (x * (c * x + d) + e)).clamp(0.0, 1.0)
     }
 
-    fn aces_filmic(r: f32, g: f32, b: f32) -> [f32; 3] {
-        [
-            aces_filmic_channel(r),
-            aces_filmic_channel(g),
-            aces_filmic_channel(b),
-        ]
-    }
-
-    fn reinhard(r: f32, g: f32, b: f32) -> [f32; 3] {
-        [r / (r + 1.0), g / (g + 1.0), b / (b + 1.0)]
-    }
-
-    enum ToneMapOperator {
-        None,
-        AcesFilmic,
-        Reinhard,
-    }
-
-    fn simulate_pipeline(
-        linear: [f32; 3],
-        exposure: f32,
-        operator: ToneMapOperator,
-        gamma: f32,
-    ) -> [f32; 3] {
+    fn simulate_pipeline(linear: [f32; 3], exposure: f32, gamma: f32) -> [f32; 3] {
         let exposed = [
             linear[0] * exposure,
             linear[1] * exposure,
             linear[2] * exposure,
         ];
 
-        let mapped = match operator {
-            ToneMapOperator::None => [
-                exposed[0].clamp(0.0, 1.0),
-                exposed[1].clamp(0.0, 1.0),
-                exposed[2].clamp(0.0, 1.0),
-            ],
-            ToneMapOperator::AcesFilmic => aces_filmic(exposed[0], exposed[1], exposed[2]),
-            ToneMapOperator::Reinhard => reinhard(exposed[0], exposed[1], exposed[2]),
-        };
+        let mapped = [
+            exposed[0].clamp(0.0, 1.0),
+            exposed[1].clamp(0.0, 1.0),
+            exposed[2].clamp(0.0, 1.0),
+        ];
 
         let gamma_corrected = [
             mapped[0].powf(1.0 / gamma),
@@ -136,7 +109,7 @@ mod tests {
     #[test]
     fn test_pipeline_gamma1_matches_blender_standard() {
         for tc in test_colors() {
-            let pipeline_output = simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 1.0);
+            let pipeline_output = simulate_pipeline(tc.linear, 1.0, 1.0);
             let blender_output = blender_standard_output(tc.linear);
 
             assert_color_eq(
@@ -169,7 +142,7 @@ mod tests {
         ];
 
         for tc in non_saturated_colors {
-            let pipeline_output = simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 2.2);
+            let pipeline_output = simulate_pipeline(tc.linear, 1.0, 2.2);
             let blender_output = blender_standard_output(tc.linear);
 
             let max_component_diff = (0..3)
@@ -263,8 +236,8 @@ mod tests {
     fn test_pipeline_exposure_scales_correctly() {
         let linear = [0.3, 0.3, 0.3];
 
-        let exp1 = simulate_pipeline(linear, 1.0, ToneMapOperator::None, 1.0);
-        let exp2 = simulate_pipeline(linear, 2.0, ToneMapOperator::None, 1.0);
+        let exp1 = simulate_pipeline(linear, 1.0, 1.0);
+        let exp2 = simulate_pipeline(linear, 2.0, 1.0);
 
         let expected_exp2 = blender_standard_output([0.6, 0.6, 0.6]);
 
@@ -280,8 +253,8 @@ mod tests {
     fn test_gamma1_is_required_for_srgb_framebuffer() {
         let linear = [0.5_f32, 0.5, 0.5];
 
-        let gamma1_output = simulate_pipeline(linear, 1.0, ToneMapOperator::None, 1.0);
-        let gamma22_output = simulate_pipeline(linear, 1.0, ToneMapOperator::None, 2.2);
+        let gamma1_output = simulate_pipeline(linear, 1.0, 1.0);
+        let gamma22_output = simulate_pipeline(linear, 1.0, 2.2);
         let blender_ref = blender_standard_output(linear);
 
         let gamma1_diff = (gamma1_output[0] - blender_ref[0]).abs();

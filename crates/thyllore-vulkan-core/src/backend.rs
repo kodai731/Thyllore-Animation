@@ -99,10 +99,6 @@ impl<'a> VulkanBackend<'a> {
         Ok(())
     }
 
-    fn acceleration_structure(&mut self) -> &mut Option<RRAccelerationStructure> {
-        &mut self.raytracing.acceleration_structure
-    }
-
     pub unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
         self.graphics.upload_mesh_vertices(
             self.instance,

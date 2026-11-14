@@ -19,14 +19,11 @@ fn compare_fbx_structures() {
 
 struct FbxStructure {
     models: HashMap<String, ModelInfo>,
-    animation_curve_nodes: Vec<String>,
     mesh_nodes: HashSet<String>,
 }
 
 #[derive(Clone, Debug)]
 struct ModelInfo {
-    uid: u32,
-    name: String,
     type_str: String,
     parent_model: Option<String>,
 }
@@ -37,7 +34,6 @@ fn load_and_analyze(path: &str) -> Result<FbxStructure, String> {
 
     let mut structure = FbxStructure {
         models: HashMap::new(),
-        animation_curve_nodes: Vec::new(),
         mesh_nodes: HashSet::new(),
     };
 
@@ -85,8 +81,6 @@ fn load_and_analyze(path: &str) -> Result<FbxStructure, String> {
         structure.models.insert(
             name.clone(),
             ModelInfo {
-                uid: node.element.element_id,
-                name: name.clone(),
                 type_str,
                 parent_model,
             },

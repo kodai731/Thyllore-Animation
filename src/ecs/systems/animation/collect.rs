@@ -200,9 +200,7 @@ pub(crate) fn build_active_instances(
             );
 
             Some(ActiveInstanceInfo {
-                source_id: inst.source_id,
                 asset_id,
-                instance_id: Some(inst.instance_id),
                 local_time,
                 weight,
                 blend_mode: inst.blend_mode,
@@ -243,9 +241,7 @@ pub(crate) fn build_solo_instance(
     );
 
     Some(ActiveInstanceInfo {
-        source_id: clip_id,
         asset_id,
-        instance_id: None,
         local_time,
         weight: 1.0,
         blend_mode: BlendMode::Override,
@@ -308,9 +304,7 @@ mod tests {
 
         assert_eq!(instances.len(), 1);
         let solo = &instances[0];
-        assert_eq!(solo.source_id, 1);
         assert_eq!(solo.asset_id, 101);
-        assert_eq!(solo.instance_id, None);
         assert_eq!(solo.weight, 1.0);
         assert_eq!(solo.blend_mode, BlendMode::Override);
         assert_eq!(solo.start_time, 0.0);
@@ -336,7 +330,7 @@ mod tests {
         let instances = collect_solo(3, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 3);
+        assert_eq!(instances[0].asset_id, 103);
         assert_eq!(instances[0].weight, 1.0);
         let muted_after: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
         assert_eq!(muted_after, muted_before);
@@ -348,7 +342,7 @@ mod tests {
         register_clip(&mut clip_library, 1, 2.0);
         register_clip(&mut clip_library, 2, 2.0);
         let mut schedule = ClipSchedule::new();
-        let audible_id = clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        clip_schedule_add_instance(&mut schedule, 1, 2.0);
         clip_schedule_add_instance(&mut schedule, 2, 2.0);
         schedule.instances[0].weight = 0.4;
         schedule.instances[1].muted = true;
@@ -359,8 +353,7 @@ mod tests {
         let instances = build_active_instances(&schedule, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 1);
-        assert_eq!(instances[0].instance_id, Some(audible_id));
+        assert_eq!(instances[0].asset_id, 101);
         assert!((instances[0].weight - 0.4).abs() < 1e-6);
     }
 
@@ -393,7 +386,6 @@ mod tests {
         let instances = build_active_instances(&schedule, 42, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 1);
         assert_eq!(instances[0].asset_id, 999);
     }
 

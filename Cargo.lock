@@ -3994,6 +3994,7 @@ dependencies = [
  "thyllore-render-core",
  "thyllore-render-debug",
  "thyllore-scene-core",
+ "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
  "thyllore-vulkan-core",
  "ufbx",

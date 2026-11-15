@@ -1,11 +1,12 @@
 use crate::core::*;
-use crate::descriptor::{PassShaders, ShaderStage};
+use crate::descriptor::PassShaders;
 use crate::resource::create_buffer;
 use crate::resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
+use thyllore_spirv_reflect::ShaderStage;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 

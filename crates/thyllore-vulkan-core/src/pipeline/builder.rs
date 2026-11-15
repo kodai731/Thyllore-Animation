@@ -1,12 +1,11 @@
 use crate::core::*;
-use crate::descriptor::{
-    shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
-};
+use crate::descriptor::{shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout};
 use crate::render::RRRender;
 use crate::types::{Pipeline, PipelineLayout, RenderPass};
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
+use thyllore_spirv_reflect::ShaderStage;
 use vulkanalia::bytecode::Bytecode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

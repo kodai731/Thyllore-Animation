@@ -14,10 +14,9 @@ use crate::hooks::pass::{
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use thyllore_spirv_reflect::GpuBlock;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
-use thyllore_vulkan_core::descriptor::{
-    push_constant_range, write_effect_trace_set, GpuBlock, SetSlot,
-};
+use thyllore_vulkan_core::descriptor::{push_constant_range, write_effect_trace_set, SetSlot};
 use thyllore_vulkan_core::renderer::{ClearColor, TracePush};
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;

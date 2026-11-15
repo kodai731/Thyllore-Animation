@@ -1,0 +1,39 @@
+use super::AppData;
+use crate::ecs::world::{ResMut, ResRef, Resource};
+use thyllore_vulkan_core::core::*;
+
+use std::time::Instant;
+
+use thyllore_vulkan_core::types::{Entry, Instance};
+
+pub struct App {
+    pub entry: Entry,
+    pub instance: Instance,
+    pub rrdevice: RRDevice,
+    pub data: AppData,
+    pub frame: usize,
+    pub resized: bool,
+    pub start: Instant,
+    pub last_update_time: f32,
+    pub gpu_timestamp_profiler: thyllore_vulkan_core::GpuTimestampProfiler,
+    pub last_frame_instant: Option<Instant>,
+    pub applied_ui_settings: Option<crate::ecs::resource::UiSettings>,
+}
+
+impl App {
+    pub fn resource<R: Resource>(&self) -> ResRef<'_, R> {
+        self.data.ecs_world.resource::<R>()
+    }
+
+    pub fn resource_mut<R: Resource>(&self) -> ResMut<'_, R> {
+        self.data.ecs_world.resource_mut::<R>()
+    }
+
+    pub fn get_resource<R: Resource>(&self) -> Option<ResRef<'_, R>> {
+        self.data.ecs_world.get_resource::<R>()
+    }
+
+    pub fn pipeline_storage(&self) -> &thyllore_vulkan_core::resource::PipelineStorage {
+        &self.data.pipeline_storage
+    }
+}

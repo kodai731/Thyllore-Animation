@@ -369,12 +369,12 @@ API_MARKER="$("$PYTHON_BIN" -c "
 import re, pathlib
 m = re.search(
     r'pub const ABI_MARKER:\s*u32\s*=\s*(\d+)',
-    pathlib.Path('$REPO_ROOT/crates/thyllore-ml-api/src/lib.rs').read_text(encoding='utf-8'),
+    pathlib.Path('$REPO_ROOT/crates/thyllore-ml-api/src/abi_marker.rs').read_text(encoding='utf-8'),
 )
 print(m.group(1) if m else 'MISSING')
 ")"
 if [[ "$API_MARKER" == "MISSING" ]]; then
-    echo "ABI_MARKER not found in crates/thyllore-ml-api/src/lib.rs" >&2
+    echo "ABI_MARKER not found in crates/thyllore-ml-api/src/abi_marker.rs" >&2
     exit 1
 fi
 

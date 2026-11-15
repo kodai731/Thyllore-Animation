@@ -1,7 +1,8 @@
 use imgui::{ColorStackToken, StyleColor, Ui};
 
-use super::colors::{srgb_to_linear_rgba, EDGE_SHADOW, SURFACE1, SURFACE2};
+use super::colors::{EDGE_SHADOW, SURFACE1, SURFACE2};
 use super::shadow::draw_window_shadow;
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const EDGE_STROKE: f32 = 1.0;
 

@@ -1,5 +1,3 @@
-pub use thyllore_color_core::srgb_to_linear_rgba;
-
 const fn rgb_hex(hex: u32) -> [f32; 4] {
     let r = ((hex >> 16) & 0xFF) as f32 / 255.0;
     let g = ((hex >> 8) & 0xFF) as f32 / 255.0;
@@ -32,7 +30,7 @@ pub const AXIS_Z: [f32; 4] = rgb_hex(0x0A84FF);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_color_core::{contrast_ratio, WCAG_AA_TEXT_CONTRAST};
+    use thyllore_color_core::{contrast_ratio, srgb_to_linear_rgba, WCAG_AA_TEXT_CONTRAST};
 
     fn text_contrast(foreground: [f32; 4], background: [f32; 4]) -> f32 {
         let [fr, fg, fb, _] = foreground;

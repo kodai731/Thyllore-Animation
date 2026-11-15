@@ -12,9 +12,10 @@ use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::World;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::TEXT_SECONDARY;
 use crate::platform::ui::theme::Icon;
 use crate::platform::ui::theme::{icon_button, toolbar_divider, ButtonState};
+use thyllore_color_core::srgb_to_linear_rgba;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {

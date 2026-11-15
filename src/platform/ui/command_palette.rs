@@ -11,9 +11,10 @@ use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
 use crate::platform::key_bindings::default_bindings;
 use crate::platform::ui::shortcuts::format_chord;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::{ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
+use thyllore_color_core::srgb_to_linear_rgba;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";

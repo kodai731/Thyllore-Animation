@@ -324,7 +324,7 @@ fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
     let view = Mat4::from_translation(Vec3::new(0.0, 0.0, -5.0));
 
     // Compute inverse using our function
-    let inv = super::inverse_view_proj_f64(proj, view);
+    let inv = thyllore_effect_core::water::inverse_view_proj_f64(proj, view);
 
     // Reference: (proj * view).try_inverse() in f32
     let product = proj * view;

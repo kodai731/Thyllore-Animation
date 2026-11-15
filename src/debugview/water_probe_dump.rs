@@ -6,8 +6,9 @@ use glam::{Mat4, Vec3};
 use crate::debugview::flame_history_dump::decode_rgba16f;
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{ProjectionData, WaterProbeCapture};
-use crate::ecs::systems::water::{compute_water_probe_report, inverse_view_proj_f64, ProbeRoot};
+use crate::ecs::systems::water::{compute_water_probe_report, ProbeRoot};
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
+use thyllore_effect_core::water::inverse_view_proj_f64;
 use thyllore_vulkan_core::resource::ReadbackLayout;
 use thyllore_vulkan_core::types::{DeviceSize, Image};
 

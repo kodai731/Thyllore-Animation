@@ -4124,6 +4124,7 @@ dependencies = [
  "protox",
  "serde_json",
  "sha2",
+ "syn",
  "tempfile",
  "thyllore-anim-core",
  "thyllore-log-core",
@@ -4247,7 +4248,6 @@ version = "0.0.1"
 dependencies = [
  "glam 0.34.2",
  "serde",
- "thyllore-color-core",
  "thyllore-scene-derive",
 ]
 

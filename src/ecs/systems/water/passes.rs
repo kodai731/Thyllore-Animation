@@ -272,7 +272,7 @@ impl RenderPassNode for WaterTraceNode {
         );
         let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
         let inv_view_proj =
-            crate::ecs::systems::water::inverse_view_proj_f64(projection.proj, projection.view);
+            thyllore_effect_core::water::inverse_view_proj_f64(projection.proj, projection.view);
         let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
         let light_position = ctx
             .world
@@ -834,7 +834,7 @@ unsafe fn record_water_ubo_updates(
 ) -> Result<Vec<(thyllore_effect_core::water::WaterUBO, u32)>> {
     let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
     let inv_view_proj =
-        crate::ecs::systems::water::inverse_view_proj_f64(projection.proj, projection.view);
+        thyllore_effect_core::water::inverse_view_proj_f64(projection.proj, projection.view);
     let settings = ctx
         .world
         .get_resource::<crate::ecs::resource::WaterRenderSettings>()

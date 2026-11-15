@@ -1108,27 +1108,27 @@ mod message_log_tests {
     use thyllore_animation::ecs::systems::{
         message_log_clear_buffer, message_log_filtered_messages,
     };
-    use thyllore_animation::logger::message_buffer::{MessageBuffer, MessageLevel};
+    use thyllore_log_core::message_buffer::{MessageBuffer, MessageLevel};
 
     fn make_log_with_messages() -> MessageLog {
         let mut log = MessageLog::default();
         log.messages = vec![
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Model loaded".to_string(),
                 timestamp: "12:00:00".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Warning,
                 text: "Missing bone: Spine2".to_string(),
                 timestamp: "12:00:01".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Error,
                 text: "Failed to load texture".to_string(),
                 timestamp: "12:00:02".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Screenshot saved".to_string(),
                 timestamp: "12:00:03".to_string(),

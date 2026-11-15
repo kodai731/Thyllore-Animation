@@ -9,11 +9,11 @@ use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer}
 
 use super::anim::ui_anim;
 use super::colors::{
-    srgb_to_linear_rgba, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3,
-    TEXT, TEXT_SECONDARY,
+    ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
 use super::icons::Icon;
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const TREE_INDENT: f32 = 16.0;
 pub const ICON_BUTTON_SIZE: f32 = 24.0;

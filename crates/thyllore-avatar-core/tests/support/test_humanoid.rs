@@ -5,8 +5,9 @@ use super::fbx_ascii::{cube_vertices, stick_polygon_indices, ClothMaterial, RigM
 pub use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
 use super::rig_convention::rig_convention;
 use super::rig_nodes::RigNode;
+use thyllore_avatar_core::humanoid::skeleton;
 use thyllore_avatar_core::humanoid::HumanoidRole;
-pub use thyllore_avatar_core::humanoid::{skeleton, CanonicalBone, CanonicalTip};
+pub use thyllore_avatar_core::humanoid::{CanonicalBone, CanonicalTip};
 
 const EXTRA_BONE_HALF_WIDTH: f64 = 0.012;
 

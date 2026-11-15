@@ -172,9 +172,9 @@ pub fn apply_texture_fit_from_path(
         let g = buf[i + 1] as f32 / 255.0;
         let b = buf[i + 2] as f32 / 255.0;
         pixels.push([
-            thyllore_texture_fit_core::srgb_to_linear(r),
-            thyllore_texture_fit_core::srgb_to_linear(g),
-            thyllore_texture_fit_core::srgb_to_linear(b),
+            thyllore_color_core::srgb_to_linear(r),
+            thyllore_color_core::srgb_to_linear(g),
+            thyllore_color_core::srgb_to_linear(b),
         ]);
     }
     let mut max_luminance = 0.0f32;

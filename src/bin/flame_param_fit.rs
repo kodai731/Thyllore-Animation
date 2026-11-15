@@ -4,6 +4,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use serde_json::json;
+use thyllore_color_core::{chromaticity_xy, is_saturated, luminance, mccamy_cct, srgb_to_linear};
 use thyllore_texture_fit_core::*;
 
 fn median(sorted: &[f32]) -> Option<f32> {

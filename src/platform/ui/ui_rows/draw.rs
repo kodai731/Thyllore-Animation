@@ -375,7 +375,7 @@ fn draw_choices<C>(
         let label_color = if item.emphasized {
             CHOICES_WARNING_COLOR
         } else {
-            crate::platform::ui::theme::colors::srgb_to_linear_rgba(
+            thyllore_color_core::srgb_to_linear_rgba(
                 crate::platform::ui::theme::colors::TEXT_SECONDARY,
             )
         };

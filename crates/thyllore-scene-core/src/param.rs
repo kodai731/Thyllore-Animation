@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
+use crate::rgb_channels::RGB_CHANNEL_SUFFIXES;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {

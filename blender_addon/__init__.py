@@ -28,7 +28,7 @@ from . import _bootstrap  # noqa: E402
 _bootstrap.insert_wheels_to_sys_path()
 
 
-# Expected ABI marker -- must match crates/thyllore-ml-api/src/lib.rs::ABI_MARKER.
+# Expected ABI marker -- must match crates/thyllore-ml-api/src/abi_marker.rs::ABI_MARKER.
 # Bump in lockstep with that constant when the L2 trait has breaking changes.
 EXPECTED_ABI_MARKER: int = 7
 

@@ -2,6 +2,7 @@ use imgui::{Style, StyleColor};
 
 use super::colors::*;
 use crate::ecs::resource::{density_spacing, UiSettings};
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const HEADER_ALPHA: f32 = 0.18;
 const HEADER_HOVERED_ALPHA: f32 = 0.25;

@@ -94,7 +94,6 @@ fn test_src_directory_structure() {
         "src/scene",
         "src/platform",
         "src/debugview",
-        "src/logger",
     ];
 
     for dir in &src_dirs {

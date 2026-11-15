@@ -1,12 +1,13 @@
 use crate::ecs::component::{
-    apply_ramp, ChainRamp, ColliderGroupOrigin, ColliderShape, RampEnd, RampScope, SpringBoneSetup,
+    ChainRamp, ColliderGroupOrigin, ColliderShape, RampEnd, RampScope, SpringBoneSetup,
     SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
     SpringColliderId, SpringJointParam,
 };
 use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
 use crate::ecs::world::{Entity, World};
 use glam::Vec3;
-use thyllore_anim_core::{spring_bone::set_chain_collider_groups, BoneId, Skeleton};
+use thyllore_anim_core::spring_bone::{apply_ramp, set_chain_collider_groups};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub fn handle_spring_chain_add(
     world: &mut World,

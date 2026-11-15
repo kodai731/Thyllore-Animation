@@ -1,4 +1,4 @@
-use crate::platform::ui::theme::colors::srgb_to_linear_rgba;
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const SHADOW_SPREAD: f32 = 12.0;
 const SHADOW_LAYER_COUNT: usize = 8;

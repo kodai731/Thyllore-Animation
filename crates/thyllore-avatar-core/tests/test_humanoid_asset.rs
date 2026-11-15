@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use support::fixture_bones::load_rig_from_fbx_text;
 use support::fixtures::ExtraParent;
 use support::test_humanoid::{
-    build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, write_test_humanoid_sidecar,
+    build_stick_mesh, extra_bones, write_test_humanoid_fbx, write_test_humanoid_sidecar,
     CanonicalTip,
 };
 use thyllore_avatar_core::expression::Side;
-use thyllore_avatar_core::humanoid::humanoid_mapping_path;
 use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_avatar_core::humanoid::StoredHumanoidMapping;
+use thyllore_avatar_core::humanoid::{humanoid_mapping_path, skeleton};
 
 #[test]
 fn test_humanoid_covers_every_role_once() {

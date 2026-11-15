@@ -1,22 +1,22 @@
-pub mod auto_exposure;
-pub mod bloom;
-pub mod composite;
-pub mod dof;
-pub mod frame_commands;
-pub mod gbuffer;
-pub mod indexed_draw;
-pub mod line_mesh_draw;
-pub mod onion_skin;
-pub mod onion_skin_buffers;
-pub mod overlay;
-pub mod overlay_scale;
-pub mod pass_target;
-pub mod pipeline_dispatch;
-pub mod push_constants;
-pub mod rayquery;
-pub mod storage_image;
-pub mod tonemap;
-pub mod trace_push;
+mod auto_exposure;
+mod bloom;
+mod composite;
+mod dof;
+mod frame_commands;
+mod gbuffer;
+mod indexed_draw;
+mod line_mesh_draw;
+mod onion_skin;
+mod onion_skin_buffers;
+mod overlay;
+mod overlay_scale;
+mod pass_target;
+mod pipeline_dispatch;
+mod push_constants;
+mod rayquery;
+mod storage_image;
+mod tonemap;
+mod trace_push;
 
 pub use auto_exposure::record_auto_exposure_pass;
 pub use bloom::{
@@ -51,8 +51,8 @@ pub use overlay_scale::{
     union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
-    record_pending_barriers, AttachmentStart, CoreTarget, FrameTransients, ImageStateTracker,
-    PendingBarrier, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
+    record_pending_barriers, AccessStage, AttachmentStart, CoreTarget, FrameTransients,
+    ImageStateTracker, PendingBarrier, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
     TransientRequest, TransientSlot,
 };
 pub use pipeline_dispatch::{
@@ -65,5 +65,7 @@ pub use storage_image::{
     copy_color_image, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,
 };
-pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
+pub use tonemap::{
+    begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw, ToneMapPushConstants,
+};
 pub use trace_push::TracePush;

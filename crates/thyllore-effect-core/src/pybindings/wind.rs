@@ -3,10 +3,9 @@ use super::effect::{
     inverse_view_proj_from_column_major, ParameterOwnerName,
 };
 use crate::wind::{
-    build_wind_model_matrix, build_wind_ubo, wind_local_bounds_corners, WindRenderSettings,
-    WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
+    build_wind_model_matrix, build_wind_ubo, wind_local_bounds_corners, WindParameterOwner,
+    WindRenderSettings, WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
 };
-use crate::WindParameterOwner;
 use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

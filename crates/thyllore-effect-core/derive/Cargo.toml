@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Proc-macro half of thyllore-effect-core (a separate package only because Rust requires proc-macro = true): #[derive(UboPack)] writes struct fields into the vec4 slots of a SPIR-V generated UBO. Re-exported by thyllore-effect-core; nothing depends on it directly."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

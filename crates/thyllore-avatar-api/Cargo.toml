@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "PyO3 wheel crate for avatar setup: chain generation, spring bone editing, collider fitting, VRM export and related Blender addon functions."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 name = "thyllore_avatar_api"
 crate-type = ["cdylib", "rlib"]

@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 3 model importer for ThylloreAnimation (glTF / FBX / PNG loaders). Returns pure model-core + anim-core types; no ECS or Vulkan dependency"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }

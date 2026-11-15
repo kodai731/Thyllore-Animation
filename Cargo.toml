@@ -6,6 +6,9 @@ members = [
     "scratch",
 ]
 
+[workspace.lints.rust]
+ambiguous_glob_reexports = "deny"
+
 [package]
 publish = false
 name = "thyllore-animation"
@@ -16,6 +19,9 @@ license = "Apache-2.0"
 authors = ["kodai731"]
 description = "A real-time animation and rendering engine powered by ECS architecture, built in Rust with Vulkan"
 repository = "https://github.com/kodai731/Thyllore-Animation"
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "thyllore-animation"

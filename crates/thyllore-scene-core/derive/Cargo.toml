@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Proc-macro half of thyllore-scene-core (a separate crate only because Rust requires proc-macro = true): #[derive(SceneFields)] turns a component's field attributes into its scene serde record and its ownership, snapshot, scalar and UI tables. Re-exported by thyllore-scene-core; nothing depends on it directly."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

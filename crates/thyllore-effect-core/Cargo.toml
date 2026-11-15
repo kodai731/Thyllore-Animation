@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Concrete effect layer for ThylloreAnimation — effect parameter components, the closed-form analytic core mirrored by the shaders, and offline bake helpers. No ECS, rendering-pipeline or Vulkan dependency, so it can also ship standalone (e.g. as a Blender addon wheel)"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 name = "thyllore_effect_core"
 crate-type = ["cdylib", "rlib"]

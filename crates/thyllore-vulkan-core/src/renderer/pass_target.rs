@@ -39,24 +39,24 @@ pub enum TargetRef {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ShaderStage {
+pub enum AccessStage {
     Fragment,
     Compute,
     RayTracing,
 }
 
-impl ShaderStage {
+impl AccessStage {
     fn pipeline_stage(self) -> vk::PipelineStageFlags {
         match self {
-            ShaderStage::Fragment => vk::PipelineStageFlags::FRAGMENT_SHADER,
-            ShaderStage::Compute => vk::PipelineStageFlags::COMPUTE_SHADER,
-            ShaderStage::RayTracing => vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            AccessStage::Fragment => vk::PipelineStageFlags::FRAGMENT_SHADER,
+            AccessStage::Compute => vk::PipelineStageFlags::COMPUTE_SHADER,
+            AccessStage::RayTracing => vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
         }
     }
 }
 
-impl From<ShaderStage> for vk::PipelineStageFlags {
-    fn from(stage: ShaderStage) -> Self {
+impl From<AccessStage> for vk::PipelineStageFlags {
+    fn from(stage: AccessStage) -> Self {
         stage.pipeline_stage()
     }
 }
@@ -81,9 +81,9 @@ impl AttachmentStart {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TargetAccess {
     Attachment(AttachmentStart),
-    Sampled(ShaderStage),
-    StorageRead(ShaderStage),
-    StorageReadWrite(ShaderStage),
+    Sampled(AccessStage),
+    StorageRead(AccessStage),
+    StorageReadWrite(AccessStage),
     TransferSrc,
     TransferDst,
 }
@@ -404,9 +404,9 @@ mod tests {
     #[test]
     fn read_after_read_in_same_layout_needs_no_barrier() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::Sampled(AccessStage::Fragment));
         assert!(tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Compute))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Compute))
             .is_none());
     }
 
@@ -415,7 +415,7 @@ mod tests {
         let mut tracker = ImageStateTracker::default();
         tracker.transition(
             image(1),
-            TargetAccess::StorageReadWrite(ShaderStage::Compute),
+            TargetAccess::StorageReadWrite(AccessStage::Compute),
         );
         let attachment = TargetAccess::Attachment(AttachmentStart::Sampled);
         let barrier = tracker.transition(image(1), attachment).expect("barrier");
@@ -429,11 +429,11 @@ mod tests {
     #[test]
     fn write_after_read_in_same_layout_needs_barrier() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::StorageRead(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::StorageRead(AccessStage::Fragment));
         let barrier = tracker
             .transition(
                 image(1),
-                TargetAccess::StorageReadWrite(ShaderStage::Compute),
+                TargetAccess::StorageReadWrite(AccessStage::Compute),
             )
             .expect("barrier");
         assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
@@ -480,7 +480,7 @@ mod tests {
         let mut tracker = ImageStateTracker::default();
         tracker.mark_shader_read_only(image(1));
         assert!(tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Fragment))
             .is_none());
     }
 
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn lifetimes_span_first_to_last_declaring_node() {
-        let sampled = TargetAccess::Sampled(ShaderStage::Fragment);
+        let sampled = TargetAccess::Sampled(AccessStage::Fragment);
         let node_uses = vec![
             vec![use_of("a", TargetAccess::TransferDst)],
             vec![use_of("a", sampled), use_of("b", TargetAccess::TransferDst)],
@@ -509,10 +509,10 @@ mod tests {
     #[test]
     fn forget_resets_to_undefined() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::Sampled(AccessStage::Fragment));
         tracker.forget(image(1));
         let barrier = tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Fragment))
             .expect("barrier");
         assert_eq!(barrier.old_layout, vk::ImageLayout::UNDEFINED);
     }

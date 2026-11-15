@@ -21,7 +21,7 @@ use crate::pipeline::{
 };
 use crate::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use crate::render::RRRender;
-use crate::renderer::push_constants::GBufferPushConstants;
+use crate::renderer::GBufferPushConstants;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};

@@ -9,6 +9,9 @@ description = "Layer 5 gRPC client for ThylloreAnimation — proto-generated stu
 repository = "https://github.com/kodai731/Thyllore-Animation"
 build = "build.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-model-core = { path = "../thyllore-model-core" }
 thyllore-anim-core = { path = "../thyllore-anim-core" }

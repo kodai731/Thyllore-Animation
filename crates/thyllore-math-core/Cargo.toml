@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 0 pure math utilities for ThylloreAnimation (glam-based helpers, coordinate system, billboard, ray intersections)"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 glam = "0.34"
 anyhow = "1"

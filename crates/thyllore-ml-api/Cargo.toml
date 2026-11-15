@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "L2 stable contract: the ABI marker shared by the PyO3 wheels (thyllore-ml-core, thyllore-avatar-api) and the Blender addon, and the PyO3 helpers both wheels use. Changes here require a coordinated wheel rebuild and end-user reinstall — keep this surface minimal."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [features]
 default = []
 python = ["dep:pyo3", "dep:pythonize", "dep:anyhow"]

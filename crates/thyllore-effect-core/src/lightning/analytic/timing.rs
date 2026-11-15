@@ -115,7 +115,7 @@ pub fn charge_alive_strikes(effect: &LightningEffect, tau: f32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LightningTiming;
+    use crate::lightning::LightningTiming;
 
     fn test_effect() -> LightningEffect {
         LightningEffect {

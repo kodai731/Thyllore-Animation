@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Proc-macro companion of thyllore-vulkan-core: #[derive(GpuResource)] destroys every GpuResource field in reverse declaration order. Depends on nothing but syn / quote"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

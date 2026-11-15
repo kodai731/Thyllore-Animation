@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 2 dynamic animation evaluation for ThylloreAnimation (Clip, Pose, Constraint, SpringBone, editable) — pure domain, no ECS dependency"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }

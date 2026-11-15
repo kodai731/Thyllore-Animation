@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 3 model exporter for ThylloreAnimation (glTF / FBX writers). Pure domain, depends on model-core + anim-core + avatar-core + file-format-core"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
 thyllore-model-core = { path = "../thyllore-model-core" }

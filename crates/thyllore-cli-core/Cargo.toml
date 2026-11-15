@@ -8,5 +8,8 @@ authors = ["kodai731"]
 description = "Pure CLI argument parsing functions for ThylloreAnimation. Depends on nothing in the workspace"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1"

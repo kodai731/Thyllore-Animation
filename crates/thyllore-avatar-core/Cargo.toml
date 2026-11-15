@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 1 avatar domain (expression grouping, presets, humanoid mapping, validation) for ThylloreAnimation — no ECS, no Vulkan"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1"
 glam = "0.34"

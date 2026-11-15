@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Parses shaders/passes.toml, validates it against the shader sources, and generates the pass manifest for ThylloreAnimation. Usable from build scripts"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror = "1"
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }

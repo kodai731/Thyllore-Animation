@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 0 file logger and log! / log_warn! / log_error! macros for ThylloreAnimation. Depends on nothing in the workspace"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono = "0.4"
 once_cell = "1"

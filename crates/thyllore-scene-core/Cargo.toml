@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Scene persistence core for ThylloreAnimation — the SceneFields / FieldPath contract that composes an effect's nested parameter structs into scene serde, ownership, snapshot, scalar accessor and UI tables (filled by thyllore-effect-derive), plus the declare_scene_format! macro for flat resources. No ECS or rendering dependency."
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 glam = "0.34"
 serde = { version = "1", features = ["derive"] }

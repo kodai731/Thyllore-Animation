@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Pure texture profile analysis and curve fitting for ThylloreAnimation (luminance, mask, envelope fit, taper fit)"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 thyllore-math-core = { path = "../thyllore-math-core" }

@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 2 ML inference core for ThylloreAnimation. Depends on thyllore-model-core and thyllore-anim-core (for curve-attached component types). Optionally exposes a PyO3 facade for Blender addon when built with the `python` feature"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [lib]
 name = "thyllore_ml_core"
 crate-type = ["cdylib", "rlib"]

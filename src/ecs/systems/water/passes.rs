@@ -10,7 +10,7 @@ use crate::ecs::systems::water::pipeline::WATER_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, ReaderStage, RenderPassNode, TargetAccess, TargetRef,
+    AccessStage, AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef,
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
@@ -233,7 +233,7 @@ impl RenderPassNode for WaterTraceNode {
             }
             vec![TargetUse::new(
                 TRACE,
-                TargetAccess::StorageReadWrite(ReaderStage::RayTracing),
+                TargetAccess::StorageReadWrite(AccessStage::RayTracing),
             )]
         })
     }
@@ -487,7 +487,7 @@ impl RenderPassNode for WaterCausticSplatNode {
             }
             vec![TargetUse::new(
                 CAUSTIC_ACCUM,
-                TargetAccess::StorageReadWrite(ReaderStage::Compute),
+                TargetAccess::StorageReadWrite(AccessStage::Compute),
             )]
         })
     }
@@ -569,7 +569,7 @@ impl RenderPassNode for WaterCausticApplyNode {
             }
             vec![TargetUse::new(
                 CAUSTIC_ACCUM,
-                TargetAccess::StorageRead(ReaderStage::Compute),
+                TargetAccess::StorageRead(AccessStage::Compute),
             )]
         })
     }
@@ -581,7 +581,7 @@ impl RenderPassNode for WaterCausticApplyNode {
             }
             vec![TargetUse::new(
                 HDR_COLOR,
-                TargetAccess::StorageReadWrite(ReaderStage::Compute),
+                TargetAccess::StorageReadWrite(AccessStage::Compute),
             )]
         })
     }
@@ -741,11 +741,11 @@ impl RenderPassNode for WaterShadingNode {
     fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
         frame_uses(ctx, |frame, _| {
             vec![
-                TargetUse::new(SCENE_COLOR, TargetAccess::Sampled(ReaderStage::Fragment)),
-                TargetUse::new(TRACE, TargetAccess::StorageRead(ReaderStage::Fragment)),
+                TargetUse::new(SCENE_COLOR, TargetAccess::Sampled(AccessStage::Fragment)),
+                TargetUse::new(TRACE, TargetAccess::StorageRead(AccessStage::Fragment)),
                 TargetUse::new(
                     frame.read_history(),
-                    TargetAccess::Sampled(ReaderStage::Fragment),
+                    TargetAccess::Sampled(AccessStage::Fragment),
                 ),
             ]
         })
@@ -861,7 +861,7 @@ unsafe fn record_water_ubo_updates(
             command_buffer,
             i,
             &ubo,
-            &[ReaderStage::Fragment, ReaderStage::Compute],
+            &[AccessStage::Fragment, AccessStage::Compute],
         )?;
         instance_ubos.push((ubo, water_ubo.slot_offset(i)? as u32));
     }

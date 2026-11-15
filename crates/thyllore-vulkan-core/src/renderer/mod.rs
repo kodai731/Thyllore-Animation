@@ -51,8 +51,8 @@ pub use overlay_scale::{
     union_scissor, OverlayResolveScale, ReducedResolveTarget, UPSAMPLE_OVERLAY,
 };
 pub use pass_target::{
-    record_pending_barriers, AttachmentStart, CoreTarget, FrameTransients, ImageStateTracker,
-    PendingBarrier, ReaderStage, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
+    record_pending_barriers, AccessStage, AttachmentStart, CoreTarget, FrameTransients,
+    ImageStateTracker, PendingBarrier, TargetAccess, TargetRef, TargetUse, TransientLifetimes,
     TransientRequest, TransientSlot,
 };
 pub use pipeline_dispatch::{

@@ -2,8 +2,9 @@ use super::effect::{
     build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes,
     inverse_view_proj_from_column_major, ParameterOwnerName,
 };
-use crate::water::WaterParameterOwner;
-use crate::water::{build_water_model_matrix, build_water_ubo, WaterTorusEffect, WaterUBO};
+use crate::water::{
+    build_water_model_matrix, build_water_ubo, WaterParameterOwner, WaterTorusEffect, WaterUBO,
+};
 use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

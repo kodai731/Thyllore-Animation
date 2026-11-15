@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::ecs::PassContext;
 pub use thyllore_vulkan_core::renderer::{
-    AttachmentStart, CoreTarget, ReaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest,
+    AccessStage, AttachmentStart, CoreTarget, TargetAccess, TargetRef, TargetUse, TransientRequest,
     TransientSlot,
 };
 use thyllore_vulkan_core::types::CommandBuffer;

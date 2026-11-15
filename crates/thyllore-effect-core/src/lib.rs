@@ -66,7 +66,6 @@ pub use wind::{
     WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS, WIND_SHADOW_VOLUME_THETA, WIND_UI_PARAMS,
 };
 
-pub use flame::analytic::field_manifest as flame_field_manifest;
 pub use flame::analytic::pick as flame_pick;
 pub use flame::analytic::radial as flame_radial;
 pub use flame::analytic::shell as flame_shell;

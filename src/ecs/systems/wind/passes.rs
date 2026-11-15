@@ -7,7 +7,7 @@ use crate::ecs::systems::wind::pipeline::WIND_RESOLVE_OVERLAY;
 use crate::ecs::systems::wind::record::record_wind_shadow_bake_pass;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, ReaderStage, RenderPassNode, TargetAccess, TargetRef,
+    AccessStage, AttachmentStart, CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef,
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
@@ -259,7 +259,7 @@ unsafe fn record_wind_passes(
             command_buffer,
             slot,
             ubo,
-            &[ReaderStage::Compute, ReaderStage::Fragment],
+            &[AccessStage::Compute, AccessStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![wind_ubo.slot_offset(slot)? as u32],

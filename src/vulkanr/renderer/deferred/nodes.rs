@@ -7,7 +7,7 @@ use crate::app::post_process::{
 };
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassGraph, PassStage, ReaderStage, RenderPassNode, TargetAccess,
+    AccessStage, AttachmentStart, CoreTarget, PassGraph, PassStage, RenderPassNode, TargetAccess,
     TargetRef, TargetUse, TransientRequest,
 };
 use thyllore_vulkan_core::types::CommandBuffer;
@@ -147,7 +147,7 @@ impl RenderPassNode for BloomDownsampleNode {
             index => bloom_mip(ctx, index - 1),
         };
         source
-            .map(|target| TargetUse::new(target, TargetAccess::Sampled(ReaderStage::Fragment)))
+            .map(|target| TargetUse::new(target, TargetAccess::Sampled(AccessStage::Fragment)))
             .into_iter()
             .collect()
     }
@@ -203,7 +203,7 @@ impl RenderPassNode for BloomUpsampleNode {
         }
         self.target_mip(ctx)
             .and_then(|target| bloom_mip(ctx, target + 1))
-            .map(|source| TargetUse::new(source, TargetAccess::Sampled(ReaderStage::Fragment)))
+            .map(|source| TargetUse::new(source, TargetAccess::Sampled(AccessStage::Fragment)))
             .into_iter()
             .collect()
     }
@@ -266,7 +266,7 @@ impl RenderPassNode for DofNode {
         }
         vec![TargetUse::new(
             HDR_COLOR,
-            TargetAccess::Sampled(ReaderStage::Fragment),
+            TargetAccess::Sampled(AccessStage::Fragment),
         )]
     }
 
@@ -315,7 +315,7 @@ impl RenderPassNode for AutoExposureNode {
         }
         vec![TargetUse::new(
             tonemap_input(ctx),
-            TargetAccess::Sampled(ReaderStage::Compute),
+            TargetAccess::Sampled(AccessStage::Compute),
         )]
     }
 
@@ -346,7 +346,7 @@ impl RenderPassNode for TonemapNode {
     }
 
     fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
-        let sampled = TargetAccess::Sampled(ReaderStage::Fragment);
+        let sampled = TargetAccess::Sampled(AccessStage::Fragment);
         let mut reads = vec![TargetUse::new(tonemap_input(ctx), sampled)];
         if is_bloom_enabled(ctx) {
             reads.extend(bloom_mip(ctx, 0).map(|target| TargetUse::new(target, sampled)));
@@ -389,7 +389,7 @@ impl RenderPassNode for OnionCompositeNode {
         }
         vec![TargetUse::new(
             ONION_GHOST,
-            TargetAccess::Sampled(ReaderStage::Fragment),
+            TargetAccess::Sampled(AccessStage::Fragment),
         )]
     }
 

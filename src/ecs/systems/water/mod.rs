@@ -6,7 +6,7 @@ mod gpu_primitive;
 pub(crate) mod gpu_targets;
 mod history_accumulate;
 mod object_pick;
-pub mod passes;
+mod passes;
 mod pipeline;
 mod preset;
 pub mod probe;

@@ -10,9 +10,7 @@ pub struct AnimationEvalResult {
 
 #[derive(Clone)]
 pub(crate) struct ActiveInstanceInfo {
-    pub(crate) source_id: crate::animation::editable::SourceClipId,
     pub(crate) asset_id: crate::asset::AssetId,
-    pub(crate) instance_id: Option<crate::animation::editable::ClipInstanceId>,
     pub(crate) local_time: f32,
     pub(crate) weight: f32,
     pub(crate) blend_mode: crate::animation::editable::BlendMode,

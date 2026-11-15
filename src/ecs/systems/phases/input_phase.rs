@@ -269,7 +269,7 @@ fn update_light_gizmo_position(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<
 
     let denom = plane_normal.dot(ray_direction);
 
-    if denom.abs() > std::f32::EPSILON {
+    if denom.abs() > f32::EPSILON {
         let t = (plane_point - ray_origin).dot(plane_normal) / denom;
 
         if t >= 0.0 {

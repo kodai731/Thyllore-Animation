@@ -225,7 +225,7 @@ fn flame_runtime_stays_closed_form() {
         .iter()
         .enumerate()
         .filter(|(idx, _)| !used.contains(idx))
-        .map(|(_, e)| format!("{} / `{}`", e.file_suffix, e.token))
+        .map(|(_, e)| format!("{} / `{}` ({})", e.file_suffix, e.token, e.reason))
         .collect();
     assert!(
         stale.is_empty(),

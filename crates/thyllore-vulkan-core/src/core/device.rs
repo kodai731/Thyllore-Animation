@@ -40,15 +40,6 @@ impl Device {
     pub fn new(device: VulkanDevice) -> Self {
         Device(device)
     }
-    pub fn null() -> Self {
-        unsafe { Device(std::mem::zeroed()) }
-    }
-}
-
-impl Default for Device {
-    fn default() -> Self {
-        Device::null()
-    }
 }
 
 impl Deref for Device {
@@ -58,7 +49,7 @@ impl Deref for Device {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RRDevice {
     device: Device,
     pub(crate) physical_device: vk::PhysicalDevice,
@@ -99,22 +90,6 @@ impl RRDevice {
     #[inline]
     pub fn msaa_samples(&self) -> crate::pipeline::builder::SampleCount {
         crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples)
-    }
-
-    pub unsafe fn default() -> RRDevice {
-        Self {
-            device: std::mem::zeroed(),
-            physical_device: vk::PhysicalDevice::default(),
-            graphics_queue: vk::Queue::default(),
-            present_queue: vk::Queue::default(),
-            graphics_queue_family_index: 0,
-            msaa_samples: vk::SampleCountFlags::default(),
-            min_uniform_buffer_offset_alignment: 256,
-            timestamp_period: 1.0,
-            wide_lines: false,
-            descriptor_allocator: RefCell::default(),
-            idle_wait: Cell::default(),
-        }
     }
 
     pub(crate) unsafe fn new(

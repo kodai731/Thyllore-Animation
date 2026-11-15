@@ -1,8 +1,10 @@
 use super::context_menu::CURVE_EXTRAPOLATION_MENU;
 use super::tween::apply_tween;
 use super::view::{find_drawn_curve, DrawnCurve};
+#[cfg(feature = "ml")]
 use super::window::SuggestionOverlay;
 use crate::animation::editable::{InterpolationType, TangentContinuity, TangentType};
+#[cfg(feature = "ml")]
 use crate::animation::BoneId;
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, FrameRequest,

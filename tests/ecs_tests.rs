@@ -11,7 +11,6 @@ mod release_build_tests {
     use thyllore_animation::ecs::world::World;
     use thyllore_animation::loader::ModelLoadResult;
 
-    #[allow(deprecated)]
     #[test]
     fn test_grid_mesh_xz_toggle_in_release() {
         let (mesh, xz_only_index_count) = create_grid_mesh();
@@ -70,11 +69,7 @@ mod release_build_tests {
     fn test_ecs_world_resource_roundtrip_in_release() {
         let mut world = World::new();
 
-        let (mesh, xz_only_index_count) = {
-            #[allow(deprecated)]
-            let (m, c) = create_grid_mesh();
-            (m, c)
-        };
+        let (mesh, xz_only_index_count) = create_grid_mesh();
 
         world.insert_resource(GridMeshData {
             mesh,
@@ -389,12 +384,14 @@ mod resources_tests {
 mod component_registry_tests {
     use super::*;
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Position {
         x: f32,
         y: f32,
     }
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Velocity {
         dx: f32,
@@ -407,7 +404,7 @@ mod component_registry_tests {
 
         let info = registry.register::<Position>();
 
-        assert!(info.size() >= 0);
+        assert_eq!(info.size(), std::mem::size_of::<Position>());
         assert!(registry.is_registered::<Position>());
     }
 

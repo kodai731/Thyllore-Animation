@@ -31,7 +31,10 @@ fn main() {
         buf.push_str(&format!("#[path = \"{}\"] mod {};\n", abs.display(), stem));
     }
 
-    buf.push_str("fn make_local_job(name: &str, args: serde_json::Value) -> Option<anyhow::Result<Box<dyn ScratchJob>>> {\n");
+    buf.push_str("#[allow(unused_variables)]\n");
+    buf.push_str(
+        "fn make_local_job(name: &str, args: serde_json::Value) -> Option<anyhow::Result<Box<dyn ScratchJob>>> {\n",
+    );
     buf.push_str("    match name {\n");
     for path in &files {
         let stem = path.file_stem().unwrap().to_str().unwrap();

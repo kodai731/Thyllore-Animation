@@ -15,7 +15,7 @@ pub struct RRBLAS {
     pub(crate) buffer: Option<vk::Buffer>,
     pub(crate) buffer_memory: Option<vk::DeviceMemory>,
     pub(crate) device_address: vk::DeviceAddress,
-    pub update_scratch: Option<DeviceBuffer>,
+    update_scratch: Option<DeviceBuffer>,
     pub(crate) transform: vk::TransformMatrixKHR,
 }
 
@@ -46,8 +46,8 @@ pub struct RRTLAS {
     pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
     pub(crate) buffer: Option<vk::Buffer>,
     pub(crate) buffer_memory: Option<vk::DeviceMemory>,
-    pub update_scratch: Option<DeviceBuffer>,
-    pub instances_buf: Option<DeviceBuffer>,
+    update_scratch: Option<DeviceBuffer>,
+    instances_buf: Option<DeviceBuffer>,
 }
 
 impl RRTLAS {

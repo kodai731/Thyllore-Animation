@@ -229,22 +229,21 @@ pub fn probe_flame_wall(
                 // Compute new diagnostic fields
                 let segment_dt = chord / crate::flame_wave::FLAME_WAVE_SEGMENTS as f32;
 
-                // Noise coordinate direction vector: dW = anisoCompress(dir, noise_aniso_y) * noise_frequency
                 // anisoCompress is a diagonal transform scaling y by noise_aniso_y
                 let dir_scaled = Vec3::new(
                     direction_local.x,
                     direction_local.y * effect.noise.aniso_y,
                     direction_local.z,
                 );
-                let dW = dir_scaled * effect.noise.frequency;
-                let dW_magnitude = dW.length();
-                let cells_per_segment = segment_dt * dW_magnitude / (2.0 * std::f32::consts::PI);
+                let noise_coordinate_rate = dir_scaled * effect.noise.frequency;
+                let noise_coordinate_speed = noise_coordinate_rate.length();
+                let cells_per_segment =
+                    segment_dt * noise_coordinate_speed / (2.0 * std::f32::consts::PI);
 
                 // unresolved_fraction: wave_ray_attenuation sigma / WAVE_NOISE_STD
                 let mut modes = crate::flame_wave::generate_wave_modes();
                 crate::flame_wave::apply_wave_envelope(&mut modes, crate::flame_wave::WAVE_ENV_MU);
-                let rates: [[f32; 3]; 3] =
-                    [[dW.x, dW.y, dW.z], [dW.x, dW.y, dW.z], [dW.x, dW.y, dW.z]];
+                let rates: [[f32; 3]; 3] = [noise_coordinate_rate.to_array(); 3];
                 let (_weights, sigma) =
                     crate::flame_wave::wave_ray_attenuation(&modes, &rates, segment_dt);
                 let unresolved_fraction = sigma / crate::flame_wave::WAVE_NOISE_STD;

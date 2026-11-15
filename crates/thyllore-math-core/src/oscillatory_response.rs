@@ -63,9 +63,8 @@ fn solve_sigma_fixed_point(
 ) -> f32 {
     let mode_power: f32 = modes.iter().map(|m| 0.5 * m.amplitude * m.amplitude).sum();
     let mut folded_power = mode_power;
-    let mut sigma_smooth = 0.0;
     for _ in 0..FIXED_POINT_ITERATIONS {
-        sigma_smooth = (sigma_base * sigma_base + folded_power)
+        let sigma_smooth = (sigma_base * sigma_base + folded_power)
             .sqrt()
             .max(sigma_floor);
         let shell_width = erf_main_width(model, sigma_smooth);

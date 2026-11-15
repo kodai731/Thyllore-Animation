@@ -141,7 +141,6 @@ pub struct RRPipeline {
 }
 
 use crate::resource::gpu_resource::GpuResource;
-use thyllore_model_core::mesh::{VertexFormat, VertexLayout};
 
 /// Vertex input configuration for pipeline
 pub enum VertexInputConfig {
@@ -153,21 +152,11 @@ pub enum VertexInputConfig {
     Gizmo,
     /// Use BillboardVertex struct (position, texcoord)
     Billboard,
-    /// Use VertexLayout from SoA mesh system
-    FromLayout(VertexLayout),
     /// Custom vertex input (bindings and attributes)
     Custom {
         bindings: Vec<vk::VertexInputBindingDescription>,
         attributes: Vec<vk::VertexInputAttributeDescription>,
     },
-}
-
-fn vertex_format_to_vk(format: VertexFormat) -> vk::Format {
-    match format {
-        VertexFormat::Float32x2 => vk::Format::R32G32_SFLOAT,
-        VertexFormat::Float32x3 => vk::Format::R32G32B32_SFLOAT,
-        VertexFormat::Float32x4 => vk::Format::R32G32B32A32_SFLOAT,
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -896,7 +885,6 @@ fn resolve_vertex_input(config: VertexInputConfig) -> VertexInputDescriptions {
                 ),
             ],
         ),
-        VertexInputConfig::FromLayout(layout) => resolve_layout_vertex_input(&layout),
         VertexInputConfig::Custom {
             bindings,
             attributes,
@@ -954,29 +942,6 @@ fn resolve_simple_vertex_input(
                 .build()
         })
         .collect();
-    (bindings, attributes)
-}
-
-fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions {
-    let bindings = vec![vk::VertexInputBindingDescription::builder()
-        .binding(0)
-        .stride(layout.stride)
-        .input_rate(vk::VertexInputRate::VERTEX)
-        .build()];
-
-    let mut attributes = Vec::new();
-    let mut offset = 0u32;
-    for attr in &layout.attributes {
-        attributes.push(
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(attr.shader_location)
-                .format(vertex_format_to_vk(attr.format))
-                .offset(offset)
-                .build(),
-        );
-        offset += attr.format.size();
-    }
     (bindings, attributes)
 }
 

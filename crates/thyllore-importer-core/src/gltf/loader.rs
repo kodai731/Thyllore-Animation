@@ -8,7 +8,6 @@ use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphWeightChannel, Skeleton,
     SkinData, TransformChannel,
 };
-use thyllore_math_core::*;
 use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
 
@@ -99,9 +98,6 @@ struct NodeAnimation {
     scale_in_tangents: Vec<Vec3>,
     scale_out_tangents: Vec<Vec3>,
     interpolation: Interpolation,
-    default_translation: Vec3,
-    default_rotation: Quat,
-    default_scale: Vec3,
 }
 
 impl Default for NodeAnimation {
@@ -121,9 +117,6 @@ impl Default for NodeAnimation {
             scale_in_tangents: Vec::new(),
             scale_out_tangents: Vec::new(),
             interpolation: Interpolation::Linear,
-            default_translation: Vec3::new(0.0, 0.0, 0.0),
-            default_rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
-            default_scale: Vec3::new(1.0, 1.0, 1.0),
         }
     }
 }
@@ -132,8 +125,6 @@ impl Default for NodeAnimation {
 struct RRNode {
     index: u16,
     name: String,
-    transform: [[f32; 4]; 4],
-    children: Vec<u16>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -160,10 +151,6 @@ impl NodeJointMap {
 
     fn get_joint_index(&self, node_index: u16) -> Option<u16> {
         self.node_to_joint.get(&node_index).copied()
-    }
-
-    fn contain_node_index(&self, node_index: u16) -> bool {
-        self.node_to_joint.contains_key(&node_index)
     }
 }
 
@@ -708,8 +695,6 @@ fn register_node_info(
     ctx.rrnodes.push(RRNode {
         index: node.index() as u16,
         name: node.name().unwrap_or("").to_string(),
-        transform: array_from_mat4(node_transform),
-        children: node.children().map(|c| c.index() as u16).collect(),
     });
 
     ctx.node_infos.push(NodeInfo {
@@ -1165,14 +1150,8 @@ fn find_or_create_node_animation<'a>(
         return &mut ctx.node_animations[idx];
     }
 
-    let (default_trans, default_rot, default_scale) =
-        decompose(&mat4_from_array(node.transform().matrix()));
-
     ctx.node_animations.push(NodeAnimation {
         node_index,
-        default_translation: default_trans,
-        default_rotation: default_rot,
-        default_scale,
         interpolation: interp,
         ..Default::default()
     });

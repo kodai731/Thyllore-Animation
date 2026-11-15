@@ -20,6 +20,7 @@ type Scope = BTreeMap<String, BTreeSet<Target>>;
 enum Target {
     Module(ModulePath),
     Definition { module: ModulePath, name: String },
+    Dependency { path: Vec<String> },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -37,6 +38,7 @@ struct CrateModules<'a> {
     items_by_module: BTreeMap<ModulePath, &'a [Item]>,
     resolved_scopes: RefCell<BTreeMap<(ModulePath, Audience), Scope>>,
     scopes_in_progress: RefCell<BTreeSet<(ModulePath, Audience)>>,
+    imported_names_in_progress: RefCell<BTreeSet<(ModulePath, String)>>,
 }
 
 fn is_visible_to(visibility: &Visibility, audience: Audience) -> bool {
@@ -134,7 +136,42 @@ fn describe_target(target: &Target) -> String {
         Target::Definition { module, name } => {
             format!("`{name}` defined in `{}`", describe_module(module))
         }
+        Target::Dependency { path } => format!("dependency item `{}`", path.join("::")),
     }
+}
+
+fn names_module_or_function(dependency_path: &[String]) -> bool {
+    dependency_path
+        .last()
+        .is_some_and(|leaf| leaf.starts_with(char::is_lowercase))
+}
+
+fn describe_indirect_dependency_reexport(
+    module: &ModulePath,
+    import: &Import,
+    dependency_path: &[String],
+) -> Option<String> {
+    let written_path = import.path.join("::");
+    let dependency_path_text = dependency_path.join("::");
+    let module_text = describe_module(module);
+
+    match &import.bound_name {
+        None => Some(format!(
+            "R3: `pub use {written_path}::*` in `{module_text}` is a glob re-export of dependency \
+             module `{dependency_path_text}`"
+        )),
+        Some(_) if names_module_or_function(dependency_path) => Some(format!(
+            "R4: `pub use {written_path}` in `{module_text}` re-exports module or function \
+             `{dependency_path_text}` of a dependency"
+        )),
+        Some(_) => None,
+    }
+}
+
+fn collect_use_imports(item_use: &syn::ItemUse) -> Vec<Import> {
+    let mut imports = Vec::new();
+    collect_imports(&item_use.tree, &[], &mut imports);
+    imports
 }
 
 impl<'a> CrateModules<'a> {
@@ -143,6 +180,7 @@ impl<'a> CrateModules<'a> {
             items_by_module: BTreeMap::new(),
             resolved_scopes: RefCell::new(BTreeMap::new()),
             scopes_in_progress: RefCell::new(BTreeSet::new()),
+            imported_names_in_progress: RefCell::new(BTreeSet::new()),
         }
     }
 
@@ -195,8 +233,14 @@ impl<'a> CrateModules<'a> {
     }
 
     fn enter_segment(&self, target: &Target, segment: &str) -> BTreeSet<Target> {
-        let Target::Module(module) = target else {
-            return BTreeSet::new();
+        let module = match target {
+            Target::Module(module) => module,
+            Target::Definition { .. } => return BTreeSet::new(),
+            Target::Dependency { path } => {
+                let mut longer_path = path.clone();
+                longer_path.push(segment.to_string());
+                return BTreeSet::from([Target::Dependency { path: longer_path }]);
+            }
         };
         if segment == "super" {
             return module
@@ -219,10 +263,14 @@ impl<'a> CrateModules<'a> {
             "crate" => BTreeSet::from([Target::Module(ModulePath::new())]),
             "self" => BTreeSet::from([here]),
             "super" => self.enter_segment(&here, "super"),
-            name => self
-                .collect_declared_names(from, Audience::SameCrate)
-                .remove(name)
-                .unwrap_or_default(),
+            name => match self.resolve_name_in_module(from, name) {
+                Some(local_targets) => local_targets,
+                None => {
+                    return BTreeSet::from([Target::Dependency {
+                        path: path.to_vec(),
+                    }])
+                }
+            },
         };
 
         for segment in later_segments {
@@ -232,6 +280,45 @@ impl<'a> CrateModules<'a> {
                 .collect();
         }
         targets
+    }
+
+    fn resolve_name_in_module(&self, module: &ModulePath, name: &str) -> Option<BTreeSet<Target>> {
+        if let Some(declared) = self
+            .collect_declared_names(module, Audience::SameCrate)
+            .remove(name)
+        {
+            return Some(declared);
+        }
+
+        let importing_paths: Vec<Vec<String>> = self
+            .items(module)
+            .iter()
+            .filter_map(|item| match item {
+                Item::Use(item_use) => Some(collect_use_imports(item_use)),
+                _ => None,
+            })
+            .flatten()
+            .filter(|import| import.bound_name.as_deref() == Some(name))
+            .map(|import| import.path)
+            .collect();
+        if importing_paths.is_empty() {
+            return None;
+        }
+
+        let key = (module.clone(), name.to_string());
+        if !self
+            .imported_names_in_progress
+            .borrow_mut()
+            .insert(key.clone())
+        {
+            return None;
+        }
+        let targets = importing_paths
+            .iter()
+            .flat_map(|path| self.resolve_path(module, path))
+            .collect();
+        self.imported_names_in_progress.borrow_mut().remove(&key);
+        Some(targets)
     }
 
     fn bind_import(
@@ -272,9 +359,7 @@ impl<'a> CrateModules<'a> {
         for item in self.items(module) {
             if let Item::Use(item_use) = item {
                 if is_visible_to(&item_use.vis, audience) {
-                    let mut imports = Vec::new();
-                    collect_imports(&item_use.tree, &[], &mut imports);
-                    for import in &imports {
+                    for import in &collect_use_imports(item_use) {
                         self.bind_import(module, import, audience, &mut scope);
                     }
                 }
@@ -326,6 +411,7 @@ impl<'a> CrateModules<'a> {
 
         public_paths
             .iter()
+            .filter(|(target, _)| !matches!(target, Target::Dependency { .. }))
             .filter(|(_, paths)| paths.len() > 1)
             .map(|(target, paths)| {
                 let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
@@ -337,6 +423,36 @@ impl<'a> CrateModules<'a> {
             })
             .collect()
     }
+
+    fn find_indirect_dependency_reexports_in(&self, module: &ModulePath) -> Vec<String> {
+        self.items(module)
+            .iter()
+            .filter_map(|item| match item {
+                Item::Use(item_use) if matches!(item_use.vis, Visibility::Public(_)) => {
+                    Some(collect_use_imports(item_use))
+                }
+                _ => None,
+            })
+            .flatten()
+            .flat_map(|import| {
+                self.resolve_path(module, &import.path)
+                    .into_iter()
+                    .filter_map(move |target| match target {
+                        Target::Dependency { path } if path != import.path => {
+                            describe_indirect_dependency_reexport(module, &import, &path)
+                        }
+                        _ => None,
+                    })
+            })
+            .collect()
+    }
+
+    fn find_indirect_dependency_reexports(&self) -> Vec<String> {
+        self.items_by_module
+            .keys()
+            .flat_map(|module| self.find_indirect_dependency_reexports_in(module))
+            .collect()
+    }
 }
 
 fn describe_crate(crate_directory: &Path) -> String {
@@ -346,7 +462,10 @@ fn describe_crate(crate_directory: &Path) -> String {
     crate_directory.display().to_string()
 }
 
-pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -> Vec<String> {
+fn find_violations_per_crate(
+    files: &[SourceFile],
+    find_violations: &dyn Fn(&CrateModules) -> Vec<String>,
+) -> Vec<String> {
     let mut crates: BTreeMap<PathBuf, CrateModules> = BTreeMap::new();
     for file in files {
         if let Some((crate_directory, module_path)) = split_crate_directory(&file.relative_path) {
@@ -360,12 +479,21 @@ pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -
     crates
         .iter()
         .flat_map(|(crate_directory, modules)| {
-            modules
-                .find_several_public_paths()
+            find_violations(modules)
                 .into_iter()
                 .map(move |violation| format!("{}: {violation}", describe_crate(crate_directory)))
         })
         .collect()
+}
+
+pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -> Vec<String> {
+    find_violations_per_crate(files, &|modules| modules.find_several_public_paths())
+}
+
+pub(crate) fn find_indirect_dependency_reexports(files: &[SourceFile]) -> Vec<String> {
+    find_violations_per_crate(files, &|modules| {
+        modules.find_indirect_dependency_reexports()
+    })
 }
 
 fn parse_source_file(relative_path: &str, source: &str) -> SourceFile {
@@ -460,4 +588,111 @@ fn a_facade_reexport_of_a_private_child_is_one_public_path() {
     ];
 
     assert!(find_definitions_with_several_public_paths(&files).is_empty());
+}
+
+#[test]
+fn a_dependency_function_reexported_through_an_imported_dependency_module_is_reported() {
+    let files = [
+        parse_source_file("crates/demo/src/lib.rs", "pub mod tools;"),
+        parse_source_file(
+            "crates/demo/src/tools.rs",
+            "use dep::search; pub use search::find;",
+        ),
+    ];
+
+    assert_eq!(
+        find_indirect_dependency_reexports(&files),
+        [
+            "crates/demo: R4: `pub use search::find` in `crate::tools` re-exports module or \
+          function `dep::search::find` of a dependency"
+        ]
+    );
+}
+
+#[test]
+fn a_dependency_function_reexported_through_a_renamed_dependency_is_reported() {
+    let files = [parse_source_file(
+        "crates/demo/src/lib.rs",
+        "use dep as vendor; pub use vendor::find;",
+    )];
+
+    assert_eq!(
+        find_indirect_dependency_reexports(&files),
+        [
+            "crates/demo: R4: `pub use vendor::find` in `crate` re-exports module or function \
+          `dep::find` of a dependency"
+        ]
+    );
+}
+
+#[test]
+fn a_dependency_module_imported_by_a_child_and_reexported_from_its_parent_is_reported() {
+    let files = [
+        parse_source_file(
+            "crates/demo/src/lib.rs",
+            "mod child; pub use child::search::find;",
+        ),
+        parse_source_file("crates/demo/src/child.rs", "pub(crate) use dep::search;"),
+    ];
+
+    assert_eq!(
+        find_indirect_dependency_reexports(&files),
+        [
+            "crates/demo: R4: `pub use child::search::find` in `crate` re-exports module or \
+          function `dep::search::find` of a dependency"
+        ]
+    );
+}
+
+#[test]
+fn a_glob_of_an_imported_dependency_module_is_reported() {
+    let files = [parse_source_file(
+        "crates/demo/src/lib.rs",
+        "use dep::search; pub use search::*;",
+    )];
+
+    assert_eq!(
+        find_indirect_dependency_reexports(&files),
+        [
+            "crates/demo: R3: `pub use search::*` in `crate` is a glob re-export of dependency \
+          module `dep::search`"
+        ]
+    );
+}
+
+#[test]
+fn a_dependency_type_reexported_through_an_imported_dependency_module_is_allowed() {
+    let files = [parse_source_file(
+        "crates/demo/src/lib.rs",
+        "use dep::search; pub use search::Finder;",
+    )];
+
+    assert!(find_indirect_dependency_reexports(&files).is_empty());
+}
+
+#[test]
+fn a_direct_dependency_reexport_is_left_to_the_syntax_check() {
+    let files = [parse_source_file(
+        "crates/demo/src/lib.rs",
+        "pub use dep::find; pub use dep::*;",
+    )];
+
+    assert!(find_indirect_dependency_reexports(&files).is_empty());
+}
+
+#[test]
+fn a_facade_reexport_of_an_own_function_is_not_a_dependency_reexport() {
+    let files = [
+        parse_source_file(
+            "crates/demo/src/lib.rs",
+            "mod shape; pub use shape::{area as circle_area, tools::*};",
+        ),
+        parse_source_file(
+            "crates/demo/src/shape.rs",
+            "pub mod tools; pub fn area() {}",
+        ),
+        parse_source_file("crates/demo/src/shape/tools.rs", "pub fn measure() {}"),
+    ];
+
+    assert!(find_indirect_dependency_reexports(&files).is_empty());
 }

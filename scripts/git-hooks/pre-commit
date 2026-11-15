@@ -7,4 +7,9 @@ if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '(\.rs|Cargo\.t
     exit 0
 fi
 
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo is not on PATH, module_facade check skipped (CI runs it)" >&2
+    exit 0
+fi
+
 exec bash "$REPO_ROOT/scripts/check_module_facade.sh"

@@ -23,7 +23,8 @@ cargo test -p thyllore-grpc-client --no-default-features --test module_facade
 `scripts/check_module_facade.sh` runs that test and prints only the violations. It runs in three places:
 
 - git `pre-commit` (`scripts/git-hooks/pre-commit`), when a `.rs` or `Cargo.toml` file is staged. A clone
-  enables it once with `git config core.hooksPath scripts/git-hooks`.
+  enables it once with `git config core.hooksPath scripts/git-hooks`. A git client without `cargo` on its
+  `PATH` (a Windows GUI client on the shared tree) skips the check with a message.
 - the Claude Code `Stop` hook (`.claude/hooks/stop_module_facade.sh`, registered in `.claude/settings.json`),
   when the working tree has a changed `.rs` or `Cargo.toml` file; a failure is returned to Claude to fix.
 - CI (`.github/workflows/module_facade.yml`).
@@ -96,8 +97,18 @@ pub use thyllore_scene_core::*;
 pub use thyllore_scene_core::find_scalar_param;
 ```
 
-R4 does not see a function that reaches a `pub use` through a private `use dep::func;` in a child module.
-That shape is still forbidden; do not rely on the test to catch it.
+The path is followed through imports: a `pub use` that starts at a privately imported module of a dependency
+is the same violation.
+
+```rust
+// Bad: R4 and R3 again, reached through the imported `std::mem`
+use std::mem;
+pub use mem::swap;
+pub use mem::*;
+```
+
+Whether the last name is a type is decided by its capital letter, because the test does not read the
+dependency. `use dep::func; pub use func;` needs no rule: rustc rejects it (E0364).
 
 ### R5: `components` and `systems` are never public in `crates/`
 

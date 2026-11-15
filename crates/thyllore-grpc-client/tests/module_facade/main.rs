@@ -1,7 +1,8 @@
 //! Public-surface rules for the workspace's own sources (issue #297). A public module is either a facade
 //! (`mod x;` + named `pub use x::Item;`) or a namespace (`pub mod x;` alone); R1-R5 below are decided by
-//! syntax only and carry no exception table. R6 (`public_paths.rs`) resolves `pub use` across the
-//! files of one crate and reports a definition or module that has more than one public path.
+//! syntax only and carry no exception table. `public_paths.rs` resolves `use` across the files of one
+//! crate: R6 reports a definition or module that has more than one public path, and R3 / R4 there
+//! report a `pub use` that reaches a dependency through an imported module of that dependency.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -345,6 +346,17 @@ fn dependencies_are_reexported_only_as_types_and_constants() {
     assert_no_violations(
         "re-exported dependency globs, modules or functions",
         &|file| find_violations_in_every_scope(&file.items, &find_dependency_reexports),
+    );
+}
+
+#[test]
+fn dependencies_are_not_reexported_through_an_imported_dependency_module() {
+    let violations = public_paths::find_indirect_dependency_reexports(&parse_workspace_sources());
+
+    assert!(
+        violations.is_empty(),
+        "dependency globs, modules or functions re-exported through an imported module:\n{}",
+        violations.join("\n")
     );
 }
 

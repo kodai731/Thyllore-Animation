@@ -6,7 +6,7 @@ pub mod flame;
 mod gpu_pack;
 pub mod lightning;
 mod scene_convert;
-pub mod volume;
+pub(crate) mod volume;
 pub mod water;
 pub mod wind;
 

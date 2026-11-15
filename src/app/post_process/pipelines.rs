@@ -12,7 +12,7 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::BloomChain;
-use thyllore_vulkan_core::renderer::tonemap::ToneMapPushConstants;
+use thyllore_vulkan_core::renderer::ToneMapPushConstants;
 
 use anyhow::Result;
 use thyllore_vulkan_core::types::{DeviceSize, ImageView};

@@ -123,7 +123,7 @@ impl<T: GpuBlock> UniformBuffer<T> {
         cmd: crate::types::CommandBuffer,
         slot: usize,
         value: &T,
-        reader_stages: &[crate::renderer::ShaderStage],
+        reader_stages: &[crate::renderer::ReaderStage],
     ) -> Result<()> {
         let cmd = cmd.raw();
         let reader_stage = reader_stages

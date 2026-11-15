@@ -44,7 +44,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `vk::*` and `vulkanalia` exist only inside `thyllore-vulkan-core`: the root crate does not depend on
   vulkanalia and `RRDevice.device` is crate-private, so writing `vk::` elsewhere fails to compile. Code
   outside the crate names handles through `thyllore_vulkan_core::types` and describes intent with core enums
-  (`AttachmentStart`, `ShaderStage`, `Topology`, `ReadbackLayout`, ...); `thyllore-render-core` holds the
+  (`AttachmentStart`, `ReaderStage`, `Topology`, `ReadbackLayout`, ...); `thyllore-render-core` holds the
   data types World and GPU share and no traits.
 - Effects (`thyllore-effect-core`) keep one directory per effect with the same split: `effect/` data,
   `analytic/` pure math mirrored by the shaders, `gpu/` UBO structs, `presets`, `settings`.

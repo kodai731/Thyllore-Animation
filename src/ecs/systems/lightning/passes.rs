@@ -7,7 +7,7 @@ use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
 use crate::ecs::systems::lightning::pipeline::LIGHTNING_OVERLAY;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    AttachmentStart, CoreTarget, PassStage, ReaderStage, RenderPassNode, TargetAccess, TargetRef,
     TargetUse,
 };
 use crate::vulkanr::renderer::deferred::{compute_projected_bounds_scissor, full_extent_scissor};
@@ -172,14 +172,14 @@ unsafe fn record_lightning_passes(
             command_buffer,
             slot,
             instance_ubo,
-            &[ShaderStage::Fragment],
+            &[ReaderStage::Fragment],
         )?;
         segments_ubo.record_update(
             render.device,
             command_buffer,
             slot,
             instance_segments,
-            &[ShaderStage::Fragment],
+            &[ReaderStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![

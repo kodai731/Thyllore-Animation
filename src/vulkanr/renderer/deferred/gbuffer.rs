@@ -1,6 +1,4 @@
-pub use thyllore_vulkan_core::renderer::push_constants::{
-    GBufferPushConstants, OnionSkinPushConstants,
-};
+pub use thyllore_vulkan_core::renderer::{GBufferPushConstants, OnionSkinPushConstants};
 
 #[cfg(test)]
 mod tests {

@@ -8,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 2 Vulkan primitive wrapper for ThylloreAnimation (device, command, buffer, image, render pass, pipeline cache, acceleration structure). No ECS dependency"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-math-core = { path = "../thyllore-math-core" }

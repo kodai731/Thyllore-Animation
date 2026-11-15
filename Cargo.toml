@@ -6,6 +6,9 @@ members = [
     "scratch",
 ]
 
+[workspace.lints.rust]
+ambiguous_glob_reexports = "deny"
+
 [package]
 publish = false
 name = "thyllore-animation"

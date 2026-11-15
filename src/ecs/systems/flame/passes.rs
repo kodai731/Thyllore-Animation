@@ -6,7 +6,7 @@ use crate::ecs::systems::flame::pipeline::FLAME_OVERLAY;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    AttachmentStart, CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
+    AttachmentStart, CoreTarget, PassStage, ReaderStage, RenderPassNode, TargetAccess, TargetRef,
     TargetUse,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
@@ -192,7 +192,7 @@ impl RenderPassNode for FlamePassNode {
             .map(|history_index| {
                 TargetUse::new(
                     TargetRef::Storage(HISTORY_KEYS[1 - history_index]),
-                    TargetAccess::Sampled(ShaderStage::Fragment),
+                    TargetAccess::Sampled(ReaderStage::Fragment),
                 )
             })
             .into_iter()
@@ -275,7 +275,7 @@ unsafe fn record_flame_passes(
             command_buffer,
             slot,
             ubo,
-            &[ShaderStage::Fragment],
+            &[ReaderStage::Fragment],
         )?;
         draws.push(OverlayInstanceDraw::new(
             vec![flame_ubo.slot_offset(slot)? as u32],

@@ -1,12 +1,15 @@
 //! Public-surface rules for the workspace's own sources (issue #297). A public module is either a facade
 //! (`mod x;` + named `pub use x::Item;`) or a namespace (`pub mod x;` alone); R1-R5 below are decided by
-//! syntax only and carry no exception table.
+//! syntax only and carry no exception table. R6 (`public_paths.rs`) resolves `pub use` across the
+//! files of one crate and reports a definition or module that has more than one public path.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use syn::{Item, UseTree, Visibility};
+
+mod public_paths;
 
 const SOURCE_ROOTS: &[&str] = &["src", "crates"];
 const MEMBER_ROOTS: &[&str] = &["crates", "scratch"];
@@ -323,6 +326,18 @@ fn public_modules_are_not_reexported_from_the_same_file() {
     assert_no_violations("dual public paths", &|file| {
         find_violations_in_every_scope(&file.items, &find_dual_paths)
     });
+}
+
+#[test]
+fn every_definition_has_one_public_path() {
+    let violations =
+        public_paths::find_definitions_with_several_public_paths(&parse_workspace_sources());
+
+    assert!(
+        violations.is_empty(),
+        "several public paths to one definition:\n{}",
+        violations.join("\n")
+    );
 }
 
 #[test]

@@ -174,7 +174,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
     match command {
         OutputCommand::TakeScreenshot => {
             log!("Taking screenshot...");
-            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+            let image_index = app.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT;
             match app.save_screenshot(image_index) {
                 Ok(path) => msg_info!("Screenshot saved: {}", path),
                 Err(e) => log_error!("Screenshot failed: {:?}", e),

@@ -1,6 +1,6 @@
 use imgui::SynchronousRendererConsumer;
 
-use crate::app::MAX_FRAMES_IN_FLIGHT;
+use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::{destroy_imgui_pipeline_objects, ReflectedSetLayout};
 use thyllore_vulkan_core::resource::GpuResource;

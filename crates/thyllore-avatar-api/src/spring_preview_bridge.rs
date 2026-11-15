@@ -15,7 +15,7 @@ use crate::blender_space::{engine_frame_metres, parent_relative_locals, rows};
 use crate::spring_edit_bridge::skeleton_from_bones;
 use thyllore_math_core::invert;
 
-pub use crate::blender_space::MatrixRows;
+use crate::blender_space::MatrixRows;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct JointPose {

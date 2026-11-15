@@ -7,7 +7,7 @@ paths:
 
 Before opening a PR or finishing an edit, run the branch diff through the items below. Begin with `structural-review.md` to evaluate the model and structure, then check implementation details. Each item's detailed rules live in the existing rule files listed at the end of each line — those are the single source of truth, so this checklist does not repeat them.
 
-1. `mod.rs` / `lib.rs` hold `mod` declarations and re-exports only; logic lives in sibling files → `ecs-architecture.md`, `module-structure.md`; enforced by `crates/thyllore-grpc-client/tests/module_facade.rs`
+1. `mod.rs` / `lib.rs` hold `mod` declarations and re-exports only; logic lives in sibling files → `ecs-architecture.md`, `module-structure.md`; enforced by `crates/thyllore-grpc-client/tests/module_facade/`
 2. Generic code (`src/app/`, `ecs/systems/phases/`, `event_dispatch`, `vulkan-core`, `scene`) never names a feature; features register through hooks → `hierarchy.md` "Feature isolation"
 3. No central list / match / if-chain that must be edited when a feature is added; collect from registrations or derives → `hierarchy.md` "Hook or command?"
 4. No string-keyed lookups (names compared as text, prefix slicing, Debug strings); resolve through typed / generated APIs → e.g. `HumanoidRole::from_unity_name` / `index` / `mirrored` from `crates/thyllore-avatar-core/data/humanoid_rig.toml`

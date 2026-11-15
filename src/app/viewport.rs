@@ -68,7 +68,7 @@ impl ViewportState {
 
         Ok(Self {
             storage,
-            transient: RenderTargetTransient::new(crate::app::init::MAX_FRAMES_IN_FLIGHT),
+            transient: RenderTargetTransient::new(crate::ecs::MAX_FRAMES_IN_FLIGHT),
             offscreen: Some(offscreen),
             hdr_buffer: Some(hdr_buffer),
             bloom_chain: Some(bloom_chain),

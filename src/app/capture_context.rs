@@ -19,7 +19,7 @@ impl App {
 
     pub fn interactive_capture_context(&self) -> CaptureContext<'_> {
         self.capture_context(
-            self.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT,
+            self.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT,
             CaptureSlot::interactive(),
         )
     }

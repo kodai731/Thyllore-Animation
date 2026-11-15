@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use std::rc::Rc;
 use std::time::Instant;
 
-pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
+use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use winit::window::Window;
 
 use thyllore_vulkan_core::core::create_sync_objects;

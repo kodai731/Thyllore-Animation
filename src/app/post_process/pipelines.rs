@@ -78,7 +78,7 @@ impl App {
             std::mem::size_of::<thyllore_vulkan_core::data::SceneUniformData>() as DeviceSize;
 
         let tonemap_descriptor =
-            RRToneMapDescriptorSet::new(rrdevice, crate::app::init::MAX_FRAMES_IN_FLIGHT)?;
+            RRToneMapDescriptorSet::new(rrdevice, crate::ecs::MAX_FRAMES_IN_FLIGHT)?;
         tonemap_descriptor.write_all(
             rrdevice,
             hdr_image_view,
@@ -212,10 +212,8 @@ impl App {
             }
         };
 
-        let histogram_descriptor = RRAutoExposureHistogramDescriptorSet::new(
-            rrdevice,
-            crate::app::init::MAX_FRAMES_IN_FLIGHT,
-        )?;
+        let histogram_descriptor =
+            RRAutoExposureHistogramDescriptorSet::new(rrdevice, crate::ecs::MAX_FRAMES_IN_FLIGHT)?;
         histogram_descriptor.update_bindings(
             rrdevice,
             hdr_image_view,
@@ -263,7 +261,7 @@ unsafe fn build_bloom_pipelines(
     let bloom_descriptors = RRBloomDescriptorSets::new(
         rrdevice,
         bloom_chain.mip_count(),
-        crate::app::init::MAX_FRAMES_IN_FLIGHT,
+        crate::ecs::MAX_FRAMES_IN_FLIGHT,
     )?;
 
     let downsample_pipeline = fullscreen_pipeline(&BLOOM_DOWNSAMPLE)

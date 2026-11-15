@@ -1,4 +1,3 @@
-use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::App;
 use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
@@ -6,6 +5,7 @@ use crate::ecs::resource::{GridGizmoData, LightGizmoData};
 use crate::ecs::systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
+use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };

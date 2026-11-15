@@ -76,7 +76,6 @@ impl FbxChannel {
 pub(crate) struct FbxBoneExport {
     pub model_uid: i64,
     pub name: String,
-    pub is_root: bool,
     pub parent_model_uid: Option<i64>,
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
@@ -225,7 +224,6 @@ pub(crate) fn build_bone_export_list(
         skeleton_idx_to_export_idx.push(Some(export_idx));
 
         let model_uid = uid_alloc.allocate();
-        let is_root = bone.parent_id.is_none();
 
         let (mut translation, rotation, scaling) = decompose_matrix_to_trs(&bone.local_transform);
 
@@ -243,7 +241,6 @@ pub(crate) fn build_bone_export_list(
         bones.push(FbxBoneExport {
             model_uid,
             name: bone.name.clone(),
-            is_root,
             parent_model_uid: None,
             translation,
             rotation,
@@ -287,7 +284,6 @@ fn attach_root_transform_node(
     bones.push(FbxBoneExport {
         model_uid: root_uid,
         name,
-        is_root: true,
         parent_model_uid: None,
         translation,
         rotation,

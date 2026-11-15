@@ -3,7 +3,7 @@ mod debug_dump;
 pub(crate) mod descriptors;
 pub(crate) mod gpu_targets;
 mod object_pick;
-pub mod passes;
+mod passes;
 mod pipeline;
 mod preset;
 pub(crate) mod record;

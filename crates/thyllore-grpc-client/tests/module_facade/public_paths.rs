@@ -339,6 +339,13 @@ impl<'a> CrateModules<'a> {
     }
 }
 
+fn describe_crate(crate_directory: &Path) -> String {
+    if crate_directory.as_os_str().is_empty() {
+        return String::from("workspace root crate");
+    }
+    crate_directory.display().to_string()
+}
+
 pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -> Vec<String> {
     let mut crates: BTreeMap<PathBuf, CrateModules> = BTreeMap::new();
     for file in files {
@@ -356,7 +363,7 @@ pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -
             modules
                 .find_several_public_paths()
                 .into_iter()
-                .map(move |violation| format!("{}: {violation}", crate_directory.display()))
+                .map(move |violation| format!("{}: {violation}", describe_crate(crate_directory)))
         })
         .collect()
 }
@@ -390,6 +397,23 @@ fn a_reexport_from_another_module_is_a_second_public_path() {
         find_definitions_with_several_public_paths(&files),
         [
             "crates/demo: R6: `Edit` defined in `crate::resource::batch` is public as \
+          crate::resource::Edit and crate::systems::Edit"
+        ]
+    );
+}
+
+#[test]
+fn a_violation_in_the_workspace_root_crate_names_that_crate() {
+    let files = [
+        parse_source_file("src/lib.rs", "pub mod resource; pub mod systems;"),
+        parse_source_file("src/resource.rs", "pub enum Edit {}"),
+        parse_source_file("src/systems.rs", "pub use crate::resource::Edit;"),
+    ];
+
+    assert_eq!(
+        find_definitions_with_several_public_paths(&files),
+        [
+            "workspace root crate: R6: `Edit` defined in `crate::resource` is public as \
           crate::resource::Edit and crate::systems::Edit"
         ]
     );

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use thyllore_anim_core::editable::EditableAnimationClip;
-use thyllore_exporter_core::systems::fbx::export_full_fbx;
+use thyllore_exporter_core::fbx::export_full_fbx;
 use thyllore_file_format_core::fbx::FbxModel;
 
 #[test]

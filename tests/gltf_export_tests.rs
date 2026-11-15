@@ -32,7 +32,7 @@ fn test_gltf_export_preserves_structure() {
 
     let output_path = std::env::temp_dir().join("test_gltf_export.glb");
 
-    thyllore_exporter_core::systems::gltf::export_gltf_animation(
+    thyllore_exporter_core::gltf::export_gltf_animation(
         source_path,
         &clip,
         &skeleton,
@@ -181,7 +181,7 @@ fn run_roundtrip_and_verify(
         return;
     }
 
-    thyllore_exporter_core::systems::gltf::export_gltf_animation(
+    thyllore_exporter_core::gltf::export_gltf_animation(
         source_path,
         clip,
         skeleton,

@@ -23,13 +23,10 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
         .unwrap_or((None, false));
 
     let result = match fbx_model {
-        Some(fbx_model) => thyllore_exporter_core::systems::fbx::export_full_fbx(
-            &fbx_model,
-            Some(&clip),
-            &skeleton,
-            path,
-        ),
-        None => thyllore_exporter_core::systems::fbx::export_animation_fbx(
+        Some(fbx_model) => {
+            thyllore_exporter_core::fbx::export_full_fbx(&fbx_model, Some(&clip), &skeleton, path)
+        }
+        None => thyllore_exporter_core::fbx::export_animation_fbx(
             &clip,
             &skeleton,
             path,
@@ -105,7 +102,7 @@ pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
         return;
     };
 
-    match thyllore_exporter_core::systems::gltf::export_gltf_animation_from_bytes(
+    match thyllore_exporter_core::gltf::export_gltf_animation_from_bytes(
         &source_bytes,
         &clip,
         &skeleton,
@@ -122,7 +119,7 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
         return;
     };
 
-    match thyllore_exporter_core::systems::gltf::export_gltf_animation_only(
+    match thyllore_exporter_core::gltf::export_gltf_animation_only(
         &clip,
         &skeleton,
         path,
@@ -156,7 +153,7 @@ pub(crate) fn export_model_fbx(app: &App, path: &Path) {
         return;
     };
 
-    match thyllore_exporter_core::systems::fbx::export_full_fbx(&fbx_model, None, &skeleton, path) {
+    match thyllore_exporter_core::fbx::export_full_fbx(&fbx_model, None, &skeleton, path) {
         Ok(()) => {
             msg_info!("FBX exported: {:?}", path);
             copy_humanoid_sidecar(app, path);

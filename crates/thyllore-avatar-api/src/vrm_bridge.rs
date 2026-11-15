@@ -7,7 +7,7 @@ use thyllore_avatar_core::vrchat::SidecarSpring;
 use thyllore_avatar_core::vrm::{
     t_pose_warnings, vrm_rest_clearance, VrmMeta, T_POSE_TOLERANCE_DEG,
 };
-use thyllore_exporter_core::systems::gltf::write_vrm;
+use thyllore_exporter_core::gltf::write_vrm;
 
 use crate::avatar_setup_bridge::{bone_inputs, sidecar_read, BoneSpec};
 

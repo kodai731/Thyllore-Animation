@@ -2,8 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use thyllore_anim_core::editable::sample_morph_tracks;
-use thyllore_exporter_core::systems::unity::anim::write_unity_anim;
-use thyllore_exporter_core::systems::unity::curves::{morph_track_curves, write_expression_anim};
+use thyllore_exporter_core::unity::{morph_track_curves, write_expression_anim, write_unity_anim};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, ExpressionLibraryState, TimelineState};

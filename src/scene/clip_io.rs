@@ -12,8 +12,7 @@ use super::file::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
 pub fn save_animation_clip(path: &Path, clip: &EditableAnimationClip) -> SceneResult<()> {
     let clip_file =
         AnimationClipFile::from_clip(clip, scalar_channel_name).map_err(SceneError::ClipFile)?;
-    thyllore_exporter_core::systems::ron::export_ron_clip(&clip_file, path)
-        .map_err(SceneError::Export)
+    thyllore_exporter_core::ron::export_ron_clip(&clip_file, path).map_err(SceneError::Export)
 }
 
 pub fn load_animation_clip(path: &Path) -> SceneResult<EditableAnimationClip> {

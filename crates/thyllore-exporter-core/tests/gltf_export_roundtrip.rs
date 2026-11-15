@@ -7,7 +7,7 @@ use gltf::json::{self, Index};
 use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip, PropertyType};
 use thyllore_anim_core::Skeleton;
 
-use thyllore_exporter_core::systems::gltf::export_gltf_animation_only;
+use thyllore_exporter_core::gltf::export_gltf_animation_only;
 
 fn create_test_skeleton() -> Skeleton {
     let mut skeleton = Skeleton::new("test");

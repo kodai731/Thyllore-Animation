@@ -21,7 +21,7 @@ fn test_blend_shapes_survive_full_fbx_export() {
             .expect("load morph_cube");
 
     let export_path = std::env::temp_dir().join("morph_cube_exported.fbx");
-    thyllore_exporter_core::systems::fbx::export_full_fbx(
+    thyllore_exporter_core::fbx::export_full_fbx(
         &source_model,
         None,
         &Skeleton::default(),
@@ -76,7 +76,7 @@ fn test_morph_track_exports_as_deform_percent_curve() {
     curve_add_keyframe(smile_curve, 1.0, 1.0);
 
     let export_path = std::env::temp_dir().join("morph_cube_weight_anim_exported.fbx");
-    thyllore_exporter_core::systems::fbx::export_full_fbx(
+    thyllore_exporter_core::fbx::export_full_fbx(
         &source_model,
         Some(&clip),
         &Skeleton::default(),

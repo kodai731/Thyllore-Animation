@@ -1,5 +1,5 @@
 //! Public-surface rules for the workspace's own sources (issue #297). A public module is either a facade
-//! (`mod x;` + named `pub use x::Item;`) or a namespace (`pub mod x;` alone); R1-R4 below are decided by
+//! (`mod x;` + named `pub use x::Item;`) or a namespace (`pub mod x;` alone); R1-R5 below are decided by
 //! syntax only and carry no exception table.
 
 use std::collections::BTreeSet;
@@ -10,6 +10,8 @@ use syn::{Item, UseTree, Visibility};
 
 const SOURCE_ROOTS: &[&str] = &["src", "crates"];
 const MEMBER_ROOTS: &[&str] = &["crates", "scratch"];
+const DOMAIN_CRATES_ROOT: &str = "crates";
+const DATA_LOGIC_SPLIT_MODULE_NAMES: &[&str] = &["components", "systems"];
 const BUILD_OUTPUT_DIRECTORY: &str = "target";
 const MODULE_ROOT_FILE_NAMES: &[&str] = &["mod.rs", "lib.rs"];
 const PATH_ROOT_KEYWORDS: &[&str] = &["crate", "super"];
@@ -237,6 +239,16 @@ fn find_dual_paths(items: &[Item]) -> Vec<String> {
         .collect()
 }
 
+fn find_public_data_logic_split(items: &[Item]) -> Vec<String> {
+    collect_public_module_names(items)
+        .into_iter()
+        .filter(|module| DATA_LOGIC_SPLIT_MODULE_NAMES.contains(&module.as_str()))
+        .map(|module| {
+            format!("R5: `pub mod {module}` puts the data / logic split on the public path")
+        })
+        .collect()
+}
+
 fn find_dependency_reexports(items: &[Item]) -> Vec<String> {
     let scope_names = collect_private_scope_names(items);
     let comes_from_dependency = |reexport: &Reexport| {
@@ -318,6 +330,19 @@ fn dependencies_are_reexported_only_as_types_and_constants() {
     assert_no_violations(
         "re-exported dependency globs, modules or functions",
         &|file| find_violations_in_every_scope(&file.items, &find_dependency_reexports),
+    );
+}
+
+#[test]
+fn domain_crates_keep_the_data_logic_split_private() {
+    assert_no_violations(
+        "public `components` / `systems` modules in crates",
+        &|file| {
+            if !file.relative_path.starts_with(DOMAIN_CRATES_ROOT) {
+                return Vec::new();
+            }
+            find_violations_in_every_scope(&file.items, &find_public_data_logic_split)
+        },
     );
 }
 

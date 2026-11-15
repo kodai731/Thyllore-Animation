@@ -17,7 +17,7 @@ use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{BoneId, ConstraintType, Skeleton, SkeletonId};
-use thyllore_exporter_core::systems::fbx::clusters_from_skin_data;
+use thyllore_exporter_core::fbx::clusters_from_skin_data;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 fn edited_skeleton_mut(assets: &mut AssetStorage) -> anyhow::Result<(SkeletonId, &mut Skeleton)> {

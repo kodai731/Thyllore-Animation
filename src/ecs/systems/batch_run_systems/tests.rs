@@ -9,9 +9,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::MotionPath;
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
-    BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction, ScheduledBatchActions,
-    TimelineState,
+    BatchAnimEdit, BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule,
+    ClipLibrary, DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction,
+    ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
@@ -728,7 +728,7 @@ fn anim_edit_parses_clip_specs() {
 #[test]
 fn copilot_extend_parses_role_axis_time_frames() {
     use super::anim_edit_spec::anim_edit_parse_spec;
-    use super::BoneAxis;
+    use crate::ecs::resource::BoneAxis;
 
     let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
     match edit {

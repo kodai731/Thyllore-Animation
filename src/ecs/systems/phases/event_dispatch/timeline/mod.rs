@@ -6,5 +6,4 @@ mod history;
 mod keyframe;
 mod tangent;
 
-pub use crate::ecs::systems::timeline::keyframe_edit::ExtrapolationEnd;
 pub use command::TimelineEvent;

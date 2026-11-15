@@ -25,7 +25,7 @@ use super::curve_buffer::dispatch_curve_buffer_events;
 use super::history::ClipSnapshot;
 use super::keyframe::apply_keyframe_edits;
 use super::tangent::apply_tangent_edits;
-use super::ExtrapolationEnd;
+use crate::ecs::systems::timeline::keyframe_edit::ExtrapolationEnd;
 
 #[derive(Clone, Debug)]
 pub enum TimelineEvent {

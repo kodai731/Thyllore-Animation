@@ -9,7 +9,7 @@ use super::anim_edit_spec::anim_edits_resolve_from_args;
 use super::batch_action::BatchAction;
 use super::debug_actions::{debug_actions_resolve_from_args, scheduled_actions_resolve_from_args};
 use super::flags::*;
-use super::BatchAnimEdit;
+use crate::ecs::resource::BatchAnimEdit;
 
 #[derive(Clone, Debug)]
 pub struct AnimDebugDumpRequest {

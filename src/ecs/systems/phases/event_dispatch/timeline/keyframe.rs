@@ -96,7 +96,7 @@ pub(super) fn apply_keyframe_edits(
 mod tests {
     use super::*;
     use crate::ecs::resource::CurveTrackRef;
-    use crate::ecs::systems::phases::event_dispatch::timeline::ExtrapolationEnd;
+    use crate::ecs::systems::timeline::keyframe_edit::ExtrapolationEnd;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
     use thyllore_anim_core::editable::{
         curve_add_keyframe, curve_sample, CurveExtrapolation, EditableAnimationClip, PropertyType,

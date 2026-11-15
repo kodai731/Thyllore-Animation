@@ -8,7 +8,8 @@ use super::window::ALL_PROPERTY_TYPES;
 use crate::ecs::component::scalar_channel_for_property;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
-use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::timeline::keyframe_edit::ExtrapolationEnd;
 use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use thyllore_anim_core::editable::{

@@ -4,11 +4,11 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::{begin_single_time_commands, end_single_time_commands, RRCommandPool};
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::descriptor::ReflectedSetLayout;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::create_buffer;
+use crate::resource::{create_image, create_image_view};
+use crate::resource::{GpuResource, OwnedDescriptorSet};
 use crate::types::Instance;
 use thyllore_spirv_reflect::ShaderBinding;
 

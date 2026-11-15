@@ -1,5 +1,5 @@
-use crate::editable::components::curve::PropertyCurve;
-use crate::editable::components::keyframe::KeyframeId;
+use crate::editable::KeyframeId;
+use crate::editable::PropertyCurve;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TweenKind {
@@ -64,8 +64,8 @@ fn blend_to_neighbor(curve: &PropertyCurve, sel_pos: usize, factor: f32) -> Opti
 }
 
 fn breakdown(
-    prev: Option<&crate::editable::components::keyframe::EditableKeyframe>,
-    next: Option<&crate::editable::components::keyframe::EditableKeyframe>,
+    prev: Option<&crate::editable::EditableKeyframe>,
+    next: Option<&crate::editable::EditableKeyframe>,
     factor: f32,
 ) -> Option<f32> {
     let prev = prev?;
@@ -120,8 +120,8 @@ fn smooth(curve: &PropertyCurve, sel_pos: usize, factor: f32) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editable::components::curve::PropertyType;
-    use crate::editable::components::keyframe::EditableKeyframe;
+    use crate::editable::EditableKeyframe;
+    use crate::editable::PropertyType;
 
     fn make_curve(times_values: &[(f32, f32)]) -> PropertyCurve {
         let mut curve = PropertyCurve::new(0, PropertyType::TranslationX);

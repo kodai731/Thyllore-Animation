@@ -1,13 +1,13 @@
 use anyhow::Result;
 
 use crate::ecs::component::RenderInfo;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{
+use crate::ecs::resource::BillboardData;
+use crate::ecs::resource::GridMeshData;
+use crate::ecs::resource::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,
 };
-use crate::ecs::resource::GridMeshData;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use thyllore_render_core::MeshBuffers;
 use thyllore_vulkan_core::renderer::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,

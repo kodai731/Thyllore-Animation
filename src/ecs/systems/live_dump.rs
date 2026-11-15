@@ -18,12 +18,12 @@ use crate::ecs::systems::animation_debug_dump::{
 use crate::ecs::systems::batch_run_systems::batch_anim_dump_json;
 use crate::ecs::systems::label_stage_timings;
 use crate::ecs::systems::phases::TRANSFORM_PROPAGATE_PHASE;
+use crate::ecs::world::World;
 use crate::ecs::FrameContext;
-use crate::ecs::World;
 use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
-use crate::scratch::loader::LoadScratchJob;
+use crate::scratch::LoadScratchJob;
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub const LIVE_DUMP_DIRECTORY: &str = "log/live_dump";
 const REPLY_TIMEOUT: Duration = Duration::from_secs(30);

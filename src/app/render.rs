@@ -1,9 +1,9 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::App;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
-use crate::ecs::systems::render_data_systems::{
+use crate::ecs::resource::{GridGizmoData, LightGizmoData};
+use crate::ecs::systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
 use crate::vulkanr::context::{
@@ -485,7 +485,7 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
-            use crate::ecs::systems::camera_systems::compute_camera_position;
+            use crate::ecs::systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
         };
 
@@ -613,7 +613,7 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
-            use crate::ecs::systems::camera_systems::compute_camera_position;
+            use crate::ecs::systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
         };
 

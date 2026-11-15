@@ -1,5 +1,5 @@
 use crate::ecs::world::Entity;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use crate::platform::ui::ui_rows::ChoiceOption;
 
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn effect_instances_fallback_names() {
-        let world = crate::ecs::World::new();
+        let world = crate::ecs::world::World::new();
         let (instances, selected) = effect_instances(&world, &[], 0, "Wind");
         assert!(instances.is_empty());
         assert_eq!(selected, 0);

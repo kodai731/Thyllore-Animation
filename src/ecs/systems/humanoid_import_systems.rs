@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use glam::{Quat, Vec3};
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::components::track::BoneTrack;
-use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+use thyllore_anim_core::editable::BoneTrack;
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_anim_core::editable::{curve_add_keyframe, curve_sample};
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::components::vrm_version::VrmVersion;
@@ -216,10 +216,10 @@ fn key_standard_pose(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_anim_core::editable::components::curve::PropertyCurve;
+    use thyllore_anim_core::editable::PropertyCurve;
 
     use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
-    use crate::ecs::systems::humanoid_bake_systems::bake_to_bone_clip;
+    use crate::ecs::systems::bake_to_bone_clip;
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };

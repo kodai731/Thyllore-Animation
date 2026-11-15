@@ -56,7 +56,10 @@ static RENDER_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-fn waypoint_items(_world: &crate::ecs::World, view: &LightningSectionView) -> Vec<(String, usize)> {
+fn waypoint_items(
+    _world: &crate::ecs::world::World,
+    view: &LightningSectionView,
+) -> Vec<(String, usize)> {
     view.waypoints
         .iter()
         .enumerate()
@@ -101,12 +104,13 @@ pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSe
         label: "Preset",
         options: |_, view: &LightningSectionView| {
             preset_options(
-                thyllore_effect_core::LIGHTNING_PRESET_NAMES,
+                thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES,
                 view.preset.as_deref(),
             )
         },
         pick: |view, index| {
-            view.preset = Some(thyllore_effect_core::LIGHTNING_PRESET_NAMES[index].to_string());
+            view.preset =
+                Some(thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[index].to_string());
         },
     });
 

@@ -1,9 +1,7 @@
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::{CurveExtrapolation, PropertyCurve, PropertyType};
-use crate::editable::components::keyframe::{
-    BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
-};
-use crate::editable::systems::tangent::{apply_auto_tangent, sample_bezier, split_bezier};
+use crate::editable::EditableAnimationClip;
+use crate::editable::{apply_auto_tangent, sample_bezier, split_bezier};
+use crate::editable::{BezierHandle, EditableKeyframe, InterpolationType, KeyframeId};
+use crate::editable::{CurveExtrapolation, PropertyCurve, PropertyType};
 use crate::BoneId;
 
 enum CurveEnd {

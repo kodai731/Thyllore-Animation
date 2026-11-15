@@ -1,6 +1,6 @@
 use super::segment::{compute_distance, push_segment, Segment};
-use crate::lightning::effect::LIGHTNING_MAX_WAYPOINTS;
-use crate::LightningEffect;
+use crate::lightning::LightningEffect;
+use crate::lightning::LIGHTNING_MAX_WAYPOINTS;
 use glam::{Quat, Vec3};
 use thyllore_math_core::{hash_f32, hash_u32};
 

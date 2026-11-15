@@ -1,4 +1,4 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::pipeline::{RRPipeline, RRRayTracingPipeline};
 use crate::types::CommandBuffer;
 use crate::vulkan::*;

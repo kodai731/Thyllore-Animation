@@ -1,4 +1,4 @@
-use crate::asset::storage::AssetStorage;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
@@ -39,11 +39,8 @@ pub fn query_clip_tracks(
                     .unwrap_or_else(|| format!("Clip {}", inst.source_id));
 
                 let group_id =
-                    crate::ecs::systems::clip_schedule_systems::clip_schedule_find_group(
-                        schedule,
-                        inst.instance_id,
-                    )
-                    .map(|g| g.id);
+                    crate::ecs::systems::clip_schedule_find_group(schedule, inst.instance_id)
+                        .map(|g| g.id);
 
                 ClipInstanceSnapshot {
                     instance_id: inst.instance_id,

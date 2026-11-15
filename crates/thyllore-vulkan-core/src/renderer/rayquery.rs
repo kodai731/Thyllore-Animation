@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRRayQueryDescriptorSet;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::RRGBuffer;
+use crate::FrameRenderContext;
 
 pub unsafe fn record_ray_query_pass(
     ctx: &FrameRenderContext,

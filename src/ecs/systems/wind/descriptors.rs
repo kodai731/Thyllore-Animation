@@ -1,13 +1,13 @@
 use anyhow::Result;
 
-use thyllore_effect_core::WindUBO;
+use thyllore_effect_core::wind::WindUBO;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::{wind_resolve, wind_shadow_bake};
 use thyllore_vulkan_core::descriptor::{
     DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WIND_RESOLVE,
     WIND_SHADOW_BAKE,
 };
-use thyllore_vulkan_core::resource::image::create_scene_depth_sampler;
+use thyllore_vulkan_core::resource::create_scene_depth_sampler;
 use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer, VolumeImage};
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 

@@ -1,4 +1,4 @@
-pub mod mesh;
+mod mesh;
 mod scale;
 mod skeleton;
 mod skeleton_edit;

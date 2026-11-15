@@ -4,9 +4,10 @@ use std::io::Write;
 use serde_json::{json, Value};
 
 use crate::ecs::resource::{FlameDumpSink, FlameHistorySnapshotState};
-use thyllore_effect_core::{
-    build_flame_ubo, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO, WallProbeView,
+use thyllore_effect_core::flame::{
+    build_flame_ubo, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
 };
+use thyllore_effect_core::WallProbeView;
 
 /// Dumps are written under fixed names, overwritten on the next dump, so the directory never grows.
 pub const FLAME_DUMP_DIRECTORY: &str = "log/flame";
@@ -116,29 +117,31 @@ pub fn build_effect_json(
     value["branch_spawn_height"] = json!(effect.branch.spawn_height);
     value["branch_spawn_range"] = json!(effect.branch.spawn_range);
     value["branch_seed"] = json!(effect.branch.seed);
-    let strain = thyllore_effect_core::build_warp_strain_params(effect);
+    let strain = thyllore_effect_core::flame::build_warp_strain_params(effect);
     value["warp_strain_params"] = json!([
         strain.strain_base,
         strain.strain_tip,
         strain.inv_reach,
         strain.inv_strain_norm,
     ]);
-    value["warp_strain_cap"] = json!(thyllore_effect_core::flame_wave::WARP_STRAIN_CAP);
-    value["warp_form"] = json!(if thyllore_effect_core::read_env_warp_form_displacement() {
-        "disp"
-    } else {
-        "seq"
-    });
+    value["warp_strain_cap"] = json!(thyllore_effect_core::flame::WARP_STRAIN_CAP);
+    value["warp_form"] = json!(
+        if thyllore_effect_core::flame::read_env_warp_form_displacement() {
+            "disp"
+        } else {
+            "seq"
+        }
+    );
     value["warp_strain_norm"] = json!(if strain.inv_strain_norm > 0.0 {
         1.0 / strain.inv_strain_norm
     } else {
         0.0
     });
     value["unified_field"] = json!({
-        "active": thyllore_effect_core::read_env_wave_unified(),
-        "window_beta": thyllore_effect_core::read_env_unified_beta(),
-        "tilt_gain_b": thyllore_effect_core::read_env_unified_tilt_gain_b(),
-        "tilt_gain_w": thyllore_effect_core::read_env_unified_tilt_gain_w(),
+        "active": thyllore_effect_core::flame::read_env_wave_unified(),
+        "window_beta": thyllore_effect_core::flame::read_env_unified_beta(),
+        "tilt_gain_b": thyllore_effect_core::flame::read_env_unified_tilt_gain_b(),
+        "tilt_gain_w": thyllore_effect_core::flame::read_env_unified_tilt_gain_w(),
     });
     value["baked_blend"] = json!(baked.blend);
     value["baked_envelope"] = json!(baked.envelope.map(|a| a.to_vec()));
@@ -185,8 +188,10 @@ pub fn build_ubo_json(ubo: &FlameUBO) -> serde_json::Value {
     })
 }
 
-fn build_branch_field_json(field: &thyllore_effect_core::FlameBranchField) -> serde_json::Value {
-    let count = (field.count as usize).min(thyllore_effect_core::BRANCH_MAX_ELEMENTS);
+fn build_branch_field_json(
+    field: &thyllore_effect_core::flame::FlameBranchField,
+) -> serde_json::Value {
+    let count = (field.count as usize).min(thyllore_effect_core::flame::BRANCH_MAX_ELEMENTS);
     json!({
         "count": field.count,
         "period": field.period,
@@ -316,7 +321,7 @@ pub fn flame_dump_system(
 }
 
 pub fn build_wall_probe_camera_json(camera: &crate::ecs::resource::Camera) -> Value {
-    use crate::ecs::systems::camera_systems::{
+    use crate::ecs::systems::{
         compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
     };
     let position = compute_camera_position(camera);
@@ -389,7 +394,7 @@ pub fn build_wall_probe_json(report: &thyllore_effect_core::WallProbeReport) -> 
 }
 
 /// Declared field composition for the dump: which noise was active, driving what, gated by which parameter.
-pub fn build_field_manifest_json(manifest: &thyllore_effect_core::FieldManifest) -> Value {
+pub fn build_field_manifest_json(manifest: &thyllore_effect_core::flame::FieldManifest) -> Value {
     json!({
         "summary": manifest.summary(),
         "active_sources": manifest
@@ -441,7 +446,7 @@ pub fn build_wall_probe_dump_record(
             entry.insert("wall_probe".to_string(), build_wall_probe_json(report));
             entry.insert(
                 "field_manifest".to_string(),
-                build_field_manifest_json(&thyllore_effect_core::flame_field_manifest(effect)),
+                build_field_manifest_json(&thyllore_effect_core::flame::flame_field_manifest(effect)),
             );
             Value::Object(entry)
         }).collect::<Vec<_>>()
@@ -598,7 +603,7 @@ mod tests {
     use glam::{Quat, Vec2, Vec3};
 
     fn sample_effect() -> FlameEffect {
-        use thyllore_effect_core::{
+        use thyllore_effect_core::flame::{
             FlameColor, FlameEdge, FlameEnvelope, FlameNoise, FlameWarp, FlameWind,
         };
         FlameEffect {
@@ -624,8 +629,8 @@ mod tests {
             time: 0.0,
             time_scale: 1.0,
             time_offset: 0.0,
-            coefficients: thyllore_effect_core::fit_flame_coefficients(
-                &thyllore_effect_core::FlameProfile::default(),
+            coefficients: thyllore_effect_core::flame::fit_flame_coefficients(
+                &thyllore_effect_core::flame::FlameProfile::default(),
             ),
             light_position_world: Vec3::new(2.0, 3.0, 2.0),
             self_shadow_strength: 0.5,
@@ -712,7 +717,7 @@ mod tests {
         let mut effect = sample_effect();
         effect.noise.amplitude = 1.5;
         effect.boundary.amp = 0.2;
-        let manifest = thyllore_effect_core::flame_field_manifest(&effect);
+        let manifest = thyllore_effect_core::flame::flame_field_manifest(&effect);
         let value = build_field_manifest_json(&manifest);
         assert!(value["summary"]
             .as_str()

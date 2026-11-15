@@ -1,6 +1,6 @@
 use super::{build_strike_segments, path::build_waypoint_path, Segment};
-use crate::lightning::effect::LightningSource;
-use crate::LightningEffect;
+use crate::lightning::LightningEffect;
+use crate::lightning::LightningSource;
 use thyllore_math_core::hash_u32;
 
 pub(super) fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {

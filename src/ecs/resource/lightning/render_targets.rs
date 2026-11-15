@@ -1,4 +1,4 @@
-use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
+use thyllore_effect_core::lightning::{LightningSegmentsUBO, LightningUBO};
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};
 

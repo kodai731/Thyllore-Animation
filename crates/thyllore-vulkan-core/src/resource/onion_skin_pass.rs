@@ -5,8 +5,8 @@ use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::onion_skin_composite;
 use crate::descriptor::{onion_skin_composite_layout_spec, ReflectedSetLayout};
 use crate::pipeline::RRPipeline;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::GpuResource;
+use crate::resource::{create_image, create_image_view};
 use crate::types::Instance;
 
 pub(crate) const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;

@@ -1,13 +1,13 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
-use crate::ecs::compute_local_time;
 use crate::ecs::resource::{
     BakedHumanoidClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
 };
+use crate::ecs::systems::compute_local_time;
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use thyllore_anim_core::editable::{BlendMode, EaseType, SourceClipId};
 use thyllore_anim_core::SkeletonId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 
@@ -44,8 +44,7 @@ pub(crate) fn collect_animated_entities(
         .filter(|timeline| timeline.preview == ClipPreview::Solo)
         .and_then(|timeline| timeline.current_clip_id);
     let solo_preview = solo_clip_id.and_then(|clip_id| {
-        crate::ecs::systems::clip_schedule_systems::find_preview_owner(world)
-            .map(|owner| (owner, clip_id))
+        crate::ecs::systems::find_preview_owner(world).map(|owner| (owner, clip_id))
     });
 
     let empty_baked = BakedHumanoidClips::default();
@@ -174,10 +173,7 @@ pub(crate) fn build_active_instances(
     baked: &BakedHumanoidClips,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
-    let active = crate::ecs::systems::clip_schedule_systems::clip_schedule_active_instances(
-        schedule,
-        animator.time,
-    );
+    let active = crate::ecs::systems::clip_schedule_active_instances(schedule, animator.time);
 
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
@@ -194,10 +190,8 @@ pub(crate) fn build_active_instances(
                 animator.looping,
             );
 
-            let weight = crate::ecs::systems::clip_schedule_systems::clip_schedule_effective_weight(
-                schedule,
-                inst.instance_id,
-            );
+            let weight =
+                crate::ecs::systems::clip_schedule_effective_weight(schedule, inst.instance_id);
 
             Some(ActiveInstanceInfo {
                 asset_id,
@@ -254,7 +248,7 @@ pub(crate) fn build_solo_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+    use crate::ecs::systems::clip_schedule_add_instance;
     use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
 
     fn register_clip(clip_library: &mut ClipLibrary, clip_id: SourceClipId, duration: f32) {

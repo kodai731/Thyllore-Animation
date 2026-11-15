@@ -1,6 +1,6 @@
 use crate::ecs::resource::{ClipLibrary, FrameClock, TimelineState};
 use crate::ecs::storage::Component;
-use crate::ecs::systems::scalar_clip_systems::{find_entity_clip_id, sampled_scalar_values};
+use crate::ecs::systems::{find_entity_clip_id, sampled_scalar_values};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
 use thyllore_anim_core::editable::EditableAnimationClip;

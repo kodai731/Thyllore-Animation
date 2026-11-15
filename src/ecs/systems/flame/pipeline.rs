@@ -1,7 +1,7 @@
 use crate::ecs::resource::FlameGpuState;
 use crate::ecs::systems::flame::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use anyhow::Result;
-use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
+use thyllore_effect_core::flame::{FlameUBO, FLAME_MAX_INSTANCES};
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::FLAME_RESOLVE;
 use thyllore_vulkan_core::render::RRRender;

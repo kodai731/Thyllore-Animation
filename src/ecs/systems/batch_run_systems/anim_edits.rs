@@ -38,9 +38,7 @@ fn apply_settle_requests(
         return;
     };
     let mut session =
-        match thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
-            &model_path,
-        ) {
+        match thyllore_ml_core::v2::inference::V2CurveCopilotSession::from_onnx_path(&model_path) {
             Ok(s) => s,
             Err(e) => {
                 log_warn!("compose settle: failed to load model: {}", e);
@@ -135,7 +133,7 @@ fn insert_bone_key(
         BoneAxis::TranslationY => &mut track.translation_y,
         BoneAxis::TranslationZ => &mut track.translation_z,
     };
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    use thyllore_anim_core::editable::curve_add_keyframe;
     curve_add_keyframe(curve, time, value);
     if time > clip.duration {
         clip.duration = time;
@@ -219,7 +217,7 @@ pub fn batch_apply_anim_edits(
         }
     }
 
-    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
+    crate::ecs::systems::request_bake_scan(world);
 }
 
 fn apply_debug_keys(world: &mut World, assets: &mut AssetStorage, seed: u64) {
@@ -291,9 +289,7 @@ fn apply_key_at_playhead(
 }
 
 fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
-    use crate::ecs::systems::scalar_clip_systems::{
-        ensure_entity_clip, resolve_selected_scalar_entity,
-    };
+    use crate::ecs::systems::{ensure_entity_clip, resolve_selected_scalar_entity};
     let Some((entity, domain)) = resolve_selected_scalar_entity(world) else {
         return;
     };
@@ -317,7 +313,7 @@ fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
 }
 
 fn apply_new_clip(world: &mut World, assets: &mut AssetStorage, name: &str) {
-    let clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip(name);
+    let clip = crate::ecs::systems::new_empty_clip(name);
     let id = crate::ecs::systems::clip_library_register_and_activate(
         &mut world.resource_mut::<ClipLibrary>(),
         assets,
@@ -335,7 +331,7 @@ fn apply_template(world: &mut World, assets: &mut AssetStorage, path: &std::path
         }
     };
     if let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) {
-        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(&mut loaded, &table);
+        thyllore_anim_core::editable::clip_remap_bone_ids(&mut loaded, &table);
     }
     remove_clip_by_name(world, assets, &loaded.name);
     let id = crate::ecs::systems::clip_library_register_and_activate(
@@ -402,10 +398,8 @@ fn try_apply_copilot_extend(
     let model_path = crate::ml::resolve_curve_copilot_model_path()
         .context("curve copilot model not found, skipping")?;
     let mut session =
-        thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
-            &model_path,
-        )
-        .context("failed to load model")?;
+        thyllore_ml_core::v2::inference::V2CurveCopilotSession::from_onnx_path(&model_path)
+            .context("failed to load model")?;
     let table = crate::ecs::systems::engine_bone_name_to_id(world, assets)
         .context("no bone name table available, skipping")?;
     let &bone_id = table

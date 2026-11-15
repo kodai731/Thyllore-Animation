@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::ecs::resource::WaterGpuState;
-use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
+use crate::ecs::systems::ensure_effect_trace_pipeline;
 use crate::ecs::systems::water::caustic_descriptors::{
     write_water_caustic_apply_set, write_water_caustic_splat_set, WaterCausticBindings,
 };

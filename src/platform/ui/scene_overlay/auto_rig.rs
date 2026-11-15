@@ -5,7 +5,7 @@ use crate::ecs::component::GlbSource;
 use crate::ecs::resource::{AutoRigState, AutoRigStatus, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::world::Parent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::text_to_animation_dialog::TextToAnimationDialogState;
 use crate::platform::ui::text_to_mesh_dialog::TextToMeshDialogState;
 

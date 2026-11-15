@@ -88,8 +88,8 @@ impl RRDevice {
     }
 
     #[inline]
-    pub fn msaa_samples(&self) -> crate::pipeline::builder::SampleCount {
-        crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples)
+    pub fn msaa_samples(&self) -> crate::pipeline::SampleCount {
+        crate::pipeline::SampleCount::from_raw(self.msaa_samples)
     }
 
     pub(crate) unsafe fn new(

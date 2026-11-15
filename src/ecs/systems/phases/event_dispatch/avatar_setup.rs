@@ -17,7 +17,7 @@ use crate::ecs::systems::{
 use crate::ecs::world::World;
 use thyllore_anim_core::BoneId;
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum AvatarSetupEvent {

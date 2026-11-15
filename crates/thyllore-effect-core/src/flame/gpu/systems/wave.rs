@@ -14,7 +14,7 @@ fn parse_mode_mask(mask: &str) -> std::collections::HashSet<usize> {
             let inner = &part[1..];
             let excluded: std::collections::HashSet<usize> = parse_mode_mask(inner);
             // Collect all indices up to WAVE_MODE_COUNT and subtract excluded
-            for i in 0..crate::flame_wave::WAVE_MODE_COUNT {
+            for i in 0..crate::flame::WAVE_MODE_COUNT {
                 if !excluded.contains(&i) {
                     result.insert(i);
                 }
@@ -69,16 +69,16 @@ pub(super) fn build_wave_cf_params() -> FlameWaveCfParams {
 
 pub(super) struct WaveUboFields {
     pub(super) shaping: FlameWaveShaping,
-    pub(super) packed: [[f32; 4]; 2 * crate::flame_wave::WAVE_MODE_SLOTS],
+    pub(super) packed: [[f32; 4]; 2 * crate::flame::WAVE_MODE_SLOTS],
     pub(super) skipped_power: [f32; 2],
-    pub(super) jitter: [[f32; 4]; crate::flame_wave::WAVE_MODE_COUNT],
+    pub(super) jitter: [[f32; 4]; crate::flame::WAVE_MODE_COUNT],
     /// Std of the low-octave erosion carrier zLow (the envelope modes), before
     /// the tanh shaping; the mixing window is expressed in these units.
     pub(super) low_carrier_std: f32,
 }
 
 pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
-    use crate::flame_wave::{
+    use crate::flame::{
         build_unified_erosion_modes, generate_wave_cf_shear_layers, generate_wave_detail_modes,
         generate_wave_modes_with_ratio, generate_wave_warp_modes, wave_cf_chebyshev_tables,
         wave_cf_depth_scale, wave_shaping_params, WAVE_CF_CHEB_COEFFS, WAVE_CF_SHEAR_SLOT,
@@ -88,7 +88,7 @@ pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
     let mut packed = [[0.0f32; 4]; 2 * WAVE_MODE_SLOTS];
     let k_ratio = read_env_wave_k_ratio();
     let unified = read_env_wave_unified();
-    let mut erosion_modes: Vec<crate::flame_wave::WaveMode> = if unified {
+    let mut erosion_modes: Vec<crate::flame::WaveMode> = if unified {
         build_unified_erosion_modes(
             k_ratio,
             read_env_wave_env_mu(),
@@ -97,7 +97,7 @@ pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
         )
     } else {
         let mut modes = generate_wave_modes_with_ratio(k_ratio).to_vec();
-        crate::flame_wave::apply_wave_envelope(&mut modes, read_env_wave_env_mu());
+        crate::flame::apply_wave_envelope(&mut modes, read_env_wave_env_mu());
         modes
     };
 
@@ -105,9 +105,8 @@ pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
     // is the low-wavenumber part of the spectrum; aggregate the skipped modes'
     // variance per octave class (the high class rides the shared low-octave
     // envelope, whose coefficient is uniform across modes).
-    let k_mag = |m: &crate::flame_wave::WaveMode| {
-        (m.k[0] * m.k[0] + m.k[1] * m.k[1] + m.k[2] * m.k[2]).sqrt()
-    };
+    let k_mag =
+        |m: &crate::flame::WaveMode| (m.k[0] * m.k[0] + m.k[1] * m.k[1] + m.k[2] * m.k[2]).sqrt();
     erosion_modes.sort_by(|a, b| k_mag(a).total_cmp(&k_mag(b)));
 
     // Mode ablation: if THYLLORE_FLAME_WAVE_MODE_MASK is set, zero the amplitude
@@ -199,14 +198,14 @@ pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
         .iter()
         .enumerate()
     {
-        let slot = crate::flame_wave::WAVE_MEDIUM_SWIRL_BASE + i;
+        let slot = crate::flame::WAVE_MEDIUM_SWIRL_BASE + i;
         packed[2 * slot] = [mode.k[0], mode.k[1], mode.k[2], mode.amplitude];
         // The swirl displacement is horizontal (c.y = 0), so the free .z lane
         // carries the phase-drift rate: [phase, c.x, drift_rate, c.z].
         packed[2 * slot + 1] = [
             mode.phase,
             mode.curl_direction[0],
-            crate::flame_wave::medium_swirl_phase_rate(i, mode.k) * effect.swirl.speed.max(0.0),
+            crate::flame::medium_swirl_phase_rate(i, mode.k) * effect.swirl.speed.max(0.0),
             mode.curl_direction[2],
         ];
     }
@@ -221,14 +220,14 @@ pub(super) fn build_wave_ubo_fields(effect: &FlameEffect) -> WaveUboFields {
         wave_shaping_params(tanh_scale)
     };
     amplitude *= (effect.noise.amplitude.abs() / NOISE_AMPLITUDE_REF).powf(SHAPING_GAMMA);
-    let jitter_scale = crate::flame_wave::read_env_wave_jitter();
+    let jitter_scale = crate::flame::read_env_wave_jitter();
     let mut jitter = [[0.0f32; 4]; WAVE_MODE_COUNT];
     for (slot, mode) in jitter.iter_mut().zip(erosion_modes.iter()) {
         slot[0] = mode.jitter[0] * jitter_scale;
         slot[1] = mode.jitter[1] * jitter_scale;
         slot[2] = mode.jitter[2] * jitter_scale;
     }
-    jitter[0][3] = crate::flame_wave::read_env_wave_jitter_freq();
+    jitter[0][3] = crate::flame::read_env_wave_jitter_freq();
     WaveUboFields {
         shaping: FlameWaveShaping {
             tracked_count: tracked as f32,
@@ -262,7 +261,7 @@ pub fn build_unified_field_params(effect: &FlameEffect) -> FlameUnifiedParams {
         return inactive;
     }
     let amplitude_ratio = (effect.noise.amplitude.abs() / NOISE_AMPLITUDE_REF).powf(SHAPING_GAMMA);
-    let std = crate::flame_wave::unified_noise_std(
+    let std = crate::flame::unified_noise_std(
         read_env_wave_k_ratio(),
         read_env_wave_env_mu(),
         effect.boundary.amp * read_env_unified_tilt_gain_b(),

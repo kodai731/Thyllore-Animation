@@ -77,7 +77,7 @@ directly. Local turnaround is ~30s incremental vs minutes per CI round-trip.
 ### ML path: v2 curve-copilot only
 
 The only supported ML inference path is the **v2 curve-copilot** model
-(`V2CurveCopilotSession` / `forecast`, under `copilot::v2::`,
+(`V2CurveCopilotSession` / `forecast`, under `thyllore_ml_core::v2::`,
 `curve_copilot_20260630_v2_k48opt.onnx`). v2 is reveal-none extrapolation:
 4 ONNX inputs (`context` / `context_times` / `future_times` / `context_tangent`,
 all `[batch, 64]`), no `future` / `reveal_mask`. The Rust runtime does the

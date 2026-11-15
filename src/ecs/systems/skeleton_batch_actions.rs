@@ -9,7 +9,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::batch_run_systems::{unit_action_parse, BatchAction};
 

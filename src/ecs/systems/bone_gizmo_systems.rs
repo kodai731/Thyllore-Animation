@@ -3,15 +3,15 @@ use glam::{Mat4, Vec3, Vec4};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::{
+use crate::ecs::resource::MeshAssets;
+use crate::ecs::resource::{
     BoneGizmoData, BoneSelectionState, ConstraintGizmoData, SpringBoneGizmoData,
 };
-use crate::ecs::resource::MeshAssets;
 use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::world::World;
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
 use thyllore_anim_core::Skeleton;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 use thyllore_importer_core::ModelLoadResult;
 use thyllore_math_core::ScreenSpaceScale;
 use thyllore_math_core::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
@@ -1006,12 +1006,12 @@ fn append_sphere_wire_colored(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
     use glam::UVec4;
     use thyllore_anim_core::SkinData;
+    use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
     use thyllore_importer_core::{LoadedNode, ModelLoadResult};
     use thyllore_vulkan_core::data::{Vertex, VertexData};
-    use thyllore_vulkan_core::resource::graphics_resource::MeshBuffer;
+    use thyllore_vulkan_core::resource::MeshBuffer;
 
     fn make_mesh_buffer_single_triangle(
         bone_indices: [[u32; 4]; 3],
@@ -1406,20 +1406,16 @@ mod tests {
         );
     }
 
-    fn to_node_data(
-        nodes: &[LoadedNode],
-    ) -> Vec<thyllore_vulkan_core::resource::graphics_resource::NodeData> {
+    fn to_node_data(nodes: &[LoadedNode]) -> Vec<thyllore_vulkan_core::resource::NodeData> {
         nodes
             .iter()
-            .map(
-                |n| thyllore_vulkan_core::resource::graphics_resource::NodeData {
-                    index: n.index,
-                    name: n.name.clone(),
-                    parent_index: n.parent_index,
-                    local_transform: n.local_transform,
-                    global_transform: Mat4::IDENTITY,
-                },
-            )
+            .map(|n| thyllore_vulkan_core::resource::NodeData {
+                index: n.index,
+                name: n.name.clone(),
+                parent_index: n.parent_index,
+                local_transform: n.local_transform,
+                global_transform: Mat4::IDENTITY,
+            })
             .collect()
     }
 
@@ -1615,7 +1611,7 @@ mod tests {
         let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
         let offsets = compute_bone_local_offsets(skeleton, &transforms);
 
-        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::TransformGizmoData::default();
         let mut at_origin_count = 0u32;
         let mut total = 0u32;
 
@@ -1625,7 +1621,7 @@ mod tests {
             }
             total += 1;
 
-            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+            crate::ecs::systems::transform_gizmo_sync_to_bone(
                 &mut gizmo,
                 Some(idx),
                 &transforms,
@@ -1664,7 +1660,7 @@ mod tests {
 
         let display = compute_display_transforms(&globals, &offsets, 1.0);
 
-        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::TransformGizmoData::default();
         let mut failures = Vec::new();
 
         for (idx, bone) in skeleton.bones.iter().enumerate() {
@@ -1672,7 +1668,7 @@ mod tests {
                 continue;
             }
 
-            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+            crate::ecs::systems::transform_gizmo_sync_to_bone(
                 &mut gizmo,
                 Some(idx),
                 &globals,
@@ -1713,7 +1709,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_finds_bone_transform() {
-        use thyllore_vulkan_core::resource::graphics_resource::NodeData;
+        use thyllore_vulkan_core::resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("mismatched_name", None);
@@ -1742,7 +1738,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_prefers_name_match() {
-        use thyllore_vulkan_core::resource::graphics_resource::NodeData;
+        use thyllore_vulkan_core::resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("correct_name", None);

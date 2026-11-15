@@ -40,14 +40,14 @@ pub fn load_rig_from_fbx_text(
     fs::write(&temp_path, fbx_text.as_bytes()).unwrap();
 
     let fbx_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(temp_path.to_str().unwrap()).unwrap();
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(temp_path.to_str().unwrap()).unwrap();
     fs::remove_file(&temp_path).ok();
 
     nodes_to_fixture(&fbx_model.nodes)
 }
 
 fn nodes_to_fixture(
-    nodes: &HashMap<String, thyllore_importer_core::fbx::fbx::BoneNode>,
+    nodes: &HashMap<String, thyllore_importer_core::fbx::BoneNode>,
 ) -> (
     Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
     thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
@@ -66,7 +66,7 @@ fn nodes_to_fixture(
 
     fn compute_world(
         idx: usize,
-        node_list: &[&thyllore_importer_core::fbx::fbx::BoneNode],
+        node_list: &[&thyllore_importer_core::fbx::BoneNode],
         name_to_index: &HashMap<String, usize>,
         world_transforms: &mut Vec<Option<Mat4>>,
     ) {

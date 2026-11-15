@@ -7,7 +7,7 @@ use crate::ecs::resource::{
     CameraFlyInput, FlySpeedModifier, KeyboardModifiers, MouseInput, ViewportInput,
 };
 
-pub(crate) fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
+pub(crate) fn update_mouse_input(world: &crate::ecs::world::World, ui: &imgui::Ui) {
     let io = ui.io();
     let mut mouse = world.resource_mut::<MouseInput>();
     mouse.position = io.mouse_pos();
@@ -25,7 +25,7 @@ pub(crate) fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     update_camera_fly_input(world, ui);
 }
 
-fn update_camera_fly_input(world: &crate::ecs::World, ui: &imgui::Ui) {
+fn update_camera_fly_input(world: &crate::ecs::world::World, ui: &imgui::Ui) {
     let io = ui.io();
     let mut fly = world.resource_mut::<CameraFlyInput>();
     fly.delta_seconds = io.delta_time();

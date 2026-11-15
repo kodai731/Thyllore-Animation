@@ -4,7 +4,7 @@ use crate::ecs::world::World;
 use crate::platform::ui::form_window::{FormPlacement, FormWindow, TabsSection};
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::export_rows::ExportView;
 use super::humanoid_rows::HumanoidView;
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_commit_stats_change() {
         let mut world = World::new();
-        world.insert_resource(crate::ecs::events::queue::EventQueue::<
+        world.insert_resource(crate::ecs::events::EventQueue::<
             Box<dyn crate::ecs::events::UiCommand>,
         >::default());
         let shown = StatsView {

@@ -1,5 +1,5 @@
 pub use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
-use thyllore_effect_core::WaterUBO;
+use thyllore_effect_core::water::WaterUBO;
 use thyllore_vulkan_core::descriptor::ReflectedDescriptorSets;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};

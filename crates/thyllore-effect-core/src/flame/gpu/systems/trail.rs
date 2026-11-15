@@ -1,5 +1,5 @@
 use crate::flame::*;
-use crate::flame_trail::{FlameTrailSample, FlameTrailState};
+use crate::flame::{FlameTrailSample, FlameTrailState};
 use glam::{Mat3, Mat4, Vec3};
 
 /// Build the expanded model matrix for flame trail rendering.

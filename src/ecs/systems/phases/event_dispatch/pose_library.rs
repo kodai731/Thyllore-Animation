@@ -1,9 +1,9 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory, PoseLibrary, TimelineState};
-use crate::ecs::systems::pose_library_systems::{apply_pose_to_clip, capture_current_pose};
+use crate::ecs::systems::{apply_pose_to_clip, capture_current_pose};
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use thyllore_anim_core::editable::SourceClipId;
 
@@ -39,12 +39,11 @@ fn dispatch_pose_library_events(
                 {
                     drop(clip_library);
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    let pose_id =
-                        crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                            &mut clip_library,
-                            assets,
-                            pose,
-                        );
+                    let pose_id = crate::ecs::systems::clip_library_register_and_activate(
+                        &mut clip_library,
+                        assets,
+                        pose,
+                    );
 
                     let source = clip_library.source_clips.get(&pose_id).cloned();
                     drop(clip_library);

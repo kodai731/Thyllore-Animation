@@ -1,4 +1,4 @@
-use thyllore_effect_core::WindUBO;
+use thyllore_effect_core::wind::WindUBO;
 use thyllore_vulkan_core::descriptor::{OverlayUpsampleDescriptorSet, ReflectedDescriptorSets};
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer};

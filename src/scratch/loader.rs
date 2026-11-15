@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use crate::ecs::world::World;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::job::{ScratchContext, ScratchEntryFn, ScratchJob, ScratchStep, SCRATCH_ENTRY_SYMBOL};
 

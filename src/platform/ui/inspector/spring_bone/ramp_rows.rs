@@ -96,7 +96,7 @@ static RAMP_SCALARS: LazyLock<Vec<ScalarParam<RampFormView>>> = LazyLock::new(||
 });
 
 /// One ramp form per joint of the bone, plus one for the chains hanging under it.
-fn ramp_items(_: &crate::ecs::World, view: &BoneSpringView) -> Vec<(String, RampFormView)> {
+fn ramp_items(_: &crate::ecs::world::World, view: &BoneSpringView) -> Vec<(String, RampFormView)> {
     let form_for = |origin: RampOrigin, chain_id: SpringChainId, targets: &RampTargets| {
         RampFormView::new(
             view.entity,

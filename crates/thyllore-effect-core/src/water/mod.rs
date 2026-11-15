@@ -1,5 +1,5 @@
 mod absorption_color;
-pub mod analytic;
+mod analytic;
 mod effect;
 mod gpu;
 mod ownership;

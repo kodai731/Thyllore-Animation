@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 /// Draw order of the editor: side panels, the viewport, its overlay, the bottom row, then floating windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

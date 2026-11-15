@@ -1,7 +1,7 @@
 use imgui::Ui;
 
 use crate::ecs::resource::{MotionPreference, UiAnimState, UiSettings};
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 pub fn ui_anim(ui: &Ui, world: &World, label: &str, target: f32) -> f32 {
     let id = ui.get_id(label).raw();

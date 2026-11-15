@@ -6,7 +6,7 @@ use crate::app::App;
 use crate::ecs::resource::{
     ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
 };
-use crate::ecs::systems::{humanoid_bake_systems, vrm_humanoid_bones};
+use crate::ecs::systems::{bake_to_bone_clip, vrm_humanoid_bones};
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::Skeleton;
 
@@ -34,7 +34,7 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
             &skeleton,
             path,
             has_skinned_meshes,
-            thyllore_importer_core::fbx::fbx::FbxAxesInfo::default(),
+            thyllore_importer_core::fbx::FbxAxesInfo::default(),
             24.0,
         ),
     };
@@ -213,7 +213,7 @@ pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimatio
         .snap_settings
         .frame_rate
         .round() as u32;
-    match humanoid_bake_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
+    match bake_to_bone_clip(&clip, &skeleton, rig, fps) {
         Ok(baked) => Some((baked, skeleton)),
         Err(e) => {
             msg_error!("Role clip bake failed: {:?}", e);

@@ -1,5 +1,5 @@
 use super::device::*;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 use crate::resource::*;
 use crate::types::Instance;
 use crate::vulkan::*;

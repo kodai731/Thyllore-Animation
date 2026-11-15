@@ -1,7 +1,7 @@
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::core::RRSwapchain;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::render::RRRender;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 use thyllore_vulkan_core::resource::{GpuResource, RRGBuffer};
 
 #[must_use]
@@ -73,7 +73,7 @@ use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::LightState;
 use crate::platform::ImguiData;
 use thyllore_vulkan_core::pipeline::SampleCount;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::types::{Extent2D, Fence};
 
 pub struct RayTracingState {

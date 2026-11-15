@@ -1,6 +1,6 @@
-use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::RRDevice;
+use crate::resource::create_buffer;
+use crate::resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
 

@@ -5,9 +5,10 @@ use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{
     ClipLibrary, GhostFrameInfo, GhostMeshData, OnionSkinningConfig, OnionSkinningResult,
 };
+use crate::ecs::systems::sample_clip_to_pose;
 use crate::ecs::world::{Animator, World};
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
 use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 use thyllore_anim_core::{Skeleton, SkeletonId, SkinData};
 use thyllore_vulkan_core::data::Vertex;
 
@@ -329,7 +330,7 @@ mod tests {
     fn test_compute_ghosts_returns_empty_when_disabled() {
         use crate::asset::AssetStorage;
         use crate::ecs::resource::ClipLibrary;
-        use crate::ecs::World;
+        use crate::ecs::world::World;
         use thyllore_anim_core::SkinData;
 
         let config = OnionSkinningConfig::default();
@@ -352,7 +353,7 @@ mod tests {
     fn test_compute_ghosts_returns_empty_with_no_entities() {
         use crate::asset::AssetStorage;
         use crate::ecs::resource::ClipLibrary;
-        use crate::ecs::World;
+        use crate::ecs::world::World;
         use thyllore_anim_core::SkinData;
 
         let mut config = OnionSkinningConfig::default();

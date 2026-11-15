@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::core::device::RRDevice;
-use crate::descriptor::pass_manifest::OVERLAY_UPSAMPLE;
+use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::overlay_upsample;
+use crate::descriptor::OVERLAY_UPSAMPLE;
 use crate::descriptor::{ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot};
-use crate::resource::gpu_resource::{build_gpu_resource, GpuResource};
-use crate::resource::image::{create_nearest_sampler, create_scene_depth_sampler};
+use crate::resource::{build_gpu_resource, GpuResource};
+use crate::resource::{create_nearest_sampler, create_scene_depth_sampler};
 use crate::types::{ImageView, Sampler};
 
 /// One set per frame slot binding the reduced overlay color and the scene depth of that frame.

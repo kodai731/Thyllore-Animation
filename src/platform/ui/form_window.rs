@@ -1,6 +1,6 @@
 use imgui::Condition;
 
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 

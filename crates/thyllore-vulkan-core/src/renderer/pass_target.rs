@@ -351,7 +351,7 @@ impl ImageStateTracker {
 }
 
 pub unsafe fn record_pending_barriers(
-    rrdevice: &crate::core::device::RRDevice,
+    rrdevice: &crate::core::RRDevice,
     command_buffer: crate::types::CommandBuffer,
     barriers: &[PendingBarrier],
 ) {

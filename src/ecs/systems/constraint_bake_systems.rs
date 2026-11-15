@@ -4,7 +4,8 @@ use glam::{Quat, Vec3};
 
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::{apply_constraints, create_pose_from_rest, sample_clip_to_pose};
+use crate::ecs::systems::{apply_constraints, sample_clip_to_pose};
+use thyllore_anim_core::create_pose_from_rest;
 use thyllore_anim_core::editable::{clip_from_animation, EditableAnimationClip};
 use thyllore_anim_core::{
     AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel,

@@ -2,8 +2,8 @@ use glam::Mat4;
 
 use thyllore_anim_core::spring_bone::SpringBoneSetup;
 use thyllore_anim_core::{AnimationClip, AnimationSystem, Skeleton, SkeletonId, SkinData};
-use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
+use thyllore_model_core::{Vertex, VertexData};
 
 use crate::fbx::{self, LoadedConstraint};
 use crate::gltf;

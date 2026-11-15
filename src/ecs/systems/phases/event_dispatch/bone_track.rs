@@ -4,7 +4,7 @@ use crate::ecs::resource::{ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
 use crate::ecs::world::World;
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Debug)]
 pub struct EnsureBoneTrack {

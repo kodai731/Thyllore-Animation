@@ -4,8 +4,8 @@ use vulkanalia::prelude::v1_0::*;
 use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::renderer::{OverlayAttachmentLoad, OverlayPass};
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::resource::GpuResource;
+use crate::resource::{RenderTargetKey, RenderTargetStorage};
 use crate::types::Instance;
 use crate::types::HDR_FORMAT;
 
@@ -25,7 +25,7 @@ pub struct HistoryTargetsDesc {
     pub keys: [RenderTargetKey; 2],
     pub(crate) format: vk::Format,
     pub(crate) usage: vk::ImageUsageFlags,
-    pub(crate) sampler: crate::resource::image::SamplerDesc,
+    pub(crate) sampler: crate::resource::SamplerDesc,
     pub(crate) history_load_op: vk::AttachmentLoadOp,
     pub(crate) depth_view: Option<vk::ImageView>,
 }
@@ -34,7 +34,7 @@ impl HistoryTargetsDesc {
     pub fn cleared_readback(
         keys: [RenderTargetKey; 2],
         format: crate::types::Format,
-        sampler: crate::resource::image::SamplerDesc,
+        sampler: crate::resource::SamplerDesc,
     ) -> Self {
         Self {
             keys,
@@ -49,7 +49,7 @@ impl HistoryTargetsDesc {
     pub fn with_depth(
         keys: [RenderTargetKey; 2],
         format: crate::types::Format,
-        sampler: crate::resource::image::SamplerDesc,
+        sampler: crate::resource::SamplerDesc,
         depth_view: crate::types::ImageView,
     ) -> Self {
         Self {

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Args;
-use thyllore_effect_core::{
+use thyllore_effect_core::lightning::{
     apply_lightning_preset, LightningDebugView, LightningShadingMode, LIGHTNING_PRESET_NAMES,
     LIGHTNING_SCALAR_PARAMS,
 };

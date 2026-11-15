@@ -10,7 +10,7 @@ pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
 pub const FLAME_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "flame",
-    max_instances: thyllore_effect_core::FLAME_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::flame::FLAME_MAX_INSTANCES,
     spawn: spawn_flame_instance,
     entities: flame_entities,
     default_in_empty_scene: true,
@@ -54,12 +54,7 @@ pub fn spawn_flame_with_clip(
     effect: FlameEffect,
 ) -> Entity {
     let entity = spawn_flame(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &FLAME_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &FLAME_DOMAIN);
     entity
 }
 

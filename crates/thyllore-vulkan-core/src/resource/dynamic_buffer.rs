@@ -4,8 +4,8 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
+use crate::core::RRDevice;
+use crate::resource::create_buffer;
 use crate::types::Instance;
 
 pub struct DynamicUniformBuffer<T: Copy> {

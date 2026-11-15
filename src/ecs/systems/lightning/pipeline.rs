@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::ecs::resource::LightningGpuState;
 use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
 use crate::ecs::systems::lightning::gpu_targets::LightningRenderTargets;
-use thyllore_effect_core::LIGHTNING_MAX_INSTANCES;
+use thyllore_effect_core::lightning::LIGHTNING_MAX_INSTANCES;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::LIGHTNING_RESOLVE;
 use thyllore_vulkan_core::render::RRRender;

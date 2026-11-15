@@ -5,7 +5,7 @@ use crate::ecs::resource::{
     BonePoseOverride, ClipLibrary, ClipPreview, CurveTrackRef, SelectedKeyframe, SelectionModifier,
     TimelineState,
 };
-use crate::ecs::systems::clip_schedule_systems::clip_schedule_switch_source;
+use crate::ecs::systems::clip_schedule_switch_source;
 use crate::ecs::systems::timeline::{
     timeline_apply_selection, timeline_select_clip, timeline_set_keyframe_selection,
     timeline_toggle_track_expanded, timeline_zoom_in, timeline_zoom_out,
@@ -16,7 +16,7 @@ use thyllore_anim_core::editable::{
     TangentContinuity, TangentType, TangentWeightMode,
 };
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::super::spring_bone::transition_to_baked_override_if_needed;
 use super::bone_set_key::dispatch_bone_set_key_events;
@@ -285,8 +285,8 @@ fn apply_view_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
+    use crate::ecs::systems::clip_library_register_and_activate;
+    use crate::ecs::systems::find_entity_clip_id;
     use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe_with_clip;
     use thyllore_anim_core::editable::{ClipInstance, EditableAnimationClip};
 

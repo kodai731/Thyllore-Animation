@@ -8,8 +8,8 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
-use crate::platform::ui::theme::icons::Icon;
-use crate::platform::ui::theme::widgets::{icon_button, ButtonState};
+use crate::platform::ui::theme::Icon;
+use crate::platform::ui::theme::{icon_button, ButtonState};
 use thyllore_anim_core::editable::{curve_sample, EditableAnimationClip, PropertyType};
 use thyllore_anim_core::BoneId;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -744,8 +744,7 @@ pub(crate) fn build_curve_editor_tab(
                 .copied()
                 .find(|domain| {
                     (domain.entities)(world).iter().any(|&entity| {
-                        crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(world, entity)
-                            == current
+                        crate::ecs::systems::find_entity_clip_id(world, entity) == current
                     })
                 })
         })

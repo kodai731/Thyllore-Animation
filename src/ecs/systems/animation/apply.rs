@@ -2,7 +2,7 @@ use anyhow::Result;
 use glam::{Mat4, Vec3, Vec4};
 
 use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
-use thyllore_vulkan_core::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],

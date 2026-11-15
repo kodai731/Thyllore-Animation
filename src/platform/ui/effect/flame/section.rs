@@ -1,6 +1,6 @@
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::systems::resolve_selected_flame;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use super::body_rows::body_rows;
 use super::head_rows::{fit_rows, head_rows, style_rows};
@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use crate::ecs::resource::FlameUIState;
     use crate::platform::ui::ui_rows::find_duplicate_labels;
-    use thyllore_effect_core::FlameRenderSettings;
+    use thyllore_effect_core::flame::FlameRenderSettings;
 
     #[test]
     fn selected_flame_rows_have_no_duplicate_labels() {

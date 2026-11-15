@@ -1,7 +1,7 @@
 use crate::command::*;
-use crate::core::device::*;
+use crate::core::*;
 use crate::raytracing::GpuPrimitive;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
 use crate::types::Instance;
 use crate::vulkan::*;

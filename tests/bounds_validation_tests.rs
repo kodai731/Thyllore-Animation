@@ -5,12 +5,12 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 use thyllore_animation::ecs::systems::{
-    apply_pose_overrides, compute_local_override_from_global_translation,
-    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
+    apply_pose_overrides, compute_local_override_from_global_translation, sample_clip_to_pose,
 };
 use thyllore_importer_core::ModelLoadResult;
-use thyllore_vulkan_core::resource::graphics_resource::NodeData;
+use thyllore_vulkan_core::resource::NodeData;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -171,9 +171,7 @@ fn compute_node_animation_bounds(load_result: &ModelLoadResult, time: f32) -> (V
         })
         .collect();
 
-    thyllore_animation::ecs::systems::animation::apply::compute_node_global_transforms(
-        &mut nodes, skeleton, &pose,
-    );
+    thyllore_animation::ecs::systems::compute_node_global_transforms(&mut nodes, skeleton, &pose);
 
     let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
     let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
@@ -350,9 +348,8 @@ fn test_fbx_stickman_bounds_match_blender() {
         return;
     }
 
-    let (fbx_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(model_path)
-            .expect("Failed to load FBX");
+    let (fbx_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
     let load_result = ModelLoadResult::from_fbx(fbx_result);
 
     let blender_bounds = run_blender_bounds(&blender_path, model_path);
@@ -381,9 +378,8 @@ fn test_fbx_fly_bounds_match_blender() {
         return;
     }
 
-    let (fbx_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(model_path)
-            .expect("Failed to load FBX");
+    let (fbx_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
     let load_result = ModelLoadResult::from_fbx(fbx_result);
 
     let blender_bounds = run_blender_bounds(&blender_path, model_path);
@@ -436,9 +432,8 @@ fn test_fbx_stickman_bone_vs_node_positions() {
         return;
     }
 
-    let (fbx_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(model_path)
-            .expect("Failed to load FBX");
+    let (fbx_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
 
     let has_skinned = fbx_result.has_skinned_meshes;
     let load_result = ModelLoadResult::from_fbx(fbx_result);
@@ -478,7 +473,7 @@ fn test_fbx_stickman_bone_vs_node_positions() {
             global_transform: Mat4::IDENTITY,
         })
         .collect();
-    thyllore_animation::ecs::systems::animation::apply::compute_node_global_transforms(
+    thyllore_animation::ecs::systems::compute_node_global_transforms(
         &mut nodes, skeleton, &rest_pose,
     );
 
@@ -582,9 +577,8 @@ fn test_bone_pose_override_roundtrip() {
         return;
     }
 
-    let (fbx_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(model_path)
-            .expect("Failed to load FBX");
+    let (fbx_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
     let load_result = ModelLoadResult::from_fbx(fbx_result);
     let skeleton = load_result.skeletons.first().expect("No skeleton");
 
@@ -643,7 +637,7 @@ fn test_bone_pose_override_roundtrip() {
                 global_transform: Mat4::IDENTITY,
             })
             .collect();
-        thyllore_animation::ecs::systems::animation::apply::compute_node_global_transforms(
+        thyllore_animation::ecs::systems::compute_node_global_transforms(
             &mut nodes,
             skeleton,
             &overridden_pose,
@@ -807,7 +801,7 @@ fn test_gltf_bone_pose_override_roundtrip() {
                 global_transform: Mat4::IDENTITY,
             })
             .collect();
-        thyllore_animation::ecs::systems::animation::apply::compute_node_global_transforms(
+        thyllore_animation::ecs::systems::compute_node_global_transforms(
             &mut nodes,
             skeleton,
             &overridden_pose,

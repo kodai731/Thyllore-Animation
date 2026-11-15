@@ -1,5 +1,5 @@
-use thyllore_anim_core::editable::components::morph_track::MorphTrackSample;
-use thyllore_anim_core::editable::systems::morph_sample::sample_morph_tracks;
+use thyllore_anim_core::editable::sample_morph_tracks;
+use thyllore_anim_core::editable::MorphTrackSample;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ClipSchedule, MorphWeights};
@@ -8,7 +8,7 @@ use crate::ecs::world::{Entity, Parent, World};
 use thyllore_anim_core::editable::{
     clip_recalculate_duration, curve_add_keyframe, EditableAnimationClip,
 };
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::morph_weight_systems::find_mesh_morph;
 use super::scalar_clip_systems::{ensure_entity_clip_named, find_entity_clip_id};

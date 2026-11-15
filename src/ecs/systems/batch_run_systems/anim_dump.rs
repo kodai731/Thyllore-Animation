@@ -275,7 +275,7 @@ fn entity_dumps(world: &World) -> Vec<EntityJson> {
 }
 
 fn entity_dump(world: &World, domain: &ScalarChannelDomain, entity: Entity) -> EntityJson {
-    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
+    use crate::ecs::systems::find_entity_clip_id;
 
     EntityJson {
         entity,

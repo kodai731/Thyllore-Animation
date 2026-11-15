@@ -6,10 +6,10 @@ use glam::Vec4;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::data::{Vertex, VertexData};
-use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
-use crate::resource::image::Rgba8Texture;
+use crate::resource::Rgba8Texture;
+use crate::resource::{RRIndexBuffer, RRVertexBuffer};
 use crate::types::Instance;
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 

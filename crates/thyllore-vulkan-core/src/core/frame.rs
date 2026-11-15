@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crate::command::{RRCommandBuffer, RRCommandPool};
-use crate::core::device::RRDevice;
-use crate::core::swapchain::RRSwapchain;
+use crate::core::RRDevice;
+use crate::core::RRSwapchain;
 use crate::resource::GpuResource;
 use crate::types::{Fence, Instance, Semaphore};
 use crate::vulkan::*;

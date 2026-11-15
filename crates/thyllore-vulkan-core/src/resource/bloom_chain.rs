@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::render_target_transient::TransientDesc;
+use crate::resource::GpuResource;
+use crate::resource::TransientDesc;
 use crate::types::HDR_FORMAT;
 
 #[derive(Clone, Copy, Debug, Default)]

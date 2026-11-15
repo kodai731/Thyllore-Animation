@@ -1,10 +1,10 @@
 use std::env;
 use std::path::Path;
 
-use thyllore_ml_core::copilot::v2::inference::{
+use thyllore_ml_core::model_path::resolve_v2_curve_copilot_model_path;
+use thyllore_ml_core::v2::inference::{
     V2CurveCopilotRequest, V2CurveCopilotSession, CONTEXT_LENGTH, MAX_HORIZON,
 };
-use thyllore_ml_core::model_path::resolve_v2_curve_copilot_model_path;
 
 const MODEL_PATH_ENV_VAR: &str = "THYLLORE_CURVE_MODEL";
 const DEPLOY_FPS: f32 = 60.0;

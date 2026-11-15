@@ -1,5 +1,5 @@
 use crate::ecs::resource::TimelineState;
-use crate::ecs::systems::humanoid_bake_systems::request_bake_scan;
+use crate::ecs::systems::request_bake_scan;
 use crate::ecs::systems::timeline::clip_instance::{
     add_clip_instance, modify_clip_instance, remove_clip_instance, select_clip_instance,
 };
@@ -102,12 +102,12 @@ mod tests {
     use crate::ecs::component::ClipSchedule;
     use crate::ecs::resource::{ClipLibrary, HumanoidRigState};
     use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
-    use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
+    use crate::ecs::systems::unresolved_clip_roles;
     use crate::ecs::world::Entity;
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    use thyllore_anim_core::editable::curve_add_keyframe;
     use thyllore_anim_core::editable::{
         ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
     };

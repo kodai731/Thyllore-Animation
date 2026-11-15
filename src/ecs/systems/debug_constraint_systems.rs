@@ -1,8 +1,8 @@
 use glam::Vec3;
 
-use crate::asset::storage::AssetStorage;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{Constrained, ConstraintSet};
-use crate::ecs::resource::gizmo::ConstraintGizmoData;
+use crate::ecs::resource::ConstraintGizmoData;
 use crate::ecs::world::{Animator, Entity, World};
 use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, PositionConstraintData, Skeleton,

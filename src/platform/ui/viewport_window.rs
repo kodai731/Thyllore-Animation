@@ -3,7 +3,7 @@ use imgui::Condition;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{LayoutSnapshot, ViewportInput};
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 fn build_viewport_window(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &GraphicsResources) {
     let layout = world.resource::<LayoutSnapshot>();

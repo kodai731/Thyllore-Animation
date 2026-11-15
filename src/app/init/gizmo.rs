@@ -1,15 +1,14 @@
 use crate::app::{App, AppData};
 
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::pipeline_allocate_id;
+use crate::ecs::resource::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
+use crate::ecs::resource::{LightState, PipelineManager};
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
     gizmo_create_buffers_for_every_slot, gizmo_create_static_buffers,
 };
-use crate::ecs::{LightState, PipelineManager};
 use thyllore_vulkan_core::command::*;
-use thyllore_vulkan_core::core::device::*;
-use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::core::*;
 use thyllore_vulkan_core::data::*;
 use thyllore_vulkan_core::descriptor::*;
 use thyllore_vulkan_core::pipeline::{
@@ -328,8 +327,7 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(constraint_gizmo_data);
 
-        let mut spring_bone_gizmo_data =
-            crate::ecs::resource::gizmo::SpringBoneGizmoData::default();
+        let mut spring_bone_gizmo_data = crate::ecs::resource::SpringBoneGizmoData::default();
         spring_bone_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
         spring_bone_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
@@ -337,7 +335,7 @@ impl App {
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
-        let mut tg = crate::ecs::resource::gizmo::TransformGizmoData::default();
+        let mut tg = crate::ecs::resource::TransformGizmoData::default();
         tg.line_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
         tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
         tg.solid_render_info.pipeline_id = Some(pipeline_ids.bone_solid);
@@ -353,7 +351,7 @@ impl App {
         rrrender: &RRRender,
         data: &mut AppData,
         pipeline_manager: &mut PipelineManager,
-    ) -> Result<crate::ecs::resource::billboard::BillboardData> {
+    ) -> Result<crate::ecs::resource::BillboardData> {
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
 

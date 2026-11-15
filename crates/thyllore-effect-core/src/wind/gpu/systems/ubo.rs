@@ -1,6 +1,6 @@
 use crate::gpu_pack::UboPack;
-use crate::wind::analytic::{wind_shadow_radial_extent, WindShellParams, WIND_MAX_PUFFS};
 use crate::wind::{build_wind_model_matrix, WindTornadoEffect, WindUBO};
+use crate::wind::{wind_shadow_radial_extent, WindShellParams, WIND_MAX_PUFFS};
 use glam::Mat4;
 use thyllore_math_core::GpuMat4;
 

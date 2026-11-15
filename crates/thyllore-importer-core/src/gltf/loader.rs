@@ -8,8 +8,8 @@ use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphWeightChannel, Skeleton,
     SkinData, TransformChannel,
 };
-use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
+use thyllore_model_core::{Vertex, VertexData};
 
 use super::morph::{
     convert_weight_animation_to_channels, morph_source_name, read_mesh_morph, read_target_names,

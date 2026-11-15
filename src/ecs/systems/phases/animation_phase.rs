@@ -4,17 +4,17 @@ use std::time::Instant;
 use anyhow::Result;
 use glam::Mat4;
 
-use crate::ecs::resource::gizmo::BoneSelectionState;
+use crate::ecs::resource::BoneSelectionState;
 use crate::ecs::resource::{
     AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PhaseSubTimings, PoseApplyCache,
     WeightHeatmapState,
 };
-use crate::ecs::FrameContext;
-use crate::ecs::{
+use crate::ecs::systems::{
     apply_morph_weights, evaluate_morph_tracks, playback_upload_animations, run_animation_pipeline,
     sync_avatar_setup, sync_expression_library, sync_humanoid_rig, sync_material_textures,
     update_weight_heatmap,
 };
+use crate::ecs::FrameContext;
 use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId};
 
 pub struct AnimationUpdates {

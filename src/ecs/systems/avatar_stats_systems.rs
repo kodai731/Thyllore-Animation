@@ -2,7 +2,7 @@ use crate::ecs::component::SpringBoneSetup;
 use std::collections::HashSet;
 use thyllore_anim_core::Skeleton;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(crate) fn count_avatar_stats(
     graphics: &GraphicsResources,
@@ -55,7 +55,7 @@ pub(crate) fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
 mod tests {
     use glam::{Mat4, Vec3};
     use thyllore_model_core::MeshMorph;
-    use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+    use thyllore_vulkan_core::resource::MeshBuffer;
 
     use super::*;
     use crate::ecs::component::{SpringChain, SpringJointParam};

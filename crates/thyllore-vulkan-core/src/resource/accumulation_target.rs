@@ -3,8 +3,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::resource::GpuResource;
+use crate::resource::{RenderTargetKey, RenderTargetStorage};
 use crate::types::Instance;
 
 /// A storage image from `RenderTargetStorage` that compute passes accumulate into, kept in

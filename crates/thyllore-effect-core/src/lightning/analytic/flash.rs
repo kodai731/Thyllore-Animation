@@ -1,5 +1,5 @@
-use crate::lightning::analytic::strike::{compute_lightning_segment_aabb, segment_length, Segment};
-use crate::LightningEffect;
+use crate::lightning::LightningEffect;
+use crate::lightning::{compute_lightning_segment_aabb, segment_length, Segment};
 use glam::{Mat4, Vec4};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -71,9 +71,9 @@ pub fn compute_lightning_flash(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lightning::analytic::{build_lightning_segments, burst_start_time};
     use crate::lightning::build_lightning_model_matrix;
-    use crate::LightningShape;
+    use crate::lightning::LightningShape;
+    use crate::lightning::{build_lightning_segments, burst_start_time};
     use glam::Vec3;
 
     fn segment(a: [f32; 3], b: [f32; 3], intensity: f32) -> Segment {

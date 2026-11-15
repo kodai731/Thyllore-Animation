@@ -1,7 +1,7 @@
 #![cfg(test)]
 #![allow(dead_code)]
 
-pub mod canonical_rig;
+mod canonical_rig;
 pub mod fbx_ascii;
 pub mod fixture_bones;
 pub mod fixtures;

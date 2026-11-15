@@ -1,5 +1,5 @@
-use crate::wind::analytic::integral::WindShellParams;
-use crate::wind::analytic::motion::rotation_phase;
+use crate::wind::rotation_phase;
+use crate::wind::WindShellParams;
 use glam::{Mat3, Vec3};
 use thyllore_math_core::{gradient_noise3, smoothstep};
 

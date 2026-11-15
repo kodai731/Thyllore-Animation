@@ -5,16 +5,16 @@ pub mod color_test_quad;
 pub(crate) mod command;
 mod command_recording;
 pub mod config;
-pub mod data;
+mod data;
 pub mod effect_hooks;
 pub(crate) mod features;
 pub mod frame;
 mod imgui_textures;
-pub mod init;
+mod init;
 mod pass_targets;
 pub mod post_process;
 pub mod render;
-pub mod render_context;
+mod render_context;
 pub mod scene_rebuild;
 pub mod update;
 pub mod viewport;
@@ -25,8 +25,8 @@ pub use data::AppData;
 pub use features::screenshot::cleanup_old_screenshots;
 pub use init::*;
 
-use crate::ecs::{ResMut, ResRef, Resource};
-use thyllore_vulkan_core::core::device::*;
+use crate::ecs::world::{ResMut, ResRef, Resource};
+use thyllore_vulkan_core::core::*;
 
 use std::time::Instant;
 

@@ -11,11 +11,11 @@ use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
-use crate::platform::ui::theme::icons::Icon;
-use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use crate::platform::ui::theme::Icon;
+use crate::platform::ui::theme::{icon_button, toolbar_divider, ButtonState};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
     build_camera_debug_panel(ui, ecs_world);

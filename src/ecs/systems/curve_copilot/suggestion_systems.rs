@@ -8,10 +8,8 @@ use thyllore_anim_core::editable::{
     EditableKeyframe, InterpolationType, PropertyCurve, PropertyType,
 };
 use thyllore_anim_core::BoneId;
-use thyllore_ml_core::copilot::v2::dump::{
-    dump_v2_curve_copilot_inference, V2CurveCopilotInferenceDump,
-};
-use thyllore_ml_core::copilot::v2::forecast;
+use thyllore_ml_core::v2::dump::{dump_v2_curve_copilot_inference, V2CurveCopilotInferenceDump};
+use thyllore_ml_core::v2::forecast;
 use thyllore_ml_core::{
     CurveCopilotMode, InferenceActorId, InferenceRequestKind, InferenceResultKind,
 };
@@ -267,7 +265,7 @@ pub fn curve_suggestion_dismiss(suggestion_state: &mut CurveSuggestionState) {
 mod tests {
     use super::*;
     use thyllore_anim_core::editable::{curve_add_keyframe, CurveId};
-    use thyllore_ml_core::copilot::v2::inference::{CONTEXT_LENGTH, MAX_HORIZON};
+    use thyllore_ml_core::v2::inference::{CONTEXT_LENGTH, MAX_HORIZON};
 
     fn create_test_curve(keyframe_count: usize) -> PropertyCurve {
         let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::TranslationX);

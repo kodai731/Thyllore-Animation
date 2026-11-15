@@ -3,24 +3,20 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use crate::command::RRCommandPool;
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::descriptor::ReflectedSetLayout;
-use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
-use crate::resource::image::{
-    create_image_view, create_texture_image_pixel, create_texture_sampler,
-};
 use crate::resource::GpuResource;
+use crate::resource::{create_image_view, create_texture_image_pixel, create_texture_sampler};
+use crate::resource::{RRIndexBuffer, RRVertexBuffer};
 use crate::types::Instance;
 use crate::vulkan::*;
 use glam::{Mat4, Vec3, Vec4};
 use thyllore_model_core::{MeshMorph, SkeletonId, SkinData};
 use thyllore_render_core::{MaterialUBO, ObjectUBO};
 
-pub use crate::descriptor::{
-    FrameDescriptorSet, Material, MaterialId, MaterialManager, ObjectDescriptorSet, ObjectId,
-};
-pub use crate::resource::MeshBuffer;
+use crate::descriptor::{FrameDescriptorSet, MaterialId, MaterialManager, ObjectDescriptorSet};
+use crate::resource::MeshBuffer;
 
 #[derive(Clone, Debug)]
 pub struct NodeData {

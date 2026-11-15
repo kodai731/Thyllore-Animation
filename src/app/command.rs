@@ -99,7 +99,7 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             );
 
             let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-            match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+            match crate::ecs::systems::clip_library_load_from_file(
                 &mut clip_library,
                 &mut app.data.ecs_assets,
                 &path,
@@ -216,7 +216,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveClipToFile { source_id, path } => {
-            use crate::ecs::systems::clip_library_systems::{
+            use crate::ecs::systems::{
                 clip_library_save_to_file, clip_library_update_save_metadata,
             };
 
@@ -236,7 +236,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveSpringBoneBake { baked_id, path } => {
-            use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+            use crate::ecs::systems::clip_library_save_to_file;
 
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             match clip_library_save_to_file(&clip_library, baked_id, &path) {

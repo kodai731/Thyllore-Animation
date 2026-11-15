@@ -12,7 +12,7 @@ use crate::ecs::systems::{
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::BatchCapture;
 use std::rc::Rc;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum CameraEvent {

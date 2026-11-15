@@ -1,4 +1,4 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::resource::GpuResource;
 use crate::vulkan::*;
 

@@ -29,7 +29,7 @@ impl Default for FlameWarp {
             rise_speed: 1.5,
             taper_power: 1.4,
             y_scale: 0.6,
-            reach: crate::flame_wave::WARP_REACH_DEFAULT,
+            reach: crate::flame::WARP_REACH_DEFAULT,
         }
     }
 }

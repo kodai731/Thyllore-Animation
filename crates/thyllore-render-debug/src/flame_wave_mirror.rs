@@ -5,8 +5,8 @@
 
 use std::sync::OnceLock;
 
-use thyllore_effect_core::flame_wave::*;
-use thyllore_effect_core::{envelope_fade, eroded_argument, erosion_remap_scale};
+use thyllore_effect_core::flame::*;
+use thyllore_effect_core::flame::{envelope_fade, eroded_argument, erosion_remap_scale};
 use thyllore_math_core::{integrate_erf_response_linear, ErfResponseModel};
 
 /// Cached shaping parameters for the default `WAVE_TANH_SCALE`.

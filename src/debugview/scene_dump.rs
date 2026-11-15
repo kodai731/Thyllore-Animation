@@ -6,7 +6,7 @@ impl App {
     pub fn dump_debug_info(&self) {
         log!("========== DUMP DEBUG INFORMATION ==========");
 
-        use crate::ecs::{ClipLibrary, ModelState};
+        use crate::ecs::resource::{ClipLibrary, ModelState};
         let clip_library = self.resource::<ClipLibrary>();
         let model_state = self.resource::<ModelState>();
 

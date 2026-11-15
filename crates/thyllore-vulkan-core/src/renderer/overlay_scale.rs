@@ -4,8 +4,8 @@ use crate::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
 use crate::renderer::overlay::{
     OverlayAttachmentLoad, OverlayBlend, OverlayNodeSpec, OverlayPass, OverlayPushConstants,
 };
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::render_target_transient::TransientDesc;
+use crate::resource::GpuResource;
+use crate::resource::TransientDesc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 

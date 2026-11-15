@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use glam::Mat4;
 
 use thyllore_anim_core::Skeleton;
-use thyllore_file_format_core::fbx::components::ClusterInfo;
+use thyllore_file_format_core::fbx::ClusterInfo;
 use thyllore_model_core::{SkinData, INFLUENCES_PER_VERTEX};
 
 pub fn clusters_from_skin_data(skin: &SkinData, skeleton: &Skeleton) -> Vec<ClusterInfo> {

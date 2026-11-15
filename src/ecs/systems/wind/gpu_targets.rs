@@ -1,12 +1,12 @@
 use anyhow::Result;
 
-use thyllore_effect_core::{
+use thyllore_effect_core::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
 };
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
-use thyllore_vulkan_core::resource::volume_image::VolumeUsage;
+use thyllore_vulkan_core::resource::VolumeUsage;
 use thyllore_vulkan_core::resource::{GpuResource, VolumeImage};
 use thyllore_vulkan_core::types::{Extent3D, Format, Instance, HDR_FORMAT};
 

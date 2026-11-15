@@ -5,9 +5,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use thyllore_anim_core::editable::clip_from_animation;
-use thyllore_animation::ecs::systems::{
-    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
-};
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_animation::ecs::systems::sample_clip_to_pose;
 use thyllore_importer_core::fbx::load_fbx_to_graphics_resources;
 use thyllore_importer_core::gltf::load_gltf_file;
 use thyllore_importer_core::ModelLoadResult;
@@ -234,7 +233,7 @@ fn test_gltf_to_fbx_roundtrip() -> anyhow::Result<()> {
         skeleton,
         &fbx_output_path,
         false,
-        thyllore_importer_core::fbx::fbx::FbxAxesInfo {
+        thyllore_importer_core::fbx::FbxAxesInfo {
             up_axis: 1,
             up_axis_sign: 1,
             front_axis: 2,

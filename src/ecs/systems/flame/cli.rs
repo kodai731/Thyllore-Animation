@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
 use clap::Args;
-use thyllore_effect_core::{
+use thyllore_effect_core::flame::{
     apply_flame_preset, refresh_flame_coefficients, FlameBaked, FlameColor, FlameDebugView,
     FlameTrailState, StyleGroups, TextureFitGroups, FLAME_PRESET_NAMES, FLAME_SCALAR_PARAMS,
 };

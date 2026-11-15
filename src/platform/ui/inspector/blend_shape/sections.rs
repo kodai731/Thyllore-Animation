@@ -11,7 +11,7 @@ use crate::platform::ui::form_window::{rows_section, FormSection};
 use crate::platform::ui::ui_rows::{ListRows, NamedValue, UiRow};
 use thyllore_avatar_core::expression::components::grouping::{ChannelGroup, ExpressionGrouping};
 use thyllore_avatar_core::expression::systems::grouping::group_channels;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone)]
 pub(super) struct BlendShapeView {

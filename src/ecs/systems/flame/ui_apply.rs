@@ -6,7 +6,7 @@ use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
 use crate::ecs::systems::effect_edit::apply_effect_update;
 use crate::ecs::systems::resolve_selected_flame;
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 impl UiCommand for FlameUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
@@ -38,7 +38,7 @@ impl UiCommand for FlameUiCommand {
                     world,
                     &path,
                     blend,
-                    thyllore_effect_core::TextureFitGroups {
+                    thyllore_effect_core::flame::TextureFitGroups {
                         silhouette: groups[0],
                         color: groups[1],
                         turbulence: groups[2],
@@ -52,7 +52,7 @@ impl UiCommand for FlameUiCommand {
                 crate::ecs::systems::apply_flame_style_to_selected(
                     world,
                     &path,
-                    thyllore_effect_core::StyleGroups {
+                    thyllore_effect_core::flame::StyleGroups {
                         motion: groups[0],
                         texture: groups[1],
                         optics: groups[2],
@@ -82,7 +82,7 @@ impl UiCommand for FlameUiCommand {
                     world.insert_component(
                         target,
                         FlameTrail {
-                            state: thyllore_effect_core::FlameTrailState {
+                            state: thyllore_effect_core::flame::FlameTrailState {
                                 enabled,
                                 ..Default::default()
                             },
@@ -101,7 +101,7 @@ impl UiCommand for FlameUiCommand {
                     world.insert_component(
                         target,
                         FlameTrail {
-                            state: thyllore_effect_core::FlameTrailState {
+                            state: thyllore_effect_core::flame::FlameTrailState {
                                 fade_seconds: fade,
                                 ..Default::default()
                             },

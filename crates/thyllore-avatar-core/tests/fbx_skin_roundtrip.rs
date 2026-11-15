@@ -22,8 +22,7 @@ fn test_skin_roundtrip_all_conventions() {
         file.write_all(fbx_text.as_bytes()).unwrap();
 
         let fbx_model =
-            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(temp_path.to_str().unwrap())
-                .unwrap();
+            thyllore_importer_core::fbx::load_fbx_with_ufbx(temp_path.to_str().unwrap()).unwrap();
 
         fs::remove_file(&temp_path).ok();
 

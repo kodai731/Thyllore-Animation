@@ -10,12 +10,12 @@ use crate::ecs::systems::avatar_submesh_geometry_systems::{merge_submesh_geometr
 use crate::ecs::systems::avatar_submesh_role_systems::{
     collect_submesh_meshes, skin_geometry_to_model, skin_role_surfaces,
 };
-use crate::ecs::systems::skeleton_edit_systems::{
+use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
+use crate::ecs::systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
     remove_bone_subtree, restore_skeleton_snapshot,
 };
-use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
-use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
@@ -45,7 +45,7 @@ use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::world_y_axis;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub struct GeneratedChainBones {
     pub report: ChainGenReport,

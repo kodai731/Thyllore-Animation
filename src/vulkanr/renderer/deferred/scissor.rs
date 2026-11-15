@@ -1,7 +1,7 @@
 use glam::{vec4, Mat4, Vec3, Vec4};
 
 use crate::ecs::resource::ProjectionData;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use thyllore_vulkan_core::types::{Extent2D, Offset2D, Rect2D};
 
 const SCISSOR_MARGIN_PX: f32 = 2.0;

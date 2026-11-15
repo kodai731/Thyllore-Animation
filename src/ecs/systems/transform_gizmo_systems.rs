@@ -3,11 +3,11 @@ use std::f32::consts::PI;
 use glam::{vec3, Mat4, Quat, Vec2, Vec3, Vec4};
 
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::transform::{TransformGizmoData, TransformGizmoHandle};
 use crate::ecs::resource::TransformGizmoMode;
+use crate::ecs::resource::{TransformGizmoData, TransformGizmoHandle};
 use thyllore_math_core::{
-    coordinate_system::perspective_infinite_reverse, ray_plane_intersection,
-    ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
+    perspective_infinite_reverse, ray_plane_intersection, ray_to_line_segment_distance,
+    ray_to_point_distance, screen_to_world_ray, view,
 };
 
 const RED: [f32; 3] = [0.9, 0.1, 0.1];
@@ -738,7 +738,7 @@ pub fn transform_gizmo_sync_to_bone(
 pub fn transform_gizmo_sync_to_entity(
     gizmo: &mut TransformGizmoData,
     world_position: Vec3,
-    entity: crate::ecs::Entity,
+    entity: crate::ecs::world::Entity,
 ) {
     gizmo.position.position = world_position;
     gizmo.visible = true;

@@ -9,7 +9,7 @@ use crate::ecs::GpuSceneContext;
 use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
 use thyllore_importer_core::fbx::FbxModel;
 use thyllore_importer_core::ModelLoadResult;
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::core::RRSwapchain;
 
 pub(crate) unsafe fn append_model_to_scene(
     load_result: &ModelLoadResult,

@@ -3,11 +3,11 @@ use crate::app::{App, AppData};
 use super::graphics::VulkanResources;
 use super::startup_scene::load_startup_scene;
 use crate::ecs::resource::pipeline_allocate_id;
+use crate::ecs::resource::PipelineManager;
 use crate::ecs::systems::{apply_startup_scene, create_default_grid_scale};
-use crate::ecs::PipelineManager;
 use crate::hooks::startup::{StartupHooks, StartupPhase};
 use thyllore_vulkan_core::command::*;
-use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::core::*;
 use thyllore_vulkan_core::descriptor::*;
 use thyllore_vulkan_core::pipeline::{CullFace, FillMode, RRPipeline, Topology};
 use thyllore_vulkan_core::render::*;
@@ -19,7 +19,7 @@ use std::time::Instant;
 pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use winit::window::Window;
 
-use thyllore_vulkan_core::core::instance::create_sync_objects;
+use thyllore_vulkan_core::core::create_sync_objects;
 
 impl App {
     pub unsafe fn create(
@@ -37,7 +37,7 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
 
-        let vulkan_context = thyllore_vulkan_core::create_vulkan_context(window)?;
+        let vulkan_context = thyllore_vulkan_core::core::create_vulkan_context(window)?;
         let messenger = vulkan_context.messenger();
         let surface = vulkan_context.surface();
         let entry = vulkan_context.entry;

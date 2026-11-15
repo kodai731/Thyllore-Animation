@@ -1,10 +1,9 @@
-use crate::core::device::*;
-use crate::core::swapchain::*;
+use crate::core::*;
 use crate::data::*;
-use crate::descriptor::pass_manifest::BILLBOARD;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::billboard;
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::BILLBOARD;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 #[must_use]

@@ -1,10 +1,10 @@
-pub mod capsule;
-pub mod knots;
-pub mod medium;
-pub mod puffs;
-pub mod shell;
+mod capsule;
+mod knots;
+mod medium;
+mod puffs;
+mod shell;
 mod slang;
-pub mod streak;
+mod streak;
 
 pub use capsule::*;
 pub use knots::*;

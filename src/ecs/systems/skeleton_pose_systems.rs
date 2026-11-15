@@ -4,8 +4,6 @@ use thyllore_anim_core::{
     decompose_transform, AnimationClip, BoneId, BoneLocalPose, Skeleton, SkeletonPose,
 };
 
-pub use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
-
 pub fn sample_clip_to_pose(
     clip: &AnimationClip,
     time: f32,

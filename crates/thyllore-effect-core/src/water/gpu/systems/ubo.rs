@@ -1,11 +1,11 @@
 use crate::gpu_pack::UboPack;
-use crate::water::analytic::laplace_beltrami_basis::{
+use crate::water::WaterTorusEffect;
+use crate::water::*;
+use crate::water::{
     compute_laplace_beltrami_modes_cached, LAPLACE_BELTRAMI_MODE_COUNT,
     LAPLACE_BELTRAMI_SLOTS_PER_MODE,
 };
-use crate::water::analytic::{generate_water_wave_modes, WATER_WAVE_MODE_COUNT};
-use crate::water::effect::WaterTorusEffect;
-use crate::water::*;
+use crate::water::{generate_water_wave_modes, WATER_WAVE_MODE_COUNT};
 use glam::Mat4;
 use thyllore_math_core::GpuMat4;
 use thyllore_math_core::LinearCongruentialGenerator;

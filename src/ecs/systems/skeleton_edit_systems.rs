@@ -18,7 +18,7 @@ use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use thyllore_exporter_core::systems::fbx::clusters_from_skin_data;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 fn edited_skeleton_mut(assets: &mut AssetStorage) -> anyhow::Result<(SkeletonId, &mut Skeleton)> {
     assets
@@ -555,9 +555,9 @@ pub fn refresh_after_skeleton_edit(
         return;
     };
     let skeleton = &skeleton_asset.skeleton;
-    let rest_globals = crate::ecs::compute_pose_global_transforms(
+    let rest_globals = thyllore_anim_core::compute_pose_global_transforms(
         skeleton,
-        &crate::ecs::create_pose_from_rest(skeleton),
+        &thyllore_anim_core::create_pose_from_rest(skeleton),
     );
     if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
         bone_gizmo.cached_skeleton_id = Some(skeleton_asset.skeleton_id);

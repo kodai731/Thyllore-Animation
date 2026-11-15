@@ -12,7 +12,7 @@ use crate::ecs::world::{Entity, MeshRef, World};
 use thyllore_anim_core::{Skeleton, SkeletonId, SkinData};
 use thyllore_avatar_core::cloth_setup::components::chain_gen::{RootAttachment, SkinSurface};
 use thyllore_model_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 /// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
 pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Mat4 {

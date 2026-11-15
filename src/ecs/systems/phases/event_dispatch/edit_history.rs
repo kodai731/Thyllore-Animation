@@ -7,7 +7,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum EditHistoryEvent {

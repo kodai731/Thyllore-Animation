@@ -3,7 +3,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::World;
 use std::path::PathBuf;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Debug)]
 pub struct DumpSpringTails {

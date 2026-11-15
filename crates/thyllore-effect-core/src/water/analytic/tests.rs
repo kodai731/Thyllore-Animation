@@ -8,8 +8,8 @@ use super::pick::{pick_torus, water_total_height_and_gradient};
 use super::slang::water_height_and_gradient_slang;
 use super::wave::{generate_water_wave_modes, water_height_and_gradient, water_perturbed_normal};
 use crate::test_support::BitwiseAgreement;
-use crate::water::effect::WaterTorusEffect;
-use crate::water::gpu::systems::{build_laplace_beltrami_modes, build_water_ubo};
+use crate::water::WaterTorusEffect;
+use crate::water::{build_laplace_beltrami_modes, build_water_ubo};
 use thyllore_math_core::torus_surface_normal;
 
 #[test]

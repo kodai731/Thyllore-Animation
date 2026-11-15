@@ -2,10 +2,7 @@ use glam::Vec3;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LineMesh, MeshScale};
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{
-    BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
-};
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::LightState;
@@ -13,6 +10,7 @@ use crate::ecs::resource::ObjectIdReadback;
 use crate::ecs::resource::PointerCapture;
 use crate::ecs::resource::PointerState;
 use crate::ecs::resource::TransformGizmoState;
+use crate::ecs::resource::{BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData};
 
 use super::world::{ResMut, ResRef, World};
 
@@ -43,17 +41,17 @@ impl<'a> EcsContext<'a> {
     }
 
     pub fn camera_position(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
+        use crate::ecs::systems::compute_camera_position;
         compute_camera_position(&self.camera())
     }
 
     pub fn camera_direction(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_direction;
+        use crate::ecs::systems::compute_camera_direction;
         compute_camera_direction(&self.camera())
     }
 
     pub fn camera_up(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_up;
+        use crate::ecs::systems::compute_camera_up;
         compute_camera_up(&self.camera())
     }
 

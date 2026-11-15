@@ -1,9 +1,9 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::GpuBufferRegistry;
+use crate::FrameRenderContext;
 use thyllore_render_core::{MeshBuffers, RenderInfo};
 
 pub struct LineMeshDrawOptions {

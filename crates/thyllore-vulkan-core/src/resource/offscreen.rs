@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::render::pass::get_depth_format;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::render::get_depth_format;
+use crate::resource::GpuResource;
+use crate::resource::{create_image, create_image_view, transition_image_layout};
 use crate::types::Instance;
 
 #[derive(Clone, Debug, Default)]
@@ -68,7 +68,7 @@ impl OffscreenFramebuffer {
         command_pool: crate::types::CommandPool,
         width: u32,
         height: u32,
-        msaa_samples: crate::pipeline::builder::SampleCount,
+        msaa_samples: crate::pipeline::SampleCount,
         format: crate::types::Format,
     ) -> Result<Self> {
         let command_pool = command_pool.raw();
@@ -335,7 +335,7 @@ impl OffscreenFramebuffer {
             return Ok(());
         }
 
-        let msaa_samples = crate::pipeline::builder::SampleCount::from_raw(self.msaa_samples);
+        let msaa_samples = crate::pipeline::SampleCount::from_raw(self.msaa_samples);
         let format = crate::types::Format(self.format);
         self.destroy(&rrdevice.device());
 

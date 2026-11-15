@@ -14,8 +14,8 @@ use crate::ecs::systems::avatar_submesh_role_systems::{
 };
 use crate::ecs::world::World;
 use thyllore_anim_core::Skeleton;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
 
 pub fn compute_hidden_triangles(
     world: &mut World,

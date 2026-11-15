@@ -6,7 +6,7 @@ use crate::ecs::systems::attach_morph_channel_catalogs;
 use crate::ecs::world::{Animator, Entity, Transform, World};
 use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
 use thyllore_importer_core::{LoadedMesh, ModelLoadResult};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(super) fn spawn_model_entities(
     model_name: &str,

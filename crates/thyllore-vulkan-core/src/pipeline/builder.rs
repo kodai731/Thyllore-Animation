@@ -1,9 +1,8 @@
-use crate::core::device::*;
-use crate::core::swapchain::*;
+use crate::core::*;
 use crate::descriptor::{
     shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
 };
-use crate::render::pass::RRRender;
+use crate::render::RRRender;
 use crate::types::{Pipeline, PipelineLayout, RenderPass};
 use crate::vulkan::*;
 use std::fs::File;
@@ -140,7 +139,7 @@ pub struct RRPipeline {
     pub(crate) pipeline: vk::Pipeline,
 }
 
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 
 /// Vertex input configuration for pipeline
 pub enum VertexInputConfig {

@@ -4,7 +4,7 @@ use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{FlameDumpSink, FlameRenderTargets};
 use crate::ecs::systems::flame_dump_npy_path;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
-use thyllore_effect_core::{build_flame_ubo, FlameUBO};
+use thyllore_effect_core::flame::{build_flame_ubo, FlameUBO};
 use thyllore_math_core::{f16_to_f32, write_npy_f32};
 use thyllore_vulkan_core::resource::ReadbackLayout;
 use thyllore_vulkan_core::types::DeviceSize;

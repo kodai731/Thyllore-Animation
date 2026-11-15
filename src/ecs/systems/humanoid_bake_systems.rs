@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use glam::{Quat, Vec3};
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
-use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+use thyllore_anim_core::editable::clip_to_animation;
+use thyllore_anim_core::editable::curve_add_keyframe;
+use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
@@ -20,7 +20,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::avatar_setup_systems::{
     compute_bone_global_transform, find_first_skeleton, skeleton_to_bone_inputs,
 };
-use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
+use crate::ecs::systems::find_preview_owner;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{BoneId, Skeleton};
@@ -526,8 +526,8 @@ mod tests {
 
     #[test]
     fn refresh_bakes_a_scheduled_clip_once() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -579,8 +579,8 @@ mod tests {
 
     #[test]
     fn refresh_does_not_rescan_when_nothing_changed() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -636,8 +636,8 @@ mod tests {
 
     #[test]
     fn refresh_without_rig_drops_baked_clips() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -736,8 +736,8 @@ mod tests {
 
     #[test]
     fn rig_revision_change_clears_failed_bakes() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -840,8 +840,8 @@ mod tests {
 
     #[test]
     fn bone_clip_is_baked_on_a_humanoid_model() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -925,8 +925,8 @@ mod tests {
 
     #[test]
     fn clip_is_still_baked_on_a_humanoid_model() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());

@@ -2,17 +2,16 @@ use crate::app::{App, AppData};
 
 use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::GridMeshData;
-use crate::ecs::systems::{create_default_grid_scale, create_grid_mesh};
-use crate::ecs::{
+use crate::ecs::resource::{
     ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState, NodeAssets,
 };
+use crate::ecs::systems::{create_default_grid_scale, create_grid_mesh};
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,
 };
 use thyllore_vulkan_core::command::*;
-use thyllore_vulkan_core::core::device::*;
-use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::core::*;
 use thyllore_vulkan_core::descriptor::*;
 use thyllore_vulkan_core::pipeline::{
     BlendConfig, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder, RRPipeline, SampleCount,
@@ -20,7 +19,7 @@ use thyllore_vulkan_core::pipeline::{
 };
 use thyllore_vulkan_core::render::*;
 
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;

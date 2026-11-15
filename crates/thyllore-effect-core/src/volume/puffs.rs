@@ -1,5 +1,5 @@
-use crate::volume::knots::RayKnots;
-use crate::volume::shell::VolumeShell;
+use crate::volume::RayKnots;
+use crate::volume::VolumeShell;
 use glam::Vec3;
 use thyllore_math_core::{biweight, biweight_sphere_piece_integral};
 

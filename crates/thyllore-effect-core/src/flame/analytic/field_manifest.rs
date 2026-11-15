@@ -2,8 +2,8 @@
 //! look quantities it drives. Derived from the same values the UBO packer reads,
 //! and pinned to the GLSL by the shader-audit test below (undeclared noise fails).
 
+use crate::flame::read_env_wave_jitter;
 use crate::flame::FlameEffect;
-use crate::flame_wave::read_env_wave_jitter;
 
 /// One independent random table / noise evaluated anywhere in the flame pipeline.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]

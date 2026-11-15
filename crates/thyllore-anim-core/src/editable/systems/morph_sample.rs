@@ -1,6 +1,6 @@
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::morph_track::MorphTrackSample;
-use crate::editable::systems::curve_ops::curve_sample;
+use crate::editable::curve_sample;
+use crate::editable::EditableAnimationClip;
+use crate::editable::MorphTrackSample;
 
 pub fn sample_morph_tracks(clip: &EditableAnimationClip, time: f32) -> Vec<MorphTrackSample> {
     clip.morph_tracks
@@ -19,7 +19,7 @@ pub fn sample_morph_tracks(clip: &EditableAnimationClip, time: f32) -> Vec<Morph
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editable::systems::curve_ops::curve_add_keyframe;
+    use crate::editable::curve_add_keyframe;
 
     #[test]
     fn sample_interpolates_between_two_keys() {

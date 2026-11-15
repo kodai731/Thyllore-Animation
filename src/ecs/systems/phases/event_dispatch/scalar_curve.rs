@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, CurveEditorState, EditHistory, TimelineState};
-use crate::ecs::systems::scalar_clip_systems::{
+use crate::ecs::systems::{
     ensure_entity_clip, resolve_selected_scalar_entity, scalar_clip_clear_keys,
     scalar_clip_insert_debug_keys, scalar_clip_insert_key,
 };
@@ -9,7 +9,7 @@ use crate::ecs::world::World;
 use crate::hooks::effect_spawn::spawn_effect_instance;
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_anim_core::editable::SourceClipId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ScalarCurveEvent {
@@ -211,7 +211,7 @@ fn sync_instances_to_clip_duration(world: &mut World, clip_id: SourceClipId) {
 
 fn existing_scalar_clip(world: &World) -> Option<SourceClipId> {
     let (entity, _) = resolve_selected_scalar_entity(world)?;
-    crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(world, entity)
+    crate::ecs::systems::find_entity_clip_id(world, entity)
 }
 
 fn edit_clip(
@@ -246,8 +246,8 @@ fn edit_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::systems::find_entity_clip_id;
     use crate::ecs::systems::phases::event_dispatch::edit_history::EditHistoryEvent;
-    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
     use crate::ecs::systems::scalar_clip_systems::test_support::{
         probe_property, spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
     };

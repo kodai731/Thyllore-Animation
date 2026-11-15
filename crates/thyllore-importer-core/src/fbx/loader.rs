@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Keyframe, Skeleton, SkinData, TransformChannel,
 };
-use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::{Vertex, VertexData};
 
 use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
 

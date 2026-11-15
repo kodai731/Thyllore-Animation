@@ -9,7 +9,7 @@ use crate::flame::{
     build_flame_inverse_model_matrix, build_flame_model_matrix, effective_sigma_t,
     flame_bounding_radius, FlameEffect,
 };
-use crate::flame_radial::{
+use crate::flame::{
     build_height_series, evaluate_ring_smooth_density, ring_support_span, FlameRadialTaper,
 };
 
@@ -227,7 +227,7 @@ pub fn probe_flame_wall(
                 let cell_world = flame_bounding_radius(effect) / effect.noise.frequency.max(1e-3);
 
                 // Compute new diagnostic fields
-                let segment_dt = chord / crate::flame_wave::FLAME_WAVE_SEGMENTS as f32;
+                let segment_dt = chord / crate::flame::FLAME_WAVE_SEGMENTS as f32;
 
                 // anisoCompress is a diagonal transform scaling y by noise_aniso_y
                 let dir_scaled = Vec3::new(
@@ -241,12 +241,12 @@ pub fn probe_flame_wall(
                     segment_dt * noise_coordinate_speed / (2.0 * std::f32::consts::PI);
 
                 // unresolved_fraction: wave_ray_attenuation sigma / WAVE_NOISE_STD
-                let mut modes = crate::flame_wave::generate_wave_modes();
-                crate::flame_wave::apply_wave_envelope(&mut modes, crate::flame_wave::WAVE_ENV_MU);
+                let mut modes = crate::flame::generate_wave_modes();
+                crate::flame::apply_wave_envelope(&mut modes, crate::flame::WAVE_ENV_MU);
                 let rates: [[f32; 3]; 3] = [noise_coordinate_rate.to_array(); 3];
                 let (_weights, sigma) =
-                    crate::flame_wave::wave_ray_attenuation(&modes, &rates, segment_dt);
-                let unresolved_fraction = sigma / crate::flame_wave::WAVE_NOISE_STD;
+                    crate::flame::wave_ray_attenuation(&modes, &rates, segment_dt);
+                let unresolved_fraction = sigma / crate::flame::WAVE_NOISE_STD;
 
                 // support_intervals and support_gap: sample density at 512 points along the ray
                 let sample_count = 512;

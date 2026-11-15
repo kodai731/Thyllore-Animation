@@ -1,7 +1,7 @@
 use super::draw::draw_rows;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::events::UiCommand;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::theme::{section_header, SectionDefault};
 use std::borrow::Cow;
 use thyllore_scene_core::{ScalarParam, UiParam};

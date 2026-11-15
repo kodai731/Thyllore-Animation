@@ -4,12 +4,12 @@ use serde_json::{json, Value};
 use crate::ecs::resource::{
     Camera, DebugViewState, LightState, ModelState, ProjectionData, SceneState, TimelineState,
 };
-use crate::ecs::systems::camera_systems::{
+use crate::ecs::systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::{EffectSpawnHook, EffectSpawnHooks};
-use thyllore_effect_core::inverse_view_proj_f64;
+use thyllore_effect_core::water::inverse_view_proj_f64;
 
 pub fn build_scene_json(world: &World) -> Value {
     let scene_path = world

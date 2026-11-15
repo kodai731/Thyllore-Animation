@@ -75,7 +75,7 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
     drop(flame_targets);
     ctx.world.insert_resource(gpu_state);
 
-    crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline(
+    crate::ecs::systems::ensure_effect_trace_pipeline(
         ctx.instance,
         ctx.rrdevice,
         ctx.world,

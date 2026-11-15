@@ -49,7 +49,7 @@ pub struct GroupAssignView {
 
 /// One collider group form per joint of the bone, plus one for the chains hanging under it.
 fn collider_group_items(
-    _: &crate::ecs::World,
+    _: &crate::ecs::world::World,
     view: &BoneSpringView,
 ) -> Vec<(String, ColliderGroupFormView)> {
     let form_for = |origin: RampOrigin, chain_id: SpringChainId, targets: &RampTargets| {

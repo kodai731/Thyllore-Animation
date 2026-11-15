@@ -1,7 +1,7 @@
 use glam::{Mat4, Vec3, Vec4};
 
 use crate::flame::{flame_bounding_radius, flame_proxy_pad, FlameEffect, FlameProxyPad};
-use crate::flame_shell::{flame_shell_outer_radius, flame_shell_support_scale};
+use crate::flame::{flame_shell_outer_radius, flame_shell_support_scale};
 
 /// Axis-aligned bounds of the shell proxy in flame-local units, widened by the wind bend so a
 /// leaning flame stays enclosed. Shared by the render-pass scissor and by click picking: both

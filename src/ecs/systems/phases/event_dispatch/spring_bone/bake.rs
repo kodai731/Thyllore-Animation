@@ -221,7 +221,7 @@ fn register_baked_clip_and_update_schedules(
     clip: thyllore_anim_core::editable::EditableAnimationClip,
     source_id: Option<u64>,
 ) -> u64 {
-    use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
+    use crate::ecs::systems::clip_library_register_and_activate;
 
     let mut clip_library = world.resource_mut::<ClipLibrary>();
     let new_id = clip_library_register_and_activate(&mut clip_library, assets, clip);

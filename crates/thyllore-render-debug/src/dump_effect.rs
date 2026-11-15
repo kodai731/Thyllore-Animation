@@ -1,5 +1,5 @@
 use glam::{Quat, Vec2, Vec3};
-use thyllore_effect_core::{
+use thyllore_effect_core::flame::{
     refresh_flame_coefficients, FlameBaked, FlameCoefficients, FlameEffect, FlameTemporalAccum,
 };
 

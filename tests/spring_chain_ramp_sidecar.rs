@@ -11,7 +11,8 @@ use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
 use thyllore_avatar_core::vrchat::sidecar_spring::{
     build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame,
 };
-use thyllore_importer_core::{load_fbx_to_graphics_resources, ModelLoadResult};
+use thyllore_importer_core::fbx::load_fbx_to_graphics_resources;
+use thyllore_importer_core::ModelLoadResult;
 
 #[test]
 #[ignore = "needs the local assets/models/fuse-woman-1/edited/woman-1-edit.* files"]

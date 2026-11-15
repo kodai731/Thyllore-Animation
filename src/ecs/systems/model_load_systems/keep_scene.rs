@@ -2,16 +2,17 @@ use anyhow::Result;
 
 use super::replace::{read_model_file, replace_scene_model};
 use crate::asset::AssetStorage;
+use crate::ecs::resource::SceneState;
 use crate::ecs::resource::{ModelState, TimelineState};
-use crate::ecs::systems::clip_library_systems::clip_library_register_loaded;
+use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::World;
-use crate::ecs::{GpuSceneContext, SceneState};
+use crate::ecs::GpuSceneContext;
 use crate::scene::{
     apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
 };
 use thyllore_anim_core::editable::EditableAnimationClip;
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::core::RRSwapchain;
 
 /// Replaces the model while keeping the scene's own entities and scheduled clips.
 pub unsafe fn load_model_keeping_scene(

@@ -9,7 +9,7 @@ mod object_pick;
 mod passes;
 mod pipeline;
 mod preset;
-pub mod probe;
+mod probe;
 pub(crate) mod record;
 mod render_targets;
 mod spawn;

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::core::device::RRDevice;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view};
+use crate::core::RRDevice;
+use crate::resource::GpuResource;
+use crate::resource::{create_image, create_image_view};
 use crate::types::Instance;
 use crate::vulkan::*;
 
@@ -44,7 +44,7 @@ impl RenderTargetStorage {
         key: RenderTargetKey,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_desc: Option<crate::resource::image::SamplerDesc>,
+        sampler_desc: Option<crate::resource::SamplerDesc>,
     ) -> Result<&RenderTargetEntry> {
         if !self.has_valid_extent() {
             return Err(anyhow!(
@@ -79,7 +79,7 @@ impl RenderTargetStorage {
         rrdevice: &RRDevice,
         format: vk::Format,
         usage: vk::ImageUsageFlags,
-        sampler_desc: Option<crate::resource::image::SamplerDesc>,
+        sampler_desc: Option<crate::resource::SamplerDesc>,
     ) -> Result<RenderTargetEntry> {
         let (image, memory) = create_image(
             instance,
@@ -105,7 +105,7 @@ impl RenderTargetStorage {
         };
 
         let sampler = match sampler_desc {
-            Some(desc) => match crate::resource::image::create_sampler(rrdevice, desc) {
+            Some(desc) => match crate::resource::create_sampler(rrdevice, desc) {
                 Ok(sampler) => sampler.raw(),
                 Err(error) => {
                     rrdevice.device().destroy_image_view(view, None);

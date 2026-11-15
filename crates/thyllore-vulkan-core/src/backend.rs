@@ -10,12 +10,12 @@ use thyllore_render_core::{
 };
 
 use crate::command::RRCommandPool;
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::data::{SceneUniformData, UniformBufferObject, Vertex};
 use crate::raytracing::RRAccelerationStructure;
-use crate::resource::graphics_resource::GraphicsResources;
-use crate::resource::image::RRImage;
-use crate::resource::raytracing_data::RayTracingData;
+use crate::resource::GraphicsResources;
+use crate::resource::RRImage;
+use crate::resource::RayTracingData;
 use crate::resource::{BillboardRenderState, GpuBufferRegistry};
 use crate::types::Instance;
 

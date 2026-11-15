@@ -1,8 +1,8 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::{AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM};
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::*;
 use crate::descriptor::shader_bindings::{auto_exposure_average, auto_exposure_histogram};
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::descriptor::{AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]

@@ -1,8 +1,8 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::TONEMAP;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::*;
 use crate::descriptor::shader_bindings::tonemap;
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::TONEMAP;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]

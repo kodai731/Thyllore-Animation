@@ -4,7 +4,7 @@ use glam::Mat4;
 
 use thyllore_anim_core::{AnimationClip, Skeleton, SkeletonId};
 use thyllore_render_core::MaterialUBO;
-use thyllore_vulkan_core::resource::graphics_resource::MaterialId;
+use thyllore_vulkan_core::descriptor::MaterialId;
 
 pub type AssetId = u64;
 

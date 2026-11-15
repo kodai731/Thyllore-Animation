@@ -14,24 +14,24 @@
 use crate::flame_fbm_mirror::fbm3;
 use glam::{Mat4, Vec3, Vec4};
 use serde_json::{json, Value};
-use thyllore_effect_core::flame::analytic::slang::{
-    flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang, flame_branch_pull_back_slang,
-};
-use thyllore_effect_core::flame_wave::{WAVE_JITTER_K, WAVE_JITTER_PHASE, WAVE_JITTER_RANK};
-use thyllore_effect_core::WallProbeView;
-use thyllore_effect_core::{
+use thyllore_effect_core::flame::{
     build_flame_ubo, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
 };
+use thyllore_effect_core::flame::{
+    flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang, flame_branch_pull_back_slang,
+};
+use thyllore_effect_core::flame::{WAVE_JITTER_K, WAVE_JITTER_PHASE, WAVE_JITTER_RANK};
+use thyllore_effect_core::WallProbeView;
 use thyllore_math_core::{
     dot3, integrate_erf_response_linear, smooth_erf_response, ErfResponseModel,
 };
 
-const EROSION_SLOTS: usize = thyllore_effect_core::flame_wave::WAVE_EROSION_SLOTS;
-const WARP_BASE: usize = thyllore_effect_core::flame_wave::WAVE_WARP_BASE;
+const EROSION_SLOTS: usize = thyllore_effect_core::flame::WAVE_EROSION_SLOTS;
+const WARP_BASE: usize = thyllore_effect_core::flame::WAVE_WARP_BASE;
 const WARP_COUNT: usize = 16;
-const MEDIUM_SWIRL_BASE: usize = thyllore_effect_core::flame_wave::WAVE_MEDIUM_SWIRL_BASE;
-const MEDIUM_SWIRL_COUNT: usize = thyllore_effect_core::flame_wave::WAVE_MEDIUM_SWIRL_MODE_COUNT;
-const DETAIL_BASE: usize = thyllore_effect_core::flame_wave::WAVE_DETAIL_BASE;
+const MEDIUM_SWIRL_BASE: usize = thyllore_effect_core::flame::WAVE_MEDIUM_SWIRL_BASE;
+const MEDIUM_SWIRL_COUNT: usize = thyllore_effect_core::flame::WAVE_MEDIUM_SWIRL_MODE_COUNT;
+const DETAIL_BASE: usize = thyllore_effect_core::flame::WAVE_DETAIL_BASE;
 const DETAIL_COUNT: usize = 64;
 const SHELL_BASE_RADIUS: f32 = 0.5;
 const SUPPORT_HEADROOM: f32 = 1.5;
@@ -1591,8 +1591,8 @@ fn outer_cylinder_interval(
     (hi > lo).then_some((lo, hi))
 }
 
-fn branch_field_json(field: &thyllore_effect_core::FlameBranchField) -> Value {
-    let count = (field.count as usize).min(thyllore_effect_core::BRANCH_MAX_ELEMENTS);
+fn branch_field_json(field: &thyllore_effect_core::flame::FlameBranchField) -> Value {
+    let count = (field.count as usize).min(thyllore_effect_core::flame::BRANCH_MAX_ELEMENTS);
     json!({
         "count": field.count,
         "period": round5(field.period),
@@ -2285,7 +2285,7 @@ fn clone_argument(a: &NodeArgument) -> NodeArgument {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_effect_core::FlameEffect;
+    use thyllore_effect_core::flame::FlameEffect;
 
     #[test]
     fn test_trace_default_effect_produces_finite_emission() {
@@ -2332,7 +2332,7 @@ mod tests {
         let trail = Default::default();
         let mut effect = FlameEffect::default();
         effect.time = 2.3;
-        let ubo_off = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_off = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let off = UboCtx::new(&ubo_off, [0.0, 0.5, 3.0]);
         let p = [0.45, 0.42, 0.1];
         let (ps_off, h_off) = off.support_position(p, 0.42);
@@ -2342,7 +2342,7 @@ mod tests {
         effect.branch.period = 0.4;
         effect.branch.gain = 3.0;
         effect.branch.spread = 0.0;
-        let ubo_on = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_on = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         assert!(ubo_on.branch_field.count > 0.0);
         let on = UboCtx::new(&ubo_on, [0.0, 0.5, 3.0]);
         let moved = (0..64)
@@ -2379,17 +2379,17 @@ mod tests {
 
         effect.swirl.speed = 1.3;
         effect.twist.speed = 0.0;
-        let ubo_delegate = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_delegate = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let delegate = UboCtx::new(&ubo_delegate, [0.0, 0.5, 3.0]).twist_angle(0.09, 0.6);
 
         effect.swirl.speed = 0.4;
         effect.twist.speed = 1.3;
-        let ubo_own = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_own = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let own = UboCtx::new(&ubo_own, [0.0, 0.5, 3.0]).twist_angle(0.09, 0.6);
         assert_eq!(delegate, own, "twist_speed must override the rate exactly");
 
         effect.twist.speed = 2.6;
-        let ubo_fast = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_fast = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let fast = UboCtx::new(&ubo_fast, [0.0, 0.5, 3.0]).twist_angle(0.09, 0.6);
         assert_ne!(
             delegate, fast,
@@ -2405,14 +2405,14 @@ mod tests {
         let baked = Default::default();
         let trail = Default::default();
         let mut effect = FlameEffect::default();
-        let ubo_off = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_off = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let off = UboCtx::new(&ubo_off, [0.0, 0.5, 3.0]);
         for h in [0.0, 0.5, 1.0] {
             assert_eq!(off.burnout_boost(h), 0.0);
         }
 
         effect.carve.burnout_gain = 2.0;
-        let ubo_on = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_on = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let on = UboCtx::new(&ubo_on, [0.0, 0.5, 3.0]);
         let base = on.burnout_boost(0.0);
         let mid = on.burnout_boost(0.5);
@@ -2425,7 +2425,7 @@ mod tests {
         assert!(top <= effect.carve.burnout_gain);
 
         effect.carve.tip.reach *= 4.0;
-        let ubo_deep = thyllore_effect_core::build_flame_ubo(&effect, &baked, &trail);
+        let ubo_deep = thyllore_effect_core::flame::build_flame_ubo(&effect, &baked, &trail);
         let deep = UboCtx::new(&ubo_deep, [0.0, 0.5, 3.0]);
         assert!(
             deep.burnout_boost(0.5) > mid,
@@ -2438,7 +2438,7 @@ mod tests {
     #[test]
     fn test_faddeeva_ray_produces_finite_emission() {
         let effect = FlameEffect::default();
-        let ubo = thyllore_effect_core::build_flame_ubo(
+        let ubo = thyllore_effect_core::flame::build_flame_ubo(
             &effect,
             &Default::default(),
             &Default::default(),

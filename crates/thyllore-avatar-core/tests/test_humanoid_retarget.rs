@@ -2,8 +2,8 @@
 
 mod support;
 
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_anim_core::editable::{curve_add_keyframe, curve_sample};
 
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::motion::systems::bake::bake_humanoid_clip;

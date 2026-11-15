@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3, Vec4};
 use thyllore_anim_core::AnimationSystem;
-use thyllore_model_core::mesh::{Vertex, VertexData};
 use thyllore_model_core::MeshMorph;
+use thyllore_model_core::{Vertex, VertexData};
 
 use crate::model_result::{name_unnamed_material, LoadedMesh, ModelLoadResult};
 

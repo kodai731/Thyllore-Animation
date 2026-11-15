@@ -7,7 +7,7 @@ use super::{
 };
 use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::water::gpu_targets::WaterRenderTargets;
-use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
+use thyllore_effect_core::water::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
 use thyllore_vulkan_core::pipeline::{DepthCompare, DepthTestConfig, RRPipeline};

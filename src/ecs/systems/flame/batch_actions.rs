@@ -1,11 +1,11 @@
 use anyhow::{bail, Result};
-use thyllore_effect_core::TextureFitGroups;
+use thyllore_effect_core::flame::TextureFitGroups;
 
 use crate::ecs::component::{ClipSchedule, FlameBaked, FlameEffect};
 use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionState};
+use crate::ecs::systems::find_entity_clip_id;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
-use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
 use crate::ecs::world::{Entity, World};

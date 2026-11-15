@@ -9,7 +9,7 @@ use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
 
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
-use crate::ecs::systems::humanoid_bake_systems::build_role_retarget_context;
+use crate::ecs::systems::build_role_retarget_context;
 use thyllore_anim_core::Skeleton;
 
 pub fn build_humanoid_rig(
@@ -96,7 +96,7 @@ pub fn build_track_name_table(
     (track_bones, track_names)
 }
 
-use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
+use thyllore_anim_core::editable::clip_remap_bone_ids;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
@@ -201,9 +201,8 @@ mod tests {
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
 
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
-        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
-            fbx_path.to_str().unwrap(),
-        );
+        let load_result =
+            thyllore_importer_core::fbx::load_fbx_to_graphics_resources(fbx_path.to_str().unwrap());
         let (fbx_result, _) = load_result.expect("Failed to load FBX");
         fbx_result
             .animation_system
@@ -358,7 +357,7 @@ mod tests {
             let mut clip = EditableAnimationClip::new(source_id, "user".to_string());
             let track = clip.add_track(999, "Head".to_string());
             let curve = track.get_curve_mut(thyllore_anim_core::editable::PropertyType::RotationX);
-            thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe(curve, 0.0, 0.5);
+            thyllore_anim_core::editable::curve_add_keyframe(curve, 0.0, 0.5);
             library
                 .source_clips
                 .insert(source_id, SourceClip::new(source_id, clip));
@@ -454,9 +453,8 @@ mod tests {
 #[cfg(test)]
 pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
     let skeleton = {
-        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
-            fbx_path.to_str().unwrap(),
-        );
+        let load_result =
+            thyllore_importer_core::fbx::load_fbx_to_graphics_resources(fbx_path.to_str().unwrap());
         let (fbx_result, _) = load_result.expect("Failed to load FBX");
         fbx_result
             .animation_system

@@ -1,4 +1,4 @@
-use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
+use crate::volume::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use glam::Vec3;
 
 // Tapered capsule as a compact-support shell in the squared distance to the segment [a, b]:
@@ -235,7 +235,7 @@ impl VolumeCapsule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::volume::knots::RAY_MAX_KNOTS;
+    use crate::volume::RAY_MAX_KNOTS;
 
     fn midpoint_reference_steps(
         capsule: &VolumeCapsule,

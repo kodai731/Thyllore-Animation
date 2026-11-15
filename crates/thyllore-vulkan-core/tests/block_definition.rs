@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use thyllore_effect_core::{FlameUBO, LightningSegmentsUBO, LightningUBO, WaterUBO, WindUBO};
+use thyllore_effect_core::flame::FlameUBO;
+use thyllore_effect_core::lightning::{LightningSegmentsUBO, LightningUBO};
+use thyllore_effect_core::water::WaterUBO;
+use thyllore_effect_core::wind::WindUBO;
 use thyllore_render_core::{FrameUBO, MaterialUBO, ObjectUBO};
 use thyllore_spirv_reflect::{
     compare_block_layout, BlockCoverage, DescriptorKind, GpuBlock, LayoutDifference, ReflectedBlock,

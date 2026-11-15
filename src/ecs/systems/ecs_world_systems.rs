@@ -84,7 +84,8 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
 }
 
 pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
-    use crate::ecs::{create_pose_from_rest, sample_clip_to_pose};
+    use crate::ecs::systems::sample_clip_to_pose;
+    use thyllore_anim_core::create_pose_from_rest;
 
     let animated_entities = world.query_animated();
 

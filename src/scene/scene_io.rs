@@ -98,9 +98,7 @@ fn save_animation_clips(
     let mut animation_clips = Vec::new();
     let mut saved_paths = std::collections::HashSet::new();
 
-    for (clip_id, clip_name) in
-        crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library)
-    {
+    for (clip_id, clip_name) in crate::ecs::systems::clip_library_clip_names(&clip_library) {
         if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
             let relative_path = format!("animations/{}.anim.ron", clip_filename);

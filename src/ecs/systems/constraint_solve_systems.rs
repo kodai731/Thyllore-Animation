@@ -1,7 +1,7 @@
 use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::ecs::component::ConstraintSet;
-use crate::ecs::systems::compute_pose_global_transforms;
+use thyllore_anim_core::compute_pose_global_transforms;
 use thyllore_anim_core::{
     decompose_transform, normalize_quat, AimConstraintData, BoneId, ConstraintType,
     IkConstraintData, ParentConstraintData, PositionConstraintData, RotationConstraintData,

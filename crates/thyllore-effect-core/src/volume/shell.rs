@@ -1,5 +1,5 @@
-use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use crate::volume::slang;
+use crate::volume::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use glam::Vec3;
 use thyllore_math_core::{
     biweight, biweight_poly, one_minus_smootherstep_poly, poly_from_quadratic,

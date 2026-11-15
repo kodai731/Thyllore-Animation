@@ -13,7 +13,7 @@ use crate::ecs::resource::{ExpressionLibraryState, ModelState};
 use crate::ecs::systems::morph_weight_systems::for_each_morph_sibling;
 use crate::ecs::world::{Entity, World};
 use thyllore_model_core::MeshMorph;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn sync_expression_library(world: &mut World) {
     let Some(model_path) = world

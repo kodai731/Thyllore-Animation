@@ -16,7 +16,7 @@ pub fn expand_ubo_pack(input: &DeriveInput) -> Result<TokenStream> {
     let assignments = collect_assignments(&data.fields)?;
 
     Ok(quote! {
-        impl #impl_generics ::thyllore_effect_core::gpu_pack::UboPack<#target>
+        impl #impl_generics ::thyllore_effect_core::UboPack<#target>
             for #name #type_generics #where_clause
         {
             fn pack(&self, ubo: &mut #target) {

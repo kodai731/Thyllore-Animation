@@ -5,7 +5,7 @@ use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::spring_bone::{ChainRamp, RampEnd, RampScope};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Debug)]
 pub struct ApplyChainRamp {

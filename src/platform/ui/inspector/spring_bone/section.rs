@@ -5,10 +5,10 @@ use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
-use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::resource::{
     AddChainForm, AddColliderForm, AvatarSetupState, HierarchyState, SpringBoneInspectorState,
 };
+use crate::ecs::resource::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;

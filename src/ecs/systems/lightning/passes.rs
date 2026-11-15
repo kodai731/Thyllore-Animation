@@ -11,10 +11,11 @@ use crate::hooks::pass::{
     TargetUse,
 };
 use crate::vulkanr::renderer::deferred::{compute_projected_bounds_scissor, full_extent_scissor};
-use thyllore_effect_core::{
-    build_lightning_ubo, compute_lightning_segment_aabb, inverse_view_proj_f64, LightningDebugView,
-    LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_INSTANCES,
+use thyllore_effect_core::lightning::{
+    build_lightning_ubo, compute_lightning_segment_aabb, LightningDebugView, LightningSegmentsUBO,
+    LightningUBO, LIGHTNING_MAX_INSTANCES,
 };
+use thyllore_effect_core::water::inverse_view_proj_f64;
 use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};

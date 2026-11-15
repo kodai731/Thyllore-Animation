@@ -1,8 +1,8 @@
-use crate::core::device::RRDevice;
-use crate::descriptor::pass_manifest::SetRole;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::model;
-use crate::resource::uniform_buffer::{Placement, UniformBuffer};
+use crate::descriptor::SetRole;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::{Placement, UniformBuffer};
 use crate::types::Instance;
 use thyllore_render_core::FrameUBO;
 

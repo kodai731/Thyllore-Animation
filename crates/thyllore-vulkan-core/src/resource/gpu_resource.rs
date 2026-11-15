@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 
 pub use thyllore_vulkan_derive::GpuResource;
 

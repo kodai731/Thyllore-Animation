@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::scalar_clip_systems::{
+use crate::ecs::systems::{
     despawn_entity_with_clip, ensure_scalar_entity_clip, find_entity_clip_id,
 };
 use crate::ecs::world::{Entity, Name, World};

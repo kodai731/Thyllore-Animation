@@ -11,7 +11,7 @@ use super::test_support::{
 };
 use super::*;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::systems::object_picking_systems::resolve_closest_pick;
+use crate::ecs::systems::resolve_closest_pick;
 use crate::ecs::world::{GlobalTransform, Name};
 use glam::{Quat, Vec3};
 
@@ -142,11 +142,7 @@ fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
 
     let mut world = crate::scene::world_with_scene_hooks();
     let mut assets = AssetStorage::new();
-    crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
-        &mut world,
-        &mut assets,
-        clips,
-    );
+    crate::ecs::systems::clip_library_register_loaded(&mut world, &mut assets, clips);
     crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
 
     let flames = world.entities_with::<FlameEffect>();

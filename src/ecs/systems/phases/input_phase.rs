@@ -3,16 +3,18 @@ use glam::{Quat, Vec2, Vec3};
 
 use glam::Mat4;
 
+use crate::ecs::component::GizmoAxis;
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::gizmo::transform::TransformGizmoHandle;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::resource::CurveEditorState;
+use crate::ecs::resource::TransformGizmoHandle;
+use crate::ecs::resource::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::resource::{
     BonePoseOverride, CameraFlyInput, ClipLibrary, HierarchyDisplayMode, ImGuiInputCapture,
     KeyboardModifiers, MeshAssets, MouseInput, ObjectIdReadback, PickPurpose, TimelineState,
     TransformGizmoMode, TransformGizmoState, UiPointerOwner, ViewportInput,
 };
+use crate::ecs::systems::sample_clip_to_pose;
 use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::systems::{
     apply_mesh_selection, camera_anchor_pivot_to_focus, camera_move_to_pose,
@@ -21,11 +23,9 @@ use crate::ecs::systems::{
     fly_direction_is_active, hierarchy_reveal_bone, select_bone_by_mesh_ray, select_bone_by_ray,
     transform_gizmo_systems, CameraMotion,
 };
+use crate::ecs::systems::{gizmo_try_select, gizmo_update_position_with_constraint};
 use crate::ecs::world::{Entity, GlobalTransform, Parent, Transform};
-use crate::ecs::{
-    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
-};
-use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 use thyllore_anim_core::{BoneId, Skeleton, SkeletonId};
 use thyllore_math_core::screen_to_world_ray;
 
@@ -90,7 +90,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
         let fly = ctx.world.resource::<CameraFlyInput>().clone();
         request_camera_focus_pick(ctx, is_right_clicked, mouse_wheel, &fly);
         let mut camera = ctx.camera_mut();
-        crate::ecs::camera_input_system_inner(
+        crate::ecs::systems::camera_input_system_inner(
             &mut *camera,
             is_right_clicked,
             is_wheel_clicked,
@@ -193,9 +193,9 @@ fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
     let capture_active = ctx.pointer_capture().active;
     if left_just_pressed && !capture_active && ctx.pointer_state().viewport_hovered {
         let camera = ctx.camera();
-        let camera_pos = crate::ecs::compute_camera_position(&camera);
-        let camera_dir = crate::ecs::compute_camera_direction(&camera);
-        let camera_up = crate::ecs::compute_camera_up(&camera);
+        let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+        let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+        let camera_up = crate::ecs::systems::compute_camera_up(&camera);
         let fov_y = camera.fov_y;
         let near_plane = camera.near_plane;
         drop(camera);
@@ -246,12 +246,12 @@ fn reset_light_gizmo_drag(ctx: &mut EcsContext) {
 }
 
 fn update_light_gizmo_position(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<()> {
-    use thyllore_math_core::coordinate_system::perspective_infinite_reverse;
+    use thyllore_math_core::perspective_infinite_reverse;
 
     let camera = ctx.camera();
-    let camera_pos = crate::ecs::compute_camera_position(&camera);
-    let camera_dir = crate::ecs::compute_camera_direction(&camera);
-    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::systems::compute_camera_up(&camera);
     let fov_y = camera.fov_y;
     let near_plane = camera.near_plane;
     drop(camera);
@@ -367,18 +367,16 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vec3, Vec3) {
     let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
 
     let camera = ctx.camera();
-    let camera_pos = crate::ecs::compute_camera_position(&camera);
-    let camera_dir = crate::ecs::compute_camera_direction(&camera);
-    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::systems::compute_camera_up(&camera);
     let fov_y = camera.fov_y;
     let near_plane = camera.near_plane;
     drop(camera);
 
     let view = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let aspect = screen_size.x / screen_size.y;
-    let proj = thyllore_math_core::coordinate_system::perspective_infinite_reverse(
-        fov_y, aspect, near_plane,
-    );
+    let proj = thyllore_math_core::perspective_infinite_reverse(fov_y, aspect, near_plane);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
@@ -561,12 +559,12 @@ fn build_pick_ray(
     width: u32,
     height: u32,
 ) -> crate::ecs::resource::PickRay {
-    use thyllore_math_core::coordinate_system::perspective_infinite_reverse;
+    use thyllore_math_core::perspective_infinite_reverse;
 
     let camera = ctx.camera();
-    let camera_pos = crate::ecs::compute_camera_position(&camera);
-    let camera_dir = crate::ecs::compute_camera_direction(&camera);
-    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::systems::compute_camera_up(&camera);
     let fov_y = camera.fov_y;
     let near_plane = camera.near_plane;
     drop(camera);
@@ -630,9 +628,9 @@ fn process_transform_gizmo_interaction(ctx: &mut EcsContext) -> Result<bool> {
 
 fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: Vec2) -> bool {
     let camera = ctx.camera();
-    let camera_pos = crate::ecs::compute_camera_position(&camera);
-    let camera_dir = crate::ecs::compute_camera_direction(&camera);
-    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::systems::compute_camera_up(&camera);
     let fov_y = camera.fov_y;
     let near_plane = camera.near_plane;
     drop(camera);
@@ -688,9 +686,7 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: Vec2) -> b
 
     let view_mat = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
-    let proj = thyllore_math_core::coordinate_system::perspective_infinite_reverse(
-        fov_y, aspect, near_plane,
-    );
+    let proj = thyllore_math_core::perspective_infinite_reverse(fov_y, aspect, near_plane);
     let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
     let initial_hit = thyllore_math_core::ray_plane_intersection(
@@ -723,9 +719,9 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: Vec2) -> b
 
 fn process_transform_gizmo_drag(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<()> {
     let camera = ctx.camera();
-    let camera_pos = crate::ecs::compute_camera_position(&camera);
-    let camera_dir = crate::ecs::compute_camera_direction(&camera);
-    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let camera_pos = crate::ecs::systems::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::systems::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::systems::compute_camera_up(&camera);
     let fov_y = camera.fov_y;
     let near_plane = camera.near_plane;
     drop(camera);
@@ -1092,7 +1088,7 @@ fn sync_curve_editor_bone(ctx: &mut EcsContext, new_active_bone: Option<BoneId>)
     }
 }
 
-fn find_animated_entity_transform(world: &crate::ecs::World) -> Option<Mat4> {
+fn find_animated_entity_transform(world: &crate::ecs::world::World) -> Option<Mat4> {
     use crate::ecs::world::{Animator, GlobalTransform};
 
     let (entity, _) = world.iter_components::<Animator>().next()?;
@@ -1181,11 +1177,11 @@ fn apply_camera_focus_pick(ctx: &EcsContext, readback: &mut ObjectIdReadback) {
 mod tests {
     use super::*;
     use crate::asset::AssetStorage;
-    use crate::ecs::resource::gizmo::BoneSelectionState;
+    use crate::ecs::resource::BoneSelectionState;
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::systems::hierarchy_select;
     use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe;
-    use crate::ecs::World;
+    use crate::ecs::world::World;
 
     fn world_with_selected_probe_and_hidden_bone_gizmo() -> (World, Entity) {
         let mut world = World::new();

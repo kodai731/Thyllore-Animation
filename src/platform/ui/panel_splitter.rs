@@ -6,7 +6,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::LayoutSnapshot;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const SPLITTER_THICKNESS: f32 = 6.0;
 const SPLITTER_VISUAL_THICKNESS: f32 = 2.0;

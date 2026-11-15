@@ -5,14 +5,14 @@ use serde_json::{json, Value};
 
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{LightningRenderSettings, ProjectionData};
-use crate::ecs::systems::effect_debug_dump::{
+use crate::ecs::systems::{
     build_camera_json, build_light_json, build_projection_json, build_scene_json, matrix_json,
 };
 use crate::ecs::world::{Entity, Name, World};
-use thyllore_effect_core::{
-    build_lightning_ubo, inverse_view_proj_f64, lightning_parameter_snapshot, LightningSegmentsUBO,
-    LightningUBO,
+use thyllore_effect_core::lightning::{
+    build_lightning_ubo, lightning_parameter_snapshot, LightningSegmentsUBO, LightningUBO,
 };
+use thyllore_effect_core::water::inverse_view_proj_f64;
 
 pub const LIGHTNING_DEBUG_DUMP_DIRECTORY: &str = "log/lightning";
 

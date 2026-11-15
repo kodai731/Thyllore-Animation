@@ -95,8 +95,8 @@ mod release_build_tests {
         }
     }
 
-    unsafe fn create_headless_test_device() -> Option<thyllore_vulkan_core::HeadlessContext> {
-        thyllore_vulkan_core::create_headless_context().ok()
+    unsafe fn create_headless_test_device() -> Option<thyllore_vulkan_core::core::HeadlessContext> {
+        thyllore_vulkan_core::core::create_headless_context().ok()
     }
 
     #[test]
@@ -111,7 +111,10 @@ mod release_build_tests {
         assert!(headless.rrdevice.min_uniform_buffer_offset_alignment > 0);
 
         unsafe {
-            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance)
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            )
         };
     }
 
@@ -132,7 +135,10 @@ mod release_build_tests {
         assert!(headless.rrdevice.msaa_samples().bits() > 0);
 
         unsafe {
-            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance)
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            )
         };
     }
 
@@ -149,7 +155,10 @@ mod release_build_tests {
 
         unsafe {
             headless.rrdevice.wait_graphics_queue_idle().unwrap();
-            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance);
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            );
         }
     }
 }
@@ -1096,7 +1105,7 @@ mod transform_tests {
 
 mod message_log_tests {
     use thyllore_animation::ecs::resource::{MessageFilter, MessageLog};
-    use thyllore_animation::ecs::systems::message_log_systems::{
+    use thyllore_animation::ecs::systems::{
         message_log_clear_buffer, message_log_filtered_messages,
     };
     use thyllore_animation::logger::message_buffer::{MessageBuffer, MessageLevel};

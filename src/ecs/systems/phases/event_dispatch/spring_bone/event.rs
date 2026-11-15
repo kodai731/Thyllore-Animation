@@ -10,11 +10,11 @@ use crate::ecs::component::SpringColliderGroupId;
 use crate::ecs::component::SpringColliderId;
 use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
+use crate::ecs::resource::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::spring_bone::{JointForce, SpringForceModel};
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum SpringBoneEvent {

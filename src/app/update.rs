@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
-use crate::ecs::run_frame;
+use crate::ecs::systems::run_frame;
 use crate::ecs::FrameContext;
-use thyllore_vulkan_core::core::device::RRDevice;
+use thyllore_vulkan_core::core::RRDevice;
 
 use anyhow::Result;
 use thyllore_vulkan_core::resource::{GpuResource, HostBuffer, HostBufferUsage};

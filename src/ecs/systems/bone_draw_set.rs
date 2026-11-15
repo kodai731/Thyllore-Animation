@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::ecs::component::SpringBoneSetup;
-use crate::ecs::resource::gizmo::{BoneDrawMode, BoneSelectionState};
+use crate::ecs::resource::{BoneDrawMode, BoneSelectionState};
 use thyllore_anim_core::{BoneId, Skeleton};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

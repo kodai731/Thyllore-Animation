@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
-use thyllore_ml_core::copilot::v2::inference::CONTEXT_LENGTH;
 use thyllore_ml_core::degrade::degrade_context_window;
+use thyllore_ml_core::v2::inference::CONTEXT_LENGTH;
 
 use crate::ml::{build_engine_feedback_record, FeedbackSenderHandle};
 use thyllore_anim_core::editable::PropertyType;

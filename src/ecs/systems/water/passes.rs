@@ -68,7 +68,7 @@ fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
     water_scene_bindings(ctx)?;
 
     let mut waters: Vec<Entity> = ctx.world.entities_with::<WaterTorusEffect>();
-    waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
+    waters.truncate(thyllore_effect_core::water::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;
     }
@@ -113,7 +113,7 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<Rect2D>
                 .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
                 .map(|accum| accum.frame_index as u32)
                 .unwrap_or(0);
-            let model = thyllore_effect_core::build_water_ubo(&effect, frame_index)
+            let model = thyllore_effect_core::water::build_water_ubo(&effect, frame_index)
                 .model
                 .to_mat4();
             compute_bounds_scissor(
@@ -152,21 +152,24 @@ fn first_water_accum(
 
 impl WaterFrame {
     /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
-    fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::WaterSecondaryRays {
+    fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::water::WaterSecondaryRays {
         let trace_available = ctx
             .world
             .get_resource::<EffectTraceGpuState>()
             .is_some_and(|state| state.pipeline.is_some() && state.descriptor.is_some());
         match self.settings.secondary_rays {
-            thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
-                thyllore_effect_core::WaterSecondaryRays::RayQuery
+            thyllore_effect_core::water::WaterSecondaryRays::RayTracingPipeline
+                if !trace_available =>
+            {
+                thyllore_effect_core::water::WaterSecondaryRays::RayQuery
             }
             requested => requested,
         }
     }
 
     fn is_trace_enabled(&self, ctx: &PassContext) -> bool {
-        self.secondary_rays(ctx) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
+        self.secondary_rays(ctx)
+            == thyllore_effect_core::water::WaterSecondaryRays::RayTracingPipeline
             && ctx
                 .world
                 .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
@@ -269,10 +272,8 @@ impl RenderPassNode for WaterTraceNode {
             &[trace_descriptor.set(SetSlot::frame_slot(frame_slot))?],
         );
         let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
-        let inv_view_proj = crate::ecs::systems::water::probe::inverse_view_proj_f64(
-            projection.proj,
-            projection.view,
-        );
+        let inv_view_proj =
+            crate::ecs::systems::water::inverse_view_proj_f64(projection.proj, projection.view);
         let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
         let light_position = ctx
             .world
@@ -826,13 +827,15 @@ impl RenderPassNode for WaterShadingNode {
 unsafe fn record_water_ubo_updates(
     ctx: &PassContext,
     render: &thyllore_vulkan_core::FrameRenderContext,
-    water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<thyllore_effect_core::WaterUBO>,
+    water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<
+        thyllore_effect_core::water::WaterUBO,
+    >,
     waters: &[crate::ecs::world::Entity],
     command_buffer: CommandBuffer,
-) -> Result<Vec<(thyllore_effect_core::WaterUBO, u32)>> {
+) -> Result<Vec<(thyllore_effect_core::water::WaterUBO, u32)>> {
     let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
     let inv_view_proj =
-        crate::ecs::systems::water::probe::inverse_view_proj_f64(projection.proj, projection.view);
+        crate::ecs::systems::water::inverse_view_proj_f64(projection.proj, projection.view);
     let settings = ctx
         .world
         .get_resource::<crate::ecs::resource::WaterRenderSettings>()
@@ -851,7 +854,8 @@ unsafe fn record_water_ubo_updates(
             .cloned()
             .unwrap_or_default();
 
-        let mut ubo = thyllore_effect_core::build_water_ubo(effect, accum.frame_index as u32);
+        let mut ubo =
+            thyllore_effect_core::water::build_water_ubo(effect, accum.frame_index as u32);
         ubo.inv_view_proj = inv_view_proj.into();
         ubo.temporal = [accum.weight, accum.frame_index as f32, 0.0, 0.0];
         ubo.composite[3] = settings.caustic_debug as f32;

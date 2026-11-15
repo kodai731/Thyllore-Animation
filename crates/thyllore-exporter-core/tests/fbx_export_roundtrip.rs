@@ -13,10 +13,10 @@ fn test_fbx_roundtrip_stickman() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
 
-    let result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+    let result = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
         .expect("Failed to load graphics resources");
     let (load_result, _) = result;
 
@@ -131,10 +131,10 @@ fn test_fbx_roundtrip_stickman_with_animation() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -285,10 +285,10 @@ fn test_exported_bone_node_types_match_original() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -381,10 +381,10 @@ fn test_compare_anim_structure() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -476,10 +476,10 @@ fn test_blender_animation_import() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -652,10 +652,10 @@ fn test_fbx_roundtrip_skinned_fly() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -912,10 +912,10 @@ fn test_blender_skinned_fly_import() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path)
         .expect("Failed to load original FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
 
     let skeleton = load_result
@@ -1082,10 +1082,10 @@ fn test_blender_no_import_warnings_stickman() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
-        .expect("Failed to load FBX");
+    let fbx_model =
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
     let skeleton = load_result
         .animation_system
@@ -1133,10 +1133,10 @@ fn test_blender_no_import_warnings_skinned() {
         return;
     }
 
-    let fbx_model = thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(original_path)
-        .expect("Failed to load FBX");
+    let fbx_model =
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load FBX");
     let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(original_path)
+        thyllore_importer_core::fbx::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
     let skeleton = load_result
         .animation_system
@@ -1179,10 +1179,9 @@ fn load_stickman_for_roundtrip() -> Option<(
     }
 
     let fbx_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
-    let (load_result, _) =
-        thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(path)
-            .expect("Failed to load graphics");
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
+    let (load_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(path)
+        .expect("Failed to load graphics");
 
     let skeleton = load_result
         .animation_system

@@ -150,7 +150,7 @@ pub fn clip_drag_preview_times(
 mod tests {
     use super::*;
     use crate::ecs::component::ClipSchedule;
-    use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+    use crate::ecs::systems::clip_schedule_add_instance;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
     use thyllore_anim_core::editable::{EditableAnimationClip, PropertyType, SourceClip};
 

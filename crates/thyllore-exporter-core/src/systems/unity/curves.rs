@@ -187,6 +187,6 @@ mod tests {
         assert_eq!(keys[1].in_slope, 100.0);
     }
 
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    use thyllore_anim_core::editable::curve_add_keyframe;
     use thyllore_anim_core::editable::BezierHandle;
 }

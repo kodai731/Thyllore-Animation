@@ -317,8 +317,7 @@ fn inverse_view_proj_f64_is_inverse_of_proj_times_view() {
     // Build a real view/proj pair using perspective + translation (like frame_systems.rs)
     let fov = f32::to_radians(std::f32::consts::FRAC_PI_4);
     let aspect = 16.0 / 9.0;
-    let proj =
-        thyllore_math_core::coordinate_system::perspective_infinite_reverse(fov, aspect, 0.1);
+    let proj = thyllore_math_core::perspective_infinite_reverse(fov, aspect, 0.1);
 
     // View matrix: camera at (0, 0, 5) looking at origin
     // view = inverse(translation(0, 0, 5)) = translation(0, 0, -5)
@@ -562,7 +561,7 @@ fn water_scene_roundtrip_keeps_parameters_and_preset() {
 
     let mut restored = crate::scene::world_with_scene_hooks();
     let mut restored_assets = crate::asset::AssetStorage::new();
-    crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+    crate::ecs::systems::clip_library_register_loaded(
         &mut restored,
         &mut restored_assets,
         loaded.clips.clone(),

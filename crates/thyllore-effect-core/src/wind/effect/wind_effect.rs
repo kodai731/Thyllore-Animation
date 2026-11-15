@@ -1,9 +1,9 @@
 use glam::{Mat4, Quat, Vec3};
 
-use crate::wind::ownership::WindParameterOwner;
+use crate::wind::WindParameterOwner;
 
 #[derive(Clone, Debug, PartialEq, crate::UboPack, thyllore_scene_core::SceneFields)]
-#[ubo(target = crate::WindUBO)]
+#[ubo(target = crate::wind::WindUBO)]
 #[scene(key = "wind_tornado", tag = WindParameterOwner, owner = Frame, tags = WIND_PARAMETER_OWNERSHIP, snapshot = wind_parameter_snapshot, scalars = WIND_SCALAR_PARAMS, ui = WIND_UI_PARAMS, overwrite = overwrite_wind_persisted_fields)]
 pub struct WindTornadoEffect {
     #[ubo("optics.z")]
@@ -192,10 +192,10 @@ pub fn build_wind_model_matrix(effect: &WindTornadoEffect) -> Mat4 {
 }
 
 impl crate::EffectPresets for WindTornadoEffect {
-    const PRESET_NAMES: &'static [&'static str] = crate::WIND_PRESET_NAMES;
+    const PRESET_NAMES: &'static [&'static str] = crate::wind::WIND_PRESET_NAMES;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        crate::apply_wind_preset(self, name)
+        crate::wind::apply_wind_preset(self, name)
     }
 }
 

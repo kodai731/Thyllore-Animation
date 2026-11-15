@@ -1,5 +1,5 @@
 use crate::ecs::resource::{ClipLibrary, TimelineState};
-use crate::ecs::systems::clip_library_systems::clip_library_clip_names;
+use crate::ecs::systems::clip_library_clip_names;
 use crate::ecs::world::World;
 use crate::hooks::scene::{decode_scene_value, encode_scene_value, SceneValue};
 use crate::hooks::scene_resource::SceneResourceHook;

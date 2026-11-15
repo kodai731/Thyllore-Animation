@@ -10,9 +10,8 @@ use thyllore_anim_core::{AnimationClip, BoneId, Skeleton};
 use thyllore_math_core::quaternion_to_euler_degrees;
 
 use super::constraint_solve_systems::apply_constraints;
-use super::skeleton_pose_systems::{
-    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
-};
+use super::skeleton_pose_systems::sample_clip_to_pose;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 
 pub struct BakeConfig {
     pub start_time: f32,

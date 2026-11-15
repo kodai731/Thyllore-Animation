@@ -2,8 +2,9 @@ use anyhow::Result;
 
 use super::ray_query_pass::collect_selected_mesh_ids;
 use crate::app::App;
-use crate::ecs::{PassContext, World};
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use crate::ecs::world::World;
+use crate::ecs::PassContext;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::types::CommandBuffer;
 
 fn debug_view_mode_value(mode: crate::ecs::resource::DebugViewMode) -> i32 {

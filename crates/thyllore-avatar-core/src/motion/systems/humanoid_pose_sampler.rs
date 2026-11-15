@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::curve_ops::curve_sample;
-use thyllore_anim_core::editable::systems::morph_sample::sample_morph_tracks;
+use thyllore_anim_core::editable::curve_sample;
+use thyllore_anim_core::editable::sample_morph_tracks;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use crate::humanoid::components::mapping::HumanoidMapping;
 use crate::humanoid::components::role::HumanoidRole;

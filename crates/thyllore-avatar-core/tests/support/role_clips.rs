@@ -1,6 +1,6 @@
 #![cfg(test)]
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+use thyllore_anim_core::editable::curve_add_keyframe;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 

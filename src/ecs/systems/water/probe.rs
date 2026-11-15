@@ -1,7 +1,7 @@
 use glam::{vec4, Mat4, Vec3};
 use serde::Serialize;
 
-pub use thyllore_effect_core::inverse_view_proj_f64;
+pub use thyllore_effect_core::water::inverse_view_proj_f64;
 
 /// Which root to compare: nearest (roots[0]) or exit (roots[1]).
 #[derive(Debug, Clone, Copy)]

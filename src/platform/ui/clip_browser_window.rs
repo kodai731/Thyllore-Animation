@@ -7,7 +7,7 @@ use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::SourceClipId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -116,16 +116,14 @@ fn build_clip_list(
     timeline_state: &TimelineState,
     world: &World,
 ) {
-    let clip_names =
-        crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
+    let clip_names = crate::ecs::systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text_disabled("No clips");
         return;
     }
 
-    let reference_counts =
-        crate::ecs::systems::clip_library_systems::clip_library_count_references(world);
+    let reference_counts = crate::ecs::systems::clip_library_count_references(world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 

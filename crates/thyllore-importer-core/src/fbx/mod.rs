@@ -1,6 +1,6 @@
 mod blend_shape;
-pub mod fbx;
-pub mod loader;
+mod fbx;
+mod loader;
 
-pub use fbx::{FbxModel, LoadedConstraint};
+pub use fbx::{load_fbx_with_ufbx, BoneNode, FbxAxesInfo, FbxModel, LoadedConstraint};
 pub use loader::{load_fbx_to_graphics_resources, FbxLoadResult, FbxMeshData, FbxNodeInfo};

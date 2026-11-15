@@ -5,12 +5,12 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use super::error::shape_mismatch;
-use crate::copilot::v2::forecast;
-use crate::copilot::v2::inference::{
-    V2CurveCopilotRequest, V2CurveCopilotSession, CONTEXT_LENGTH, MAX_HORIZON,
-};
 use crate::degrade::{degrade_context_window, now_unix, DegradeGate, DEGRADED_CONTEXT_LENGTH};
 use crate::mode::CurveCopilotMode;
+use crate::v2::forecast;
+use crate::v2::inference::{
+    V2CurveCopilotRequest, V2CurveCopilotSession, CONTEXT_LENGTH, MAX_HORIZON,
+};
 use thyllore_ml_api::python::anyhow_to_pyerr;
 
 fn degrade_gate() -> &'static DegradeGate {

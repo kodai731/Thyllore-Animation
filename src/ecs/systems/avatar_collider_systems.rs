@@ -12,7 +12,7 @@ use thyllore_anim_core::spring_bone::replace_fitted_body_colliders;
 use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
 use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn fit_body_colliders(
     world: &mut World,

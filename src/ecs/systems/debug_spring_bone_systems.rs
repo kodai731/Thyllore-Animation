@@ -1,7 +1,7 @@
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{JointForce, VrmJointForce};
 
-use crate::asset::storage::AssetStorage;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
     ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
     SpringColliderGroup, SpringJointParam, WithSpringBone,

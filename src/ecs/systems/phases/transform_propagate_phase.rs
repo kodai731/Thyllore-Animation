@@ -3,10 +3,10 @@ use std::time::Instant;
 
 use glam::Mat4;
 
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::{AnimationType, PhaseSubTimings};
 use crate::ecs::systems::skeleton_gizmos_clear;
-use crate::ecs::transform_propagation_system;
+use crate::ecs::systems::transform_propagation_system;
 use crate::ecs::FrameContext;
 use thyllore_anim_core::SkeletonId;
 
@@ -50,7 +50,7 @@ pub fn run_transform_propagate_phase(
         .insert(TRANSFORM_PROPAGATE_PHASE, sub);
 }
 
-fn skeleton_gizmos_are_stale(world: &crate::ecs::World) -> bool {
+fn skeleton_gizmos_are_stale(world: &crate::ecs::world::World) -> bool {
     use crate::ecs::world::Animator;
 
     let has_cached_skeleton = world
@@ -61,7 +61,7 @@ fn skeleton_gizmos_are_stale(world: &crate::ecs::World) -> bool {
     has_cached_skeleton && !has_animated_entity
 }
 
-fn find_skin_entity_transform(world: &crate::ecs::World) -> Mat4 {
+fn find_skin_entity_transform(world: &crate::ecs::world::World) -> Mat4 {
     use crate::ecs::world::{Animator, GlobalTransform};
 
     world
@@ -87,12 +87,12 @@ mod tests {
     use super::*;
     use crate::ecs::component::{motion_path_position, MotionPath};
     use crate::ecs::resource::FrameClock;
-    use crate::ecs::sync_motion_paths;
+    use crate::ecs::systems::sync_motion_paths;
     use crate::ecs::world::{Animator, GlobalTransform, Transform};
     use glam::Vec3;
 
-    fn create_world_with_animated_entity(translation: Vec3) -> crate::ecs::World {
-        let mut world = crate::ecs::World::new();
+    fn create_world_with_animated_entity(translation: Vec3) -> crate::ecs::world::World {
+        let mut world = crate::ecs::world::World::new();
 
         let mut transform = Transform::default();
         transform.translation = translation;
@@ -119,7 +119,7 @@ mod tests {
         world
     }
 
-    fn insert_bone_gizmo_with_cached_skeleton(world: &mut crate::ecs::World) {
+    fn insert_bone_gizmo_with_cached_skeleton(world: &mut crate::ecs::world::World) {
         let mut bone_gizmo = BoneGizmoData::default();
         bone_gizmo.visible = true;
         bone_gizmo.cached_skeleton_id = Some(1);
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn motion_path_position_reaches_global_transform_in_the_same_frame() {
-        let mut world = crate::ecs::World::new();
+        let mut world = crate::ecs::world::World::new();
         world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
         world.resource_mut::<FrameClock>().frame = 15;
 

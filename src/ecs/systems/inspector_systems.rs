@@ -5,7 +5,7 @@ use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degree
 use crate::asset::AssetStorage;
 use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {

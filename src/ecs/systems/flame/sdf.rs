@@ -11,9 +11,9 @@ fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
     let Some(source) = source else {
         return white_pixel;
     };
-    match thyllore_effect_core::flame_sdf::load_flame_sdf(&source.path) {
+    match thyllore_effect_core::flame::load_flame_sdf(&source.path) {
         Ok(sdf) => {
-            let pixels = thyllore_effect_core::flame_sdf::encode_sdf_rgba8(&sdf);
+            let pixels = thyllore_effect_core::flame::encode_sdf_rgba8(&sdf);
             (pixels, sdf.width, sdf.height)
         }
         Err(e) => {

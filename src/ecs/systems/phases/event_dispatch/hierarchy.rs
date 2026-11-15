@@ -2,14 +2,14 @@ use glam::Vec3;
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
-use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
     AssetEditCommand, AssetEditQueue, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue,
     HierarchyState, TimelineState,
 };
+use crate::ecs::resource::{BoneDisplayStyle, BoneDrawMode};
+use crate::ecs::resource::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_reveal_bone, hierarchy_select,
@@ -21,7 +21,7 @@ use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
 use glam::Quat;
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum HierarchyEvent {

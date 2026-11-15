@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 use glam::Vec3;
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 mod support;
 
@@ -45,10 +45,7 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
     for frame_idx in 0..=total_frames {
         let time = frame_idx as f32 / 30.0;
         let mut remapped = clip.clone();
-        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(
-            &mut remapped,
-            &name_to_id,
-        );
+        thyllore_anim_core::editable::clip_remap_bone_ids(&mut remapped, &name_to_id);
         let sampled =
             thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoid_pose(
                 &remapped, &mapping, time,

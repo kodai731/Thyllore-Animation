@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use thyllore_effect_core::WaterUBO;
+use thyllore_effect_core::water::WaterUBO;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::water_resolve;
 use thyllore_vulkan_core::descriptor::{

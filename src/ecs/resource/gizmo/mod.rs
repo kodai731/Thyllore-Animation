@@ -1,10 +1,10 @@
-pub mod bone;
-pub mod bone_selection;
-pub mod constraint;
-pub mod grid;
-pub mod light;
-pub mod spring_bone;
-pub mod transform;
+mod bone;
+mod bone_selection;
+mod constraint;
+mod grid;
+mod light;
+mod spring_bone;
+mod transform;
 
 pub use bone::*;
 pub use bone_selection::*;

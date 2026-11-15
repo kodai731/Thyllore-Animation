@@ -5,11 +5,11 @@ use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
     StaticLineMesh,
 };
-use crate::ecs::resource::gizmo::grid::GridGizmoData;
-use crate::ecs::resource::gizmo::light::LightGizmoData;
+use crate::ecs::resource::GridGizmoData;
+use crate::ecs::resource::LightGizmoData;
 use thyllore_math_core::{
-    coordinate_system::perspective_infinite_reverse, is_point_in_rect,
-    ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
+    is_point_in_rect, perspective_infinite_reverse, ray_to_line_segment_distance,
+    ray_to_point_distance, screen_to_world_ray, view,
 };
 use thyllore_render_core::FRAMES_IN_FLIGHT;
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
@@ -392,7 +392,7 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
 mod tests {
     use super::*;
     use glam::vec3;
-    use thyllore_math_core::coordinate_system::world_to_screen;
+    use thyllore_math_core::world_to_screen;
 
     const GIZMO_POSITION: Vec3 = vec3(1.0, 2.0, 3.0);
     const CAMERA_DISTANCE: f32 = 10.0;

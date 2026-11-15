@@ -1,13 +1,13 @@
 use crate::app::App;
-use crate::ecs::Resource;
+use crate::ecs::world::Resource;
 use crate::hooks::gpu_resource::GpuResourceHooks;
 use crate::vulkanr::context::{
     CommandState, FrameSync, RenderTargets, SurfaceState, SwapchainState,
 };
 use thyllore_vulkan_core::command::RRCommandBuffer;
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
-use thyllore_vulkan_core::render::framebuffer::{create_color_objects, create_framebuffers};
-use thyllore_vulkan_core::render::pass::create_depth_objects;
+use thyllore_vulkan_core::core::RRSwapchain;
+use thyllore_vulkan_core::render::create_depth_objects;
+use thyllore_vulkan_core::render::{create_color_objects, create_framebuffers};
 use thyllore_vulkan_core::resource::{destroy_all_in_reverse, GpuResource};
 
 use anyhow::Result;

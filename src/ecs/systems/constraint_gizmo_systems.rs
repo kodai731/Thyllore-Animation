@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::ConstraintGizmoData;
+use crate::ecs::resource::ConstraintGizmoData;
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 use crate::ecs::world::World;
 use crate::hooks::model_load::LoadedModel;

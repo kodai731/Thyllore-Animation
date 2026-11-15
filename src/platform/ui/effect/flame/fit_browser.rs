@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::FlameUIState;
-use crate::ecs::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use crate::ecs::world::World;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::platform::ui::pointer::is_last_item_double_clicked;
 

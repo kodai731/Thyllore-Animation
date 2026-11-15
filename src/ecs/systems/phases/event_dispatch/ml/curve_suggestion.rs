@@ -5,7 +5,7 @@ use crate::ecs::events::UiCommand;
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum CurveSuggestionEvent {

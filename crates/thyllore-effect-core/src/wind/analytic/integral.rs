@@ -4,13 +4,13 @@ use crate::volume::{
     RayKnots, RayMedium, RayPuffs,
 };
 use crate::volume::{StreakModulation, VolumeShell};
+use crate::wind::build_wind_puffs;
 #[cfg(test)]
-use crate::wind::analytic::eddy::{eddy_sigma, EDDY_OCTAVE_COUNT};
-#[cfg(test)]
-use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
-use crate::wind::analytic::puffs::build_wind_puffs;
+use crate::wind::rotation_phase;
 use crate::wind::WindTornadoEffect;
+#[cfg(test)]
+use crate::wind::{eddy_sigma, EDDY_OCTAVE_COUNT};
+use crate::wind::{h_top, spread_offset, streak_phase, wall_amp};
 #[cfg(test)]
 use glam::Vec3;
 
@@ -23,7 +23,7 @@ const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
 #[derive(Clone, Copy, Debug, PartialEq, crate::UboPack)]
-#[ubo(target = crate::WindUBO)]
+#[ubo(target = crate::wind::WindUBO)]
 pub struct WindShellParams {
     #[ubo("shape.x")]
     pub height: f32,

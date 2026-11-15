@@ -8,7 +8,7 @@ use crate::ecs::systems::chains_skinned_to_entity;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::BoneId;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::platform::ui::bone_choice::collect_bone_list;
 use crate::platform::ui::form_window::{rows_section, FormSection};

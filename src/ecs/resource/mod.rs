@@ -1,7 +1,7 @@
 mod animation;
 mod app;
 mod editor;
-pub mod gizmo;
+mod gizmo;
 mod gpu;
 mod input;
 mod ml;

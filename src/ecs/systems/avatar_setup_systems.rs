@@ -28,7 +28,7 @@ use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_unde
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn animated_spring_space(world: &World) -> SpringSpace {
     world

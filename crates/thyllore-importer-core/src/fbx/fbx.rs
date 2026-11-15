@@ -8,7 +8,7 @@ use thyllore_anim_core::{
 
 pub use thyllore_file_format_core::fbx::{
     BoneAnimation, BoneNode, ClusterInfo, FbxAnimation, FbxAxesInfo, FbxData, FbxModel, KeyFrame,
-    LoadedConstraint, MeshPart,
+    LoadedConstraint,
 };
 
 fn convert_coordinate_axis(axis: ufbx::CoordinateAxis, default: (i32, i32)) -> (i32, i32) {

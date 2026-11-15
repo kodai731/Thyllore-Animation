@@ -12,7 +12,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::find_model_path;
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn load_model_texture_remap(model_path: &str) -> MaterialTextureRemap {
     if Path::new(model_path).file_stem().is_none() {

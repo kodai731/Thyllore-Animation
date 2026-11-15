@@ -19,7 +19,7 @@ impl App {
             .buffers
             .command_buffers()[image_index];
 
-        thyllore_vulkan_core::begin_frame_command_buffer(&self.rrdevice, command_buffer)?;
+        thyllore_vulkan_core::renderer::begin_frame_command_buffer(&self.rrdevice, command_buffer)?;
 
         // Collect GPU timestamp profiler results from previous frame and write to ECS resource.
         // Derive next_frame from the current GpuPassTimings resource (frame + 1), defaulting to 1
@@ -112,7 +112,7 @@ impl App {
             );
             self.begin_main_render_pass(command_buffer, image_index);
             self.record_imgui_rendering(command_buffer, draw_data)?;
-            thyllore_vulkan_core::end_render_pass(&self.rrdevice, command_buffer);
+            thyllore_vulkan_core::renderer::end_render_pass(&self.rrdevice, command_buffer);
             self.gpu_timestamp_profiler
                 .end_scope(&self.rrdevice, command_buffer, image_index);
         } else {
@@ -127,7 +127,7 @@ impl App {
                 self.record_3d_rendering_to_offscreen(command_buffer, image_index, offscreen)?;
                 self.gpu_timestamp_profiler
                     .end_scope(&self.rrdevice, command_buffer, image_index);
-                thyllore_vulkan_core::end_render_pass(&self.rrdevice, command_buffer);
+                thyllore_vulkan_core::renderer::end_render_pass(&self.rrdevice, command_buffer);
             }
 
             self.gpu_timestamp_profiler.begin_scope(
@@ -138,7 +138,7 @@ impl App {
             );
             self.begin_main_render_pass(command_buffer, image_index);
             self.record_imgui_rendering(command_buffer, draw_data)?;
-            thyllore_vulkan_core::end_render_pass(&self.rrdevice, command_buffer);
+            thyllore_vulkan_core::renderer::end_render_pass(&self.rrdevice, command_buffer);
             self.gpu_timestamp_profiler
                 .end_scope(&self.rrdevice, command_buffer, image_index);
         }
@@ -146,7 +146,7 @@ impl App {
         self.gpu_timestamp_profiler
             .end_frame(&self.rrdevice, command_buffer, image_index);
 
-        thyllore_vulkan_core::end_frame_command_buffer(&self.rrdevice, command_buffer)?;
+        thyllore_vulkan_core::renderer::end_frame_command_buffer(&self.rrdevice, command_buffer)?;
 
         Ok(())
     }
@@ -187,7 +187,7 @@ impl App {
         let mut transients_seen = std::collections::HashSet::new();
         for (node, uses) in nodes.iter().zip(&node_uses) {
             let barriers = self.collect_pass_barriers(uses, &mut transients_seen)?;
-            thyllore_vulkan_core::record_pending_barriers(
+            thyllore_vulkan_core::renderer::record_pending_barriers(
                 &self.rrdevice,
                 command_buffer,
                 &barriers,
@@ -211,7 +211,7 @@ impl App {
             return;
         };
 
-        thyllore_vulkan_core::clear_shadow_mask_to_lit(
+        thyllore_vulkan_core::renderer::clear_shadow_mask_to_lit(
             &self.rrdevice,
             command_buffer,
             gbuffer.shadow_mask_image(),
@@ -240,7 +240,7 @@ impl App {
             return;
         };
 
-        thyllore_vulkan_core::record_picked_texel_copy(
+        thyllore_vulkan_core::renderer::record_picked_texel_copy(
             &self.rrdevice,
             command_buffer,
             gbuffer.object_id_image(),

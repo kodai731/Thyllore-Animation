@@ -88,7 +88,7 @@ pub(super) fn onion_skinning_group() -> UiRow<SceneSettingsView> {
         if let Some(o) = v.onion.as_ref() {
             ui.text(format!(
                 "Total ghosts: {}",
-                crate::ecs::compute_total_ghost_count(o)
+                crate::ecs::systems::compute_total_ghost_count(o)
             ));
         }
     }));

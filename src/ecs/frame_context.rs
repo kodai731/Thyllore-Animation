@@ -4,19 +4,17 @@ use anyhow::Result;
 use glam::{Mat4, Vec3};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{
-    BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
-};
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::DebugViewState;
+use crate::ecs::resource::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
 use thyllore_vulkan_core::command::RRCommandPool;
-use thyllore_vulkan_core::core::device::RRDevice;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::resource::GpuBufferRegistry;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::types::Instance;
 use thyllore_vulkan_core::VulkanBackend;
 
@@ -86,17 +84,17 @@ impl<'a> FrameContext<'a> {
     }
 
     pub fn camera_position(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
+        use crate::ecs::systems::compute_camera_position;
         compute_camera_position(&self.camera())
     }
 
     pub fn camera_direction(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_direction;
+        use crate::ecs::systems::compute_camera_direction;
         compute_camera_direction(&self.camera())
     }
 
     pub fn camera_up(&self) -> Vec3 {
-        use crate::ecs::systems::camera_systems::compute_camera_up;
+        use crate::ecs::systems::compute_camera_up;
         compute_camera_up(&self.camera())
     }
 

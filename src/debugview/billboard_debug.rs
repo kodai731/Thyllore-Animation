@@ -1,14 +1,12 @@
-use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::{Camera, LightState};
-use crate::ecs::systems::camera_systems::{
-    compute_camera_direction, compute_camera_position, compute_camera_up,
-};
+use crate::ecs::systems::{compute_camera_direction, compute_camera_position, compute_camera_up};
 use crate::ecs::world::World;
 use crate::vulkanr::context::SwapchainState;
 use glam::{Vec3, Vec4};
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::core::RRSwapchain;
 use thyllore_vulkan_core::descriptor::RRBillboardDescriptorSet;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 
 pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
@@ -145,7 +143,7 @@ fn log_basic_info(
 }
 
 fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
-    use thyllore_math_core::{coordinate_system::perspective_infinite_reverse, view};
+    use thyllore_math_core::{perspective_infinite_reverse, view};
 
     let swapchain_extent = swapchain.swapchain_extent();
 

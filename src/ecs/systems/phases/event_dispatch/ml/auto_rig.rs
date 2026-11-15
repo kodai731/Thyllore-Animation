@@ -3,7 +3,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::{ModelLoadSource, UiCommand};
 use crate::ecs::world::World;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum AutoRigEvent {
@@ -329,7 +329,7 @@ pub(super) fn apply_motion_response(
 
     if let Some(clip) = clip {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+        let new_id = crate::ecs::systems::clip_library_register_and_activate(
             &mut clip_library,
             assets,
             clip,

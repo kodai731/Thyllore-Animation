@@ -10,7 +10,7 @@ pub const DEFAULT_WATER_NAME: &str = "Water";
 
 pub const WATER_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "water",
-    max_instances: thyllore_effect_core::WATER_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::water::WATER_MAX_INSTANCES,
     spawn: spawn_water_instance,
     entities: water_entities,
     default_in_empty_scene: false,
@@ -51,12 +51,7 @@ pub fn spawn_water_with_clip(
     effect: WaterTorusEffect,
 ) -> Entity {
     let entity = spawn_water(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &WATER_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &WATER_DOMAIN);
     entity
 }
 

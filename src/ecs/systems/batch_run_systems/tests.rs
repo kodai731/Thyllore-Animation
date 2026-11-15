@@ -401,7 +401,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
     let keyframes = level["keyframes"].as_array().unwrap();
     assert_eq!(
         keyframes.len(),
-        crate::ecs::systems::scalar_clip_systems::DEBUG_KEYS_PER_CURVE + 1
+        crate::ecs::systems::DEBUG_KEYS_PER_CURVE + 1
     );
     assert!(keyframes
         .iter()
@@ -752,7 +752,7 @@ fn copilot_extend_parses_role_axis_time_frames() {
 
 #[test]
 fn template_then_save_round_trips_a_clip() {
-    use crate::ecs::systems::humanoid_bake_systems::new_empty_clip;
+    use crate::ecs::systems::new_empty_clip;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();

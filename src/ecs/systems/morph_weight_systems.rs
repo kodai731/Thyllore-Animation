@@ -9,8 +9,8 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedMorphWeights, MorphChannelCatalog, MorphWeights};
 use crate::ecs::resource::BlendShapeInspectorState;
 use crate::ecs::world::{Entity, MeshRef, Parent, World};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
 
 pub fn apply_morph_weights(
     world: &mut World,

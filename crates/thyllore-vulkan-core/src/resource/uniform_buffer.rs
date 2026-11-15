@@ -4,9 +4,9 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::DeviceV1_2;
 
-use crate::core::device::RRDevice;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::RRDevice;
+use crate::resource::create_buffer;
+use crate::resource::GpuResource;
 use crate::types::Instance;
 use thyllore_spirv_reflect::GpuBlock;
 

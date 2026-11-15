@@ -5,9 +5,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
-use crate::core::device::RRDevice;
-use crate::resource::buffer::{copy_buffer, create_buffer};
+use crate::core::RRDevice;
 use crate::resource::GpuResource;
+use crate::resource::{copy_buffer, create_buffer};
 use crate::types::Instance;
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 

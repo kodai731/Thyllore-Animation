@@ -1,8 +1,8 @@
-use crate::ecs::World;
+use crate::ecs::world::World;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::renderer::ImageStateTracker;
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::resource::RenderTargetStorage;
 use thyllore_vulkan_core::types::{ImageView, Instance};
 

@@ -8,7 +8,7 @@ struct BloomFrame<'a> {
     downsample_pipeline: &'a thyllore_vulkan_core::pipeline::RRPipeline,
     upsample_pipeline: &'a thyllore_vulkan_core::pipeline::RRPipeline,
     descriptors: &'a thyllore_vulkan_core::descriptor::RRBloomDescriptorSets,
-    targets: crate::ecs::ResRef<'a, crate::ecs::resource::PostProcessFrameTargets>,
+    targets: crate::ecs::world::ResRef<'a, crate::ecs::resource::PostProcessFrameTargets>,
     settings: crate::ecs::resource::BloomSettings,
 }
 

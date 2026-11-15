@@ -3,10 +3,10 @@ use super::path::{
     build_waypoint_path, displace_path, emit_path, rotate_around_axis, scatter_end_offset,
 };
 use super::segment::{clip_to_growth_arrival, push_segment, Segment, LIGHTNING_MAX_SEGMENTS};
-use crate::lightning::analytic::hash_channel::HashChannel;
 use crate::lightning::analytic::timing;
-use crate::lightning::effect::LightningSource;
-use crate::LightningEffect;
+use crate::lightning::HashChannel;
+use crate::lightning::LightningEffect;
+use crate::lightning::LightningSource;
 use glam::Vec3;
 use thyllore_math_core::{hash_f32, hash_u32};
 

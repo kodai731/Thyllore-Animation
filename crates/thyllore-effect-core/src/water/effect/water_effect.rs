@@ -1,9 +1,9 @@
 use glam::{Mat4, Quat, Vec3};
 
-use crate::water::ownership::WaterParameterOwner;
+use crate::water::WaterParameterOwner;
 
 #[derive(Clone, Debug, PartialEq, crate::UboPack, thyllore_scene_core::SceneFields)]
-#[ubo(target = crate::WaterUBO)]
+#[ubo(target = crate::water::WaterUBO)]
 #[scene(key = "water_torus", tag = WaterParameterOwner, owner = Frame, tags = WATER_PARAMETER_OWNERSHIP, snapshot = water_parameter_snapshot, scalars = WATER_SCALAR_PARAMS, ui = WATER_UI_PARAMS, overwrite = overwrite_water_persisted_fields)]
 pub struct WaterTorusEffect {
     #[persist(as = [f32; 3])]
@@ -123,10 +123,10 @@ pub fn advance_water_time(effect: &mut WaterTorusEffect, delta_time: f32) {
 }
 
 impl crate::EffectPresets for WaterTorusEffect {
-    const PRESET_NAMES: &'static [&'static str] = crate::WATER_PRESET_NAMES;
+    const PRESET_NAMES: &'static [&'static str] = crate::water::WATER_PRESET_NAMES;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        crate::apply_water_preset(self, name)
+        crate::water::apply_water_preset(self, name)
     }
 }
 

@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use imgui::{DrawCornerFlags, DrawListMut, StyleVar, Ui};
 
 use crate::ecs::resource::UiWidgetState;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer};
 
 use super::anim::ui_anim;

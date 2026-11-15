@@ -3,7 +3,7 @@ use std::path::Path;
 use imgui::{Condition, StyleVar};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
     clamp_ui_scale, save_ui_settings, CoordinateSpace, MotionPreference, PanelVisibility,
@@ -12,13 +12,13 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
+use crate::platform::ui::theme::segmented_control;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
-use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::platform::ui::form_window::{FormPlacement, FormWindow};
 use crate::platform::ui::scene_settings::{

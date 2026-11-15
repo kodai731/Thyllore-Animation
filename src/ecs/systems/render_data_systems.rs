@@ -1,12 +1,12 @@
 use glam::{Mat4, Vec3};
 
+use crate::ecs::component::RenderData;
 use crate::ecs::component::{DynamicMesh, GpuMeshRef, MeshBuffers};
-use crate::ecs::resource::gizmo::{
+use crate::ecs::resource::GridMeshData;
+use crate::ecs::resource::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,
 };
-use crate::ecs::resource::GridMeshData;
-use crate::ecs::RenderData;
 
 fn frame_slot_mesh_ref<V>(mesh: &DynamicMesh<V>, frame_slot: usize) -> GpuMeshRef {
     GpuMeshRef::new(

@@ -2,9 +2,10 @@ use anyhow::Result;
 
 use crate::app::App;
 use crate::asset::AssetStorage;
-use crate::ecs::{GpuSceneContext, World};
+use crate::ecs::world::World;
+use crate::ecs::GpuSceneContext;
 use crate::vulkanr::context::{CommandState, SwapchainState};
-use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::core::RRSwapchain;
 
 impl App {
     /// Waits for the GPU, borrows the scene parts and runs one rebuild (model load, mesh spawn).

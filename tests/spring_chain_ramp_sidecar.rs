@@ -5,10 +5,10 @@ use thyllore_anim_core::spring_bone::{
     VrmJointForce,
 };
 use thyllore_animation::ecs::systems::skeleton_to_bone_inputs;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::vrchat::sidecar::read_sidecar_json;
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::vrchat::read_sidecar_json;
+use thyllore_avatar_core::vrchat::SidecarJointForce;
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame,
 };
 use thyllore_importer_core::fbx::load_fbx_to_graphics_resources;

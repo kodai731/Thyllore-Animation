@@ -1,4 +1,4 @@
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use thyllore_anim_core::BoneId;
 

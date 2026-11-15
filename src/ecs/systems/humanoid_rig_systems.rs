@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
+use thyllore_avatar_core::humanoid::load_or_infer_rig;
+use thyllore_avatar_core::humanoid::AvatarRig;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
@@ -198,7 +198,7 @@ mod tests {
     use super::*;
     use thyllore_anim_core::editable::SourceClip;
 
-    use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
+    use thyllore_avatar_core::humanoid::save_generic_rig;
 
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
         let load_result =

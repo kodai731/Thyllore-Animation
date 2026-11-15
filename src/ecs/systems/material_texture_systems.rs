@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use thyllore_avatar_core::material::components::texture_remap::MaterialTextureRemap;
-use thyllore_avatar_core::material::systems::texture_remap_io::{
+use thyllore_avatar_core::material::MaterialTextureRemap;
+use thyllore_avatar_core::material::{
     load_material_texture_remap, make_model_relative_path, material_texture_remap_path,
     save_material_texture_remap,
 };

@@ -1,1 +1,1 @@
-pub mod capsule;
+pub(crate) mod capsule;

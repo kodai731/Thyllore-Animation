@@ -8,9 +8,7 @@ use thyllore_anim_core::{
     compose_transform, compute_pose_global_transforms, create_pose_from_rest, decompose_transform,
     BoneId, BoneLocalPose, Skeleton, SkeletonPose,
 };
-use thyllore_avatar_core::vrchat::sidecar_spring::{
-    spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
-};
+use thyllore_avatar_core::vrchat::{spring_setup_from_sidecar, BoneRestFrame, SidecarSpring};
 
 use crate::avatar_setup_bridge::{bone_inputs, BoneSpec};
 use crate::blender_space::{engine_frame_metres, parent_relative_locals, rows};

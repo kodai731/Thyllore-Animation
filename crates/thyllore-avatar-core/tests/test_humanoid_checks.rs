@@ -6,11 +6,11 @@ use support::fixtures::{
     test_humanoid_bone_inputs, with_asymmetric_hand, with_bone_in_two_roles,
     with_long_left_upper_arm, with_spine_below_hips, with_swapped_upper_arms, without_fingers,
 };
-use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
-use thyllore_avatar_core::humanoid::systems::geometry_checks::check_mapping_geometry;
-use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
-use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
+use thyllore_avatar_core::humanoid::check_mapping_geometry;
+use thyllore_avatar_core::humanoid::derive_humanoid_frame;
+use thyllore_avatar_core::humanoid::validate_mapping;
+use thyllore_avatar_core::humanoid::GeometryWarning;
+use thyllore_avatar_core::humanoid::MappingIssue;
 
 #[test]
 fn test_valid_mapping_has_no_issues() {
@@ -180,16 +180,14 @@ fn test_bone_in_three_roles_has_bone_in_two_roles() {
     let (bones, mut mapping) = test_humanoid_bone_inputs();
     let head_idx = *mapping
         .by_role
-        .get(&thyllore_avatar_core::humanoid::components::role::HumanoidRole::Head)
+        .get(&thyllore_avatar_core::humanoid::HumanoidRole::Head)
         .unwrap();
-    mapping.by_role.insert(
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Jaw,
-        head_idx,
-    );
-    mapping.by_role.insert(
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Neck,
-        head_idx,
-    );
+    mapping
+        .by_role
+        .insert(thyllore_avatar_core::humanoid::HumanoidRole::Jaw, head_idx);
+    mapping
+        .by_role
+        .insert(thyllore_avatar_core::humanoid::HumanoidRole::Neck, head_idx);
     let issues = validate_mapping(&mapping, &bones);
 
     let bone_in_two: Vec<_> = issues

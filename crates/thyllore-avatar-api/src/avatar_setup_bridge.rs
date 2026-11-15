@@ -9,17 +9,17 @@ use thyllore_anim_core::spring_bone::{
     SPRING_JOINT_SCALAR_PARAMS, SPRING_JOINT_UI_PARAMS, VRM_JOINT_FORCE_SCALAR_PARAMS,
     VRM_JOINT_FORCE_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::components::chain_gen::RootAttachment;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::stats::components::stats::AvatarStats;
-use thyllore_avatar_core::vrchat::sidecar::{
+use thyllore_avatar_core::cloth_setup::RootAttachment;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::expression::ExpressionLibrary;
+use thyllore_avatar_core::humanoid::infer_mapping;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::stats::AvatarStats;
+use thyllore_avatar_core::vrchat::{
     build_hybrid_bone_map, build_sidecar, AvatarSidecar, SidecarHiddenTriangles, SidecarInput,
     SidecarSubmeshRole,
 };
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, map_sidecar_colliders, spring_setup_from_sidecar, BoneRestFrame,
     ColliderSpace, SidecarSpring, SidecarSpringChain,
 };
@@ -420,8 +420,8 @@ mod tests {
     use crate::blender_space::rows;
 
     use crate::param_rows::ParamDefault;
-    use thyllore_avatar_core::vrchat::sidecar::SidecarBlink;
-    use thyllore_avatar_core::vrchat::sidecar_spring::{
+    use thyllore_avatar_core::vrchat::SidecarBlink;
+    use thyllore_avatar_core::vrchat::{
         SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin, SidecarColliderShape,
         SidecarJointForce, SidecarSpringChain, SidecarSpringJoint,
     };
@@ -762,7 +762,7 @@ mod tests {
     fn sidecar_build_keeps_the_base_fields_the_addon_does_not_edit() {
         let mut base = sidecar_read(&sidecar_build(&build_input()).unwrap()).unwrap();
         base.expressions
-            .push(thyllore_avatar_core::vrchat::sidecar::SidecarExpression {
+            .push(thyllore_avatar_core::vrchat::SidecarExpression {
                 name: "smile".into(),
                 weights: BTreeMap::from([("mouth_smile".to_string(), 1.0)]),
             });

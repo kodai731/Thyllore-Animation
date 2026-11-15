@@ -1,6 +1,6 @@
 use super::*;
 use crate::avatar_setup_bridge::BoneSpec;
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint;
+use thyllore_avatar_core::vrchat::SidecarSpringJoint;
 
 fn spec(name: &str, parent: Option<usize>) -> BoneSpec {
     BoneSpec {

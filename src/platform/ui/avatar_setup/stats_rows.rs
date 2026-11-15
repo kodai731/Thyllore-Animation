@@ -1,6 +1,6 @@
 use crate::ecs::resource::AvatarSetupState;
 use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
-use thyllore_avatar_core::vrchat::rank::{PerformanceRank, Platform, RankReport};
+use thyllore_avatar_core::vrchat::{PerformanceRank, Platform, RankReport};
 
 #[derive(Clone)]
 pub struct StatsView {

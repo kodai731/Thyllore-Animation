@@ -14,8 +14,8 @@ use crate::chain_gen_bridge::{
     membership_vertex_group as membership_vertex_group_of,
     submesh_chain_names as submesh_chain_names_of, GenerateChainsRequest, VERTEX_GROUP_NAMES,
 };
-use thyllore_avatar_core::cloth_setup::components::chain_gen::default_root_of_submesh;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshRole;
+use thyllore_avatar_core::cloth_setup::default_root_of_submesh;
+use thyllore_avatar_core::cloth_setup::SubmeshRole;
 
 #[derive(serde::Serialize)]
 struct ChainRoleEntry {

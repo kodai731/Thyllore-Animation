@@ -12,7 +12,7 @@ use crate::platform::ui::theme::Icon;
 use crate::platform::ui::theme::{icon_button, ButtonState};
 use thyllore_anim_core::editable::{curve_sample, EditableAnimationClip, PropertyType};
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
 use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};

@@ -5,17 +5,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use glam::{Mat4, Vec3};
 
-pub fn load_fixture_bones(
-    convention_id: &str,
-) -> Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput> {
+pub fn load_fixture_bones(convention_id: &str) -> Vec<thyllore_avatar_core::humanoid::BoneInput> {
     load_fixture_rig(convention_id).0
 }
 
 pub fn load_fixture_rig(
     convention_id: &str,
 ) -> (
-    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
-    thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
+    Vec<thyllore_avatar_core::humanoid::BoneInput>,
+    thyllore_avatar_core::motion::RetargetSkeleton,
 ) {
     let fbx_text =
         fs::read_to_string(format!("tests/data/rigs/{}.fbx.txt", convention_id)).unwrap();
@@ -26,8 +24,8 @@ pub fn load_rig_from_fbx_text(
     label: &str,
     fbx_text: &str,
 ) -> (
-    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
-    thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
+    Vec<thyllore_avatar_core::humanoid::BoneInput>,
+    thyllore_avatar_core::motion::RetargetSkeleton,
 ) {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let mut temp_path = std::env::temp_dir();
@@ -49,8 +47,8 @@ pub fn load_rig_from_fbx_text(
 fn nodes_to_fixture(
     nodes: &HashMap<String, thyllore_importer_core::fbx::BoneNode>,
 ) -> (
-    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
-    thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton,
+    Vec<thyllore_avatar_core::humanoid::BoneInput>,
+    thyllore_avatar_core::motion::RetargetSkeleton,
 ) {
     let mut node_list: Vec<_> = nodes.values().collect();
     node_list.sort_by(|a, b| a.name.cmp(&b.name));
@@ -93,38 +91,31 @@ fn nodes_to_fixture(
         compute_world(i, &node_list, &name_to_index, &mut world_transforms);
     }
 
-    let mut bones: Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput> =
-        Vec::with_capacity(n);
-    let mut retarget_bones: Vec<
-        thyllore_avatar_core::motion::components::retarget_skeleton::RetargetBone,
-    > = Vec::with_capacity(n);
+    let mut bones: Vec<thyllore_avatar_core::humanoid::BoneInput> = Vec::with_capacity(n);
+    let mut retarget_bones: Vec<thyllore_avatar_core::motion::RetargetBone> = Vec::with_capacity(n);
     for (i, node) in node_list.iter().enumerate() {
         let world = world_transforms[i].unwrap();
         let (_scale, rot, pos) = world.to_scale_rotation_translation();
 
-        bones.push(
-            thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput {
-                name: node.name.clone(),
-                parent: node
-                    .parent
-                    .as_ref()
-                    .and_then(|p| name_to_index.get(p).copied()),
-                rest_position: [pos.x, pos.y, pos.z],
-            },
-        );
-        retarget_bones.push(
-            thyllore_avatar_core::motion::components::retarget_skeleton::RetargetBone {
-                parent: node
-                    .parent
-                    .as_ref()
-                    .and_then(|p| name_to_index.get(p).copied()),
-                world_position: Vec3::new(pos.x, pos.y, pos.z),
-                world_rotation: rot,
-            },
-        );
+        bones.push(thyllore_avatar_core::humanoid::BoneInput {
+            name: node.name.clone(),
+            parent: node
+                .parent
+                .as_ref()
+                .and_then(|p| name_to_index.get(p).copied()),
+            rest_position: [pos.x, pos.y, pos.z],
+        });
+        retarget_bones.push(thyllore_avatar_core::motion::RetargetBone {
+            parent: node
+                .parent
+                .as_ref()
+                .and_then(|p| name_to_index.get(p).copied()),
+            world_position: Vec3::new(pos.x, pos.y, pos.z),
+            world_rotation: rot,
+        });
     }
 
-    let skeleton = thyllore_avatar_core::motion::components::retarget_skeleton::RetargetSkeleton {
+    let skeleton = thyllore_avatar_core::motion::RetargetSkeleton {
         bones: retarget_bones,
     };
 

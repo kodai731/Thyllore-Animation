@@ -3,15 +3,13 @@ use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::{apply_setting_assignments, setting_names};
+use thyllore_avatar_core::cloth_setup::{
     attachment_or_default, ChainGenRequest, ChainGenSettings, RootAttachment,
 };
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
-use thyllore_avatar_core::cloth_setup::systems::chain_gen;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_cli_core::scalar_assignment_parse;
 
 #[derive(Debug)]
@@ -55,17 +53,17 @@ pub(super) fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn Ba
         Ok(attachment) => attachment,
         Err(e) => return Some(Err(e)),
     };
-    let setting_names = chain_gen::setting_names();
+    let known_setting_names = setting_names();
     let assignments: Vec<(String, f32)> = match setting_parts
         .iter()
-        .map(|part| scalar_assignment_parse(part, &setting_names))
+        .map(|part| scalar_assignment_parse(part, &known_setting_names))
         .collect::<std::result::Result<_, String>>()
     {
         Ok(assignments) => assignments,
         Err(message) => return Some(Err(anyhow!("generate_chain_bones: {message}"))),
     };
     let mut settings = ChainGenSettings::default();
-    if let Err(e) = chain_gen::apply_setting_assignments(&mut settings, &assignments) {
+    if let Err(e) = apply_setting_assignments(&mut settings, &assignments) {
         return Some(Err(e));
     }
     if settings.joint_count == 0 {

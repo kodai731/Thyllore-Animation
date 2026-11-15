@@ -1,9 +1,9 @@
 use crate::ecs::component::CapsuleFitParams;
-use thyllore_avatar_core::cloth_setup::components::chain_gen::RootAttachment;
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::vrchat::rank::Platform;
+use thyllore_avatar_core::cloth_setup::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::RootAttachment;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::vrchat::Platform;
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
@@ -16,7 +16,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
+use thyllore_avatar_core::cloth_setup::{ChainGenRequest, ChainGenSettings};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]

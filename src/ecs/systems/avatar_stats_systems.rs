@@ -1,7 +1,7 @@
 use crate::ecs::component::SpringBoneSetup;
 use std::collections::HashSet;
 use thyllore_anim_core::Skeleton;
-use thyllore_avatar_core::stats::components::stats::AvatarStats;
+use thyllore_avatar_core::stats::AvatarStats;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(crate) fn count_avatar_stats(

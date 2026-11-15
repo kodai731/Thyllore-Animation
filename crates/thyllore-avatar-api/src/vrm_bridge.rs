@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use glam::Vec3;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+use thyllore_avatar_core::humanoid::infer_mapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::vrchat::SidecarSpring;
 use thyllore_avatar_core::vrm::{
     t_pose_warnings, vrm_rest_clearance, VrmMeta, T_POSE_TOLERANCE_DEG,
 };
@@ -94,11 +94,9 @@ pub fn vrm_rest_clearance_warnings(request: &VrmRestClearanceWarningsRequest) ->
 mod tests {
     use std::collections::BTreeMap;
 
-    use thyllore_avatar_core::stats::components::stats::AvatarStats;
-    use thyllore_avatar_core::vrchat::sidecar::{
-        AvatarSidecar, SidecarBlink, SIDECAR_SCHEMA_VERSION,
-    };
-    use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+    use thyllore_avatar_core::stats::AvatarStats;
+    use thyllore_avatar_core::vrchat::SidecarSpring;
+    use thyllore_avatar_core::vrchat::{AvatarSidecar, SidecarBlink, SIDECAR_SCHEMA_VERSION};
 
     use super::*;
 

@@ -22,28 +22,24 @@ use thyllore_anim_core::spring_bone::{
     add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
     SpringJointParam,
 };
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::joint_half_thicknesses;
+use thyllore_avatar_core::cloth_setup::root_head_capsule;
+use thyllore_avatar_core::cloth_setup::{append_chain_bones, write_chain_weights, ChainBoneIds};
+use thyllore_avatar_core::cloth_setup::{
+    cap_root_band, component_labels, compute_chain_weights, place_chains_with_strands,
+    root_attachment_positions, RootBand,
+};
+use thyllore_avatar_core::cloth_setup::{
     chain_name, default_root_of_submesh, BodyCollider, ChainGenInput, ChainGenParams,
     ChainGenReport, ChainGenRequest, ChainGenSettings, ChainPlacement, ChainWeightRecord,
     GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
     RootBandRecord, StrandPlacement, VertexInfluences,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
-use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
-    append_chain_bones, write_chain_weights, ChainBoneIds,
-};
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    cap_root_band, component_labels, compute_chain_weights, place_chains_with_strands,
-    root_attachment_positions, RootBand,
-};
-use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
-    collider_surfaces, retain_torso_skin, supports_garments,
-};
-use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
-use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
-use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::{collider_surfaces, retain_torso_skin, supports_garments};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshSelector};
+use thyllore_avatar_core::collider::HeadCapsule;
+use thyllore_avatar_core::collider::RoleBone;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_math_core::world_y_axis;
 use thyllore_vulkan_core::resource::GraphicsResources;
 

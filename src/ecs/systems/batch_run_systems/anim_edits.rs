@@ -10,11 +10,9 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::{
 use crate::ecs::world::World;
 
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
-use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
-use thyllore_avatar_core::motion::seed::systems::compose_motion::{
-    compose_motion, settle_requests,
-};
+use thyllore_avatar_core::motion::seed::MotionSpec;
+use thyllore_avatar_core::motion::seed::{compose_motion, settle_requests};
+use thyllore_avatar_core::motion::seed::{PoseTable, RotationAxis};
 
 fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
     match axis {
@@ -28,7 +26,7 @@ fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
 fn apply_settle_requests(
     world: &mut World,
     assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+    requests: &[thyllore_avatar_core::motion::seed::SettleRequest],
 ) {
     if requests.is_empty() {
         return;
@@ -89,7 +87,7 @@ fn apply_settle_requests(
 fn apply_settle_requests(
     _world: &mut World,
     _assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+    requests: &[thyllore_avatar_core::motion::seed::SettleRequest],
 ) {
     if !requests.is_empty() {
         log_warn!("compose settle: ml feature is disabled, keys stay as composed");

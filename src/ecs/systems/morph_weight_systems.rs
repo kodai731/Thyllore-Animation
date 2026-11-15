@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use thyllore_avatar_core::expression::components::grouping::ExpressionGrouping;
-use thyllore_avatar_core::expression::systems::grouping::group_channels;
-use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
+use thyllore_avatar_core::expression::find_mirror_channel;
+use thyllore_avatar_core::expression::group_channels;
+use thyllore_avatar_core::expression::ExpressionGrouping;
 use thyllore_model_core::MeshMorph;
 
 use crate::asset::AssetStorage;

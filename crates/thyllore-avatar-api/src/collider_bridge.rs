@@ -3,9 +3,9 @@ use thyllore_anim_core::spring_bone::{
     replace_fitted_body_colliders, set_chain_collider_groups, CapsuleFitParams, SpringChainId,
     SpringColliderGroupId, CAPSULE_FIT_SCALAR_PARAMS, CAPSULE_FIT_UI_PARAMS,
 };
-use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
-use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::collider::fit_body_capsules;
+use thyllore_avatar_core::humanoid::infer_mapping;
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarSpring,
 };
 use thyllore_model_core::{Skeleton, SkinData};

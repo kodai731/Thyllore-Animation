@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
 use super::view::DrawnCurve;

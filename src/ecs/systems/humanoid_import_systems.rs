@@ -4,11 +4,11 @@ use glam::{Quat, Vec3};
 use thyllore_anim_core::editable::BoneTrack;
 use thyllore_anim_core::editable::EditableAnimationClip;
 use thyllore_anim_core::editable::{curve_add_keyframe, curve_sample};
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::vrm_version::VrmVersion;
-use thyllore_avatar_core::motion::components::sampled_pose::SampledPose;
-use thyllore_avatar_core::motion::systems::retarget_pose::retarget_from_bones;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::humanoid::VrmVersion;
+use thyllore_avatar_core::motion::retarget_from_bones;
+use thyllore_avatar_core::motion::SampledPose;
 use thyllore_importer_core::gltf::vrm_humanoid_extension::VrmHumanoid;
 use thyllore_math_core::{continuous_euler, decompose, euler_degrees_to_quaternion};
 
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn bone_set_key_writes_standard_values_on_a_humanoid_model() {
         use crate::ecs::systems::timeline::process_bone_set_key;
-        use thyllore_avatar_core::motion::systems::role_rotation::role_rotation_to_thyllore;
+        use thyllore_avatar_core::motion::role_rotation_to_thyllore;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());

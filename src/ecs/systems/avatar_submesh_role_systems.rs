@@ -1,4 +1,4 @@
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::{
     refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 
@@ -10,7 +10,7 @@ use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
 use crate::ecs::world::{Entity, MeshRef, World};
 use thyllore_anim_core::{Skeleton, SkeletonId, SkinData};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{RootAttachment, SkinSurface};
+use thyllore_avatar_core::cloth_setup::{RootAttachment, SkinSurface};
 use thyllore_model_core::BoneId;
 use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 

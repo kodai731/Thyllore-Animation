@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn loading_a_clip_moves_role_tracks_to_model_bones() {
         use thyllore_anim_core::editable::curve_add_keyframe;
-        use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+        use thyllore_avatar_core::humanoid::HumanoidRole;
 
         let mut clip = crate::ecs::systems::new_empty_clip("bow");
         let track = clip.add_track(

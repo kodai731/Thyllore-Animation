@@ -4,15 +4,13 @@ use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::{
     attachment_or_default, default_attachment, default_root_of_submesh, ChainGenRequest,
     ChainGenSettings, RootAttachment, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [

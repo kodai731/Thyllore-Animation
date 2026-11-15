@@ -354,7 +354,7 @@ unsafe fn apply_hidden_triangles(
     app: &mut App,
     meshes: Vec<(usize, Vec<u32>)>,
 ) -> anyhow::Result<()> {
-    use thyllore_avatar_core::cloth_setup::systems::hidden_mask::order_visible_triangles_first;
+    use thyllore_avatar_core::cloth_setup::order_visible_triangles_first;
 
     app.rrdevice.wait_idle()?;
     let pool = app

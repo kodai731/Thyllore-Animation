@@ -1,5 +1,5 @@
 use glam::Vec3;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
+use thyllore_avatar_core::cloth_setup::SubmeshKey;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 /// One submesh inside the merged vertex range.

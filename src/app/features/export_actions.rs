@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
+use thyllore_avatar_core::humanoid::humanoid_mapping_path;
 
 use crate::app::App;
 use crate::ecs::resource::{

@@ -1,5 +1,5 @@
 use glam::{Quat, Vec3};
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpring;
+use thyllore_avatar_core::vrchat::SidecarSpring;
 
 use super::*;
 use crate::avatar_setup_bridge::BoneSpec;

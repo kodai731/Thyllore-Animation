@@ -10,8 +10,8 @@ use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use thyllore_anim_core::spring_bone::SpringForceModel;
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::SubmeshKey;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 #[derive(Debug)]
 pub struct UseExistingBonesAsSprings {

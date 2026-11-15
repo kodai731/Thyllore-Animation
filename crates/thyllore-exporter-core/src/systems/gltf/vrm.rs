@@ -5,9 +5,9 @@ use glam::{Mat4, Quat, Vec3};
 use gltf::binary::Glb;
 use gltf::json;
 
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::vrchat::sidecar::AvatarSidecar;
-use thyllore_avatar_core::vrchat::sidecar_spring::{rest_frames_from_globals, BoneRestFrame};
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::vrchat::AvatarSidecar;
+use thyllore_avatar_core::vrchat::{rest_frames_from_globals, BoneRestFrame};
 use thyllore_avatar_core::vrm::{
     build_vrm_extensions, spring_end_nodes, SpringEndNode, VrmInput, VrmMeta,
 };
@@ -195,11 +195,9 @@ mod tests {
     use glam::{Mat4, Vec3};
     use thyllore_anim_core::spring_bone::{ColliderShape, JointForce, VrmJointForce};
     use thyllore_anim_core::Skeleton;
-    use thyllore_avatar_core::stats::components::stats::AvatarStats;
-    use thyllore_avatar_core::vrchat::sidecar::{
-        AvatarSidecar, SidecarBlink, SIDECAR_SCHEMA_VERSION,
-    };
-    use thyllore_avatar_core::vrchat::sidecar_spring::{
+    use thyllore_avatar_core::stats::AvatarStats;
+    use thyllore_avatar_core::vrchat::{AvatarSidecar, SidecarBlink, SIDECAR_SCHEMA_VERSION};
+    use thyllore_avatar_core::vrchat::{
         SidecarCollider, SidecarColliderGroup, SidecarColliderOrigin, SidecarColliderShape,
         SidecarCollisionMode, SidecarJointForce, SidecarSpring, SidecarSpringChain,
         SidecarSpringJoint,

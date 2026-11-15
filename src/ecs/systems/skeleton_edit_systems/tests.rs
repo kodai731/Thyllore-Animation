@@ -170,7 +170,7 @@ fn spring_chains_drop_removed_joints_and_empty_chains() {
 
 #[test]
 fn humanoid_mapping_follows_renumbered_bones_and_drops_removed_roles() {
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
     let (_, remap, _) = remove_middle_of_three();
     let mut world = World::new();
@@ -236,7 +236,7 @@ fn renumbered_clip_tracks_mark_their_source_dirty_for_the_playback_asset() {
 #[test]
 fn skeleton_snapshot_carries_the_humanoid_mapping() {
     use crate::asset::SkeletonAsset;
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());

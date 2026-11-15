@@ -18,11 +18,8 @@ pub fn canonical_hips_height() -> f32 {
 }
 
 pub fn reference_world_positions(
-    sampled: &thyllore_avatar_core::motion::components::sampled_pose::SampledPose,
-) -> Vec<(
-    thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-    [f32; 3],
-)> {
+    sampled: &thyllore_avatar_core::motion::SampledPose,
+) -> Vec<(thyllore_avatar_core::humanoid::HumanoidRole, [f32; 3])> {
     let bones = canonical_bones();
     let n = bones.len();
 
@@ -45,50 +42,26 @@ pub fn reference_world_positions(
 
     for i in 0..n {
         let bone = &bones[i];
-        let role: thyllore_avatar_core::humanoid::components::role::HumanoidRole = match bone.role {
-            "Hips" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips,
-            "Spine" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Spine,
-            "Chest" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Chest,
-            "Neck" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Neck,
-            "Head" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Head,
-            "RightShoulder" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightShoulder
-            }
-            "RightUpperArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperArm
-            }
-            "RightLowerArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerArm
-            }
-            "RightHand" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightHand
-            }
-            "LeftShoulder" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftShoulder
-            }
-            "LeftUpperArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperArm
-            }
-            "LeftLowerArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerArm
-            }
-            "LeftHand" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftHand,
-            "RightUpperLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperLeg
-            }
-            "RightLowerLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerLeg
-            }
-            "RightFoot" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightFoot
-            }
-            "LeftUpperLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperLeg
-            }
-            "LeftLowerLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerLeg
-            }
-            "LeftFoot" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftFoot,
+        let role: thyllore_avatar_core::humanoid::HumanoidRole = match bone.role {
+            "Hips" => thyllore_avatar_core::humanoid::HumanoidRole::Hips,
+            "Spine" => thyllore_avatar_core::humanoid::HumanoidRole::Spine,
+            "Chest" => thyllore_avatar_core::humanoid::HumanoidRole::Chest,
+            "Neck" => thyllore_avatar_core::humanoid::HumanoidRole::Neck,
+            "Head" => thyllore_avatar_core::humanoid::HumanoidRole::Head,
+            "RightShoulder" => thyllore_avatar_core::humanoid::HumanoidRole::RightShoulder,
+            "RightUpperArm" => thyllore_avatar_core::humanoid::HumanoidRole::RightUpperArm,
+            "RightLowerArm" => thyllore_avatar_core::humanoid::HumanoidRole::RightLowerArm,
+            "RightHand" => thyllore_avatar_core::humanoid::HumanoidRole::RightHand,
+            "LeftShoulder" => thyllore_avatar_core::humanoid::HumanoidRole::LeftShoulder,
+            "LeftUpperArm" => thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperArm,
+            "LeftLowerArm" => thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerArm,
+            "LeftHand" => thyllore_avatar_core::humanoid::HumanoidRole::LeftHand,
+            "RightUpperLeg" => thyllore_avatar_core::humanoid::HumanoidRole::RightUpperLeg,
+            "RightLowerLeg" => thyllore_avatar_core::humanoid::HumanoidRole::RightLowerLeg,
+            "RightFoot" => thyllore_avatar_core::humanoid::HumanoidRole::RightFoot,
+            "LeftUpperLeg" => thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperLeg,
+            "LeftLowerLeg" => thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerLeg,
+            "LeftFoot" => thyllore_avatar_core::humanoid::HumanoidRole::LeftFoot,
             _ => continue,
         };
 
@@ -125,50 +98,26 @@ pub fn reference_world_positions(
     let mut result = Vec::new();
     for i in 0..n {
         let bone = &bones[i];
-        let role: thyllore_avatar_core::humanoid::components::role::HumanoidRole = match bone.role {
-            "Hips" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips,
-            "Spine" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Spine,
-            "Chest" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Chest,
-            "Neck" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Neck,
-            "Head" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::Head,
-            "RightShoulder" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightShoulder
-            }
-            "RightUpperArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperArm
-            }
-            "RightLowerArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerArm
-            }
-            "RightHand" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightHand
-            }
-            "LeftShoulder" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftShoulder
-            }
-            "LeftUpperArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperArm
-            }
-            "LeftLowerArm" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerArm
-            }
-            "LeftHand" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftHand,
-            "RightUpperLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperLeg
-            }
-            "RightLowerLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerLeg
-            }
-            "RightFoot" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightFoot
-            }
-            "LeftUpperLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperLeg
-            }
-            "LeftLowerLeg" => {
-                thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerLeg
-            }
-            "LeftFoot" => thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftFoot,
+        let role: thyllore_avatar_core::humanoid::HumanoidRole = match bone.role {
+            "Hips" => thyllore_avatar_core::humanoid::HumanoidRole::Hips,
+            "Spine" => thyllore_avatar_core::humanoid::HumanoidRole::Spine,
+            "Chest" => thyllore_avatar_core::humanoid::HumanoidRole::Chest,
+            "Neck" => thyllore_avatar_core::humanoid::HumanoidRole::Neck,
+            "Head" => thyllore_avatar_core::humanoid::HumanoidRole::Head,
+            "RightShoulder" => thyllore_avatar_core::humanoid::HumanoidRole::RightShoulder,
+            "RightUpperArm" => thyllore_avatar_core::humanoid::HumanoidRole::RightUpperArm,
+            "RightLowerArm" => thyllore_avatar_core::humanoid::HumanoidRole::RightLowerArm,
+            "RightHand" => thyllore_avatar_core::humanoid::HumanoidRole::RightHand,
+            "LeftShoulder" => thyllore_avatar_core::humanoid::HumanoidRole::LeftShoulder,
+            "LeftUpperArm" => thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperArm,
+            "LeftLowerArm" => thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerArm,
+            "LeftHand" => thyllore_avatar_core::humanoid::HumanoidRole::LeftHand,
+            "RightUpperLeg" => thyllore_avatar_core::humanoid::HumanoidRole::RightUpperLeg,
+            "RightLowerLeg" => thyllore_avatar_core::humanoid::HumanoidRole::RightLowerLeg,
+            "RightFoot" => thyllore_avatar_core::humanoid::HumanoidRole::RightFoot,
+            "LeftUpperLeg" => thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperLeg,
+            "LeftLowerLeg" => thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerLeg,
+            "LeftFoot" => thyllore_avatar_core::humanoid::HumanoidRole::LeftFoot,
             _ => continue,
         };
         result.push((role, positions[i]));

@@ -2,7 +2,7 @@
 use thyllore_anim_core::editable::curve_add_keyframe;
 use thyllore_anim_core::editable::EditableAnimationClip;
 
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 fn role_index(name: &str) -> usize {
     HumanoidRole::from_unity_name(name)

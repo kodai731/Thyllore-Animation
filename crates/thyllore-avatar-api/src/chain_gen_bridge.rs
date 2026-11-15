@@ -1,22 +1,20 @@
 use std::collections::BTreeMap;
 
 use glam::Vec3;
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::joint_half_thicknesses;
+use thyllore_avatar_core::cloth_setup::root_head_capsule;
+use thyllore_avatar_core::cloth_setup::SubmeshSelector;
+use thyllore_avatar_core::cloth_setup::{
+    apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
+};
+use thyllore_avatar_core::cloth_setup::{
     attachment_or_default, chain_column, chain_name, end_bone_name, BodyCollider, ChainGenInput,
     ChainGenParams, ChainGenSettings, GeneratedChain, GivenChain, InfluenceTarget, RootAttachment,
     SkinSurface, VertexInfluences, CHAIN_GEN_SCALAR_PARAMS, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    apply_setting_assignments, compute_chain_weights, place_chains_with_strands,
-};
-use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
-    collider_surfaces, retain_torso_skin, supports_garments,
-};
-use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
-use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::{collider_surfaces, retain_torso_skin, supports_garments};
+use thyllore_avatar_core::collider::RoleBone;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_model_core::BoneId;
 
 use crate::avatar_setup_bridge::BoneSpec;

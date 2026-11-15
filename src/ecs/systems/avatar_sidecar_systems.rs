@@ -12,9 +12,9 @@ use crate::ecs::world::{Entity, World};
 use std::collections::BTreeMap;
 use std::path::Path;
 use thyllore_anim_core::Skeleton;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::vrchat::sidecar::{
+use thyllore_avatar_core::cloth_setup::SubmeshKey;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::vrchat::{
     build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,
     AvatarSidecar, SidecarInput, SidecarSubmeshRole,
 };
@@ -39,7 +39,7 @@ fn restore_submesh_role(state: &mut AvatarSetupState, role: &SidecarSubmeshRole)
         }
     }
 }
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
     SidecarSpring,
 };

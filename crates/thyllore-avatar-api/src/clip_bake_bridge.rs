@@ -4,16 +4,16 @@ use glam::{Mat3, Mat4, Quat};
 use thyllore_anim_core::editable::{
     clip_remap_bone_ids, AnimationClipFile, EditableAnimationClip, ANIMATION_FORMAT_VERSION,
 };
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
-use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
-use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
-use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
-use thyllore_avatar_core::motion::systems::bake::bake_humanoid_clip;
-use thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context;
+use thyllore_avatar_core::humanoid::derive_humanoid_frame;
+use thyllore_avatar_core::humanoid::detect_rest_pose;
+use thyllore_avatar_core::humanoid::infer_mapping;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::motion::bake_humanoid_clip;
+use thyllore_avatar_core::motion::build_retarget_context;
+use thyllore_avatar_core::motion::RetargetContext;
+use thyllore_avatar_core::motion::{RetargetBone, RetargetSkeleton};
 use thyllore_model_core::BoneId;
 
 use crate::avatar_setup_bridge::BoneSpec;

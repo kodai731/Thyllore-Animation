@@ -2,7 +2,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use anyhow::Result;
-use thyllore_avatar_core::material::systems::texture_remap_io::resolve_remapped_texture;
+use thyllore_avatar_core::material::resolve_remapped_texture;
 
 use crate::ecs::systems::load_model_texture_remap;
 use thyllore_importer_core::{resolve_mesh_texture, DecodedTextureFiles, ModelLoadResult};

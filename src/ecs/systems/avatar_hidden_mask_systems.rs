@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
+use thyllore_avatar_core::cloth_setup::{
     find_hidden_triangle_indices, mask_mesh_from_skin, merge_mask_meshes,
 };
-use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;
+use thyllore_avatar_core::cloth_setup::{HiddenMaskParams, MaskMesh};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::vrchat::SidecarHiddenTriangles;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};

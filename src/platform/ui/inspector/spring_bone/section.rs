@@ -11,7 +11,7 @@ use crate::ecs::resource::{
 use crate::ecs::resource::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;

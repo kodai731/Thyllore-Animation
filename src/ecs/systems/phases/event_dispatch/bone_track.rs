@@ -52,7 +52,7 @@ fn resolve_track_name(world: &World, assets: &AssetStorage, bone_id: BoneId) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,

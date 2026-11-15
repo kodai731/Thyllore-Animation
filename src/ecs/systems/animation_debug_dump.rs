@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use glam::{Mat4, Vec3};
 use serde::Serialize;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{BakedHumanoidClips, ClipLibrary, HumanoidRigState, TimelineState};

@@ -1,4 +1,4 @@
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::bone_label::{format_bone_label, order_bone_ids_by_role};
 use super::window::{get_current_clip, ALL_PROPERTY_TYPES};

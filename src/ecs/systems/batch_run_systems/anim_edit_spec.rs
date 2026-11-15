@@ -8,7 +8,7 @@ use thyllore_anim_core::editable::PropertyType;
 use thyllore_cli_core::{finite_float_parse, nonnegative_finite_float_parse, required_split};
 
 use super::flags::BATCH_ANIM_EDIT_FLAG;
-use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
+use thyllore_avatar_core::motion::seed::MotionSpec;
 
 const SPEC_USAGE: &str = "debug_keys=<seed> | key=<param>@<time>=<value> | key=<bone_name>.<x|y|z|tx|ty|tz>@<time>=<value> | key_at_playhead=<param> | trim_end=<seconds> | new_clip=<name> | template=<path> | save=<path> | compose=<motion>[,side=left|right][,count=<n>][,amount=<f>][,speed=<f>] | copilot_extend=<bone_name>.<x|y|z>@<time>,<frames> | clear";
 
@@ -178,7 +178,7 @@ fn scalar_property_for_cli_name(name: &str) -> Result<PropertyType> {
 }
 
 fn parse_bone_axis(axis_str: &str, bone_name: &str) -> Result<BoneAxis> {
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
     let allows_translation =
         HumanoidRole::from_unity_name(bone_name).map_or(true, |role| role.allows_translation());
     match axis_str {

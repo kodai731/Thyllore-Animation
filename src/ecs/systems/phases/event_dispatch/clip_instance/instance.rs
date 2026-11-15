@@ -111,7 +111,7 @@ mod tests {
     use thyllore_anim_core::editable::{
         ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
     };
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
     fn spawn_zero_length_clip_instance(world: &mut World) -> Entity {
         let entity = world.spawn();

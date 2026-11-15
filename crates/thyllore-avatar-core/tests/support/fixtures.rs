@@ -4,11 +4,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use thyllore_avatar_core::humanoid::canonical::skeleton::skeleton;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::hierarchy::is_ancestor;
+use thyllore_avatar_core::humanoid::is_ancestor;
+use thyllore_avatar_core::humanoid::skeleton;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]

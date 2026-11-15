@@ -18,7 +18,7 @@ use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
 #[derive(Clone)]
-pub struct ConstraintSectionView {
+pub(crate) struct ConstraintSectionView {
     pub entity: Entity,
     pub entries: Vec<ConstraintEntry>,
     pub bones: Rc<[(BoneId, String)]>,
@@ -29,7 +29,7 @@ pub struct ConstraintSectionView {
     pub bake: BakeForm,
 }
 
-pub fn constraint_section(
+pub(crate) fn constraint_section(
     world: &World,
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
@@ -102,7 +102,7 @@ fn find_animated_entity(world: &World) -> Option<Entity> {
     world.component_entities::<Animator>().into_iter().next()
 }
 
-pub fn section_rows(view: &ConstraintSectionView) -> Vec<UiRow<ConstraintSectionView>> {
+pub(crate) fn section_rows(view: &ConstraintSectionView) -> Vec<UiRow<ConstraintSectionView>> {
     let [sample_fps_param] = BAKE_UI_PARAMS.as_slice() else {
         unreachable!("BakeForm declares sample_fps");
     };

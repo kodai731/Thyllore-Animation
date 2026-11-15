@@ -5,12 +5,12 @@ use crate::vulkan::*;
 /// Converts raw query ticks to milliseconds.
 const TIMESTAMP_QUERY_COUNT: u32 = 128;
 
-pub fn ticks_to_ms(start_tick: u64, end_tick: u64, timestamp_period: f32) -> f32 {
+pub(crate) fn ticks_to_ms(start_tick: u64, end_tick: u64, timestamp_period: f32) -> f32 {
     (end_tick.saturating_sub(start_tick)) as f32 * timestamp_period / 1e6
 }
 
 /// Decodes query results from the WITH_AVAILABILITY layout.
-pub fn decode_results(
+pub(crate) fn decode_results(
     labels: &[(String, u32, u32)], // (label, start_idx, end_idx)
     data: &[u64],
 ) -> Option<Vec<(String, u64, u64)>> {

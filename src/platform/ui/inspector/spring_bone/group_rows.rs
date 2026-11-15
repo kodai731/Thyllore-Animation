@@ -7,20 +7,20 @@ use super::section::SpringView;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 
 #[derive(Clone)]
-pub struct GroupView {
+pub(super) struct GroupView {
     pub entity: Entity,
     pub group: SpringColliderGroup,
     pub available: Vec<SpringColliderId>,
 }
 
 #[derive(Clone)]
-pub struct MemberView {
+pub(super) struct MemberView {
     pub entity: Entity,
     pub group: SpringColliderGroup,
     pub member_index: usize,
 }
 
-pub fn group_list_row() -> UiRow<SpringView> {
+pub(super) fn group_list_row() -> UiRow<SpringView> {
     UiRow::List(Box::new(ListRows::<SpringView, GroupView> {
         title: "Collider Groups",
         items: |_, view: &SpringView| {
@@ -56,7 +56,7 @@ pub fn group_list_row() -> UiRow<SpringView> {
     }))
 }
 
-pub fn group_rows(view: &GroupView) -> Vec<UiRow<GroupView>> {
+pub(super) fn group_rows(view: &GroupView) -> Vec<UiRow<GroupView>> {
     let mut rows: Vec<UiRow<GroupView>> = Vec::new();
 
     rows.push(UiRow::Text {

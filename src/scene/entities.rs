@@ -164,7 +164,7 @@ pub(crate) mod test_support {
 
     /// Test-only owner so scene tests never depend on a concrete effect.
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-    pub struct ProbeOwner {
+    pub(crate) struct ProbeOwner {
         pub position: [f32; 3],
         pub level: f32,
     }
@@ -181,7 +181,7 @@ pub(crate) mod test_support {
 
     /// Test-only attachment restored by insertion.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct ProbeLabel {
+    pub(crate) struct ProbeLabel {
         pub label: String,
     }
 

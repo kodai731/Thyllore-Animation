@@ -20,7 +20,7 @@ struct VrmMetaFieldsOut {
 
 /// The editable `VRMC_vrm.meta` fields with their keys, labels, kinds and choices.
 #[pyfunction]
-pub fn vrm_meta_fields(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn vrm_meta_fields(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(
         py,
         &VrmMetaFieldsOut {
@@ -31,21 +31,24 @@ pub fn vrm_meta_fields(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 }
 
 #[pyfunction]
-pub fn vrm_t_pose_warnings(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+pub(super) fn vrm_t_pose_warnings(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
     let request: VrmTPoseWarningsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     bridge_t_pose_warnings(&request).map_err(anyhow_to_pyerr)
 }
 
 #[pyfunction]
-pub fn vrm_rest_clearance_warnings(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+pub(super) fn vrm_rest_clearance_warnings(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
     let request: VrmRestClearanceWarningsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     Ok(bridge_rest_clearance_warnings(&request))
 }
 
 #[pyfunction]
-pub fn vrm_write<'py>(py: Python<'py>, request: &Bound<PyAny>) -> PyResult<Bound<'py, PyBytes>> {
+pub(super) fn vrm_write<'py>(
+    py: Python<'py>,
+    request: &Bound<PyAny>,
+) -> PyResult<Bound<'py, PyBytes>> {
     let request: VrmWriteRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
     let vrm = bridge_vrm_write(&request).map_err(anyhow_to_pyerr)?;
     Ok(PyBytes::new(py, &vrm))

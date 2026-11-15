@@ -233,7 +233,7 @@ fn test_gltf_to_fbx_roundtrip() -> anyhow::Result<()> {
         skeleton,
         &fbx_output_path,
         false,
-        thyllore_importer_core::fbx::FbxAxesInfo {
+        thyllore_file_format_core::fbx::FbxAxesInfo {
             up_axis: 1,
             up_axis_sign: 1,
             front_axis: 2,

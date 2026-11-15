@@ -12,13 +12,13 @@ use thyllore_avatar_core::humanoid::HumanoidRole;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ExtraParent {
+pub(crate) enum ExtraParent {
     Role(HumanoidRole),
     Row(usize),
 }
 
 #[derive(Clone, Debug)]
-pub struct ExtraBone {
+pub(crate) struct ExtraBone {
     pub name: String,
     pub parent: ExtraParent,
     pub position: [f64; 3],
@@ -71,7 +71,7 @@ fn mirror_parent(entries: &[ExtraBoneEntry], parent: ExtraParent) -> ExtraParent
     }
 }
 
-pub fn extra_bones() -> Vec<ExtraBone> {
+pub(crate) fn extra_bones() -> Vec<ExtraBone> {
     let entries = load_extra_bone_entries();
     let mut output: Vec<ExtraBone> = Vec::new();
 
@@ -109,7 +109,7 @@ pub fn extra_bones() -> Vec<ExtraBone> {
     output
 }
 
-pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
     let canonical = skeleton();
     let mut bones: Vec<BoneInput> = canonical
         .iter()
@@ -152,7 +152,7 @@ pub fn test_humanoid_bone_inputs() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, HumanoidMapping { by_role })
 }
 
-pub fn with_swapped_upper_arms() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn with_swapped_upper_arms() -> (Vec<BoneInput>, HumanoidMapping) {
     let (bones, mut mapping) = test_humanoid_bone_inputs();
     let left_upper_arm_bone = *mapping
         .by_role
@@ -164,7 +164,7 @@ pub fn with_swapped_upper_arms() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, mapping)
 }
 
-pub fn with_bone_in_two_roles() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn with_bone_in_two_roles() -> (Vec<BoneInput>, HumanoidMapping) {
     let (bones, mut mapping) = test_humanoid_bone_inputs();
     let head_bone = *mapping
         .by_role
@@ -174,7 +174,7 @@ pub fn with_bone_in_two_roles() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, mapping)
 }
 
-pub fn without_fingers() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn without_fingers() -> (Vec<BoneInput>, HumanoidMapping) {
     let (bones, mut mapping) = test_humanoid_bone_inputs();
     for role in HumanoidRole::ALL {
         let name = role.unity_name();
@@ -190,7 +190,7 @@ pub fn without_fingers() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, mapping)
 }
 
-pub fn with_spine_below_hips() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn with_spine_below_hips() -> (Vec<BoneInput>, HumanoidMapping) {
     let (mut bones, mapping) = test_humanoid_bone_inputs();
     let spine_idx = *mapping.by_role.get(&HumanoidRole::Spine).unwrap();
     let hips_idx = *mapping.by_role.get(&HumanoidRole::Hips).unwrap();
@@ -198,7 +198,7 @@ pub fn with_spine_below_hips() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, mapping)
 }
 
-pub fn with_long_left_upper_arm() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn with_long_left_upper_arm() -> (Vec<BoneInput>, HumanoidMapping) {
     let (mut bones, mapping) = test_humanoid_bone_inputs();
     let left_upper_arm_idx = *mapping.by_role.get(&HumanoidRole::LeftUpperArm).unwrap();
     let left_lower_arm_idx = *mapping.by_role.get(&HumanoidRole::LeftLowerArm).unwrap();
@@ -215,7 +215,7 @@ pub fn with_long_left_upper_arm() -> (Vec<BoneInput>, HumanoidMapping) {
     (bones, mapping)
 }
 
-pub fn with_asymmetric_hand() -> (Vec<BoneInput>, HumanoidMapping) {
+pub(crate) fn with_asymmetric_hand() -> (Vec<BoneInput>, HumanoidMapping) {
     let (mut bones, mapping) = test_humanoid_bone_inputs();
     let left_hand_idx = *mapping.by_role.get(&HumanoidRole::LeftHand).unwrap();
     bones[left_hand_idx].rest_position[2] += 0.2;

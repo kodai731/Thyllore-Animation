@@ -43,7 +43,7 @@ use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_math_core::world_y_axis;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub struct GeneratedChainBones {
+pub(super) struct GeneratedChainBones {
     pub report: ChainGenReport,
     pub chains: Vec<SpringChain>,
     pub root_collider: Option<FittedCapsule>,

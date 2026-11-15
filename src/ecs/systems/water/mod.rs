@@ -25,6 +25,7 @@ pub use caustic_descriptors::*;
 pub use cli::*;
 pub use debug_dump::*;
 pub use descriptors::*;
+pub use gpu_targets::WaterBindingKey;
 pub use history_accumulate::*;
 pub use object_pick::*;
 pub use pipeline::*;

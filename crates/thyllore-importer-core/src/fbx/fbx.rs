@@ -6,7 +6,7 @@ use thyllore_anim_core::{
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
 
-pub use thyllore_file_format_core::fbx::{
+use thyllore_file_format_core::fbx::{
     BoneAnimation, BoneNode, ClusterInfo, FbxAnimation, FbxAxesInfo, FbxData, FbxModel, KeyFrame,
     LoadedConstraint,
 };

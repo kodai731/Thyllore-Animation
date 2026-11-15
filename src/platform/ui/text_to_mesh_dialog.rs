@@ -9,7 +9,7 @@ use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_st
 use thyllore_grpc_client::{MeshInputMode, MeshModelType, TextToImageModelType};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub struct TextToMeshDialogState {
+pub(super) struct TextToMeshDialogState {
     pub open: bool,
     pub prompt_buf: String,
     pub target_faces: i32,

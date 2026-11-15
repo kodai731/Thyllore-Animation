@@ -4035,6 +4035,7 @@ dependencies = [
  "strum",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-math-core",
  "thyllore-model-core",

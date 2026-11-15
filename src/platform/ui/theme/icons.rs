@@ -1,7 +1,7 @@
 use crate::ecs::component::EntityIcon;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Icon {
+pub(crate) enum Icon {
     Play,
     Pause,
     Stop,
@@ -35,7 +35,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    pub const fn codepoint(self) -> char {
+    pub(crate) const fn codepoint(self) -> char {
         match self {
             Icon::Play => '\u{e13c}',
             Icon::Pause => '\u{e12e}',
@@ -70,12 +70,12 @@ impl Icon {
         }
     }
 
-    pub fn glyph(self) -> String {
+    pub(crate) fn glyph(self) -> String {
         self.codepoint().to_string()
     }
 }
 
-pub fn entity_icon(icon: EntityIcon) -> Option<Icon> {
+pub(crate) fn entity_icon(icon: EntityIcon) -> Option<Icon> {
     match icon {
         EntityIcon::Model => Some(Icon::Box),
         EntityIcon::Mesh => Some(Icon::Box),

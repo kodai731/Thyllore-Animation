@@ -8,7 +8,7 @@ const HEADER_ALPHA: f32 = 0.18;
 const HEADER_HOVERED_ALPHA: f32 = 0.25;
 const HEADER_ACTIVE_ALPHA: f32 = 0.32;
 
-pub fn apply_thyllore_style(style: &mut Style) {
+pub(crate) fn apply_thyllore_style(style: &mut Style) {
     style.set_window_rounding(10.0);
     style.set_child_rounding(10.0);
     style.set_popup_rounding(10.0);
@@ -168,7 +168,7 @@ pub fn apply_thyllore_style(style: &mut Style) {
     style.set_color(StyleColor::DockingEmptyBg, srgb_to_linear_rgba(SURFACE0));
 }
 
-pub fn apply_ui_settings(context: &mut imgui::Context, settings: &UiSettings) {
+pub(crate) fn apply_ui_settings(context: &mut imgui::Context, settings: &UiSettings) {
     let spacing = density_spacing(settings.density);
     let style = context.style_mut();
     style.set_font_scale_main(settings.scale);

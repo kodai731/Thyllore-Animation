@@ -33,7 +33,7 @@ pub(super) struct ChannelGroupView {
     pub(super) collapsed: bool,
 }
 
-pub fn blend_shape_sections(
+pub(crate) fn blend_shape_sections(
     world: &World,
     entity: Entity,
     assets: &AssetStorage,

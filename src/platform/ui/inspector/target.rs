@@ -3,12 +3,12 @@ use crate::ecs::world::Entity;
 use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InspectorTarget {
+pub(super) enum InspectorTarget {
     Entity(Entity),
     Bone(BoneId),
 }
 
-pub fn inspector_target(state: &HierarchyState) -> Option<InspectorTarget> {
+pub(super) fn inspector_target(state: &HierarchyState) -> Option<InspectorTarget> {
     match (
         state.display_mode,
         state.selected_bone_id,

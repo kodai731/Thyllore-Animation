@@ -20,6 +20,7 @@ mod ui_command;
 
 pub use cli::*;
 pub use debug_dump::*;
+pub use descriptors::LightningResolveDescriptorSet;
 pub use object_pick::*;
 pub use path::*;
 pub use pipeline::*;

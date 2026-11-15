@@ -7,7 +7,7 @@ use super::rig_names::bone_name;
 use super::rig_positions::character_to_file_rotation;
 
 #[derive(Clone, Debug)]
-pub struct RigNode {
+pub(crate) struct RigNode {
     pub name: String,
     pub parent: Option<usize>,
     pub role: Option<&'static str>,
@@ -15,7 +15,7 @@ pub struct RigNode {
     pub world_rotation: DQuat,
 }
 
-pub fn build_rig_nodes(convention: &RigConvention) -> Vec<RigNode> {
+pub(crate) fn build_rig_nodes(convention: &RigConvention) -> Vec<RigNode> {
     let bones = canonical_bones();
     let positions = super::rig_positions::file_positions(convention);
 
@@ -112,7 +112,7 @@ fn make_container_node(convention: &RigConvention, positions: &[[f64; 3]]) -> Op
     }
 }
 
-pub fn first_child_bone_index(
+pub(crate) fn first_child_bone_index(
     bones: &[super::CanonicalBone],
     parent_index: usize,
 ) -> Option<usize> {
@@ -125,7 +125,7 @@ pub fn first_child_bone_index(
     })
 }
 
-pub fn bone_direction(
+pub(crate) fn bone_direction(
     positions: &[[f64; 3]],
     bone_index: usize,
     child_bone_index: Option<usize>,
@@ -187,7 +187,7 @@ fn node_world_rotation(convention: &RigConvention, bone_index: usize, dir: DVec3
     }
 }
 
-pub fn bone_local_axis(convention: &RigConvention, bone_index: usize) -> DVec3 {
+pub(crate) fn bone_local_axis(convention: &RigConvention, bone_index: usize) -> DVec3 {
     match convention.bone_axis {
         BoneAxisRule::Along(a) => [a[0], a[1], a[2]].into(),
         BoneAxisRule::WorldAligned => {

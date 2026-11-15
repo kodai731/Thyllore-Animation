@@ -2,16 +2,16 @@
 use glam::{DQuat, DVec3};
 
 use super::fbx_ascii::{cube_vertices, stick_polygon_indices, ClothMaterial, RigMesh};
-pub use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
+pub(crate) use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
 use super::rig_convention::rig_convention;
 use super::rig_nodes::RigNode;
 use thyllore_avatar_core::humanoid::skeleton;
 use thyllore_avatar_core::humanoid::HumanoidRole;
-pub use thyllore_avatar_core::humanoid::{CanonicalBone, CanonicalTip};
+pub(crate) use thyllore_avatar_core::humanoid::{CanonicalBone, CanonicalTip};
 
 const EXTRA_BONE_HALF_WIDTH: f64 = 0.012;
 
-pub fn test_humanoid_nodes(bones: &[CanonicalBone], extras: &[ExtraBone]) -> Vec<RigNode> {
+pub(crate) fn test_humanoid_nodes(bones: &[CanonicalBone], extras: &[ExtraBone]) -> Vec<RigNode> {
     let mut nodes: Vec<RigNode> = bones
         .iter()
         .enumerate()
@@ -54,7 +54,7 @@ fn is_finger_or_eye(name: &str) -> bool {
         .any(|s| name.contains(s))
 }
 
-pub fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMesh {
+pub(crate) fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMesh {
     let mut vertices: Vec<[f64; 3]> = Vec::new();
     let mut polygon_vertex_index: Vec<i32> = Vec::new();
     let mut cluster_vertex_indices: Vec<Vec<i32>> = Vec::new();
@@ -143,7 +143,7 @@ pub fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMes
     }
 }
 
-pub fn write_test_humanoid_fbx() -> String {
+pub(crate) fn write_test_humanoid_fbx() -> String {
     let bones = skeleton();
     let extras = extra_bones();
     let nodes = test_humanoid_nodes(&bones, &extras);
@@ -151,7 +151,7 @@ pub fn write_test_humanoid_fbx() -> String {
     super::fbx_ascii::write_rig_fbx_with_mesh(&rig_convention("vrm_normalized"), &nodes, &mesh)
 }
 
-pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()> {
+pub(crate) fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()> {
     use thyllore_avatar_core::humanoid::BoneInput;
 
     let bones = skeleton();
@@ -183,7 +183,7 @@ pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()>
     Ok(())
 }
 
-pub fn build_ctx() -> (
+pub(crate) fn build_ctx() -> (
     thyllore_avatar_core::motion::RetargetContext,
     Vec<thyllore_avatar_core::humanoid::BoneInput>,
 ) {

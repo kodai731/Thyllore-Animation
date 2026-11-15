@@ -14,28 +14,28 @@ use super::apply_texture_fit_from_path;
 use super::FlameUiCommand;
 
 #[derive(Debug, Default)]
-pub struct AddFlame;
+pub(super) struct AddFlame;
 
 #[derive(Debug, Default)]
-pub struct OpenFlameCurves;
+pub(super) struct OpenFlameCurves;
 
 #[derive(Debug, Default)]
-pub struct TimelineSelectFlameClip;
+pub(super) struct TimelineSelectFlameClip;
 
 #[derive(Debug)]
-pub struct FlameClipPreview {
+pub(super) struct FlameClipPreview {
     pub end_seconds: f32,
 }
 
 #[derive(Debug)]
-pub struct ApplyTextureFit {
+pub(super) struct ApplyTextureFit {
     pub path: String,
     pub blend: f32,
     pub profile: bool,
 }
 
 #[derive(Debug)]
-pub struct ApplyTextureFitRoundtrip {
+pub(super) struct ApplyTextureFitRoundtrip {
     pub path: String,
     pub blend: f32,
     pub profile: bool,

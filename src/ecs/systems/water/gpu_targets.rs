@@ -56,7 +56,7 @@ fn linear_clamp_sampler_desc() -> SamplerDesc {
     }
 }
 
-pub unsafe fn create_water_gpu_targets(
+pub(crate) unsafe fn create_water_gpu_targets(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
@@ -93,7 +93,7 @@ pub unsafe fn create_water_gpu_targets(
     })
 }
 
-pub fn is_depth_view_ready(view: ImageView) -> bool {
+pub(crate) fn is_depth_view_ready(view: ImageView) -> bool {
     view != ImageView::default()
 }
 

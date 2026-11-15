@@ -9,7 +9,7 @@ use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub struct TextToAnimationDialogState {
+pub(super) struct TextToAnimationDialogState {
     pub open: bool,
     pub prompt_buf: String,
     pub duration: f32,

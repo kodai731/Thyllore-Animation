@@ -10,9 +10,9 @@ use thyllore_vulkan_core::resource::VolumeUsage;
 use thyllore_vulkan_core::resource::{GpuResource, VolumeImage};
 use thyllore_vulkan_core::types::{Extent3D, Format, Instance, HDR_FORMAT};
 
-pub const WIND_SHADOW_VOLUME_FORMAT: Format = Format::R16G16_SFLOAT;
+pub(crate) const WIND_SHADOW_VOLUME_FORMAT: Format = Format::R16G16_SFLOAT;
 
-pub fn wind_shadow_volume_extent() -> Extent3D {
+pub(crate) fn wind_shadow_volume_extent() -> Extent3D {
     Extent3D {
         width: WIND_SHADOW_VOLUME_RADIAL * WIND_SHADOW_VOLUME_SLOTS,
         height: WIND_SHADOW_VOLUME_HEIGHT,
@@ -60,7 +60,7 @@ impl WindRenderTargets {
     }
 }
 
-pub unsafe fn create_wind_render_targets(
+pub(crate) unsafe fn create_wind_render_targets(
     instance: &Instance,
     rrdevice: &RRDevice,
     width: u32,
@@ -97,7 +97,7 @@ pub unsafe fn create_wind_render_targets(
     })
 }
 
-pub unsafe fn recreate_wind_framebuffer(
+pub(crate) unsafe fn recreate_wind_framebuffer(
     rrdevice: &RRDevice,
     targets: &mut WindRenderTargets,
     hdr_view: thyllore_vulkan_core::types::ImageView,

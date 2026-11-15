@@ -3,13 +3,13 @@ use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
 use thyllore_avatar_core::vrchat::{PerformanceRank, Platform, RankReport};
 
 #[derive(Clone)]
-pub struct StatsView {
+pub(super) struct StatsView {
     pub platform: Platform,
     pub rank: Option<RankReport>,
 }
 
 impl StatsView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         Self {
             platform: state.platform,
             rank: state.rank.clone(),
@@ -46,7 +46,7 @@ fn platform_choice_row() -> UiRow<StatsView> {
     }
 }
 
-pub fn rows() -> Vec<UiRow<StatsView>> {
+pub(super) fn rows() -> Vec<UiRow<StatsView>> {
     vec![
         platform_choice_row(),
         UiRow::Canvas(|ui, _world, view| match &view.rank {

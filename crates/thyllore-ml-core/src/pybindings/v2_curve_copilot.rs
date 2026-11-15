@@ -53,13 +53,16 @@ fn apply_context_degrade(
 }
 
 #[pyfunction]
-pub fn capabilities() -> Vec<&'static str> {
+pub(super) fn capabilities() -> Vec<&'static str> {
     vec!["curve_forecast"]
 }
 
 #[pyfunction]
 #[pyo3(signature = (full_token=None, mode=None))]
-pub fn effective_context_length(full_token: Option<&str>, mode: Option<&str>) -> PyResult<usize> {
+pub(super) fn effective_context_length(
+    full_token: Option<&str>,
+    mode: Option<&str>,
+) -> PyResult<usize> {
     let mode = parse_mode(mode)?;
     Ok(if should_degrade_context(mode, full_token) {
         DEGRADED_CONTEXT_LENGTH
@@ -69,22 +72,22 @@ pub fn effective_context_length(full_token: Option<&str>, mode: Option<&str>) ->
 }
 
 #[pyfunction]
-pub fn degraded_context_length() -> usize {
+pub(super) fn degraded_context_length() -> usize {
     DEGRADED_CONTEXT_LENGTH
 }
 
 #[pyfunction]
-pub fn deploy_fps() -> f32 {
+pub(super) fn deploy_fps() -> f32 {
     forecast::DEPLOY_FPS
 }
 
 #[pyfunction]
-pub fn resolve_curve_copilot_model_path() -> Option<String> {
+pub(super) fn resolve_curve_copilot_model_path() -> Option<String> {
     crate::model_path::resolve_v2_curve_copilot_model_path()
 }
 
 #[pyfunction]
-pub fn forecast_sample_offsets() -> (Vec<i64>, Vec<i64>) {
+pub(super) fn forecast_sample_offsets() -> (Vec<i64>, Vec<i64>) {
     (
         forecast::context_sample_offsets().to_vec(),
         forecast::future_sample_offsets().to_vec(),
@@ -92,12 +95,12 @@ pub fn forecast_sample_offsets() -> (Vec<i64>, Vec<i64>) {
 }
 
 #[pyfunction]
-pub fn resolve_origin_frame(keyframe_times: Vec<f32>, playhead: f32) -> Option<f32> {
+pub(super) fn resolve_origin_frame(keyframe_times: Vec<f32>, playhead: f32) -> Option<f32> {
     forecast::resolve_origin_time(&keyframe_times, playhead)
 }
 
 #[pyclass(name = "PyV2CurveCopilotSession", module = "thyllore_ml_core")]
-pub struct PyV2CurveCopilotSession {
+pub(crate) struct PyV2CurveCopilotSession {
     inner: V2CurveCopilotSession,
 }
 

@@ -11,7 +11,7 @@ use glam::Vec3;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
 // Ray bounds 2 + axis ends 2 + 3 regions x 2 quadratics x 2 roots.
-pub const CAPSULE_MAX_KNOTS: usize = 16;
+pub(super) const CAPSULE_MAX_KNOTS: usize = 16;
 
 const GAUSS_NODES: [f32; 3] = [0.238_619_19, 0.661_209_4, 0.932_469_5];
 const GAUSS_WEIGHTS: [f32; 3] = [0.467_913_94, 0.360_761_57, 0.171_324_49];
@@ -49,7 +49,7 @@ struct CapsuleAxis {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct VolumeCapsule {
+pub(super) struct VolumeCapsule {
     pub a: Vec3,
     pub b: Vec3,
     pub radius_start: f32,
@@ -134,7 +134,7 @@ impl VolumeCapsule {
         self.delta_quadratic(point, Vec3::ZERO, region, axis).2
     }
 
-    pub fn density_at(&self, point: Vec3) -> f32 {
+    pub(super) fn density_at(&self, point: Vec3) -> f32 {
         let Some(axis) = self.axis() else {
             return 0.0;
         };
@@ -142,7 +142,7 @@ impl VolumeCapsule {
     }
 
     /// Region boundaries and support boundaries of the ray, appended unsorted.
-    pub fn collect_knots<const N: usize>(
+    pub(super) fn collect_knots<const N: usize>(
         &self,
         origin: Vec3,
         direction: Vec3,
@@ -173,7 +173,7 @@ impl VolumeCapsule {
         }
     }
 
-    pub fn knots(
+    pub(super) fn knots(
         &self,
         origin: Vec3,
         direction: Vec3,
@@ -187,7 +187,7 @@ impl VolumeCapsule {
     }
 
     /// Integral of the density over the piece [s0, s1], which must not cross a knot.
-    pub fn piece_integral(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> f32 {
+    pub(super) fn piece_integral(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> f32 {
         let length = s1 - s0;
         if length <= EMPTY_INTERVAL_EPSILON {
             return 0.0;
@@ -216,7 +216,13 @@ impl VolumeCapsule {
         (length * edge_fade_mean(c0, c1, c2)).max(0.0)
     }
 
-    pub fn ray_emission(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> f32 {
+    pub(super) fn ray_emission(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        t_near: f32,
+        t_far: f32,
+    ) -> f32 {
         if t_far <= t_near {
             return 0.0;
         }

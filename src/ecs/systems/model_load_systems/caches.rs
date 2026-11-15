@@ -1,6 +1,6 @@
 use crate::ecs::resource::{FbxModelCache, GltfModelCache};
 use crate::ecs::world::World;
-use thyllore_importer_core::fbx::FbxModel;
+use thyllore_file_format_core::fbx::FbxModel;
 
 pub(super) fn insert_model_caches(
     world: &mut World,

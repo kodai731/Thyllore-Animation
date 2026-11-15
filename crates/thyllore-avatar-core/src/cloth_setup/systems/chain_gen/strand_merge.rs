@@ -2,14 +2,14 @@ use glam::Vec3;
 
 /// When the strand clustering stops joining the two closest centerlines.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum StrandMergeStop {
+pub(super) enum StrandMergeStop {
     Count(usize),
     Distance(f32),
     Never,
 }
 
 impl StrandMergeStop {
-    pub fn from_settings(column_count: u32, strand_merge_distance: f32) -> Self {
+    pub(super) fn from_settings(column_count: u32, strand_merge_distance: f32) -> Self {
         if column_count > 0 {
             Self::Count(column_count as usize)
         } else if strand_merge_distance > 0.0 {
@@ -25,7 +25,7 @@ fn centerline_distance(a: &[Vec3], b: &[Vec3]) -> f32 {
     a.iter().zip(b).map(|(p, q)| (p - q).length()).sum::<f32>() / len as f32
 }
 
-pub fn merge_strands(centerlines: &[Vec<Vec3>], stop: StrandMergeStop) -> Vec<Vec<usize>> {
+pub(super) fn merge_strands(centerlines: &[Vec<Vec3>], stop: StrandMergeStop) -> Vec<Vec<usize>> {
     let n = centerlines.len();
     if n == 0 {
         return vec![];
@@ -98,7 +98,7 @@ fn cluster_distance(a: &[usize], b: &[usize], centerlines: &[Vec<Vec3>]) -> f32 
     total / count as f32
 }
 
-pub fn tuft_centerline(
+pub(super) fn tuft_centerline(
     centerlines: &[Vec<Vec3>],
     weights: &[usize],
     members: &[usize],

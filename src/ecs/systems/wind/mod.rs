@@ -17,6 +17,7 @@ mod ui_command;
 
 pub use cli::*;
 pub use debug_dump::*;
+pub use descriptors::WindResolveDescriptorSet;
 pub use object_pick::*;
 pub use record::*;
 pub use render_targets::*;

@@ -25,45 +25,45 @@ const MESH_RESPONSE_FIXTURE: &str = "mesh_response.bin";
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub enum MockServerConfig {
+pub(crate) enum MockServerConfig {
     EchoDefault,
     DeterministicFromFixtures(PathBuf),
 }
 
 #[derive(Default, Debug)]
-pub struct RecvBuffer {
+pub(crate) struct RecvBuffer {
     re_encoded_messages_by_method: BTreeMap<(String, String), Vec<Vec<u8>>>,
 }
 
 impl RecvBuffer {
-    pub fn record(&mut self, service: &str, method: &str, re_encoded_bytes: Vec<u8>) {
+    pub(crate) fn record(&mut self, service: &str, method: &str, re_encoded_bytes: Vec<u8>) {
         self.re_encoded_messages_by_method
             .entry((service.to_string(), method.to_string()))
             .or_default()
             .push(re_encoded_bytes);
     }
 
-    pub fn count(&self, service: &str, method: &str) -> usize {
+    pub(crate) fn count(&self, service: &str, method: &str) -> usize {
         self.re_encoded_messages_by_method
             .get(&(service.to_string(), method.to_string()))
             .map(|v| v.len())
             .unwrap_or(0)
     }
 
-    pub fn bytes_at(&self, service: &str, method: &str, index: usize) -> Option<&[u8]> {
+    pub(crate) fn bytes_at(&self, service: &str, method: &str, index: usize) -> Option<&[u8]> {
         self.re_encoded_messages_by_method
             .get(&(service.to_string(), method.to_string()))
             .and_then(|v| v.get(index))
             .map(Vec::as_slice)
     }
 
-    pub fn sha256_of(&self, service: &str, method: &str, index: usize) -> Option<String> {
+    pub(crate) fn sha256_of(&self, service: &str, method: &str, index: usize) -> Option<String> {
         let bytes = self.bytes_at(service, method, index)?;
         Some(format!("{:x}", Sha256::digest(bytes)))
     }
 }
 
-pub struct MockServerHandle {
+pub(crate) struct MockServerHandle {
     pub address: String,
     #[allow(dead_code)]
     pub port: u16,
@@ -73,7 +73,7 @@ pub struct MockServerHandle {
 }
 
 impl MockServerHandle {
-    pub fn start(config: MockServerConfig) -> Self {
+    pub(crate) fn start(config: MockServerConfig) -> Self {
         let recv_buffer = Arc::new(Mutex::new(RecvBuffer::default()));
         let recv_buffer_for_thread = recv_buffer.clone();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
@@ -100,7 +100,7 @@ impl MockServerHandle {
     }
 
     #[allow(dead_code)]
-    pub fn shutdown(mut self) {
+    pub(crate) fn shutdown(mut self) {
         self.shutdown_inner();
     }
 

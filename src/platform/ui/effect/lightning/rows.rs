@@ -17,7 +17,7 @@ use crate::platform::ui::effect::rows::{instance_options, preset_options};
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 
 #[derive(Clone)]
-pub struct LightningSectionView {
+pub(super) struct LightningSectionView {
     pub instances: Vec<String>,
     pub instance_index: usize,
     pub preset: Option<String>,
@@ -83,7 +83,7 @@ fn waypoint_on_change(
     Box::new(LightningUiCommand::RemoveWaypoint(item))
 }
 
-pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
+pub(super) fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
     let mut rows = vec![UiRow::Action {
         label: "Add Lightning",
         enabled: |_, _| true,
@@ -162,7 +162,7 @@ pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSe
     rows
 }
 
-pub fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
+pub(super) fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
     vec![
         UiRow::Action {
             label: "Curves",

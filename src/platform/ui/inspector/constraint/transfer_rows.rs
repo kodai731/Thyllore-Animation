@@ -6,7 +6,7 @@ use super::fields::{
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::UiRow;
 
-pub fn transfer_rows(view: &ConstraintView) -> Vec<UiRow<ConstraintView>> {
+pub(crate) fn transfer_rows(view: &ConstraintView) -> Vec<UiRow<ConstraintView>> {
     let params = constraint_params();
     let offset_param = match &view.constraint {
         ConstraintType::Position(_) | ConstraintType::Scale(_) => params.offset,

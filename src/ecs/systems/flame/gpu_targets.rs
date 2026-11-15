@@ -20,7 +20,7 @@ const FLAME_HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(1),
 ];
 
-pub const FLAME_HISTORY_FORMAT: Format = Format::R16G16B16A16_SFLOAT;
+pub(crate) const FLAME_HISTORY_FORMAT: Format = Format::R16G16B16A16_SFLOAT;
 
 fn nearest_clamp_sampler_desc() -> SamplerDesc {
     SamplerDesc {
@@ -30,7 +30,7 @@ fn nearest_clamp_sampler_desc() -> SamplerDesc {
     }
 }
 
-pub fn flame_history_desc() -> HistoryTargetsDesc {
+pub(crate) fn flame_history_desc() -> HistoryTargetsDesc {
     HistoryTargetsDesc::cleared_readback(
         FLAME_HISTORY_KEYS,
         FLAME_HISTORY_FORMAT,
@@ -38,7 +38,7 @@ pub fn flame_history_desc() -> HistoryTargetsDesc {
     )
 }
 
-pub unsafe fn create_flame_history(
+pub(crate) unsafe fn create_flame_history(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
@@ -59,7 +59,7 @@ pub unsafe fn create_flame_history(
     )
 }
 
-pub unsafe fn recreate_flame_history(
+pub(crate) unsafe fn recreate_flame_history(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,

@@ -27,7 +27,7 @@ use thyllore_vulkan_core::FrameRenderContext;
 
 const REDUCED_COLOR_SLOT: TransientSlot = TransientSlot("wind.reduced_color");
 
-pub struct WindPassNode;
+pub(super) struct WindPassNode;
 
 /// Everything the wind node agrees on for one frame. `None` means nothing records this frame.
 struct WindFrame {

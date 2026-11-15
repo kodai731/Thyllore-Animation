@@ -94,7 +94,7 @@ impl GpuResource for crate::types::Framebuffer {
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct OwnedDescriptorSet {
+pub(crate) struct OwnedDescriptorSet {
     set: vk::DescriptorSet,
     layout: vk::DescriptorSetLayout,
 }

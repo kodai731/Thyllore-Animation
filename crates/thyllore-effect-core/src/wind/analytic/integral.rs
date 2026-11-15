@@ -139,7 +139,7 @@ impl WindShellParams {
         params
     }
 
-    pub fn shell(&self) -> VolumeShell {
+    pub(crate) fn shell(&self) -> VolumeShell {
         VolumeShell {
             height: self.height,
             radius_base: self.wall_radius_base,
@@ -165,7 +165,7 @@ impl WindShellParams {
         &self.puffs[..self.puff_count]
     }
 
-    pub fn streak(&self) -> StreakModulation {
+    pub(crate) fn streak(&self) -> StreakModulation {
         StreakModulation {
             order: self.streak_order,
             twist: self.streak_twist,

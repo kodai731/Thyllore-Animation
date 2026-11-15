@@ -11,7 +11,7 @@ use support::rig_convention::rig_convention;
 use support::rig_names::CONVENTIONS;
 use support::rig_nodes::build_rig_nodes;
 
-fn world_from_local(nodes: &[thyllore_importer_core::fbx::BoneNode], name: &str) -> Mat4 {
+fn world_from_local(nodes: &[thyllore_file_format_core::fbx::BoneNode], name: &str) -> Mat4 {
     let node = nodes.iter().find(|n| n.name == name).unwrap();
     let mut m = node.local_transform;
     let mut current_name = name;

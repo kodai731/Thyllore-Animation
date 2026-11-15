@@ -1,7 +1,7 @@
 use super::row::*;
 
 /// Widget ids that collide inside one row list, fields included as `scope/label`.
-pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<String> {
+pub(crate) fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<String> {
     let ids = widget_ids(rows);
     let mut duplicates = Vec::new();
     for (index, id) in ids.iter().enumerate() {
@@ -13,7 +13,7 @@ pub fn find_duplicate_labels<C>(rows: &[UiRow<C>]) -> Vec<String> {
 }
 
 /// Every id imgui sees in this row list: labels at this level and the scoped ids of each field and group.
-pub fn widget_ids<C>(rows: &[UiRow<C>]) -> Vec<String> {
+pub(super) fn widget_ids<C>(rows: &[UiRow<C>]) -> Vec<String> {
     rows.iter()
         .flat_map(|row| match row {
             UiRow::Field(field) => scoped_ids(field.scope(), field.widget_ids()),
@@ -29,11 +29,11 @@ fn scoped_ids(scope: &str, inner: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-pub fn row_labels<C>(rows: &[UiRow<C>]) -> Vec<Option<&str>> {
+pub(crate) fn row_labels<C>(rows: &[UiRow<C>]) -> Vec<Option<&str>> {
     rows.iter().map(row_label).collect()
 }
 
-pub fn visible_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
+pub(crate) fn visible_labels<C>(rows: &[UiRow<C>]) -> Vec<&str> {
     row_labels(rows).into_iter().flatten().collect()
 }
 

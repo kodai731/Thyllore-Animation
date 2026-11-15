@@ -5,9 +5,10 @@ use thyllore_anim_core::{AnimationClip, AnimationSystem, Skeleton, SkeletonId, S
 use thyllore_model_core::MeshMorph;
 use thyllore_model_core::{Vertex, VertexData};
 
-use crate::fbx::{self, LoadedConstraint};
+use crate::fbx;
 use crate::gltf;
 use crate::gltf::vrm_humanoid_extension::VrmHumanoid;
+use thyllore_file_format_core::fbx::LoadedConstraint;
 
 #[derive(Clone, Debug)]
 pub struct TextureData {
@@ -47,7 +48,7 @@ impl Default for LoadedMesh {
     }
 }
 
-pub fn name_unnamed_material(mesh_index: usize) -> String {
+pub(crate) fn name_unnamed_material(mesh_index: usize) -> String {
     format!("material_{}", mesh_index)
 }
 

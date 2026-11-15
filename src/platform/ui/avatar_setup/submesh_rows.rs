@@ -21,13 +21,13 @@ const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [
 ];
 
 #[derive(Clone)]
-pub struct SubmeshesView {
+pub(super) struct SubmeshesView {
     pub submeshes: Vec<SubmeshItem>,
     pub chain_gen: ChainGenSettings,
 }
 
 #[derive(Clone)]
-pub struct SubmeshItem {
+pub(super) struct SubmeshItem {
     pub key: SubmeshKey,
     pub role: SubmeshRole,
     pub attachment: Option<RootAttachment>,
@@ -55,7 +55,7 @@ static CHAIN_GEN_SCALARS: LazyLock<Vec<ScalarParam<SubmeshesView>>> = LazyLock::
 });
 
 impl SubmeshesView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         let submeshes: Vec<SubmeshItem> = state
             .submesh_roles
             .iter()
@@ -122,7 +122,7 @@ fn chain_generation_group() -> UiRow<SubmeshesView> {
     }
 }
 
-pub fn rows() -> Vec<UiRow<SubmeshesView>> {
+pub(super) fn rows() -> Vec<UiRow<SubmeshesView>> {
     let mut out = vec![chain_generation_group()];
     out.push(UiRow::List(Box::new(ListRows::<
         SubmeshesView,

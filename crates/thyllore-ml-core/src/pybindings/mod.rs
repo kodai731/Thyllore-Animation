@@ -3,4 +3,4 @@ mod feedback;
 mod registration;
 mod v2_curve_copilot;
 
-pub use v2_curve_copilot::PyV2CurveCopilotSession;
+pub(crate) use v2_curve_copilot::PyV2CurveCopilotSession;

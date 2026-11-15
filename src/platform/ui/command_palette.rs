@@ -42,7 +42,7 @@ pub(crate) const PALETTE_KEY_BINDING: PaletteKeyBinding = PaletteKeyBinding {
     label: "Command palette",
 };
 
-pub enum PaletteItem {
+pub(super) enum PaletteItem {
     Command {
         label: &'static str,
         chord: String,
@@ -75,7 +75,7 @@ enum PaletteOutcome {
     Close,
 }
 
-pub fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
+pub(super) fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
     let mut query_chars = query.chars().flat_map(char::to_lowercase).peekable();
     let mut score = 0;
     let mut previous_char = None;
@@ -105,7 +105,7 @@ fn match_bonus(index: usize, previous_char: Option<char>, last_match_index: Opti
     }
 }
 
-pub fn rank_candidates(query: &str, items: &[PaletteItem]) -> Vec<usize> {
+pub(super) fn rank_candidates(query: &str, items: &[PaletteItem]) -> Vec<usize> {
     let mut scored: Vec<(usize, u32)> = items
         .iter()
         .enumerate()

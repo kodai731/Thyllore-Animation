@@ -14,7 +14,7 @@ use thyllore_avatar_core::cloth_setup::SubmeshKey;
 use thyllore_avatar_core::humanoid::HumanoidRole;
 
 #[derive(Debug)]
-pub struct UseExistingBonesAsSprings {
+pub(super) struct UseExistingBonesAsSprings {
     root: HumanoidRole,
     min_joints: u32,
 }
@@ -68,7 +68,7 @@ pub(super) fn use_existing_bones_as_springs_parse(
 }
 
 #[derive(Debug)]
-pub struct DumpSpringTailsAction {
+pub(super) struct DumpSpringTailsAction {
     path: PathBuf,
     sample_rate: f32,
 }
@@ -113,7 +113,7 @@ pub(super) fn dump_spring_tails_parse(text: &str) -> Option<Result<Box<dyn Batch
 }
 
 #[derive(Debug)]
-pub struct DumpSkinnedVerticesAction {
+pub(super) struct DumpSkinnedVerticesAction {
     path: PathBuf,
     sample_rate: f32,
     submesh: SubmeshKey,
@@ -176,7 +176,7 @@ pub(super) fn dump_skinned_vertices_parse(text: &str) -> Option<Result<Box<dyn B
 }
 
 #[derive(Debug)]
-pub struct FitSpringParamsAction {
+pub(super) struct FitSpringParamsAction {
     reference: PathBuf,
     sample_rate: f32,
     initial_step: f32,
@@ -267,7 +267,7 @@ pub(super) fn fit_spring_params_parse(text: &str) -> Option<Result<Box<dyn Batch
 }
 
 #[derive(Debug)]
-pub struct FitBodyColliders {
+pub(super) struct FitBodyColliders {
     params: CapsuleFitParams,
 }
 
@@ -311,7 +311,7 @@ pub(super) fn fit_body_colliders_parse(text: &str) -> Option<Result<Box<dyn Batc
 }
 
 #[derive(Debug)]
-pub struct SpringForceModelAction {
+pub(super) struct SpringForceModelAction {
     force_model: SpringForceModel,
 }
 

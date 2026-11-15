@@ -12,29 +12,29 @@ use crate::avatar_setup_bridge::{
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
-pub fn spring_joint_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn spring_joint_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &spring_joint_params())
 }
 
 #[pyfunction]
-pub fn spring_joint_force_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn spring_joint_force_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &spring_joint_force_params())
 }
 
 #[pyfunction]
-pub fn sidecar_read<'py>(py: Python<'py>, json: &str) -> PyResult<Bound<'py, PyAny>> {
+pub(super) fn sidecar_read<'py>(py: Python<'py>, json: &str) -> PyResult<Bound<'py, PyAny>> {
     let sidecar = bridge_sidecar_read(json).map_err(anyhow_to_pyerr)?;
     pythonize_value(py, &sidecar)
 }
 
 #[pyfunction]
-pub fn sidecar_build(input: &Bound<PyAny>) -> PyResult<String> {
+pub(super) fn sidecar_build(input: &Bound<PyAny>) -> PyResult<String> {
     let input: SidecarBuildInput = depythonize(input).map_err(depythonize_error_to_pyerr)?;
     bridge_sidecar_build(&input).map_err(|e| PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]
-pub fn spring_colliders_to_local<'py>(
+pub(super) fn spring_colliders_to_local<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -45,7 +45,7 @@ pub fn spring_colliders_to_local<'py>(
 }
 
 #[pyfunction]
-pub fn spring_colliders_to_model<'py>(
+pub(super) fn spring_colliders_to_model<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -56,7 +56,7 @@ pub fn spring_colliders_to_model<'py>(
 }
 
 #[pyfunction]
-pub fn infer_humanoid_mapping<'py>(
+pub(super) fn infer_humanoid_mapping<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {

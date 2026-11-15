@@ -96,7 +96,7 @@ pub fn remove_skeleton_bone(
 
 /// Removes a bone with its descendants, folds their skin weights into the parent and renumbers every
 /// bone reference in the world; returns the number of bones removed. The caller refreshes and records.
-pub fn remove_bone_subtree(
+pub(crate) fn remove_bone_subtree(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
@@ -119,7 +119,7 @@ pub fn remove_bone_subtree(
 }
 
 /// The state a skeleton edit can touch, or `None` when no skeleton is loaded.
-pub fn capture_skeleton_snapshot(
+pub(crate) fn capture_skeleton_snapshot(
     world: &World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
@@ -256,7 +256,7 @@ fn restore_owned_components<T: Component, M: Component + Default>(
     }
 }
 
-pub fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
+pub(super) fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
     if snapshot.bone_indices.len() != skin.bone_indices.len() {
         msg_error!(
             "Skeleton snapshot has {} skinned vertices for mesh {}, the mesh has {}",
@@ -306,7 +306,7 @@ fn drop_bone_state_beyond(world: &mut World, bone_count: BoneId) {
 }
 
 /// Gives the removed subtree's weight to the parent it hung from and renumbers the surviving bones.
-pub fn merge_removed_bone_weights(
+pub(super) fn merge_removed_bone_weights(
     skin: &mut SkinData,
     removed: &[BoneId],
     parent: Option<BoneId>,

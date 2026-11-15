@@ -32,13 +32,13 @@ declare_effect_pyfunctions! {
 }
 
 #[pyfunction]
-pub fn wind_default_preset() -> &'static str {
+pub(super) fn wind_default_preset() -> &'static str {
     WIND_DEFAULT_PRESET
 }
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj))]
-pub fn pack_wind_ubo(
+pub(super) fn pack_wind_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -56,7 +56,7 @@ pub fn pack_wind_ubo(
 /// World-space corners of the envelope box the engine picks and scissors the wind pass against.
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation))]
-pub fn wind_bounds_corners(
+pub(super) fn wind_bounds_corners(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -78,12 +78,12 @@ pub fn wind_bounds_corners(
 }
 
 #[pyfunction]
-pub fn wind_ubo_size() -> usize {
+pub(super) fn wind_ubo_size() -> usize {
     std::mem::size_of::<WindUBO>()
 }
 
 /// Resolution divisor of the engine's default wind resolve scale (1 = full, 2 = half).
 #[pyfunction]
-pub fn wind_resolve_divisor() -> u32 {
+pub(super) fn wind_resolve_divisor() -> u32 {
     WindRenderSettings::default().resolve_scale.divisor()
 }

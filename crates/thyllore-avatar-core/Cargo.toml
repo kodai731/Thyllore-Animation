@@ -29,5 +29,6 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 
 [dev-dependencies]
+thyllore-file-format-core = { path = "../thyllore-file-format-core" }
 tempfile = "3"
 thyllore-importer-core = { path = "../thyllore-importer-core" }

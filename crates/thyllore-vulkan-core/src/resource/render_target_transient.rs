@@ -6,7 +6,7 @@ use crate::resource::{create_image, create_image_view};
 use crate::types::Instance;
 use crate::vulkan::*;
 
-pub const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
+pub(super) const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
 const MAX_FRAMEBUFFER_ATTACHMENTS: usize = 4;
 
 #[derive(Clone, Copy, Debug)]

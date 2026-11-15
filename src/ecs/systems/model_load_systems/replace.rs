@@ -7,7 +7,7 @@ use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
 use crate::ecs::GpuSceneContext;
 use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
-use thyllore_importer_core::fbx::FbxModel;
+use thyllore_file_format_core::fbx::FbxModel;
 use thyllore_importer_core::ModelLoadResult;
 use thyllore_vulkan_core::core::RRSwapchain;
 

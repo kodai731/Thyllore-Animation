@@ -4,7 +4,7 @@ use glam::{DMat3, DQuat, DVec3};
 use super::rig_convention::RigConvention;
 use super::{canonical_bones, CanonicalBone};
 
-pub fn file_positions(convention: &RigConvention) -> Vec<[f64; 3]> {
+pub(crate) fn file_positions(convention: &RigConvention) -> Vec<[f64; 3]> {
     let bones = canonical_bones();
     let mut positions: Vec<[f64; 3]> = bones
         .iter()
@@ -68,7 +68,7 @@ fn character_space_position(
     p
 }
 
-pub fn character_to_file_rotation(spec: &[([f64; 3], f64)]) -> DMat3 {
+pub(crate) fn character_to_file_rotation(spec: &[([f64; 3], f64)]) -> DMat3 {
     let mut m = DMat3::IDENTITY;
     for (axis, angle_deg) in spec {
         let axis_vec = DVec3::from(*axis);

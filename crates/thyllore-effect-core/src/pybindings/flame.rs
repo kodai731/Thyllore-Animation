@@ -76,7 +76,7 @@ fn build_ubo_from_params(
 /// World-space corners of the shell proxy box, the same box the engine scissors its
 /// flame pass to (`compute_bounds_scissor`) and picks against.
 #[pyfunction]
-pub fn flame_bounds_corners(
+pub(super) fn flame_bounds_corners(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     position: [f32; 3],
@@ -103,7 +103,7 @@ pub fn flame_bounds_corners(
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, light_position=None, frame_index=0))]
-pub fn pack_flame_ubo(
+pub(super) fn pack_flame_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -128,7 +128,7 @@ pub fn pack_flame_ubo(
 /// The Blender addon bakes them into the GLSL as constants so the dead paths are
 /// not compiled; the values come from the same UBO the shader would read.
 #[pyfunction]
-pub fn flame_shader_specialization<'py>(
+pub(super) fn flame_shader_specialization<'py>(
     py: Python<'py>,
     params: &Bound<'py, PyDict>,
 ) -> PyResult<Bound<'py, PyDict>> {
@@ -144,13 +144,16 @@ pub fn flame_shader_specialization<'py>(
 /// Optical depth the effect really renders with: `optical_depth` when set,
 /// otherwise `sigma_t * radius` (the `0 = use sigma_t directly` convention).
 #[pyfunction]
-pub fn flame_effective_optical_depth(py: Python<'_>, params: &Bound<'_, PyDict>) -> PyResult<f32> {
+pub(super) fn flame_effective_optical_depth(
+    py: Python<'_>,
+    params: &Bound<'_, PyDict>,
+) -> PyResult<f32> {
     let (effect, _) =
         build_flame_from_params(py, params, 0.0, [0.0; 3], [1.0, 0.0, 0.0, 0.0], None)?;
     Ok(effective_sigma_t(&effect) * effect.radius.max(MIN_FLAME_EXTENT))
 }
 
 #[pyfunction]
-pub fn flame_ubo_size() -> usize {
+pub(super) fn flame_ubo_size() -> usize {
     std::mem::size_of::<FlameUBO>()
 }

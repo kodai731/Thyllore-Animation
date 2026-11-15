@@ -20,7 +20,7 @@ use thyllore_vulkan_core::descriptor::SetSlot;
 use thyllore_vulkan_core::renderer::{OverlayInstanceDraw, ShadingPushConstants};
 use thyllore_vulkan_core::types::{CommandBuffer, Extent2D, Rect2D};
 
-pub struct LightningPassNode;
+pub(super) struct LightningPassNode;
 
 /// Every lightning instance the node draws this frame, in UBO slot order.
 struct LightningFrame {

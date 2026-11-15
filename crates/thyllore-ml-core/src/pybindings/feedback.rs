@@ -13,7 +13,7 @@ use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pytho
     record_id="", revision=0, ts=None
 ))]
 #[allow(clippy::too_many_arguments)]
-pub fn build_feedback_record<'py>(
+pub(super) fn build_feedback_record<'py>(
     py: Python<'py>,
     model_hash: &str,
     channel_kind: &str,
@@ -50,7 +50,7 @@ pub fn build_feedback_record<'py>(
 }
 
 #[pyfunction]
-pub fn send_feedback_batch<'py>(
+pub(super) fn send_feedback_batch<'py>(
     py: Python<'py>,
     feedback_url: &str,
     ingest_token: &str,
@@ -77,7 +77,7 @@ pub fn send_feedback_batch<'py>(
 }
 
 #[pyfunction]
-pub fn send_message(
+pub(super) fn send_message(
     py: Python<'_>,
     feedback_url: &str,
     ingest_token: &str,

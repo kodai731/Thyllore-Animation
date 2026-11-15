@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use crate::ecs::world::World;
 use crate::platform::ui::form_window::FormSection;
 
-pub struct EffectSectionHook {
+pub(crate) struct EffectSectionHook {
     pub key: &'static str,
     pub order: u32,
     pub section: fn(&World) -> Option<Box<dyn FormSection>>,
@@ -18,7 +18,7 @@ macro_rules! effect_section_hook {
     };
 }
 
-pub fn collect_effect_sections() -> &'static [&'static EffectSectionHook] {
+pub(crate) fn collect_effect_sections() -> &'static [&'static EffectSectionHook] {
     static SECTIONS: OnceLock<Vec<&'static EffectSectionHook>> = OnceLock::new();
     SECTIONS.get_or_init(|| {
         let mut sections: Vec<&'static EffectSectionHook> =

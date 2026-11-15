@@ -7,7 +7,8 @@ use thyllore_anim_core::{
 };
 use thyllore_model_core::{Vertex, VertexData};
 
-use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
+use super::fbx::load_fbx_with_ufbx;
+use thyllore_file_format_core::fbx::{FbxModel, LoadedConstraint};
 
 #[derive(Clone, Debug)]
 pub struct FbxNodeInfo {
@@ -112,7 +113,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLo
 }
 
 fn convert_bone_nodes_to_node_info(
-    bone_nodes: &HashMap<String, super::fbx::BoneNode>,
+    bone_nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
 ) -> Vec<FbxNodeInfo> {
     let mut nodes = Vec::new();
     let mut name_to_index: HashMap<String, usize> = HashMap::new();
@@ -181,7 +182,9 @@ fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
     }
 }
 
-fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> Skeleton {
+fn convert_nodes_to_skeleton(
+    nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
+) -> Skeleton {
     let mut skeleton = Skeleton::new("fbx_skeleton");
 
     let mut name_to_id: HashMap<String, u32> = HashMap::new();
@@ -210,7 +213,7 @@ fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> S
 fn add_bone_recursive(
     skeleton: &mut Skeleton,
     name: &str,
-    nodes: &HashMap<String, super::fbx::BoneNode>,
+    nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
     name_to_id: &mut HashMap<String, u32>,
 ) -> u32 {
     if let Some(&id) = name_to_id.get(name) {
@@ -258,7 +261,7 @@ fn add_bone_recursive(
 }
 
 fn convert_fbx_animation_to_clip(
-    fbx_anim: &super::fbx::FbxAnimation,
+    fbx_anim: &thyllore_file_format_core::fbx::FbxAnimation,
     animation_system: &AnimationSystem,
     skeleton_id: Option<u32>,
 ) -> AnimationClip {
@@ -303,7 +306,7 @@ fn convert_fbx_animation_to_clip(
 }
 
 fn convert_fbx_data_to_mesh(
-    fbx_data: &super::fbx::FbxData,
+    fbx_data: &thyllore_file_format_core::fbx::FbxData,
     skeleton_id: Option<u32>,
     animation_system: &AnimationSystem,
     nodes: &[FbxNodeInfo],
@@ -375,7 +378,7 @@ fn convert_fbx_data_to_mesh(
 }
 
 fn convert_clusters_to_skin_data(
-    fbx_data: &super::fbx::FbxData,
+    fbx_data: &thyllore_file_format_core::fbx::FbxData,
     skeleton_id: u32,
     skeleton: Option<&Skeleton>,
 ) -> SkinData {

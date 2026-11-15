@@ -13,19 +13,19 @@ const fn rgba_hex(hex: u64) -> [f32; 4] {
     [r, g, b, a]
 }
 
-pub const SURFACE0: [f32; 4] = rgb_hex(0x1C1C1E);
-pub const SURFACE1: [f32; 4] = rgb_hex(0x2C2C2E);
-pub const SURFACE2: [f32; 4] = rgb_hex(0x3A3A3C);
-pub const SURFACE3: [f32; 4] = rgb_hex(0x48484A);
-pub const ACCENT: [f32; 4] = rgb_hex(0x0A84FF);
-pub const TEXT: [f32; 4] = rgb_hex(0xF2F2F7);
-pub const TEXT_SECONDARY: [f32; 4] = rgb_hex(0x98989D);
-pub const OUTLINE: [f32; 4] = rgba_hex(0x14FFFFFF);
-pub const OUTLINE_STRONG: [f32; 4] = rgba_hex(0x33FFFFFF);
-pub const EDGE_SHADOW: [f32; 4] = rgba_hex(0x99000000);
-pub const AXIS_X: [f32; 4] = rgb_hex(0xFF453A);
-pub const AXIS_Y: [f32; 4] = rgb_hex(0x30D158);
-pub const AXIS_Z: [f32; 4] = rgb_hex(0x0A84FF);
+pub(crate) const SURFACE0: [f32; 4] = rgb_hex(0x1C1C1E);
+pub(crate) const SURFACE1: [f32; 4] = rgb_hex(0x2C2C2E);
+pub(crate) const SURFACE2: [f32; 4] = rgb_hex(0x3A3A3C);
+pub(crate) const SURFACE3: [f32; 4] = rgb_hex(0x48484A);
+pub(crate) const ACCENT: [f32; 4] = rgb_hex(0x0A84FF);
+pub(crate) const TEXT: [f32; 4] = rgb_hex(0xF2F2F7);
+pub(crate) const TEXT_SECONDARY: [f32; 4] = rgb_hex(0x98989D);
+pub(crate) const OUTLINE: [f32; 4] = rgba_hex(0x14FFFFFF);
+pub(crate) const OUTLINE_STRONG: [f32; 4] = rgba_hex(0x33FFFFFF);
+pub(crate) const EDGE_SHADOW: [f32; 4] = rgba_hex(0x99000000);
+pub(crate) const AXIS_X: [f32; 4] = rgb_hex(0xFF453A);
+pub(crate) const AXIS_Y: [f32; 4] = rgb_hex(0x30D158);
+pub(crate) const AXIS_Z: [f32; 4] = rgb_hex(0x0A84FF);
 
 #[cfg(test)]
 mod tests {

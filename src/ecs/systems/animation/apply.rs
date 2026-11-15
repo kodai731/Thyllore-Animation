@@ -22,7 +22,7 @@ pub(crate) fn build_node_based_bone_transforms(
     transforms
 }
 
-pub fn apply_skinning_to_single_mesh(
+pub(crate) fn apply_skinning_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     global_transforms: &[Mat4],
@@ -68,7 +68,7 @@ pub fn apply_skinning_to_single_mesh(
     true
 }
 
-pub fn apply_node_animation_to_single_mesh(
+pub(crate) fn apply_node_animation_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     nodes: &[NodeData],
@@ -185,7 +185,7 @@ pub unsafe fn upload_animations(
     Ok(())
 }
 
-pub fn prepare_node_animation(
+pub(crate) fn prepare_node_animation(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     skeleton: &Skeleton,

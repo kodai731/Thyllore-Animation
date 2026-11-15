@@ -122,13 +122,13 @@ mod tests {
     use thyllore_scene_core::SceneFields;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum ProbeOwnerTag {
+    pub(super) enum ProbeOwnerTag {
         Frame,
     }
 
     #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
     #[scene(key = "test_probe_params", tag = ProbeOwnerTag, owner = Frame, tags = PROBE_TAGS, snapshot = probe_snapshot, scalars = PROBE_SCALARS, ui = PROBE_UI, overwrite = overwrite_probe)]
-    pub struct ProbeParams {
+    pub(super) struct ProbeParams {
         #[persist(curve, ui(min = 0.0, max = 1.0))]
         pub level: f32,
         #[persist(ui(min = 0.0, max = 1.0))]
@@ -141,7 +141,7 @@ mod tests {
 
     #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
     #[params(tag = ProbeOwnerTag, owner = Frame, group = "wind")]
-    pub struct ProbeWind {
+    pub(super) struct ProbeWind {
         #[persist(curve, scalars, debug_range = (-1.0, 1.0))]
         pub direction: [f32; 2],
         #[persist(curve, ui(label = "Bend", min = 0.0, max = 1.0), renamed_from = ["lean"])]

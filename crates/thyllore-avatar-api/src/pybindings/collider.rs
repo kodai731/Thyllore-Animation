@@ -10,12 +10,12 @@ use crate::collider_bridge::{
 use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
-pub fn capsule_fit_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn capsule_fit_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &capsule_fit_params())
 }
 
 #[pyfunction]
-pub fn fit_body_colliders<'py>(
+pub(super) fn fit_body_colliders<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -30,7 +30,7 @@ pub fn fit_body_colliders<'py>(
 }
 
 #[pyfunction]
-pub fn has_fitted_body_colliders(request: &Bound<PyAny>) -> PyResult<bool> {
+pub(super) fn has_fitted_body_colliders(request: &Bound<PyAny>) -> PyResult<bool> {
     let request: HasFittedBodyCollidersRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
 
@@ -39,7 +39,7 @@ pub fn has_fitted_body_colliders(request: &Bound<PyAny>) -> PyResult<bool> {
 }
 
 #[pyfunction]
-pub fn assign_collider_groups<'py>(
+pub(super) fn assign_collider_groups<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {

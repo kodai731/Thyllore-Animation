@@ -9,10 +9,10 @@ mod shell;
 mod slang;
 mod streak;
 
-pub use knots::*;
+pub(crate) use knots::*;
 #[cfg(test)]
-pub use medium::*;
+pub(crate) use medium::*;
 #[cfg(test)]
-pub use puffs::*;
-pub use shell::*;
-pub use streak::*;
+pub(crate) use puffs::*;
+pub(crate) use shell::*;
+pub(crate) use streak::*;

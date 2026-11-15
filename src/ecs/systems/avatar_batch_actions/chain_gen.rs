@@ -13,7 +13,7 @@ use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_cli_core::scalar_assignment_parse;
 
 #[derive(Debug)]
-pub struct GenerateChainBones {
+pub(super) struct GenerateChainBones {
     request: ChainGenRequest,
 }
 
@@ -99,7 +99,7 @@ fn attachment_parse(parts: &[&str]) -> Result<Option<RootAttachment>> {
 }
 
 #[derive(Debug)]
-pub struct SubmeshRoleAction {
+pub(super) struct SubmeshRoleAction {
     pub(super) role: SubmeshRole,
     pub(super) target: SubmeshSelector,
 }
@@ -147,7 +147,7 @@ pub(super) fn submesh_role_spec_parse(spec: &str) -> Result<SubmeshRoleAction> {
 }
 
 #[derive(Debug)]
-pub struct HideCoveredSkin {
+pub(super) struct HideCoveredSkin {
     params: HiddenMaskParams,
 }
 

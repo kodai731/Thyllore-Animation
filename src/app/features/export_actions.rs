@@ -31,7 +31,7 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
             &skeleton,
             path,
             has_skinned_meshes,
-            thyllore_importer_core::fbx::FbxAxesInfo::default(),
+            thyllore_file_format_core::fbx::FbxAxesInfo::default(),
             24.0,
         ),
     };
@@ -185,7 +185,10 @@ pub(crate) fn export_model_gltf(app: &App, path: &Path) {
     }
 }
 
-pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
+pub(crate) fn clip_with_skeleton(
+    app: &App,
+    source_id: u64,
+) -> Option<(EditableAnimationClip, Skeleton)> {
     let library = app.data.ecs_world.resource::<ClipLibrary>();
     let clip = library.get(source_id).cloned()?;
     drop(library);

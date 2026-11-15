@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn shader_include_dir(include_dir: &str) -> PathBuf {
+pub(crate) fn shader_include_dir(include_dir: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../shaders")
         .join(include_dir)
 }
 
-pub fn shader_source(include_dir: &str, relative_path: &str) -> String {
+pub(crate) fn shader_source(include_dir: &str, relative_path: &str) -> String {
     let path = shader_include_dir(include_dir).join(relative_path);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {}", path.display(), e))
 }
@@ -22,19 +22,19 @@ fn constant_text<'a>(source: &'a str, ty: &str, name: &str) -> Option<&'a str> {
         .map(|rest| rest.trim_end_matches(';'))
 }
 
-pub fn int_constant(source: &str, name: &str) -> i64 {
+pub(crate) fn int_constant(source: &str, name: &str) -> i64 {
     constant_text(source, "int", name)
         .and_then(|value| value.parse().ok())
         .unwrap_or_else(|| panic!("{name} declared as an int constant"))
 }
 
-pub fn float_constant(source: &str, name: &str) -> f32 {
+pub(crate) fn float_constant(source: &str, name: &str) -> f32 {
     constant_text(source, "float", name)
         .and_then(|value| value.parse().ok())
         .unwrap_or_else(|| panic!("{name} declared as a float constant"))
 }
 
-pub fn strip_line_comments(source: &str) -> String {
+pub(crate) fn strip_line_comments(source: &str) -> String {
     source
         .lines()
         .map(|l| l.split("//").next().unwrap_or(""))
@@ -43,7 +43,7 @@ pub fn strip_line_comments(source: &str) -> String {
 }
 
 /// (name, body) per top-level Slang function; handles multi-line signatures and struct returns.
-pub fn parse_functions(source: &str) -> Vec<(String, String)> {
+pub(crate) fn parse_functions(source: &str) -> Vec<(String, String)> {
     const NON_TYPES: [&str; 12] = [
         "if", "for", "while", "return", "else", "switch", "const", "struct", "layout", "module",
         "import", "static",
@@ -93,7 +93,7 @@ pub fn parse_functions(source: &str) -> Vec<(String, String)> {
     functions
 }
 
-pub fn assert_anchors_exist(include_dir: &str, expected: &[&str]) {
+pub(crate) fn assert_anchors_exist(include_dir: &str, expected: &[&str]) {
     let dir = shader_include_dir(include_dir);
     let mut combined = String::new();
     for entry in fs::read_dir(&dir).unwrap() {

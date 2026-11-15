@@ -24,7 +24,7 @@ struct ChainRoleEntry {
 }
 
 #[pyfunction]
-pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let entries: Vec<ChainRoleEntry> = SubmeshRole::VARIANTS
         .iter()
         .copied()
@@ -42,7 +42,7 @@ pub fn chain_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 /// The root attachments a submesh row can choose: `name` (the sidecar value), `label`,
 /// `description` and `bone_palette` (the Blender bone color theme number of its chains).
 #[pyfunction]
-pub fn root_attachments(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn root_attachments(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let entries = root_attachments_of().map_err(anyhow_to_pyerr)?;
     pythonize_value(py, &entries)
 }
@@ -50,7 +50,7 @@ pub fn root_attachments(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 /// The Blender bone color theme number of a chain generated with `attachment`; `None` is a chain
 /// authored by hand.
 #[pyfunction]
-pub fn chain_bone_palette(attachment: Option<&str>) -> PyResult<u8> {
+pub(super) fn chain_bone_palette(attachment: Option<&str>) -> PyResult<u8> {
     let attachment = attachment
         .map(parse_attachment)
         .transpose()
@@ -61,39 +61,39 @@ pub fn chain_bone_palette(attachment: Option<&str>) -> PyResult<u8> {
 /// The vertex groups the addon writes beside the bone weights: `covered`; the membership groups are
 /// spelled by `membership_vertex_group`.
 #[pyfunction]
-pub fn vertex_group_names(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn vertex_group_names(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &VERTEX_GROUP_NAMES)
 }
 
 /// The vertex group that holds the vertices the user assigned to the chain.
 #[pyfunction]
-pub fn membership_vertex_group(chain_name: &str) -> String {
+pub(super) fn membership_vertex_group(chain_name: &str) -> String {
     membership_vertex_group_of(chain_name)
 }
 
 /// The chain a membership group belongs to; `None` for any other vertex group.
 #[pyfunction]
-pub fn chain_of_vertex_group(group_name: &str) -> Option<String> {
+pub(super) fn chain_of_vertex_group(group_name: &str) -> Option<String> {
     chain_of_vertex_group_of(group_name).map(str::to_string)
 }
 
 /// The chain generation settings table: name, label, min, max, format, tooltip and default per row.
 #[pyfunction]
-pub fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn chain_gen_ui_params(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     pythonize_value(py, &chain_gen_params())
 }
 
 /// The names among `candidates` that belong to a chain generated on the submesh `target`
 /// (`<mesh>/<material>`); the others name chains of other submeshes.
 #[pyfunction]
-pub fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Vec<String>> {
+pub(super) fn submesh_chain_names(target: &str, candidates: Vec<String>) -> PyResult<Vec<String>> {
     submesh_chain_names_of(target, &candidates).map_err(anyhow_to_pyerr)
 }
 
 /// `(old name, new name)` for the candidates that name a chain of the submesh `target` under the
 /// legacy `<role>_<label>_<column>` scheme; renaming them keeps the chains a regenerate reads back.
 #[pyfunction]
-pub fn legacy_chain_renames(
+pub(super) fn legacy_chain_renames(
     target: &str,
     candidates: Vec<String>,
 ) -> PyResult<Vec<(String, String)>> {
@@ -113,7 +113,7 @@ pub fn legacy_chain_renames(
 /// the root was chosen by, when it was; a root given as a bone takes its role from `humanoid_bones`.
 /// `attachment` is `"cap"` or `"ring"`; absent, it follows the root role.
 #[pyfunction]
-pub fn generate_chains<'py>(
+pub(super) fn generate_chains<'py>(
     py: Python<'py>,
     request: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {

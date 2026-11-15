@@ -3,7 +3,7 @@ use crate::ecs::world::{Transform, World};
 use crate::ecs::FrameContext;
 
 /// Keeps the persisted placement equal to the Transform the gizmo and the inspector edit.
-pub fn follow_locator_transforms(world: &mut World) {
+pub(super) fn follow_locator_transforms(world: &mut World) {
     for entity in world.entities_with::<Locator>() {
         let Some((translation, rotation)) = world
             .get_component::<Transform>(entity)

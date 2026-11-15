@@ -23,7 +23,7 @@ use thyllore_vulkan_core::resource::RenderTargetKey;
 use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, CommandBuffer, Rect2D};
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
-pub const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[
+pub(super) const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[
     &WaterFrameNode,
     &WaterTraceNode,
     &WaterCausticClearNode,
@@ -217,7 +217,7 @@ fn frame_uses(
         .unwrap_or_default()
 }
 
-pub struct WaterTraceNode;
+pub(super) struct WaterTraceNode;
 
 impl RenderPassNode for WaterTraceNode {
     fn name(&self) -> &'static str {
@@ -306,7 +306,7 @@ impl RenderPassNode for WaterTraceNode {
 
 /// Borrows the frame's scene color / trace images, rebinds the water descriptors of this frame slot,
 /// and uploads the per-instance UBOs before any water pass reads them.
-pub struct WaterFrameNode;
+pub(super) struct WaterFrameNode;
 
 impl RenderPassNode for WaterFrameNode {
     fn name(&self) -> &'static str {
@@ -423,7 +423,7 @@ impl RenderPassNode for WaterFrameNode {
     }
 }
 
-pub struct WaterCausticClearNode;
+pub(super) struct WaterCausticClearNode;
 
 impl RenderPassNode for WaterCausticClearNode {
     fn name(&self) -> &'static str {
@@ -469,7 +469,7 @@ impl RenderPassNode for WaterCausticClearNode {
 
 /// Splats refracted light into the accumulation image.
 /// The G-buffer position image stays in GENERAL from the ray query pass and is not declared here.
-pub struct WaterCausticSplatNode;
+pub(super) struct WaterCausticSplatNode;
 
 impl RenderPassNode for WaterCausticSplatNode {
     fn name(&self) -> &'static str {
@@ -551,7 +551,7 @@ impl RenderPassNode for WaterCausticSplatNode {
 }
 
 /// Adds the accumulated caustic light to the HDR color.
-pub struct WaterCausticApplyNode;
+pub(super) struct WaterCausticApplyNode;
 
 impl RenderPassNode for WaterCausticApplyNode {
     fn name(&self) -> &'static str {
@@ -625,7 +625,7 @@ impl RenderPassNode for WaterCausticApplyNode {
     }
 }
 
-pub struct WaterSceneColorCopyNode;
+pub(super) struct WaterSceneColorCopyNode;
 
 impl RenderPassNode for WaterSceneColorCopyNode {
     fn name(&self) -> &'static str {
@@ -678,7 +678,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
     }
 }
 
-pub struct WaterHistoryClearNode;
+pub(super) struct WaterHistoryClearNode;
 
 impl RenderPassNode for WaterHistoryClearNode {
     fn name(&self) -> &'static str {
@@ -727,7 +727,7 @@ impl RenderPassNode for WaterHistoryClearNode {
     }
 }
 
-pub struct WaterShadingNode;
+pub(super) struct WaterShadingNode;
 
 impl RenderPassNode for WaterShadingNode {
     fn name(&self) -> &'static str {

@@ -67,13 +67,15 @@ impl WindResolveDescriptorSet {
     }
 }
 
-pub unsafe fn create_wind_shadow_bake_sets(rrdevice: &RRDevice) -> Result<ReflectedDescriptorSets> {
+pub(crate) unsafe fn create_wind_shadow_bake_sets(
+    rrdevice: &RRDevice,
+) -> Result<ReflectedDescriptorSets> {
     let layout_spec = ReflectedLayoutSpec::local(&WIND_SHADOW_BAKE)
         .with_override(wind_shadow_bake::WIND, DescriptorKind::UniformBufferDynamic);
     ReflectedDescriptorSets::create(rrdevice, &layout_spec, SetGrid::SINGLE)
 }
 
-pub unsafe fn write_wind_shadow_bake_set(
+pub(crate) unsafe fn write_wind_shadow_bake_set(
     sets: &ReflectedDescriptorSets,
     rrdevice: &RRDevice,
     wind_ubo: &UniformBuffer<WindUBO>,

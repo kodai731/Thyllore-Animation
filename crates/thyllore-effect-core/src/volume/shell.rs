@@ -20,7 +20,7 @@ const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct VolumeShell {
+pub(crate) struct VolumeShell {
     pub height: f32,
     pub radius_base: f32,
     pub radius_slope: f32,
@@ -32,7 +32,7 @@ pub struct VolumeShell {
     pub sigma_t: f32,
 }
 
-pub fn clamp_ray_to_cone_frustum(
+pub(crate) fn clamp_ray_to_cone_frustum(
     radius_base: f32,
     radius_top: f32,
     top_y: f32,
@@ -91,24 +91,24 @@ pub fn clamp_ray_to_cone_frustum(
 }
 
 impl VolumeShell {
-    pub fn fade_start(&self) -> f32 {
+    pub(crate) fn fade_start(&self) -> f32 {
         1.0 - self.top_fade
     }
 
-    pub fn wall_radius(&self, h: f32) -> f32 {
+    pub(crate) fn wall_radius(&self, h: f32) -> f32 {
         self.radius_base + self.radius_slope * h
     }
 
-    pub fn wall_radius_sq(&self, h: f32) -> f32 {
+    pub(crate) fn wall_radius_sq(&self, h: f32) -> f32 {
         let radius = self.wall_radius(h);
         radius * radius + self.radius_offset_q
     }
 
-    pub fn envelope_radius(&self, h: f32) -> f32 {
+    pub(crate) fn envelope_radius(&self, h: f32) -> f32 {
         self.wall_radius_sq(h).max(0.0).sqrt() + self.width_q.sqrt()
     }
 
-    pub fn envelope_height(&self, h: f32) -> f32 {
+    pub(crate) fn envelope_height(&self, h: f32) -> f32 {
         if h < 0.0 || h > self.h_top {
             return 0.0;
         }
@@ -121,11 +121,11 @@ impl VolumeShell {
         1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v))
     }
 
-    pub fn wall_at(&self, q: f32, h: f32) -> f32 {
+    pub(crate) fn wall_at(&self, q: f32, h: f32) -> f32 {
         self.strength * biweight((q - self.wall_radius_sq(h)) / self.width_q)
     }
 
-    pub fn density_at(&self, local: Vec3) -> f32 {
+    pub(crate) fn density_at(&self, local: Vec3) -> f32 {
         slang::shell_density_at(self, local)
     }
 
@@ -142,7 +142,7 @@ impl VolumeShell {
 
     /// Clamps the ray parameter interval to the envelope cone frustum intersected with the
     /// height slab; `None` when the ray misses it.
-    pub fn clamp_ray_to_cone(
+    pub(crate) fn clamp_ray_to_cone(
         &self,
         origin: Vec3,
         direction: Vec3,
@@ -159,7 +159,7 @@ impl VolumeShell {
     }
 
     /// Wall support boundaries and the envelope break of the ray, appended unsorted.
-    pub fn collect_knots(
+    pub(crate) fn collect_knots(
         &self,
         origin: Vec3,
         direction: Vec3,
@@ -187,7 +187,7 @@ impl VolumeShell {
         }
     }
 
-    pub fn knots(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> RayKnots {
+    pub(crate) fn knots(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> RayKnots {
         let mut knots = RayKnots::begin(t_near, t_far);
         self.collect_knots(origin, direction, t_near, t_far, &mut knots);
         knots.sort();
@@ -212,7 +212,7 @@ impl VolumeShell {
     }
 
     /// True when the piece [s0, s1], which must not cross a knot, lies inside the wall support.
-    pub fn piece_holds(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> bool {
+    pub(crate) fn piece_holds(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> bool {
         let length = s1 - s0;
         if length <= EMPTY_INTERVAL_EPSILON {
             return false;
@@ -228,7 +228,13 @@ impl VolumeShell {
     }
 
     /// Envelope times wall on the piece as a polynomial in sigma; `None` when the piece holds no wall.
-    pub fn piece_poly(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> Option<Poly> {
+    pub(crate) fn piece_poly(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        s0: f32,
+        s1: f32,
+    ) -> Option<Poly> {
         if !self.piece_holds(origin, direction, s0, s1) {
             return None;
         }
@@ -260,7 +266,13 @@ impl VolumeShell {
         Some(density)
     }
 
-    pub fn piece_optical_depth(&self, origin: Vec3, direction: Vec3, s0: f32, s1: f32) -> f32 {
+    pub(crate) fn piece_optical_depth(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        s0: f32,
+        s1: f32,
+    ) -> f32 {
         let Some(density) = self.piece_poly(origin, direction, s0, s1) else {
             return 0.0;
         };
@@ -268,7 +280,7 @@ impl VolumeShell {
     }
 
     /// A multiplicative modulation linear on the piece between the given end values.
-    pub fn piece_optical_depth_modulated(
+    pub(crate) fn piece_optical_depth_modulated(
         &self,
         origin: Vec3,
         direction: Vec3,
@@ -284,11 +296,17 @@ impl VolumeShell {
         ((s1 - s0) * self.sigma_t * total).max(0.0)
     }
 
-    pub fn optical_depth(&self, origin: Vec3, direction: Vec3, t_near: f32, t_far: f32) -> f32 {
+    pub(crate) fn optical_depth(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        t_near: f32,
+        t_far: f32,
+    ) -> f32 {
         slang::shell_optical_depth(self, origin, direction, t_near, t_far)
     }
 
-    pub fn optical_depth_toward(&self, origin: Vec3, direction: Vec3, t_max: f32) -> f32 {
+    pub(crate) fn optical_depth_toward(&self, origin: Vec3, direction: Vec3, t_max: f32) -> f32 {
         slang::shell_optical_depth_toward(self, origin, direction, t_max)
     }
 

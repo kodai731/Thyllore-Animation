@@ -5,7 +5,7 @@ use crate::spring_preview_bridge::{PoseRequest, SpringPreview, SpringPreviewRequ
 use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 #[pyclass(name = "SpringPreview", module = "thyllore_avatar_api")]
-pub struct PySpringPreview {
+pub(crate) struct PySpringPreview {
     inner: SpringPreview,
 }
 

@@ -5,12 +5,12 @@ use thyllore_math_core::{biweight, biweight_sphere_piece_integral};
 
 // Mirror of shaders/include/volume_puffs.slang.
 
-pub const PUFFS_PER_RAY: usize = 20;
+pub(crate) const PUFFS_PER_RAY: usize = 20;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
 /// Puffs a ray enters, with their entry and exit ray parameters.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RayPuffs {
+pub(crate) struct RayPuffs {
     pub count: usize,
     pub index: [usize; PUFFS_PER_RAY],
     pub enter: [f32; PUFFS_PER_RAY],
@@ -30,7 +30,7 @@ impl Default for RayPuffs {
 
 impl RayPuffs {
     /// Adds the entry and exit of every sphere (xyz centre, w radius) the ray crosses as knots.
-    pub fn collect(
+    pub(crate) fn collect(
         spheres: &[[f32; 4]],
         origin: Vec3,
         direction: Vec3,
@@ -72,7 +72,7 @@ impl RayPuffs {
     }
 
     /// Optical depth at `sigma` per unit kernel of every puff enclosing the piece [s0, s1].
-    pub fn piece_optical_depth(
+    pub(crate) fn piece_optical_depth(
         &self,
         spheres: &[[f32; 4]],
         sigma: f32,
@@ -84,13 +84,13 @@ impl RayPuffs {
         (sigma * self.piece_integral(spheres, origin, direction, s0, s1)).max(0.0)
     }
 
-    pub fn piece_holds(&self, s0: f32, s1: f32) -> bool {
+    pub(crate) fn piece_holds(&self, s0: f32, s1: f32) -> bool {
         let s_mid = 0.5 * (s0 + s1);
         (0..self.count).any(|k| s_mid > self.enter[k] && s_mid < self.exit[k])
     }
 
     /// Unit-strength integral of every puff enclosing the piece [s0, s1], which must not cross a knot.
-    pub fn piece_integral(
+    pub(crate) fn piece_integral(
         &self,
         spheres: &[[f32; 4]],
         origin: Vec3,
@@ -119,7 +119,7 @@ impl RayPuffs {
 }
 
 /// Shell knots plus the entry and exit of every puff the ray crosses, sorted, with the crossed puffs.
-pub fn shell_and_puff_knots(
+pub(crate) fn shell_and_puff_knots(
     shell: &VolumeShell,
     spheres: &[[f32; 4]],
     origin: Vec3,
@@ -135,7 +135,7 @@ pub fn shell_and_puff_knots(
 }
 
 /// Sum of the biweight kernels, scaled by `strength`, of every sphere containing `point`.
-pub fn puff_density(spheres: &[[f32; 4]], strength: f32, point: Vec3) -> f32 {
+pub(crate) fn puff_density(spheres: &[[f32; 4]], strength: f32, point: Vec3) -> f32 {
     let mut density = 0.0f32;
     for sphere in spheres {
         let radius = sphere[3];
@@ -152,7 +152,7 @@ pub fn puff_density(spheres: &[[f32; 4]], strength: f32, point: Vec3) -> f32 {
 }
 
 /// Density of the shell wall with the puffs added inside the wall envelope.
-pub fn shell_and_puff_density(
+pub(crate) fn shell_and_puff_density(
     shell: &VolumeShell,
     spheres: &[[f32; 4]],
     puff_strength: f32,

@@ -20,14 +20,14 @@ use thyllore_vulkan_core::resource::{
 };
 use thyllore_vulkan_core::types::{ImageView, Instance};
 
-pub const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
+pub(super) const WIND_RESOLVE_OVERLAY: OverlayNodeSpec = OverlayNodeSpec {
     shaders: &WIND_RESOLVE,
     blends: &[OverlayBlend::Premultiplied],
     depth_test: None,
     push_constants: OverlayPushConstants::of::<ShadingPushConstants>(),
 };
 
-pub unsafe fn create_wind_gpu_state(
+pub(super) unsafe fn create_wind_gpu_state(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrrender: &RRRender,

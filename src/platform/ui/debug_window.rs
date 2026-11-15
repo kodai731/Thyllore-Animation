@@ -18,7 +18,7 @@ use crate::platform::ui::theme::{icon_button, toolbar_divider, ButtonState};
 use thyllore_color_core::srgb_to_linear_rgba;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
+pub(super) fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
     build_camera_debug_panel(ui, ecs_world);
     ui.separator();
 
@@ -325,7 +325,7 @@ fn build_mouse_info(ui: &imgui::Ui, ecs_world: &World) {
     ui.text(format!("is wheel clicked: ({:.1})", mouse.middle_pressed));
 }
 
-pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
+pub(super) fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
     let show = ecs_world
         .get_resource::<DebugViewState>()
         .map(|s| s.show_click_debug)

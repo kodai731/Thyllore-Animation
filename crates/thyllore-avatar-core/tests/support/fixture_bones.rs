@@ -5,11 +5,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use glam::{Mat4, Vec3};
 
-pub fn load_fixture_bones(convention_id: &str) -> Vec<thyllore_avatar_core::humanoid::BoneInput> {
+pub(crate) fn load_fixture_bones(
+    convention_id: &str,
+) -> Vec<thyllore_avatar_core::humanoid::BoneInput> {
     load_fixture_rig(convention_id).0
 }
 
-pub fn load_fixture_rig(
+pub(crate) fn load_fixture_rig(
     convention_id: &str,
 ) -> (
     Vec<thyllore_avatar_core::humanoid::BoneInput>,
@@ -20,7 +22,7 @@ pub fn load_fixture_rig(
     load_rig_from_fbx_text(convention_id, &fbx_text)
 }
 
-pub fn load_rig_from_fbx_text(
+pub(crate) fn load_rig_from_fbx_text(
     label: &str,
     fbx_text: &str,
 ) -> (
@@ -45,7 +47,7 @@ pub fn load_rig_from_fbx_text(
 }
 
 fn nodes_to_fixture(
-    nodes: &HashMap<String, thyllore_importer_core::fbx::BoneNode>,
+    nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
 ) -> (
     Vec<thyllore_avatar_core::humanoid::BoneInput>,
     thyllore_avatar_core::motion::RetargetSkeleton,
@@ -64,7 +66,7 @@ fn nodes_to_fixture(
 
     fn compute_world(
         idx: usize,
-        node_list: &[&thyllore_importer_core::fbx::BoneNode],
+        node_list: &[&thyllore_file_format_core::fbx::BoneNode],
         name_to_index: &HashMap<String, usize>,
         world_transforms: &mut Vec<Option<Mat4>>,
     ) {

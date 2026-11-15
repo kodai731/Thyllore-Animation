@@ -3,11 +3,11 @@ use glam::{Mat3, Vec3};
 
 use super::canonical_bones;
 
-pub fn canonical_hips() -> [f32; 3] {
+pub(crate) fn canonical_hips() -> [f32; 3] {
     canonical_bones()[0].position
 }
 
-pub fn canonical_hips_height() -> f32 {
+pub(crate) fn canonical_hips_height() -> f32 {
     let hips = canonical_hips()[1];
     let foot_y = canonical_bones()
         .iter()
@@ -17,7 +17,7 @@ pub fn canonical_hips_height() -> f32 {
     hips - foot_y
 }
 
-pub fn reference_world_positions(
+pub(crate) fn reference_world_positions(
     sampled: &thyllore_avatar_core::motion::SampledPose,
 ) -> Vec<(thyllore_avatar_core::humanoid::HumanoidRole, [f32; 3])> {
     let bones = canonical_bones();

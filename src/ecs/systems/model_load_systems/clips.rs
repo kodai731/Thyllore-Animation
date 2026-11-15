@@ -236,7 +236,7 @@ pub fn build_initial_clip_schedule(
     schedule
 }
 
-pub fn keeps_selected_user_clip(world: &World) -> bool {
+pub(super) fn keeps_selected_user_clip(world: &World) -> bool {
     let (Some(timeline), Some(library)) = (
         world.get_resource::<TimelineState>(),
         world.get_resource::<ClipLibrary>(),

@@ -5,7 +5,7 @@ use crate::platform::ui::ui_rows::ChoiceOption;
 
 /// Build instance name list and selected index from effect entities.
 /// Each entity's `Name` component is used if present, otherwise `"{fallback_prefix} {i+1}"`.
-pub fn effect_instances(
+pub(crate) fn effect_instances(
     world: &World,
     entities: &[Entity],
     selected: usize,
@@ -24,7 +24,7 @@ pub fn effect_instances(
     (instances, selected)
 }
 
-pub fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> {
+pub(crate) fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> {
     names
         .iter()
         .enumerate()
@@ -35,7 +35,7 @@ pub fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> 
         .collect()
 }
 
-pub fn preset_options(names: &[&str], applied: Option<&str>) -> Vec<ChoiceOption> {
+pub(crate) fn preset_options(names: &[&str], applied: Option<&str>) -> Vec<ChoiceOption> {
     names
         .iter()
         .map(|&name| ChoiceOption {

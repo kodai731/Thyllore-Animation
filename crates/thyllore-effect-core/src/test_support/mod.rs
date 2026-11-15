@@ -1,4 +1,4 @@
 mod bitwise_agreement;
-pub mod scene;
+pub(crate) mod scene;
 
-pub use bitwise_agreement::BitwiseAgreement;
+pub(crate) use bitwise_agreement::BitwiseAgreement;

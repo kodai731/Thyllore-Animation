@@ -117,7 +117,7 @@ fn close_avatar_setup(world: &World) {
 }
 
 #[derive(Clone)]
-pub struct ValidationView {
+pub(super) struct ValidationView {
     pub rest_pose: RestPose,
     pub issues: Vec<String>,
     pub warnings: Vec<String>,
@@ -125,7 +125,7 @@ pub struct ValidationView {
 }
 
 impl ValidationView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         Self {
             rest_pose: state.rest_pose,
             issues: state.issues.iter().map(|i| i.to_string()).collect(),

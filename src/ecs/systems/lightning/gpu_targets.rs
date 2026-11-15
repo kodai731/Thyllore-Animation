@@ -41,7 +41,7 @@ impl LightningRenderTargets {
     }
 }
 
-pub unsafe fn create_lightning_render_targets(
+pub(crate) unsafe fn create_lightning_render_targets(
     rrdevice: &RRDevice,
     width: u32,
     height: u32,
@@ -66,7 +66,7 @@ pub unsafe fn create_lightning_render_targets(
     })
 }
 
-pub unsafe fn recreate_lightning_render_targets(
+pub(crate) unsafe fn recreate_lightning_render_targets(
     rrdevice: &RRDevice,
     targets: &mut LightningRenderTargets,
     hdr_view: thyllore_vulkan_core::types::ImageView,

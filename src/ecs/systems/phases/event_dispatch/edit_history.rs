@@ -1,4 +1,3 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClip};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
@@ -7,7 +6,8 @@ use crate::ecs::resource::{
     EditHistory, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
 };
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum EditHistoryEvent {

@@ -1,4 +1,4 @@
-use crate::loader::fbx::fbx::FbxModel;
+use thyllore_importer_core::fbx::fbx::FbxModel;
 
 pub enum FbxModelCache {
     Loaded {

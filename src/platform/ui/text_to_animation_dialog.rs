@@ -7,7 +7,7 @@ use crate::ecs::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub struct TextToAnimationDialogState {
     pub open: bool,

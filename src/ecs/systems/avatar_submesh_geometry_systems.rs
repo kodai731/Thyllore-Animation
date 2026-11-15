@@ -1,6 +1,6 @@
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::Vec3;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 /// One submesh inside the merged vertex range.
 pub(crate) struct SubmeshPart {
@@ -22,7 +22,7 @@ pub(crate) struct MergedSubmeshGeometry {
     pub(crate) positions: Vec<Vec3>,
     pub(crate) triangles: Vec<[u32; 3]>,
     pub(crate) tex_coords: Vec<[f32; 2]>,
-    pub(crate) skeleton_id: crate::animation::SkeletonId,
+    pub(crate) skeleton_id: thyllore_anim_core::SkeletonId,
 }
 
 fn submesh_tex_coords(

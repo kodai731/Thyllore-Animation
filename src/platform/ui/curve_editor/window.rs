@@ -1,5 +1,3 @@
-use crate::animation::editable::{curve_sample, EditableAnimationClip, PropertyType};
-use crate::animation::BoneId;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     AxisLock, ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState,
@@ -12,6 +10,8 @@ use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, ButtonState};
+use thyllore_anim_core::editable::{curve_sample, EditableAnimationClip, PropertyType};
+use thyllore_anim_core::BoneId;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
@@ -328,7 +328,7 @@ pub(super) fn collect_visible_scalar_curves<'a>(
 }
 
 pub(super) fn collect_visible_curves<'a>(
-    track: &'a crate::animation::editable::BoneTrack,
+    track: &'a thyllore_anim_core::editable::BoneTrack,
     editor_state: &CurveEditorState,
 ) -> Vec<DrawnCurve<'a>> {
     let mut curves = Vec::new();

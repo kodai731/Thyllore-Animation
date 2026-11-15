@@ -2,7 +2,6 @@ use anyhow::Result;
 
 use glam::Mat4;
 
-use crate::animation::SkeletonId;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{AnimationType, UpdatePhaseTimings};
 use crate::ecs::systems::phases::{
@@ -11,6 +10,7 @@ use crate::ecs::systems::phases::{
     run_view_phase_ecs,
 };
 use crate::ecs::FrameContext;
+use thyllore_anim_core::SkeletonId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FramePhase {

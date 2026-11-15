@@ -1,8 +1,8 @@
-use crate::animation::Skeleton;
 use crate::ecs::component::SpringBoneSetup;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use std::collections::HashSet;
+use thyllore_anim_core::Skeleton;
 use thyllore_avatar_core::stats::components::stats::AvatarStats;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub(crate) fn count_avatar_stats(
     graphics: &GraphicsResources,
@@ -58,8 +58,8 @@ mod tests {
     use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
 
     use super::*;
-    use crate::animation::SkinData;
     use crate::ecs::component::{SpringChain, SpringJointParam};
+    use thyllore_anim_core::SkinData;
 
     fn make_chain_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::new("chain");

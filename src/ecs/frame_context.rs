@@ -11,14 +11,14 @@ use crate::ecs::resource::gizmo::{
 use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::VulkanBackend;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::device::RRDevice;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::GpuBufferRegistry;
 use thyllore_vulkan_core::types::Instance;
+use thyllore_vulkan_core::VulkanBackend;
 
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 

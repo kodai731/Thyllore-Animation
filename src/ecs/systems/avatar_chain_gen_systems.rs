@@ -17,7 +17,6 @@ use crate::ecs::systems::skeleton_edit_systems::{
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
@@ -46,6 +45,7 @@ use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
 use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_math_core::world_y_axis;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub struct GeneratedChainBones {
     pub report: ChainGenReport,
@@ -345,7 +345,7 @@ fn find_root_bone(
 
 fn find_skeleton_mut(
     assets: &mut AssetStorage,
-    skeleton_id: crate::animation::SkeletonId,
+    skeleton_id: thyllore_anim_core::SkeletonId,
 ) -> anyhow::Result<&mut thyllore_model_core::Skeleton> {
     assets
         .skeletons

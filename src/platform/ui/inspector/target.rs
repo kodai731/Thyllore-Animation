@@ -1,6 +1,6 @@
-use crate::animation::BoneId;
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorTarget {

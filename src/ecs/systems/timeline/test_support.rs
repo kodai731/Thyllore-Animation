@@ -1,8 +1,8 @@
-use crate::animation::editable::{
+use crate::ecs::resource::{ClipLibrary, SelectedKeyframe, TimelineState};
+use thyllore_anim_core::editable::{
     clip_add_keyframe, clip_recalculate_duration, EditableAnimationClip, PropertyType, SourceClip,
     SourceClipId,
 };
-use crate::ecs::resource::{ClipLibrary, SelectedKeyframe, TimelineState};
 
 pub(crate) fn clip_with_three_keys() -> (TimelineState, ClipLibrary) {
     let clip_id: SourceClipId = 1;

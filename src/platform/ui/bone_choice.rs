@@ -1,5 +1,5 @@
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
+use thyllore_anim_core::BoneId;
 
 use crate::platform::ui::ui_rows::ChoiceOption;
 

@@ -3,12 +3,12 @@ use std::time::Instant;
 
 use glam::Mat4;
 
-use crate::animation::SkeletonId;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{AnimationType, PhaseSubTimings};
 use crate::ecs::systems::skeleton_gizmos_clear;
 use crate::ecs::transform_propagation_system;
 use crate::ecs::FrameContext;
+use thyllore_anim_core::SkeletonId;
 
 pub const TRANSFORM_PROPAGATE_PHASE: &str = "transform_propagate";
 

@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::data::SceneUniformData;
-use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::vulkanr::descriptor::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::data::SceneUniformData;
+use thyllore_vulkan_core::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
+use thyllore_vulkan_core::descriptor::{
     ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WATER_CAUSTIC_APPLY,
     WATER_CAUSTIC_SPLAT,
 };

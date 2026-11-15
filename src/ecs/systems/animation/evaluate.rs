@@ -1,9 +1,9 @@
-use crate::animation::editable::BlendMode;
-use crate::animation::SkeletonPose;
 use crate::asset::AssetStorage;
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, create_pose_from_rest, sample_clip_to_pose,
 };
+use thyllore_anim_core::editable::BlendMode;
+use thyllore_anim_core::SkeletonPose;
 
 use super::AnimatedEntityInfo;
 use crate::ecs::systems::pose_blend_systems::blend_poses_additive;

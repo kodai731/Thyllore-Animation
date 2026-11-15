@@ -6,11 +6,12 @@ use std::path::PathBuf;
 
 use thyllore_anim_core::editable::clip_from_animation;
 use thyllore_animation::ecs::systems::{
-    apply_skinning, compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
+    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
-use thyllore_animation::loader::fbx::load_fbx_to_graphics_resources;
-use thyllore_animation::loader::gltf::load_gltf_file;
-use thyllore_animation::loader::ModelLoadResult;
+use thyllore_importer_core::fbx::load_fbx_to_graphics_resources;
+use thyllore_importer_core::gltf::load_gltf_file;
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_model_core::apply_skinning;
 
 const TOLERANCE: f32 = 1e-3;
 

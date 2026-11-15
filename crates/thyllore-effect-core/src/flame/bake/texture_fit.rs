@@ -1152,7 +1152,7 @@ mod tests {
             .position(|&c| (c - 0.0).abs() < 1e-6)
             .unwrap();
         let axis_profile: Vec<f32> = profile.iter().map(|row| row[center_col_idx]).collect();
-        let axis_result = crate::flame_fit::fit_envelope_from_profile(
+        let axis_result = thyllore_texture_fit_core::fit_envelope_from_profile(
             &axis_profile,
             effect.edge.radius_tip_ratio,
             effect.warp.taper_power,

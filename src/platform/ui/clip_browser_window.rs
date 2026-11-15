@@ -1,13 +1,13 @@
 use imgui::Condition;
 
-use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, ClipExportFormat, DialogRequest};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, TimelineState};
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -175,7 +175,7 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
 }
 
 fn extract_source_filename(
-    clip: Option<&crate::animation::editable::EditableAnimationClip>,
+    clip: Option<&thyllore_anim_core::editable::EditableAnimationClip>,
 ) -> String {
     clip.and_then(|c| c.source_path.as_ref())
         .and_then(|p| std::path::Path::new(p).file_name())

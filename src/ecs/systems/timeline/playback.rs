@@ -65,8 +65,8 @@ pub fn timeline_update(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::ClipInstance;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
+    use thyllore_anim_core::editable::ClipInstance;
 
     #[test]
     fn timeline_advances_without_a_clip() {

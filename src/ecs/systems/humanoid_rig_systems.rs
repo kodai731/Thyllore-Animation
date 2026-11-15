@@ -7,10 +7,10 @@ use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
 
-use crate::animation::Skeleton;
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
 use crate::ecs::systems::humanoid_bake_systems::build_role_retarget_context;
+use thyllore_anim_core::Skeleton;
 
 pub fn build_humanoid_rig(
     model_path: &Path,
@@ -98,11 +98,11 @@ pub fn build_track_name_table(
 
 use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
 
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
     let Some(model_path) = find_model_path(world) else {
@@ -196,7 +196,7 @@ pub fn engine_bone_name_to_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::SourceClip;
+    use thyllore_anim_core::editable::SourceClip;
 
     use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
 

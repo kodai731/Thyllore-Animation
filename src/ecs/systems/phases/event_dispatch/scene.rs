@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum SceneEvent {

@@ -2,7 +2,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{HierarchyState, LayoutSnapshot};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use super::blend_shape::blend_shape_sections;
 use super::bone::bone_section;

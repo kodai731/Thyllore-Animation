@@ -12,9 +12,9 @@ use thyllore_avatar_core::motion::systems::retarget_pose::retarget_from_bones;
 use thyllore_importer_core::gltf::vrm_humanoid_extension::VrmHumanoid;
 use thyllore_math_core::{continuous_euler, decompose, euler_degrees_to_quaternion};
 
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub struct StandardBoneKey {
     pub role: HumanoidRole,
@@ -326,19 +326,19 @@ mod tests {
         let left_upper_arm_bone: BoneId = rig.track_bones["LeftUpperArm"];
 
         let mut clip_library = crate::ecs::resource::ClipLibrary::new();
-        let clip_id: crate::animation::editable::SourceClipId = 1;
+        let clip_id: thyllore_anim_core::editable::SourceClipId = 1;
         let clip = EditableAnimationClip::new(clip_id, "test".to_string());
-        let source = crate::animation::editable::SourceClip::new(clip_id, clip);
+        let source = thyllore_anim_core::editable::SourceClip::new(clip_id, clip);
         clip_library.source_clips.insert(clip_id, source);
 
         let mut timeline_state = crate::ecs::resource::TimelineState::new();
         timeline_state.current_clip_id = Some(clip_id);
         timeline_state.current_time = 0.0;
 
-        let mut overrides: std::collections::HashMap<BoneId, crate::animation::BoneLocalPose> =
+        let mut overrides: std::collections::HashMap<BoneId, thyllore_anim_core::BoneLocalPose> =
             std::collections::HashMap::new();
 
-        let left_upper_arm_pose = crate::animation::BoneLocalPose {
+        let left_upper_arm_pose = thyllore_anim_core::BoneLocalPose {
             translation: Vec3::new(0.0, 0.0, 0.0),
             rotation: role_rotation_to_thyllore(&rig.context.frame, [0.0, 0.0, -40.0]),
             scale: Vec3::new(1.0, 1.0, 1.0),
@@ -346,7 +346,7 @@ mod tests {
         overrides.insert(left_upper_arm_bone, left_upper_arm_pose);
 
         let skirt_bone_id: BoneId = rig.track_bones["Skirt_Front_1"];
-        let skirt_pose = crate::animation::BoneLocalPose {
+        let skirt_pose = thyllore_anim_core::BoneLocalPose {
             translation: Vec3::new(0.0, 0.0, 0.0),
             rotation: euler_degrees_to_quaternion(&Vec3::new(30.0, 0.0, 0.0)),
             scale: Vec3::new(1.0, 1.0, 1.0),

@@ -1,10 +1,10 @@
-use crate::animation::spring_bone::{chains_skinned_to, SpringChainId, SpringSpace};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::world::{Animator, Entity, Parent, Transform, World};
 use crate::ecs::MeshRef;
 use crate::hooks::model_load::LoadedModel;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{chains_skinned_to, SpringChainId, SpringSpace};
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 /// The uniform scale the entity's ancestry applies to its skeleton; a mirrored axis counts by its magnitude.
 pub fn spring_space_for_entity(world: &World, entity: Entity) -> SpringSpace {

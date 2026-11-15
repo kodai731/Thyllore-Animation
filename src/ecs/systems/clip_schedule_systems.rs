@@ -1,10 +1,10 @@
-use crate::animation::editable::{
-    ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId, SourceClipId,
-};
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::resource::{AnimationType, HierarchyState};
 use crate::ecs::systems::clip_library_systems::find_clip_schedule_owner;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::{
+    ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId, SourceClipId,
+};
 
 pub fn clip_schedule_add_instance(
     schedule: &mut ClipSchedule,

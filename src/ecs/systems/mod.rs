@@ -174,8 +174,6 @@ pub use spring_bone_systems::*;
 pub use text_to_animation_systems::*;
 #[cfg(feature = "auto-rig")]
 pub use text_to_mesh_systems::*;
-pub use thyllore_model_core::apply_skinning;
-pub use thyllore_vulkan_core::descriptor::effect_trace::*;
 pub use timeline::*;
 pub use transform_gizmo_systems::*;
 pub use tree_navigation::*;

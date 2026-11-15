@@ -1,7 +1,6 @@
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{JointForce, VrmJointForce};
 
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
 use crate::ecs::component::{
     ColliderGroupOrigin, ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
@@ -9,6 +8,7 @@ use crate::ecs::component::{
 };
 use crate::ecs::resource::SpringBoneState;
 use crate::ecs::world::{Animator, World};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
     let entities = world.component_entities::<Animator>();

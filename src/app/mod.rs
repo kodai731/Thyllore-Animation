@@ -26,7 +26,7 @@ pub use features::screenshot::cleanup_old_screenshots;
 pub use init::*;
 
 use crate::ecs::{ResMut, ResRef, Resource};
-use crate::vulkanr::device::*;
+use thyllore_vulkan_core::core::device::*;
 
 use std::time::Instant;
 
@@ -59,7 +59,7 @@ impl App {
         self.data.ecs_world.get_resource::<R>()
     }
 
-    pub fn pipeline_storage(&self) -> &crate::vulkanr::resource::PipelineStorage {
+    pub fn pipeline_storage(&self) -> &thyllore_vulkan_core::resource::PipelineStorage {
         &self.data.pipeline_storage
     }
 }

@@ -6,7 +6,7 @@ use crate::ecs::systems::{
     save_expression_library, set_morph_weight_on_siblings,
 };
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum MorphEvent {

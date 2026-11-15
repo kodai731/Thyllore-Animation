@@ -117,12 +117,12 @@ fn restore_skin_weights_writes_the_snapshot_back_when_sizes_match() {
 #[test]
 fn constraints_that_lose_a_bone_are_dropped_and_others_renumbered() {
     let (_, remap, _) = remove_middle_of_three();
-    let mut kept = ConstraintType::Position(crate::animation::PositionConstraintData {
+    let mut kept = ConstraintType::Position(thyllore_anim_core::PositionConstraintData {
         constrained_bone: 3,
         target_bone: 0,
         ..Default::default()
     });
-    let mut dropped = ConstraintType::Aim(crate::animation::AimConstraintData {
+    let mut dropped = ConstraintType::Aim(thyllore_anim_core::AimConstraintData {
         source_bone: 1,
         target_bone: 2,
         ..Default::default()
@@ -215,7 +215,7 @@ fn spring_chain_tail_follows_renumbered_bones_and_clears_when_removed() {
 
 #[test]
 fn renumbered_clip_tracks_mark_their_source_dirty_for_the_playback_asset() {
-    use crate::animation::editable::{EditableAnimationClip, SourceClip};
+    use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
 
     let (_, remap, _) = remove_middle_of_three();
     let mut world = World::new();

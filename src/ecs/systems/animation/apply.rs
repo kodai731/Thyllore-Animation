@@ -1,8 +1,8 @@
 use anyhow::Result;
 use glam::{Mat4, Vec3, Vec4};
 
-use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
+use thyllore_vulkan_core::resource::graphics_resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
@@ -170,7 +170,7 @@ pub fn compute_node_global_transforms(
 }
 
 pub unsafe fn upload_animations(
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     updated_meshes: &[usize],
 ) -> Result<()> {
     for &mesh_idx in updated_meshes {

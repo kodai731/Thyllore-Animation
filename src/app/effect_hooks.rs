@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use crate::app::{App, AppData};
 use crate::ecs::EffectContext;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::render::RRRender;
 use thyllore_vulkan_core::types::Instance;
 
 pub fn build_effect_context<'a>(

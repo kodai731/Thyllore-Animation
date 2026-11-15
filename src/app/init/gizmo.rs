@@ -7,17 +7,17 @@ use crate::ecs::systems::{
     gizmo_create_buffers_for_every_slot, gizmo_create_static_buffers,
 };
 use crate::ecs::{LightState, PipelineManager};
-use crate::vulkanr::command::*;
-use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
-use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::{
+use thyllore_vulkan_core::command::*;
+use thyllore_vulkan_core::core::device::*;
+use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::data::*;
+use thyllore_vulkan_core::descriptor::*;
+use thyllore_vulkan_core::pipeline::{
     BlendConfig, CullFace, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder,
     PushConstantConfig, RRPipeline, ShaderStages, Topology, VertexInputConfig,
 };
-use crate::vulkanr::render::*;
-use crate::vulkanr::swapchain::*;
-use crate::vulkanr::VulkanBackend;
+use thyllore_vulkan_core::render::*;
+use thyllore_vulkan_core::VulkanBackend;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;
@@ -40,7 +40,7 @@ impl App {
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
         render_layouts: &[&ReflectedSetLayout],
-        pipeline_storage: &mut crate::vulkanr::resource::PipelineStorage,
+        pipeline_storage: &mut thyllore_vulkan_core::resource::PipelineStorage,
         pipeline_manager: &mut PipelineManager,
     ) -> Result<GizmoPipelineIds> {
         let grid = PipelineBuilder::from_pass(&GRID)
@@ -190,7 +190,7 @@ impl App {
         depth_test: Option<DepthTestConfig>,
         blend: Option<BlendConfig>,
         push_constants: PushConstantConfig,
-        pipeline_storage: &mut crate::vulkanr::resource::PipelineStorage,
+        pipeline_storage: &mut thyllore_vulkan_core::resource::PipelineStorage,
         pipeline_manager: &mut PipelineManager,
         label: &str,
     ) -> Result<usize> {

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetId;
 use crate::ecs::resource::ClipPreview;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 #[derive(Default)]
 pub struct BakedHumanoidClips {

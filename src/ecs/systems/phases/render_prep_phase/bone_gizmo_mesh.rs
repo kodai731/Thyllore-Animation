@@ -14,11 +14,11 @@ use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::Result;
 use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::SpringChainId;
 use thyllore_math_core::ScreenSpaceScale;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub(super) unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
@@ -212,7 +212,7 @@ fn compute_visual_scale(
 
 unsafe fn update_stick_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     mesh_scale: f32,
@@ -255,7 +255,7 @@ unsafe fn update_stick_bone_mesh(
 
 unsafe fn update_octahedral_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
@@ -302,7 +302,7 @@ unsafe fn update_octahedral_bone_mesh(
 
 unsafe fn update_box_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
@@ -349,7 +349,7 @@ unsafe fn update_box_bone_mesh(
 
 unsafe fn update_sphere_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,

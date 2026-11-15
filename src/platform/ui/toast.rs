@@ -5,7 +5,7 @@ use crate::ecs::resource::{advance_toast, ToastMessage, UiToast, ViewportInput};
 use crate::ecs::world::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE2, TEXT};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const TOAST_FADE_SECS: f32 = 0.3;
 const TOAST_PADDING: [f32; 2] = [16.0, 8.0];

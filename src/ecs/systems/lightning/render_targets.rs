@@ -7,7 +7,7 @@ use crate::ecs::systems::lightning::gpu_targets::{
 use crate::ecs::EffectContext;
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::render::RRRender;
 
 pub const LIGHTNING_EFFECT_HOOK: EffectHook = EffectHook {
     name: "lightning",

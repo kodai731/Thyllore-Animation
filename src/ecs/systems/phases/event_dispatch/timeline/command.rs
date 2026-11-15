@@ -1,8 +1,3 @@
-use crate::animation::editable::{
-    BezierHandle, CurveExtrapolation, InterpolationType, KeyframeId, PropertyType, SourceClipId,
-    TangentContinuity, TangentType, TangentWeightMode,
-};
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_domain_for_entity, ClipSchedule};
 use crate::ecs::events::UiCommand;
@@ -16,7 +11,12 @@ use crate::ecs::systems::timeline::{
     timeline_toggle_track_expanded, timeline_zoom_in, timeline_zoom_out,
 };
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::{
+    BezierHandle, CurveExtrapolation, InterpolationType, KeyframeId, PropertyType, SourceClipId,
+    TangentContinuity, TangentType, TangentWeightMode,
+};
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use super::super::spring_bone::transition_to_baked_override_if_needed;
 use super::bone_set_key::dispatch_bone_set_key_events;
@@ -285,10 +285,10 @@ fn apply_view_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{ClipInstance, EditableAnimationClip};
     use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
     use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe_with_clip;
+    use thyllore_anim_core::editable::{ClipInstance, EditableAnimationClip};
 
     #[test]
     fn timeline_select_clip_leaves_scalar_schedule_untouched() {

@@ -91,12 +91,10 @@ fn test_src_directory_structure() {
     let src_dirs = [
         "src/app",
         "src/vulkanr",
-        "src/loader",
         "src/scene",
         "src/platform",
         "src/debugview",
         "src/logger",
-        "src/math",
     ];
 
     for dir in &src_dirs {

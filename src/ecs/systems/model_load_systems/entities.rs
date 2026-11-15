@@ -1,12 +1,12 @@
 use super::clips::{build_initial_clip_schedule, register_loaded_clips};
-use crate::animation::{classify_imported_animation, ImportedAnimationTraits};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
 use crate::ecs::resource::AnimationType;
 use crate::ecs::systems::attach_morph_channel_catalogs;
 use crate::ecs::world::{Animator, Entity, Transform, World};
-use crate::loader::{LoadedMesh, ModelLoadResult};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
+use thyllore_importer_core::{LoadedMesh, ModelLoadResult};
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub(super) fn spawn_model_entities(
     model_name: &str,

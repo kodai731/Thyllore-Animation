@@ -1,11 +1,11 @@
 use super::hit_test::*;
 use super::interaction::SelectionModifier;
 use super::view::*;
-use crate::animation::editable::{KeyframeId, PropertyType};
 use crate::ecs::resource::{
     BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveViewMode,
     DraggingTangent,
 };
+use thyllore_anim_core::editable::{KeyframeId, PropertyType};
 
 pub(super) fn handle_curve_area_click(
     editor_state: &mut CurveEditorState,
@@ -304,7 +304,7 @@ pub(super) fn apply_box_selection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{curve_add_keyframe, PropertyCurve};
+    use thyllore_anim_core::editable::{curve_add_keyframe, PropertyCurve};
 
     use super::super::test_fixtures::*;
 

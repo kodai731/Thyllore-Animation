@@ -26,8 +26,8 @@ unsafe fn prepare_composite_resources<'a>(
     raytracing: &'a RayTracingData,
     world: &World,
 ) -> Result<(
-    &'a crate::vulkanr::pipeline::RRPipeline,
-    &'a crate::vulkanr::descriptor::RRCompositeDescriptorSet,
+    &'a thyllore_vulkan_core::pipeline::RRPipeline,
+    &'a thyllore_vulkan_core::descriptor::RRCompositeDescriptorSet,
     i32,
 )> {
     let pipeline = raytracing

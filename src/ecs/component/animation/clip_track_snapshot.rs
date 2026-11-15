@@ -1,6 +1,6 @@
-use crate::animation::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
-use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
+use thyllore_anim_core::BoneId;
 
 pub struct ClipTrackSnapshot {
     pub entries: Vec<ClipTrackEntry>,

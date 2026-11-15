@@ -1,8 +1,8 @@
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::resource::{ActorRuntime, InferenceActorState};
-use crate::ml::{
+use crate::ml::InferenceThreadHandle;
+use thyllore_ml_core::{
     InferenceActorId, InferenceRequest, InferenceRequestId, InferenceRequestKind, InferenceResult,
-    InferenceThreadHandle,
 };
 
 pub fn inference_actor_initialize(setup: &InferenceActorSetup, state: &mut InferenceActorState) {

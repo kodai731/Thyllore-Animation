@@ -11,13 +11,13 @@ use crate::hooks::pass::{
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
 use thyllore_vulkan_core::descriptor::SetSlot;
+use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };

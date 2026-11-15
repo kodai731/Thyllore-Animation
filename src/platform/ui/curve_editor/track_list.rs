@@ -2,14 +2,14 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
 use super::bone_label::{format_bone_label, order_bone_ids_by_role};
 use super::window::{get_current_clip, ALL_PROPERTY_TYPES};
-use crate::animation::editable::{EditableAnimationClip, PropertyType};
-use crate::animation::BoneId;
 use crate::ecs::component::{scalar_channel_for_property, ScalarChannelDomain};
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorState, CurveEditorTarget, HumanoidRigState, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{EditableAnimationClip, PropertyType};
+use thyllore_anim_core::BoneId;
 
 pub(super) fn collect_humanoid_bone_roles(world: &World) -> Vec<(BoneId, HumanoidRole)> {
     world
@@ -414,7 +414,7 @@ mod tests {
     fn unmapped_bones_list_only_keyed_curves() {
         let mut clip = EditableAnimationClip::new(0, "bone".to_string());
         let track = clip.add_track(0, "Spine".to_string());
-        crate::animation::editable::curve_add_keyframe(&mut track.rotation_x, 0.0, 1.0);
+        thyllore_anim_core::editable::curve_add_keyframe(&mut track.rotation_x, 0.0, 1.0);
 
         assert!(is_curve_listed(&clip, &[], 0, PropertyType::RotationX));
         assert!(!is_curve_listed(&clip, &[], 0, PropertyType::RotationY));

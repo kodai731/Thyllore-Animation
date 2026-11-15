@@ -12,7 +12,7 @@ use crate::platform::ui::theme::{
     draw_raised_window_frame, property_label, push_raised_window_style, section_header,
     SectionDefault,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
 const SHORTCUT_SCOPES: [ShortcutScope; 5] = [

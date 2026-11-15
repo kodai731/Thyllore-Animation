@@ -9,8 +9,8 @@ use crate::ecs::systems::render_data_systems::{
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };
-use crate::vulkanr::descriptor::CompositeGBufferViews;
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
+use thyllore_vulkan_core::descriptor::CompositeGBufferViews;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
 use std::time::{Duration, Instant};
@@ -460,7 +460,7 @@ impl App {
     pub unsafe fn begin_offscreen_render_pass(
         &self,
         command_buffer: CommandBuffer,
-        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+        offscreen: &thyllore_vulkan_core::resource::OffscreenFramebuffer,
     ) {
         begin_render_pass_cleared(
             &self.rrdevice,
@@ -477,7 +477,7 @@ impl App {
         &self,
         command_buffer: CommandBuffer,
         image_index: usize,
-        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+        offscreen: &thyllore_vulkan_core::resource::OffscreenFramebuffer,
     ) -> Result<()> {
         let extent = offscreen.extent();
         set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);

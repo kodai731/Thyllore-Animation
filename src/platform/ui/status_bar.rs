@@ -8,7 +8,7 @@ use crate::ecs::systems::{camera_fly_speed, sum_compute_ms, sum_wait_ms};
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;

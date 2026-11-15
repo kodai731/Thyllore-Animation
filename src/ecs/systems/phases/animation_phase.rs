@@ -4,7 +4,6 @@ use std::time::Instant;
 use anyhow::Result;
 use glam::Mat4;
 
-use crate::animation::{BoneId, BoneLocalPose, SkeletonId};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::{
     AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PhaseSubTimings, PoseApplyCache,
@@ -16,6 +15,7 @@ use crate::ecs::{
     sync_avatar_setup, sync_expression_library, sync_humanoid_rig, sync_material_textures,
     update_weight_heatmap,
 };
+use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId};
 
 pub struct AnimationUpdates {
     pub updated_meshes: Vec<usize>,

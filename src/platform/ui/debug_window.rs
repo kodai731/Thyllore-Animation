@@ -15,7 +15,7 @@ use crate::ecs::World;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, TEXT_SECONDARY};
 use crate::platform::ui::theme::icons::Icon;
 use crate::platform::ui::theme::widgets::{icon_button, toolbar_divider, ButtonState};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub fn build_debug_panel_content(ui: &imgui::Ui, ecs_world: &World) {
     build_camera_debug_panel(ui, ecs_world);

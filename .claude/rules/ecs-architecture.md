@@ -71,7 +71,7 @@ needs: it never names the effect (see `hierarchy.md`, "Feature isolation").
 
 Feature-specific domains that have their own data/logic separation follow the `components/` and `systems/`
 pattern within their module directory. The editable animation domain lives in the pure crate
-`crates/thyllore-anim-core` (re-exported as `src/animation.rs`); it has no ECS dependency.
+`crates/thyllore-anim-core`; it has no ECS dependency.
 
 ```
 crates/thyllore-anim-core/src/editable/

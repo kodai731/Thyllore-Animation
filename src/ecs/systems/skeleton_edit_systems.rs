@@ -1,8 +1,6 @@
 use glam::{UVec4, Vec3, Vec4};
 use thyllore_model_core::{BoneRemap, SkinData, INFLUENCES_PER_VERTEX};
 
-use crate::animation::editable::SourceClipId;
-use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{Constrained, ConstraintSet, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
@@ -17,8 +15,10 @@ use crate::ecs::systems::avatar_setup_systems::{
 use crate::ecs::systems::humanoid_rig_systems::{invalidate_humanoid_rig, sync_humanoid_rig};
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
-use crate::exporter::fbx_exporter::clusters_from_skin_data;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{BoneId, ConstraintType, Skeleton, SkeletonId};
+use thyllore_exporter_core::systems::fbx::clusters_from_skin_data;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 fn edited_skeleton_mut(assets: &mut AssetStorage) -> anyhow::Result<(SkeletonId, &mut Skeleton)> {
     assets

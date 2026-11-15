@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::shader_bindings::water_resolve;
-use crate::vulkanr::descriptor::{
+use thyllore_effect_core::WaterUBO;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::shader_bindings::water_resolve;
+use thyllore_vulkan_core::descriptor::{
     DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot, WATER_RESOLVE,
 };
-use thyllore_effect_core::WaterUBO;
 use thyllore_vulkan_core::resource::UniformBuffer;
 use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, ImageView, Sampler};
 

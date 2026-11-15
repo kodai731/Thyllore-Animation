@@ -2,8 +2,8 @@ use std::sync::LazyLock;
 
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::animation::{BoneId, ConstraintType, ParentConstraintData};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
+use thyllore_anim_core::{BoneId, ConstraintType, ParentConstraintData};
 
 use super::fields::{applied_to_rows, common_rows, remove_row, update_event, ConstraintView};
 use crate::platform::ui::bone_choice::bone_options;

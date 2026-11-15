@@ -1,8 +1,7 @@
 use anyhow::Result;
 use clap::Args;
-use thyllore_effect_core::{
-    find_scalar_param, WindDebugView, WindResolveScale, WindShadingMode, WIND_SCALAR_PARAMS,
-};
+use thyllore_effect_core::{WindDebugView, WindResolveScale, WindShadingMode, WIND_SCALAR_PARAMS};
+use thyllore_scene_core::find_scalar_param;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;

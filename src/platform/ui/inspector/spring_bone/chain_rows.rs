@@ -3,10 +3,10 @@ use std::sync::LazyLock;
 use thyllore_anim_core::spring_bone::{JointForceForm, SpringJointParam, SPRING_JOINT_UI_PARAMS};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
-use crate::animation::BoneId;
 use crate::ecs::component::SpringChain;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 use super::force_rows::force_field_row;
 use super::section::SpringView;

@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use glam::{Quat, Vec3};
 
-use crate::animation::editable::{clip_from_animation, EditableAnimationClip};
-use crate::animation::{AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel};
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::{apply_constraints, create_pose_from_rest, sample_clip_to_pose};
+use thyllore_anim_core::editable::{clip_from_animation, EditableAnimationClip};
+use thyllore_anim_core::{
+    AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel,
+};
 
 use super::clip_library_systems::clip_library_register_and_activate;
 
@@ -88,7 +90,7 @@ pub fn constraint_bake_register(
     clip_library: &mut ClipLibrary,
     assets: &mut crate::asset::AssetStorage,
     baked_clip: EditableAnimationClip,
-) -> crate::animation::editable::SourceClipId {
+) -> thyllore_anim_core::editable::SourceClipId {
     clip_library_register_and_activate(clip_library, assets, baked_clip)
 }
 

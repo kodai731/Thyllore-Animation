@@ -14,7 +14,7 @@ use crate::platform::ui::shortcuts::format_chord;
 use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";
 const PALETTE_WIDTH: f32 = 520.0;

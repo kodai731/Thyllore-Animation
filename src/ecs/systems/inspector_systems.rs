@@ -1,11 +1,11 @@
 use glam::{Quat, Vec3, Vec4};
 
-use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {

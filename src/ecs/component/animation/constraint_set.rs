@@ -1,4 +1,4 @@
-use crate::animation::{ConstraintId, ConstraintType};
+use thyllore_anim_core::{ConstraintId, ConstraintType};
 
 #[derive(Clone, Debug)]
 pub struct ConstraintEntry {

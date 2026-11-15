@@ -1,9 +1,11 @@
+#![cfg(test)]
+
 use glam::{Mat4, UVec4, Vec3, Vec4};
 
-use crate::animation::{Skeleton, SkeletonPose, SkinData};
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
-use crate::loader::LoadedNode;
-use crate::vulkanr::resource::graphics_resource::NodeData;
+use thyllore_anim_core::{Skeleton, SkeletonPose, SkinData};
+use thyllore_animation::ecs::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_importer_core::LoadedNode;
+use thyllore_vulkan_core::resource::graphics_resource::NodeData;
 
 const TOLERANCE: f32 = 0.001;
 const EXPECTED_POSITION: Vec3 = Vec3::new(0.5, 1.0, 0.0);
@@ -116,7 +118,7 @@ fn run_node_animation(
 ) -> Vec3 {
     let pose = rest_pose(skeleton);
     let mut node_data = to_node_data(loaded_nodes);
-    crate::ecs::systems::animation::apply::compute_node_global_transforms(
+    thyllore_animation::ecs::systems::animation::apply::compute_node_global_transforms(
         &mut node_data,
         skeleton,
         &pose,

@@ -8,14 +8,14 @@ use super::{
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{Camera, LightState, ProjectionData};
-use crate::math::coordinate_system::perspective_infinite_reverse;
+use thyllore_math_core::coordinate_system::perspective_infinite_reverse;
 
 pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> ProjectionData {
     let position = compute_camera_position(camera);
     let direction = compute_camera_direction(camera);
     let up = compute_camera_up(camera);
 
-    let view = crate::math::view(position, direction, up);
+    let view = thyllore_math_core::view(position, direction, up);
     let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(camera.fov_y, aspect, camera.near_plane);
     let screen_size = Vec2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
@@ -29,7 +29,7 @@ pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> Pr
 }
 
 pub unsafe fn update_frame_ubo(
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     proj_data: &ProjectionData,
     camera_position: Vec3,
     light_position: Vec3,
@@ -46,7 +46,7 @@ pub unsafe fn update_frame_ubo(
 }
 
 pub unsafe fn update_object_ubos(
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     model_matrix: Mat4,
     object_index: usize,
     image_index: usize,

@@ -1,8 +1,8 @@
-use crate::animation::editable::SourceClipId;
-use crate::animation::BoneId;
 use crate::ecs::resource::{
     ClipDragType, ClipLibrary, SelectedKeyframe, SelectionModifier, TimelineState,
 };
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::BoneId;
 
 pub fn timeline_select_clip(
     timeline_state: &mut TimelineState,
@@ -149,10 +149,10 @@ pub fn clip_drag_preview_times(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableAnimationClip, PropertyType, SourceClip};
     use crate::ecs::component::ClipSchedule;
     use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
+    use thyllore_anim_core::editable::{EditableAnimationClip, PropertyType, SourceClip};
 
     #[test]
     fn set_keyframe_selection_replace() {

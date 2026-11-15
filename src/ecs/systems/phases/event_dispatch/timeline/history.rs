@@ -1,7 +1,7 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::ecs::resource::{ClipLibrary, EditHistory, TimelineState};
 use crate::ecs::systems::edit_history_push_clip_mergeable;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 /// The active clip as it was before an edit, so the edit can be pushed to the history afterwards.
 pub(super) struct ClipSnapshot {

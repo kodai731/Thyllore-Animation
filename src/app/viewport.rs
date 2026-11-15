@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{
     allocate_imgui_texture_set, imgui_layout_spec, imgui_texture_id, write_imgui_texture_set,
     ReflectedSetLayout,
 };
-use crate::vulkanr::resource::{
+use thyllore_vulkan_core::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };

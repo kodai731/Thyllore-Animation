@@ -5,10 +5,10 @@ use anyhow::Result;
 use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
 use clap::Args;
 use thyllore_effect_core::{
-    apply_flame_preset, find_scalar_param, refresh_flame_coefficients, FlameBaked, FlameColor,
-    FlameDebugView, FlameTrailState, StyleGroups, TextureFitGroups, FLAME_PRESET_NAMES,
-    FLAME_SCALAR_PARAMS,
+    apply_flame_preset, refresh_flame_coefficients, FlameBaked, FlameColor, FlameDebugView,
+    FlameTrailState, StyleGroups, TextureFitGroups, FLAME_PRESET_NAMES, FLAME_SCALAR_PARAMS,
 };
+use thyllore_scene_core::find_scalar_param;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};

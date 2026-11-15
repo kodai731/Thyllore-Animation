@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
@@ -23,7 +22,8 @@ use crate::ecs::FrameContext;
 use crate::ecs::World;
 use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
 use crate::scratch::loader::LoadScratchJob;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub const LIVE_DUMP_DIRECTORY: &str = "log/live_dump";
 const REPLY_TIMEOUT: Duration = Duration::from_secs(30);

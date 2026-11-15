@@ -6,7 +6,7 @@ use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
 use crate::ecs::systems::effect_edit::apply_effect_update;
 use crate::ecs::systems::resolve_selected_flame;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 impl UiCommand for FlameUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {

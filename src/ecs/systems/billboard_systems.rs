@@ -6,7 +6,7 @@ use crate::ecs::resource::billboard::{
     BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
 };
 use crate::ecs::world::{BillboardBehavior, Transform, World};
-use crate::vulkanr::VulkanBackend;
+use thyllore_vulkan_core::VulkanBackend;
 
 pub fn create_billboard() -> BillboardData {
     let billboard_size = 0.5;

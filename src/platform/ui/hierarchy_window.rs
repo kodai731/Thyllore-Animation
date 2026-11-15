@@ -14,7 +14,7 @@ use crate::ecs::world::World;
 use crate::platform::ui::theme::{
     entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 

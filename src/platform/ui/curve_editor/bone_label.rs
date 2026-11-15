@@ -1,6 +1,6 @@
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-use crate::animation::BoneId;
+use thyllore_anim_core::BoneId;
 
 pub(super) fn format_bone_label(bone_name: &str, role: Option<HumanoidRole>) -> String {
     match role {

@@ -1,9 +1,9 @@
 use anyhow::Result;
 
 use crate::ecs::systems::wind::gpu_targets::{wind_shadow_volume_extent, WindRenderTargets};
-use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
 use thyllore_vulkan_core::descriptor::{ReflectedDescriptorSets, SetSlot};
+use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::renderer::{
     bind_compute, dispatch, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,

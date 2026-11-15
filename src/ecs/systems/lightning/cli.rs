@@ -1,9 +1,10 @@
 use anyhow::Result;
 use clap::Args;
 use thyllore_effect_core::{
-    apply_lightning_preset, find_scalar_param, LightningDebugView, LightningShadingMode,
-    LIGHTNING_PRESET_NAMES, LIGHTNING_SCALAR_PARAMS,
+    apply_lightning_preset, LightningDebugView, LightningShadingMode, LIGHTNING_PRESET_NAMES,
+    LIGHTNING_SCALAR_PARAMS,
 };
+use thyllore_scene_core::find_scalar_param;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::LightningEffect;

@@ -1,4 +1,3 @@
-use crate::animation::{BoneId, ConstraintType, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::component::{ColorVertex, LineMesh};
@@ -6,6 +5,7 @@ use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 use crate::ecs::world::World;
 use crate::hooks::model_load::LoadedModel;
+use thyllore_anim_core::{BoneId, ConstraintType, Skeleton};
 
 use glam::Mat4;
 

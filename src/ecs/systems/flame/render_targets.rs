@@ -6,7 +6,7 @@ use crate::ecs::systems::flame::gpu_targets::{create_flame_history, recreate_fla
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::render::RRRender;
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",

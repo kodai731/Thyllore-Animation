@@ -5,14 +5,18 @@ use crate::ecs::systems::wind::descriptors::{
     create_wind_shadow_bake_sets, write_wind_shadow_bake_set, WindResolveDescriptorSet,
 };
 use crate::ecs::systems::wind::gpu_targets::WindRenderTargets;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{OverlayUpsampleDescriptorSet, WIND_RESOLVE, WIND_SHADOW_BAKE};
-use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{build_gpu_resource, GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{
+    OverlayUpsampleDescriptorSet, WIND_RESOLVE, WIND_SHADOW_BAKE,
+};
+use thyllore_vulkan_core::pipeline::RRPipeline;
+use thyllore_vulkan_core::render::RRRender;
 use thyllore_vulkan_core::renderer::{
     OverlayBlend, OverlayNodeSpec, OverlayPushConstants, ShadingPushConstants, UPSAMPLE_OVERLAY,
+};
+use thyllore_vulkan_core::resource::{
+    build_gpu_resource, GraphicsResources, Placement, UniformBuffer,
 };
 use thyllore_vulkan_core::types::{ImageView, Instance};
 

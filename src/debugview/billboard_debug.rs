@@ -5,9 +5,9 @@ use crate::ecs::systems::camera_systems::{
 };
 use crate::ecs::world::World;
 use crate::vulkanr::context::SwapchainState;
-use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
-use crate::vulkanr::swapchain::RRSwapchain;
 use glam::{Vec3, Vec4};
+use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::descriptor::RRBillboardDescriptorSet;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 
@@ -145,7 +145,7 @@ fn log_basic_info(
 }
 
 fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
-    use crate::math::{coordinate_system::perspective_infinite_reverse, view};
+    use thyllore_math_core::{coordinate_system::perspective_infinite_reverse, view};
 
     let swapchain_extent = swapchain.swapchain_extent();
 

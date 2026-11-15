@@ -2,15 +2,15 @@ use std::rc::Rc;
 
 use crate::app::{App, AppData};
 use crate::ecs::PassContext;
-use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::FrameSync;
-use crate::vulkanr::core::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::VulkanBackend;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::device::RRDevice;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::GpuBufferRegistry;
 use thyllore_vulkan_core::types::Instance;
 use thyllore_vulkan_core::FrameRenderContext;
+use thyllore_vulkan_core::VulkanBackend;
 
 pub fn build_frame_render_context(app: &App, image_index: usize) -> FrameRenderContext<'_> {
     FrameRenderContext {

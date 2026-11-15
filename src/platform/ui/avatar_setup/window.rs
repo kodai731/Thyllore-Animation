@@ -2,9 +2,9 @@ use crate::ecs::resource::{AvatarSetupState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::form_window::{FormPlacement, FormWindow, TabsSection};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
 use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use super::export_rows::ExportView;
 use super::humanoid_rows::HumanoidView;

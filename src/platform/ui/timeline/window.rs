@@ -13,8 +13,8 @@ use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::timeline_effective_duration;
 use crate::ecs::world::World;
 use crate::platform::ui::curve_editor::{build_curve_editor_tab, build_placement_toggle};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use imgui::Condition;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub(super) fn draw_timeline_window(
     ui: &imgui::Ui,

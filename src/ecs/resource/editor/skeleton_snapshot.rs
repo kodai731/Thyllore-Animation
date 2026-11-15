@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use glam::{UVec4, Vec4};
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 
-use crate::animation::editable::{BoneTrack, SourceClipId};
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{BoneTrack, SourceClipId};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 /// Skin weights of one graphics mesh, identified by its index in the graphics resources.
 #[derive(Clone, Debug)]

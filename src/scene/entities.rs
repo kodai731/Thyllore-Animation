@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::scalar_clip_systems::{
@@ -12,6 +11,7 @@ use crate::ecs::world::{Entity, Name, World};
 use crate::hooks::scene::{
     SceneComponentHook, SceneComponentHooks, SceneComponentRole, SceneValue,
 };
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 /// A named entity stored as the persisted form of its components, keyed by type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]

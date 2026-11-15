@@ -9,7 +9,7 @@ mod release_build_tests {
     use thyllore_animation::ecs::resource::GridMeshData;
     use thyllore_animation::ecs::systems::create_grid_mesh;
     use thyllore_animation::ecs::world::World;
-    use thyllore_animation::loader::ModelLoadResult;
+    use thyllore_importer_core::ModelLoadResult;
 
     #[test]
     fn test_grid_mesh_xz_toggle_in_release() {
@@ -40,7 +40,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -56,7 +56,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -95,10 +95,8 @@ mod release_build_tests {
         }
     }
 
-    use thyllore_animation::vulkanr;
-
-    unsafe fn create_headless_test_device() -> Option<vulkanr::HeadlessContext> {
-        vulkanr::create_headless_context().ok()
+    unsafe fn create_headless_test_device() -> Option<thyllore_vulkan_core::HeadlessContext> {
+        thyllore_vulkan_core::create_headless_context().ok()
     }
 
     #[test]
@@ -112,7 +110,9 @@ mod release_build_tests {
         assert!(headless.rrdevice.has_graphics_queue());
         assert!(headless.rrdevice.min_uniform_buffer_offset_alignment > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance) };
+        unsafe {
+            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance)
+        };
     }
 
     #[test]
@@ -131,7 +131,9 @@ mod release_build_tests {
         assert!(api_version > 0);
         assert!(headless.rrdevice.msaa_samples().bits() > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance) };
+        unsafe {
+            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance)
+        };
     }
 
     #[test]
@@ -147,7 +149,7 @@ mod release_build_tests {
 
         unsafe {
             headless.rrdevice.wait_graphics_queue_idle().unwrap();
-            vulkanr::destroy_headless_device(&headless.rrdevice, &headless.instance);
+            thyllore_vulkan_core::destroy_headless_device(&headless.rrdevice, &headless.instance);
         }
     }
 }
@@ -761,7 +763,7 @@ mod components_tests {
 
 mod constraint_solver_tests {
     use glam::{Mat4, Quat, Vec3};
-    use thyllore_animation::animation::{
+    use thyllore_anim_core::{
         BoneLocalPose, ConstraintType, IkConstraintData, PositionConstraintData,
         RotationConstraintData, ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
         PRIORITY_POSITION, PRIORITY_ROTATION, PRIORITY_SCALE,
@@ -784,7 +786,7 @@ mod constraint_solver_tests {
     }
 
     fn create_rest_pose(skeleton: &Skeleton) -> SkeletonPose {
-        use thyllore_animation::animation::decompose_transform;
+        use thyllore_anim_core::decompose_transform;
         let bone_poses = skeleton
             .bones
             .iter()

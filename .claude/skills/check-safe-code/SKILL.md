@@ -16,7 +16,7 @@ fixed in PR #72 (`feature/make-safe-code`).
 
 ```
 /check-safe-code
-/check-safe-code src/loader/
+/check-safe-code crates/thyllore-importer-core/
 /check-safe-code src/vulkanr/core/device.rs
 ```
 

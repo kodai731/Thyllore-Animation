@@ -1,8 +1,10 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::image::{SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter};
-use crate::vulkanr::resource::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::resource::image::{
+    SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter,
+};
+use thyllore_vulkan_core::resource::{
     GpuResource, HistoryTargets, HistoryTargetsDesc, RenderTargetKey, RenderTargetStorage,
 };
 use thyllore_vulkan_core::types::{CommandPool, Format, ImageView, Instance};

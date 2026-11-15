@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::EventQueue;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 /// A UI command applies itself to the world during the event dispatch phase, in the order it was sent.
 pub trait UiCommand: std::fmt::Debug {

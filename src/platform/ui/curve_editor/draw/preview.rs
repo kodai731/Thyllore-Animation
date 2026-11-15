@@ -1,8 +1,8 @@
-use crate::animation::editable::{
+use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
+use thyllore_anim_core::editable::{
     sample_bezier, segment_uses_bezier, BezierHandle, EditableKeyframe, InterpolationType,
     PropertyCurve,
 };
-use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe, DraggingTangent};
 
 use super::super::drag::{
     compute_dragged_tangent, dragged_key_delta, dragged_key_position, TimeSnap,

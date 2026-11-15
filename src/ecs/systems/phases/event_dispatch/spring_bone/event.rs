@@ -1,6 +1,4 @@
 use super::bake::dispatch_spring_bone_bake_events;
-use crate::animation::spring_bone::{JointForce, SpringForceModel};
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ColliderShape;
 use crate::ecs::component::SpringBoneSetup;
@@ -14,7 +12,9 @@ use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{JointForce, SpringForceModel};
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum SpringBoneEvent {

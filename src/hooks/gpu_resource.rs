@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::ecs::world::{Resource, World};
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::resource::GpuResource;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::resource::GpuResource;
 
 pub type GpuResourceDestroyFn = unsafe fn(&World, &RRDevice);
 

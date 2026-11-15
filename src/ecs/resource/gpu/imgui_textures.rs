@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use imgui::SnapshotTextureId;
 
 use crate::gpu_resource;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::imgui_texture_id;
-use crate::vulkanr::resource::{GpuResource, SampledTexture};
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::imgui_texture_id;
+use thyllore_vulkan_core::resource::{GpuResource, SampledTexture};
 use thyllore_vulkan_core::types::DescriptorSet;
 
 /// The textures Dear ImGui asked the renderer to own; a draw command carries the

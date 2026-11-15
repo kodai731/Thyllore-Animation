@@ -3,7 +3,6 @@ use glam::{Quat, Vec2, Vec3};
 
 use glam::Mat4;
 
-use crate::animation::{BoneId, Skeleton, SkeletonId};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::gizmo::transform::TransformGizmoHandle;
@@ -27,7 +26,8 @@ use crate::ecs::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
 };
 use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
-use crate::math::screen_to_world_ray;
+use thyllore_anim_core::{BoneId, Skeleton, SkeletonId};
+use thyllore_math_core::screen_to_world_ray;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     process_pending_mesh_selection(ctx);
@@ -246,7 +246,7 @@ fn reset_light_gizmo_drag(ctx: &mut EcsContext) {
 }
 
 fn update_light_gizmo_position(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<()> {
-    use crate::math::coordinate_system::perspective_infinite_reverse;
+    use thyllore_math_core::coordinate_system::perspective_infinite_reverse;
 
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
@@ -256,7 +256,7 @@ fn update_light_gizmo_position(ctx: &mut EcsContext, mouse_pos: Vec2) -> Result<
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = crate::math::view(camera_pos, camera_dir, camera_up);
+    let view = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
     let proj = perspective_infinite_reverse(fov_y, aspect, near_plane);
     let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
@@ -374,10 +374,11 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vec3, Vec3) {
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = crate::math::view(camera_pos, camera_dir, camera_up);
+    let view = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let aspect = screen_size.x / screen_size.y;
-    let proj =
-        crate::math::coordinate_system::perspective_infinite_reverse(fov_y, aspect, near_plane);
+    let proj = thyllore_math_core::coordinate_system::perspective_infinite_reverse(
+        fov_y, aspect, near_plane,
+    );
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
@@ -403,7 +404,7 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vec3, Vec3) {
 
 fn apply_bone_selection_result(
     ctx: &mut EcsContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     hit: Option<(usize, f32)>,
     is_shift: bool,
 ) -> Option<BoneId> {
@@ -560,7 +561,7 @@ fn build_pick_ray(
     width: u32,
     height: u32,
 ) -> crate::ecs::resource::PickRay {
-    use crate::math::coordinate_system::perspective_infinite_reverse;
+    use thyllore_math_core::coordinate_system::perspective_infinite_reverse;
 
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
@@ -570,7 +571,7 @@ fn build_pick_ray(
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let view = crate::math::view(camera_pos, camera_dir, camera_up);
+    let view = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let proj = perspective_infinite_reverse(fov_y, width as f32 / height as f32, near_plane);
     let pixel_center = Vec2::new(px as f32 + 0.5, py as f32 + 0.5);
     let screen_size = Vec2::new(width as f32, height as f32);
@@ -685,15 +686,20 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: Vec2) -> b
     let (plane_point, plane_normal) =
         transform_gizmo_systems::transform_gizmo_compute_drag_plane(handle, gizmo_pos, camera_dir);
 
-    let view_mat = crate::math::view(camera_pos, camera_dir, camera_up);
+    let view_mat = thyllore_math_core::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
-    let proj =
-        crate::math::coordinate_system::perspective_infinite_reverse(fov_y, aspect, near_plane);
+    let proj = thyllore_math_core::coordinate_system::perspective_infinite_reverse(
+        fov_y, aspect, near_plane,
+    );
     let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
-    let initial_hit =
-        crate::math::ray_plane_intersection(ray_origin, ray_direction, plane_point, plane_normal)
-            .unwrap_or(gizmo_pos);
+    let initial_hit = thyllore_math_core::ray_plane_intersection(
+        ray_origin,
+        ray_direction,
+        plane_point,
+        plane_normal,
+    )
+    .unwrap_or(gizmo_pos);
 
     let entity_scale = {
         let tg = ctx.transform_gizmo();

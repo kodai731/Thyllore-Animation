@@ -192,7 +192,7 @@ pub struct LoadedScene {
     pub scene: SceneFile,
     /// `None` when the scene has no model or its mesh was generated in-app.
     pub model_path: Option<PathBuf>,
-    pub clips: Vec<crate::animation::editable::EditableAnimationClip>,
+    pub clips: Vec<thyllore_anim_core::editable::EditableAnimationClip>,
 }
 
 fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<Option<PathBuf>> {

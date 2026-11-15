@@ -1,7 +1,7 @@
-use crate::animation::editable::EditableKeyframe;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::EditableKeyframe;
 
 use super::view::{find_drawn_curve, DrawnCurve};
 

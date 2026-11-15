@@ -1,10 +1,10 @@
 use crate::app::{App, AppData};
 
 use crate::vulkanr::context::RenderConfig;
-use crate::vulkanr::descriptor::*;
-use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::render::*;
+use thyllore_vulkan_core::core::device::*;
+use thyllore_vulkan_core::descriptor::*;
+use thyllore_vulkan_core::pipeline::RRPipeline;
+use thyllore_vulkan_core::render::*;
 
 use anyhow::{anyhow, Result};
 
@@ -18,7 +18,7 @@ impl App {
         log!("Initializing ImGui Vulkan rendering resources");
 
         let descriptor_set_layout = ReflectedSetLayout::create(rrdevice, &imgui_layout_spec())?;
-        let sampler = crate::vulkanr::image::create_linear_clamp_sampler(rrdevice)?;
+        let sampler = thyllore_vulkan_core::resource::image::create_linear_clamp_sampler(rrdevice)?;
 
         let msaa_samples = data.ecs_world.resource::<RenderConfig>().msaa_samples;
         let imgui_pipeline = RRPipeline::new_imgui(

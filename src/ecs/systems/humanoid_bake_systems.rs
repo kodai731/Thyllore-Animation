@@ -11,8 +11,6 @@ use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
 use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::{continuous_euler, decompose, quaternion_to_euler_degrees};
 
-use crate::animation::editable::SourceClipId;
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::{AnimationClipAsset, AssetId, AssetStorage};
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::resource::{
@@ -24,6 +22,8 @@ use crate::ecs::systems::avatar_setup_systems::{
 };
 use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub fn request_bake_scan(world: &mut World) {
     if let Some(mut baked_clips) = world.get_resource_mut::<BakedHumanoidClips>() {

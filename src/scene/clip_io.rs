@@ -3,8 +3,8 @@ use std::path::Path;
 
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::animation::editable::EditableAnimationClip;
 use crate::ecs::component::{scalar_channel_for_cli_name, scalar_channel_for_property};
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use super::error::{SceneError, SceneResult};
 use super::file::{AnimationClipFile, ANIMATION_FORMAT_VERSION};

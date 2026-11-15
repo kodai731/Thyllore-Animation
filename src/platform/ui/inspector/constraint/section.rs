@@ -3,12 +3,12 @@ use std::sync::LazyLock;
 
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
-use crate::animation::{BoneId, ConstraintType};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintEntry, ConstraintSet};
 use crate::ecs::resource::{BakeForm, ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::{Animator, Entity, World};
+use thyllore_anim_core::{BoneId, ConstraintType};
 
 use super::fields::{update_event, ConstraintFields, ConstraintView};
 use crate::platform::ui::bone_choice::collect_bone_list;

@@ -3,7 +3,7 @@ use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory, PoseLibrary, TimelineState};
 use crate::ecs::systems::pose_library_systems::{apply_pose_to_clip, capture_current_pose};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use thyllore_anim_core::editable::SourceClipId;
 

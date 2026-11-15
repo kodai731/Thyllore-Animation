@@ -6,8 +6,8 @@ use crate::ecs::systems::animation::apply::{
 };
 use crate::ecs::world::World;
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
-use crate::loader::ModelLoadResult;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub(super) fn apply_initial_pose(
     world: &mut World,

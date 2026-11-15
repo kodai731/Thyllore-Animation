@@ -1,13 +1,13 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::shader_bindings::lightning_resolve;
-use crate::vulkanr::descriptor::{
+use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::shader_bindings::lightning_resolve;
+use thyllore_vulkan_core::descriptor::{
     DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot,
     LIGHTNING_RESOLVE,
 };
-use crate::vulkanr::image::create_scene_depth_sampler;
-use thyllore_effect_core::{LightningSegmentsUBO, LightningUBO};
+use thyllore_vulkan_core::resource::image::create_scene_depth_sampler;
 use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 

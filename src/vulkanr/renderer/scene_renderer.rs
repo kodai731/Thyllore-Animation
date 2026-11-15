@@ -1,13 +1,13 @@
 use anyhow::Result;
 
 use crate::ecs::component::RenderData;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::ObjectDescriptorSet;
-use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 use thyllore_render_core::ObjectUBO;
+use thyllore_vulkan_core::core::device::RRDevice;
 use thyllore_vulkan_core::renderer::{
     bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, IndexWidth,
 };
+use thyllore_vulkan_core::resource::graphics_resource::ObjectDescriptorSet;
+use thyllore_vulkan_core::resource::{GpuBufferRegistry, PipelineStorage};
 use thyllore_vulkan_core::types::{CommandBuffer, DescriptorSet};
 
 pub unsafe fn update_object_ubo(

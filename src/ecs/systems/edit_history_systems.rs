@@ -1,5 +1,5 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::ecs::resource::{EditCommand, EditCommandAfter, EditHistory};
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 pub fn edit_history_push_clip_mergeable(
     history: &mut EditHistory,

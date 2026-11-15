@@ -6,21 +6,21 @@ use crate::ecs::systems::{create_default_grid_scale, create_grid_mesh};
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState, NodeAssets,
 };
-use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,
 };
-use crate::vulkanr::descriptor::*;
-use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::{
+use thyllore_vulkan_core::command::*;
+use thyllore_vulkan_core::core::device::*;
+use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::descriptor::*;
+use thyllore_vulkan_core::pipeline::{
     BlendConfig, DepthCompare, DepthTestConfig, FillMode, PipelineBuilder, RRPipeline, SampleCount,
     Topology, VertexInputConfig,
 };
-use crate::vulkanr::render::*;
-use crate::vulkanr::swapchain::*;
+use thyllore_vulkan_core::render::*;
 
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;

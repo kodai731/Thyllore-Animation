@@ -1,9 +1,9 @@
 use glam::Vec3;
 
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::SkeletonSnapshot;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
 #[derive(Clone, Debug)]
 pub enum EditCommand {
@@ -364,7 +364,7 @@ mod tests {
             },
             EditCommand::SkeletonModified {
                 before: SkeletonSnapshot {
-                    skeleton: crate::animation::Skeleton::new("s"),
+                    skeleton: thyllore_anim_core::Skeleton::new("s"),
                     skins: Vec::new(),
                     spring_setups: Vec::new(),
                     constraint_sets: Vec::new(),

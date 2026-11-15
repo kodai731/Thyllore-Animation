@@ -1,5 +1,3 @@
-use crate::animation::editable::{BlendMode, EaseType, SourceClipId};
-use crate::animation::SkeletonId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::compute_local_time;
@@ -7,7 +5,9 @@ use crate::ecs::resource::{
     BakedHumanoidClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
 };
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::{BlendMode, EaseType, SourceClipId};
+use thyllore_anim_core::SkeletonId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 
@@ -254,8 +254,8 @@ pub(crate) fn build_solo_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableAnimationClip, SourceClip};
     use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+    use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
 
     fn register_clip(clip_library: &mut ClipLibrary, clip_id: SourceClipId, duration: f32) {
         let mut clip = EditableAnimationClip::new(clip_id, format!("clip_{clip_id}"));

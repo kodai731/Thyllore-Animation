@@ -5,7 +5,7 @@ use glam::{vec3, Mat4, Quat, Vec2, Vec3, Vec4};
 use crate::ecs::component::{ColorVertex, LineMesh};
 use crate::ecs::resource::gizmo::transform::{TransformGizmoData, TransformGizmoHandle};
 use crate::ecs::resource::TransformGizmoMode;
-use crate::math::{
+use thyllore_math_core::{
     coordinate_system::perspective_infinite_reverse, ray_plane_intersection,
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };

@@ -1,20 +1,20 @@
-use crate::animation::editable::{
-    curve_add_keyframe_with_tangents, curve_sample, BezierHandle, EditableAnimationClip,
-    EditableKeyframe, InterpolationType, PropertyCurve, PropertyType,
-};
-use crate::animation::BoneId;
 use crate::ecs::resource::{
     CurveSuggestionPendingDump, CurveSuggestionState, GhostCurveSuggestion, InferenceActorState,
     PendingSuggestionRequest,
 };
-use crate::ml::{
-    CurveCopilotMode, FeedbackSenderHandle, InferenceActorId, InferenceRequestKind,
-    InferenceResultKind,
+use crate::ml::FeedbackSenderHandle;
+use thyllore_anim_core::editable::{
+    curve_add_keyframe_with_tangents, curve_sample, BezierHandle, EditableAnimationClip,
+    EditableKeyframe, InterpolationType, PropertyCurve, PropertyType,
 };
+use thyllore_anim_core::BoneId;
 use thyllore_ml_core::copilot::v2::dump::{
     dump_v2_curve_copilot_inference, V2CurveCopilotInferenceDump,
 };
 use thyllore_ml_core::copilot::v2::forecast;
+use thyllore_ml_core::{
+    CurveCopilotMode, InferenceActorId, InferenceRequestKind, InferenceResultKind,
+};
 
 use super::mode_systems::{
     curve_copilot_capture_feedback_context, curve_copilot_degrade_context,
@@ -204,7 +204,7 @@ pub(crate) fn build_suggestions_from_curve(
     dt: f32,
     bone_id: BoneId,
     property_type: PropertyType,
-    request_id: crate::ml::InferenceRequestId,
+    request_id: thyllore_ml_core::InferenceRequestId,
 ) -> Vec<GhostCurveSuggestion> {
     let handle_dt = forecast::SUGGESTION_STRIDE as f32 * dt / 3.0;
     let continuity_offset = forecast::continuity_offset(mean_curve, origin_value);
@@ -266,7 +266,7 @@ pub fn curve_suggestion_dismiss(suggestion_state: &mut CurveSuggestionState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{curve_add_keyframe, CurveId};
+    use thyllore_anim_core::editable::{curve_add_keyframe, CurveId};
     use thyllore_ml_core::copilot::v2::inference::{CONTEXT_LENGTH, MAX_HORIZON};
 
     fn create_test_curve(keyframe_count: usize) -> PropertyCurve {

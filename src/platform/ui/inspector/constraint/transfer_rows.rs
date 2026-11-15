@@ -1,4 +1,4 @@
-use crate::animation::ConstraintType;
+use thyllore_anim_core::ConstraintType;
 
 use super::fields::{
     applied_to_rows, common_rows, constraint_params, remove_row, scalar_row, ConstraintView,
@@ -68,9 +68,9 @@ fn affect_axis_row<const AXIS: usize>(label: &'static str) -> UiRow<ConstraintVi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::{PositionConstraintData, RotationConstraintData, ScaleConstraintData};
     use crate::platform::ui::inspector::constraint::fields::ConstraintFields;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use thyllore_anim_core::{PositionConstraintData, RotationConstraintData, ScaleConstraintData};
 
     fn view_of(constraint: ConstraintType) -> ConstraintView {
         ConstraintView {

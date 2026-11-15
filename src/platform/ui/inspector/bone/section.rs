@@ -1,9 +1,9 @@
 use glam::Vec3;
 
-use crate::animation::{Bone, BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::{Bone, BoneId, Skeleton};
 
 use crate::platform::ui::form_window::{message_section, rows_section, FormSection};
 use crate::platform::ui::ui_rows::UiRow;

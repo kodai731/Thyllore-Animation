@@ -7,14 +7,14 @@ use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
 };
 use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;
 
-use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_submesh_role_systems::{
     collect_submesh_meshes, skin_geometry_to_model,
 };
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::Skeleton;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
 
 pub fn compute_hidden_triangles(

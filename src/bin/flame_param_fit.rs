@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use serde_json::json;
-use thyllore_effect_core::flame_fit::*;
+use thyllore_texture_fit_core::*;
 
 fn median(sorted: &[f32]) -> Option<f32> {
     if sorted.is_empty() {

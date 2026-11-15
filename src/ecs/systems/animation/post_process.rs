@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use glam::Mat4;
 
-use crate::animation::{BoneId, BoneLocalPose, SkeletonId, SkeletonPose};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
@@ -10,6 +9,7 @@ use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
 use crate::ecs::{apply_pose_overrides, compute_pose_global_transforms, create_pose_from_rest};
 use thyllore_anim_core::spring_bone::SpringSpace;
+use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId, SkeletonPose};
 
 use super::evaluate::evaluate_entity_blend;
 use super::AnimatedEntityInfo;
@@ -70,13 +70,13 @@ pub(crate) fn compute_spring_bone_result(
 fn apply_spring_bone_simulation(
     world: &World,
     setup: &SpringBoneSetup,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     globals: &mut [Mat4],
     pose: &mut SkeletonPose,
     dt: f32,
     space: SpringSpace,
 ) {
-    use crate::animation::spring_bone::{
+    use thyllore_anim_core::spring_bone::{
         collect_affected_bone_ids, spring_bone_initialize, spring_bone_reseat_tails,
         spring_bone_update, spring_bone_write_back_to_pose,
     };

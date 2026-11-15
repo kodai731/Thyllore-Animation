@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use imgui::{SnapshotTextureId, TextureFormat, TextureId, TextureUploadRect};
 
 use crate::ecs::resource::ImguiTextures;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{imgui_texture_id, shader_bindings, ReflectedSetLayout};
-use crate::vulkanr::resource::{GpuResource, PixelRegion, SampledTexture};
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{imgui_texture_id, shader_bindings, ReflectedSetLayout};
+use thyllore_vulkan_core::resource::{GpuResource, PixelRegion, SampledTexture};
 use thyllore_vulkan_core::types::{Instance, Sampler};
 
 fn pixel_region(rect: &TextureUploadRect) -> PixelRegion<'_> {

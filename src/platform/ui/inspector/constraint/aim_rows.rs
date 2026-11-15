@@ -1,4 +1,4 @@
-use crate::animation::{AimConstraintData, BoneId, ConstraintType};
+use thyllore_anim_core::{AimConstraintData, BoneId, ConstraintType};
 
 use super::fields::{common_rows, constraint_params, remove_row, scalar_row, ConstraintView};
 use crate::platform::ui::bone_choice::bone_options;

@@ -1,9 +1,9 @@
 use crate::ecs::World;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::RenderTargetStorage;
+use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::renderer::ImageStateTracker;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::RenderTargetStorage;
 use thyllore_vulkan_core::types::{ImageView, Instance};
 
 pub struct EffectContext<'a> {

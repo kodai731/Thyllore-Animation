@@ -1,5 +1,5 @@
-use crate::animation::editable::{EditableKeyframe, PropertyCurve};
 use crate::ecs::resource::{AxisLock, CurveSelectedKeyframe};
+use thyllore_anim_core::editable::{EditableKeyframe, PropertyCurve};
 
 use super::drag::{dragged_key_delta, dragged_key_position, TimeSnap};
 use super::draw::{draw_key_diamond, draw_time_grid, DiamondStyle, KeyDiamond};
@@ -173,8 +173,8 @@ pub(super) fn draw_dopesheet_drag_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{curve_add_keyframe, KeyframeId, PropertyType};
     use crate::ecs::resource::CurveValueDisplay;
+    use thyllore_anim_core::editable::{curve_add_keyframe, KeyframeId, PropertyType};
 
     fn build_pixel_view(curve_origin_y: f32) -> ViewTransform {
         ViewTransform {

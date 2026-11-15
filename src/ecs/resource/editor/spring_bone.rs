@@ -1,5 +1,5 @@
-use crate::animation::BoneId;
 use crate::ecs::component::{ChainRamp, RampScope, SpringColliderGroupId};
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]

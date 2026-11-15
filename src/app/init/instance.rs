@@ -6,11 +6,11 @@ use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::systems::{apply_startup_scene, create_default_grid_scale};
 use crate::ecs::PipelineManager;
 use crate::hooks::startup::{StartupHooks, StartupPhase};
-use crate::vulkanr::command::*;
-use crate::vulkanr::descriptor::*;
-use crate::vulkanr::pipeline::{CullFace, FillMode, RRPipeline, Topology};
-use crate::vulkanr::render::*;
-use crate::vulkanr::swapchain::*;
+use thyllore_vulkan_core::command::*;
+use thyllore_vulkan_core::core::swapchain::*;
+use thyllore_vulkan_core::descriptor::*;
+use thyllore_vulkan_core::pipeline::{CullFace, FillMode, RRPipeline, Topology};
+use thyllore_vulkan_core::render::*;
 
 use anyhow::{Context, Result};
 use std::rc::Rc;
@@ -24,7 +24,7 @@ use thyllore_vulkan_core::core::instance::create_sync_objects;
 impl App {
     pub unsafe fn create(
         window: &Window,
-        #[cfg(feature = "ml")] curve_copilot_mode: crate::ml::CurveCopilotMode,
+        #[cfg(feature = "ml")] curve_copilot_mode: thyllore_ml_core::CurveCopilotMode,
     ) -> Result<Self> {
         let mut data = AppData::default();
         crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);

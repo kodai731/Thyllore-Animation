@@ -1,5 +1,5 @@
-use crate::animation::editable::{curve_add_keyframe, PropertyCurve, PropertyType};
 use crate::ecs::resource::CurveValueDisplay;
+use thyllore_anim_core::editable::{curve_add_keyframe, PropertyCurve, PropertyType};
 
 use super::view::ViewTransform;
 

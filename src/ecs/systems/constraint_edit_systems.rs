@@ -1,10 +1,10 @@
-use crate::animation::{
-    AimConstraintData, BoneId, ConstraintId, ConstraintType, IkConstraintData,
-    ParentConstraintData, PositionConstraintData, RotationConstraintData, ScaleConstraintData,
-};
 use crate::ecs::component::{Constrained, ConstraintSet};
 use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::{
+    AimConstraintData, BoneId, ConstraintId, ConstraintType, IkConstraintData,
+    ParentConstraintData, PositionConstraintData, RotationConstraintData, ScaleConstraintData,
+};
 
 pub fn handle_constraint_add(
     world: &mut World,

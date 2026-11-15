@@ -16,7 +16,7 @@ use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;
 use super::group_rows::group_list_row;
-use crate::animation::BoneId;
+use thyllore_anim_core::BoneId;
 
 use crate::platform::ui::bone_choice::{bone_options, collect_bone_list};
 use crate::platform::ui::form_window::{message_section, rows_section, FormSection};

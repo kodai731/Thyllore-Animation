@@ -67,8 +67,8 @@ fn reset_model_world_state(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::EditableAnimationClip;
     use glam::Mat4;
+    use thyllore_anim_core::editable::EditableAnimationClip;
 
     fn make_world_with_model_resources() -> World {
         let mut world = World::new();
@@ -111,9 +111,10 @@ mod tests {
         {
             let mut library = world.resource_mut::<ClipLibrary>();
             let user_clip = EditableAnimationClip::new(1, "user".to_string());
-            library
-                .source_clips
-                .insert(1, crate::animation::editable::SourceClip::new(1, user_clip));
+            library.source_clips.insert(
+                1,
+                thyllore_anim_core::editable::SourceClip::new(1, user_clip),
+            );
         }
         {
             let mut timeline = world.resource_mut::<TimelineState>();
@@ -137,7 +138,7 @@ mod tests {
             let model_clip = EditableAnimationClip::new(2, "model".to_string());
             library.source_clips.insert(
                 2,
-                crate::animation::editable::SourceClip::new(2, model_clip),
+                thyllore_anim_core::editable::SourceClip::new(2, model_clip),
             );
             library.model_clip_ids.insert(2);
         }

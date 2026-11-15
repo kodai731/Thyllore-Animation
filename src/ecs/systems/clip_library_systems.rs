@@ -4,14 +4,14 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::animation::editable::{
-    clip_remap_bone_ids, clip_to_animation, EditableAnimationClip, SourceClip, SourceClipId,
-};
-use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::World;
 use crate::scene::SceneError;
+use thyllore_anim_core::editable::{
+    clip_remap_bone_ids, clip_to_animation, EditableAnimationClip, SourceClip, SourceClipId,
+};
+use thyllore_anim_core::{AnimationClip, BoneId};
 
 pub fn clip_library_register_and_activate(
     lib: &mut ClipLibrary,
@@ -201,8 +201,8 @@ pub fn clip_library_resample_selected_model(
     assets: &mut AssetStorage,
     fps: f32,
 ) -> Option<usize> {
-    use crate::animation::editable::clip_resample_at_fps;
     use crate::ecs::resource::EditHistory;
+    use thyllore_anim_core::editable::clip_resample_at_fps;
 
     let clip_ids = query_selected_model_clip_ids(world);
     if clip_ids.is_empty() {

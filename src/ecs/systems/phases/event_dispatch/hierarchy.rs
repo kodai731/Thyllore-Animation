@@ -1,6 +1,5 @@
 use glam::Vec3;
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
@@ -20,8 +19,9 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::Quat;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum HierarchyEvent {

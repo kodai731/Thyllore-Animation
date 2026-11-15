@@ -9,8 +9,8 @@ use thyllore_ml_core::feedback::{
     FeedbackEndpoint, FeedbackRecord, FeedbackRecordInputs, FeedbackResponse,
 };
 
-use crate::animation::editable::PropertyType;
 use crate::ecs::component::scalar_channel_for_property;
+use thyllore_anim_core::editable::PropertyType;
 
 pub const FEEDBACK_ENDPOINT_ENV: &str = "THYLLORE_FEEDBACK_ENDPOINT";
 pub const INGEST_TOKEN_ENV: &str = "THYLLORE_INGEST_TOKEN";

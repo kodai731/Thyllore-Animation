@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
+use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::render::{create_color_overlay_render_pass, ColorOverlayPassDesc};
 use thyllore_vulkan_core::resource::GpuResource;
 use thyllore_vulkan_core::types::{Extent2D, HDR_FORMAT};

@@ -1,5 +1,3 @@
-use crate::animation::spring_bone::SpringSpace;
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{AvatarSetupState, ModelState, NodeAssets};
@@ -9,9 +7,10 @@ use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Animator, Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::Mat4;
 use std::path::Path;
+use thyllore_anim_core::spring_bone::SpringSpace;
+use thyllore_anim_core::{BoneId, Skeleton};
 use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
@@ -29,6 +28,7 @@ use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_unde
 use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
 use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
 use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 pub fn animated_spring_space(world: &World) -> SpringSpace {
     world

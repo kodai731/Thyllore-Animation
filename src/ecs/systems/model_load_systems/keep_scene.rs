@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 use super::replace::{read_model_file, replace_scene_model};
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ModelState, TimelineState};
 use crate::ecs::systems::clip_library_systems::clip_library_register_loaded;
@@ -11,7 +10,8 @@ use crate::ecs::{GpuSceneContext, SceneState};
 use crate::scene::{
     apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
 };
-use crate::vulkanr::swapchain::RRSwapchain;
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_vulkan_core::core::swapchain::RRSwapchain;
 
 /// Replaces the model while keeping the scene's own entities and scheduled clips.
 pub unsafe fn load_model_keeping_scene(
@@ -50,8 +50,8 @@ pub unsafe fn load_generated_mesh(
     use crate::scene::ModelReference;
 
     log!("Loading generated mesh from GLB ({} bytes)", glb_data.len());
-    let load_result = match crate::loader::gltf::load_gltf_from_slice(glb_data) {
-        Ok(gltf) => crate::loader::ModelLoadResult::from_gltf(gltf),
+    let load_result = match thyllore_importer_core::gltf::load_gltf_from_slice(glb_data) {
+        Ok(gltf) => thyllore_importer_core::ModelLoadResult::from_gltf(gltf),
         Err(error) => return report_load_result(world, Err(error)),
     };
 

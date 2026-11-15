@@ -2,13 +2,13 @@ use std::path::Path;
 
 use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
 
-use crate::animation::editable::EditableAnimationClip;
-use crate::animation::Skeleton;
 use crate::app::App;
 use crate::ecs::resource::{
     ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
 };
 use crate::ecs::systems::{humanoid_bake_systems, vrm_humanoid_bones};
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_anim_core::Skeleton;
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -23,15 +23,18 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
         .unwrap_or((None, false));
 
     let result = match fbx_model {
-        Some(fbx_model) => {
-            crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, Some(&clip), &skeleton, path)
-        }
-        None => crate::exporter::fbx_exporter::export_animation_fbx(
+        Some(fbx_model) => thyllore_exporter_core::systems::fbx::export_full_fbx(
+            &fbx_model,
+            Some(&clip),
+            &skeleton,
+            path,
+        ),
+        None => thyllore_exporter_core::systems::fbx::export_animation_fbx(
             &clip,
             &skeleton,
             path,
             has_skinned_meshes,
-            crate::loader::fbx::fbx::FbxAxesInfo::default(),
+            thyllore_importer_core::fbx::fbx::FbxAxesInfo::default(),
             24.0,
         ),
     };
@@ -102,7 +105,7 @@ pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_from_bytes(
+    match thyllore_exporter_core::systems::gltf::export_gltf_animation_from_bytes(
         &source_bytes,
         &clip,
         &skeleton,
@@ -119,7 +122,7 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_only(
+    match thyllore_exporter_core::systems::gltf::export_gltf_animation_only(
         &clip,
         &skeleton,
         path,
@@ -153,7 +156,7 @@ pub(crate) fn export_model_fbx(app: &App, path: &Path) {
         return;
     };
 
-    match crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, None, &skeleton, path) {
+    match thyllore_exporter_core::systems::fbx::export_full_fbx(&fbx_model, None, &skeleton, path) {
         Ok(()) => {
             msg_info!("FBX exported: {:?}", path);
             copy_humanoid_sidecar(app, path);

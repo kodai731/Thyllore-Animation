@@ -6,7 +6,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::GrpcServerProcess;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const TRAINING_REPO_ENV: &str = "ANIMATION_TRAINING_PATH";
 const TRAINING_REPO_FALLBACK: &str = "../AnimationModelTraining";

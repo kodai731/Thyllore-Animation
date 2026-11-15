@@ -18,7 +18,7 @@ use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, SURFACE3};
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::widgets::segmented_control;
 use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 use crate::platform::ui::form_window::{FormPlacement, FormWindow};
 use crate::platform::ui::scene_settings::{

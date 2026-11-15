@@ -1,6 +1,6 @@
 use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
 
-use crate::vulkanr::resource::graphics_resource::{
+use thyllore_vulkan_core::resource::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
 

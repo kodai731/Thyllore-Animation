@@ -1,4 +1,3 @@
-use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, CurveEditorState, EditHistory, TimelineState};
@@ -8,8 +7,9 @@ use crate::ecs::systems::scalar_clip_systems::{
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::spawn_effect_instance;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::PropertyType;
 use thyllore_anim_core::editable::SourceClipId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ScalarCurveEvent {
@@ -107,7 +107,7 @@ pub fn dispatch_scalar_clip_events(
                 let seconds = seconds.max(0.0);
                 edit_clip(world, *source_id, "Clip length edit", |clip| {
                     clip.min_duration = seconds;
-                    crate::animation::editable::clip_recalculate_duration(clip);
+                    thyllore_anim_core::editable::clip_recalculate_duration(clip);
                 });
                 sync_instances_to_clip_duration(world, *source_id);
             }
@@ -218,7 +218,7 @@ fn edit_clip(
     world: &mut World,
     clip_id: SourceClipId,
     description: &'static str,
-    apply: impl FnOnce(&mut crate::animation::editable::EditableAnimationClip),
+    apply: impl FnOnce(&mut thyllore_anim_core::editable::EditableAnimationClip),
 ) {
     let (before, after) = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();

@@ -1,8 +1,8 @@
-use crate::animation::editable::BlendMode;
 use crate::ecs::component::ClipInstanceSnapshot;
 use crate::ecs::resource::{TimelineInteractionState, TimelineState};
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::BlendMode;
 
 pub(super) fn handle_clip_mute_button(
     ui: &imgui::Ui,

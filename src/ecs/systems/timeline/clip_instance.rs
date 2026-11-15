@@ -1,6 +1,3 @@
-use crate::animation::editable::{
-    ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId, EditableAnimationClip, SourceClipId,
-};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::clip_schedule_systems::{
@@ -9,6 +6,9 @@ use crate::ecs::systems::clip_schedule_systems::{
 use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
 use crate::ecs::systems::timeline::timeline_select_clip;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::{
+    ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId, EditableAnimationClip, SourceClipId,
+};
 
 pub fn add_clip_instance(
     world: &mut World,

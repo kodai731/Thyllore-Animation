@@ -1,7 +1,7 @@
-use crate::animation::editable::{
+use crate::ecs::resource::{CurveSelectedKeyframe, TangentHandleType};
+use thyllore_anim_core::editable::{
     curve_sample, BezierHandle, EditableKeyframe, InterpolationType, KeyframeId, PropertyType,
 };
-use crate::ecs::resource::{CurveSelectedKeyframe, TangentHandleType};
 
 use super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
@@ -118,7 +118,7 @@ pub(super) fn find_tangent_handle_at_position(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{curve_add_keyframe, PropertyCurve};
+    use thyllore_anim_core::editable::{curve_add_keyframe, PropertyCurve};
 
     use super::super::test_fixtures::*;
 

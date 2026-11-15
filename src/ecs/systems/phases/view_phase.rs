@@ -9,7 +9,7 @@ use crate::ecs::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
     update_billboard_transform,
 };
-use crate::math::calculate_billboard_click_rect;
+use thyllore_math_core::calculate_billboard_click_rect;
 
 pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
     {

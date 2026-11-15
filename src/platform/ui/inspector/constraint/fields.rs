@@ -4,10 +4,10 @@ use std::sync::LazyLock;
 use glam::{Quat, Vec3};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::Entity;
-use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
+use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::UiRow;
@@ -258,7 +258,7 @@ pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
 mod tests {
 
     use super::*;
-    use crate::animation::{
+    use thyllore_anim_core::{
         AimConstraintData, IkConstraintData, PositionConstraintData, RotationConstraintData,
         ScaleConstraintData,
     };

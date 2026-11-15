@@ -5,7 +5,7 @@ use crate::ecs::events::UiCommand;
 use crate::ecs::resource::WaterRenderSettings;
 use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 impl UiCommand for WaterUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {

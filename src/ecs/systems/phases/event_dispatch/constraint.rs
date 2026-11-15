@@ -1,8 +1,8 @@
-use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ConstraintEvent {
@@ -149,7 +149,7 @@ fn dispatch_constraint_bake_events(
             let clip_library = world.resource::<ClipLibrary>();
             match clip_library.get(source_id) {
                 Some(editable) => {
-                    let anim_clip = crate::animation::editable::clip_to_animation(editable);
+                    let anim_clip = thyllore_anim_core::editable::clip_to_animation(editable);
                     let source_name = editable.name.clone();
                     drop(clip_library);
 

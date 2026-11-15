@@ -1,10 +1,10 @@
-use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ClipBrowserEvent {
@@ -113,7 +113,7 @@ fn dispatch_clip_browser_events(
 fn record_clip_added(
     world: &mut World,
     clip_id: SourceClipId,
-    source: crate::animation::editable::SourceClip,
+    source: thyllore_anim_core::editable::SourceClip,
 ) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();
@@ -124,7 +124,7 @@ fn record_clip_added(
 fn record_clip_removed(
     world: &mut World,
     clip_id: SourceClipId,
-    removed: crate::animation::editable::SourceClip,
+    removed: thyllore_anim_core::editable::SourceClip,
 ) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();

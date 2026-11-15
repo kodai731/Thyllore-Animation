@@ -1,5 +1,3 @@
-use crate::animation::spring_bone::SpringForceModel;
-use crate::animation::BoneId;
 use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::systems::batch_run_systems::BatchAction;
@@ -10,6 +8,8 @@ use crate::ecs::systems::phases::event_dispatch::spring_bone::{
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
+use thyllore_anim_core::spring_bone::SpringForceModel;
+use thyllore_anim_core::BoneId;
 use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 

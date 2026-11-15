@@ -3,7 +3,7 @@ use imgui::Condition;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[cfg(debug_assertions)]
 use super::debug_window::build_debug_panel_content;

@@ -1,7 +1,6 @@
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_effect_core::{
-    find_scalar_param, find_ui_param, title_case_snake, ScalarParam, UiParam,
-};
+use thyllore_effect_core::{ScalarParam, UiParam};
+use thyllore_scene_core::{find_scalar_param, find_ui_param, title_case_snake};
 
 use crate::ecs::component::{scalar_channel_domains, ScalarChannel, ScalarChannelDomain};
 use crate::ecs::storage::Component;

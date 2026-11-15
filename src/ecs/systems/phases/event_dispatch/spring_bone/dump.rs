@@ -2,8 +2,8 @@ use super::bake::find_spring_bake_inputs;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use std::path::PathBuf;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Debug)]
 pub struct DumpSpringTails {
@@ -36,7 +36,7 @@ impl UiCommand for DumpSpringTails {
             inputs.looping,
         );
 
-        let csv = crate::animation::spring_bone::format_tail_csv(&samples);
+        let csv = thyllore_anim_core::spring_bone::format_tail_csv(&samples);
         match std::fs::write(&self.path, &csv) {
             Ok(()) => log!(
                 "Wrote {} spring tail samples to {:?}",
@@ -208,7 +208,7 @@ impl UiCommand for FitSpringParams {
 
 fn read_spring_reference(
     path: &PathBuf,
-) -> Option<Vec<crate::animation::spring_bone::SpringTailSample>> {
+) -> Option<Vec<thyllore_anim_core::spring_bone::SpringTailSample>> {
     let csv = match std::fs::read_to_string(path) {
         Ok(csv) => csv,
         Err(e) => {
@@ -217,7 +217,7 @@ fn read_spring_reference(
         }
     };
 
-    match crate::animation::spring_bone::parse_tail_csv(&csv) {
+    match thyllore_anim_core::spring_bone::parse_tail_csv(&csv) {
         Ok(samples) => Some(samples),
         Err(e) => {
             msg_error!("Failed to parse spring reference CSV {:?}: {}", path, e);

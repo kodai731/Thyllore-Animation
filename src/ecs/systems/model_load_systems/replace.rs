@@ -7,9 +7,9 @@ use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
 use crate::ecs::GpuSceneContext;
 use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
-use crate::loader::fbx::FbxModel;
-use crate::loader::ModelLoadResult;
-use crate::vulkanr::swapchain::RRSwapchain;
+use thyllore_importer_core::fbx::FbxModel;
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_vulkan_core::core::swapchain::RRSwapchain;
 
 pub(crate) unsafe fn append_model_to_scene(
     load_result: &ModelLoadResult,
@@ -55,10 +55,11 @@ pub(super) unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Opt
     let path_lower = path.to_lowercase();
 
     if path_lower.ends_with(".fbx") {
-        let (result, fbx_model) = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
+        let (result, fbx_model) =
+            thyllore_importer_core::fbx::load_fbx_to_graphics_resources(path)?;
         Ok((ModelLoadResult::from_fbx(result), Some(fbx_model)))
     } else if caches::is_gltf_path(path) {
-        let result = crate::loader::gltf::load_gltf_file(path)?;
+        let result = thyllore_importer_core::gltf::load_gltf_file(path)?;
         Ok((ModelLoadResult::from_gltf(result), None))
     } else {
         Err(anyhow!(

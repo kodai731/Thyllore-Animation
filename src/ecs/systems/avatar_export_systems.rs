@@ -5,13 +5,13 @@ use thyllore_anim_core::editable::systems::morph_sample::sample_morph_tracks;
 use thyllore_exporter_core::systems::unity::anim::write_unity_anim;
 use thyllore_exporter_core::systems::unity::curves::{morph_track_curves, write_expression_anim};
 
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, ExpressionLibraryState, TimelineState};
 use crate::ecs::systems::avatar_setup_systems::find_model_path;
 use crate::ecs::systems::avatar_sidecar_systems::{export_avatar_sidecar, find_expression_morph};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 const MORPH_TRACK_SAMPLE_COUNT: usize = 21;
 

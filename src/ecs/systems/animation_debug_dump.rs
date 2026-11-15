@@ -4,7 +4,6 @@ use glam::{Mat4, Vec3};
 use serde::Serialize;
 use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
-use crate::animation::{decompose_transform, AnimationClip, BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{BakedHumanoidClips, ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
@@ -13,6 +12,7 @@ use crate::ecs::systems::skeleton_pose_systems::{
 };
 use crate::ecs::world::Entity;
 use crate::ecs::World;
+use thyllore_anim_core::{decompose_transform, AnimationClip, BoneId, Skeleton};
 
 pub struct AnimationDebugTarget<'a> {
     pub skeleton: &'a Skeleton,

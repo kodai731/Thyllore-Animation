@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::SpringBoneSetup;
 use crate::ecs::resource::gizmo::{BoneDrawMode, BoneSelectionState};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BoneDrawSet {
@@ -97,7 +97,7 @@ fn with_descendants(skeleton: &Skeleton, selected: &HashSet<usize>) -> HashSet<u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::Bone;
+    use thyllore_anim_core::Bone;
 
     fn chain_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::default();

@@ -99,9 +99,6 @@ fn apply_clip_instance_event(event: &ClipInstanceEvent, world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{
-        ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
-    };
     use crate::ecs::component::ClipSchedule;
     use crate::ecs::resource::{ClipLibrary, HumanoidRigState};
     use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
@@ -111,6 +108,9 @@ mod tests {
     };
     use crate::ecs::world::Entity;
     use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    use thyllore_anim_core::editable::{
+        ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
+    };
     use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
 
     fn spawn_zero_length_clip_instance(world: &mut World) -> Entity {

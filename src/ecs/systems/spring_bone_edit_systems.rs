@@ -1,4 +1,3 @@
-use crate::animation::{spring_bone::set_chain_collider_groups, BoneId, Skeleton};
 use crate::ecs::component::{
     apply_ramp, ChainRamp, ColliderGroupOrigin, ColliderShape, RampEnd, RampScope, SpringBoneSetup,
     SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup, SpringColliderGroupId,
@@ -7,6 +6,7 @@ use crate::ecs::component::{
 use crate::ecs::resource::{SpringBoneInspectorState, SpringBoneState};
 use crate::ecs::world::{Entity, World};
 use glam::Vec3;
+use thyllore_anim_core::{spring_bone::set_chain_collider_groups, BoneId, Skeleton};
 
 pub fn handle_spring_chain_add(
     world: &mut World,
@@ -291,7 +291,7 @@ pub fn handle_spring_chain_collider_groups_form(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::{JointForce, SpringForceModel, VrmJointForce};
+    use thyllore_anim_core::spring_bone::{JointForce, SpringForceModel, VrmJointForce};
 
     fn make_chain(id: SpringChainId) -> SpringChain {
         let first_bone = id * 3 + 1;

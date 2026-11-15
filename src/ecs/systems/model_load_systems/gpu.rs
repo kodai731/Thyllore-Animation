@@ -5,13 +5,13 @@ use anyhow::Result;
 use thyllore_avatar_core::material::systems::texture_remap_io::resolve_remapped_texture;
 
 use crate::ecs::systems::load_model_texture_remap;
-use crate::loader::{resolve_mesh_texture, DecodedTextureFiles, ModelLoadResult};
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::{MeshSource, TexturePixels};
-use crate::vulkanr::swapchain::RRSwapchain;
+use thyllore_importer_core::{resolve_mesh_texture, DecodedTextureFiles, ModelLoadResult};
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::device::RRDevice;
+use thyllore_vulkan_core::core::swapchain::RRSwapchain;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::{MeshSource, TexturePixels};
 use thyllore_vulkan_core::types::Instance;
 
 pub(super) unsafe fn upload_model_meshes(

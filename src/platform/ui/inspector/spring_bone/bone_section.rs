@@ -4,13 +4,13 @@ use thyllore_anim_core::spring_bone::{
     ColliderShape, SpringChainId, SpringColliderDef, SpringColliderGroupId, SpringJointParam,
 };
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ChainRamp, RampEnd, RampScope, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::SpringBoneInspectorState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{SetChainRampEnd, SpringBoneEvent};
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::BoneId;
 
 use super::chain_rows::{joint_param_rows, JointView};
 use super::collider_group_rows::{collider_group_list_row, GroupChoice};

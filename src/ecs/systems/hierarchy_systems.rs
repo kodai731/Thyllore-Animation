@@ -1,7 +1,7 @@
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Children, Entity, Name, Parent, World};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 #[derive(Clone, Debug)]
 pub struct HierarchyEntry {
@@ -168,7 +168,7 @@ pub fn hierarchy_is_bone_expanded(state: &HierarchyState, bone_id: BoneId) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::Bone;
+    use thyllore_anim_core::Bone;
 
     fn create_world_with_nested_entities() -> (World, Entity, Entity, Entity) {
         let mut world = World::new();

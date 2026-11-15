@@ -1,15 +1,15 @@
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::animation::editable::{
-    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
-    EditableAnimationClip, SourceClipId,
-};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_domain_for_entity, ClipSchedule, ScalarChannelDomain,
 };
 use crate::ecs::resource::{ClipLibrary, HierarchyState};
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::{
+    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
+    EditableAnimationClip, SourceClipId,
+};
 
 pub fn find_entity_clip_id(world: &World, entity: Entity) -> Option<SourceClipId> {
     world

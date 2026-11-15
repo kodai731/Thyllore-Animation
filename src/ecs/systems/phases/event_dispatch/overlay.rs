@@ -9,7 +9,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum OverlayEvent {

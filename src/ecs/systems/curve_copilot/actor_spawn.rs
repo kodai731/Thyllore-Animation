@@ -1,9 +1,7 @@
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::world::{EntityBuilder, World};
-use crate::ml::{
-    resolve_curve_copilot_model_path, CurveCopilotMode, FeedbackSenderHandle, InferenceModelKind,
-    CURVE_COPILOT_ACTOR_ID,
-};
+use crate::ml::{resolve_curve_copilot_model_path, FeedbackSenderHandle};
+use thyllore_ml_core::{CurveCopilotMode, InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
 
 crate::startup_hook!("CurveCopilotActor", Ml, spawn_curve_copilot_actor);
 

@@ -1,10 +1,10 @@
 use super::view::DrawnCurve;
-use crate::animation::editable::{
-    compute_tween, KeyframeId, PropertyCurve, PropertyType, TweenKind,
-};
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef, TweenSession};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{
+    compute_tween, KeyframeId, PropertyCurve, PropertyType, TweenKind,
+};
 
 const TWEEN_BUTTONS: &[(&str, TweenKind)] = &[
     ("Blend", TweenKind::BlendToNeighbor),
@@ -133,7 +133,7 @@ pub(super) fn discard_tween_on_selection_change(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::EditableKeyframe;
+    use thyllore_anim_core::editable::EditableKeyframe;
 
     fn make_curve() -> PropertyCurve {
         PropertyCurve::from_keyframes(

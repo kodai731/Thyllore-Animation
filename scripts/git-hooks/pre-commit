@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '(\.rs|Cargo\.toml)$'; then
+    exit 0
+fi
+
+exec bash "$REPO_ROOT/scripts/check_module_facade.sh"

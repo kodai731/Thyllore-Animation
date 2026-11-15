@@ -20,6 +20,14 @@ file states what to write so that they pass.
 cargo test -p thyllore-grpc-client --no-default-features --test module_facade
 ```
 
+`scripts/check_module_facade.sh` runs that test and prints only the violations. It runs in three places:
+
+- git `pre-commit` (`scripts/git-hooks/pre-commit`), when a `.rs` or `Cargo.toml` file is staged. A clone
+  enables it once with `git config core.hooksPath scripts/git-hooks`.
+- the Claude Code `Stop` hook (`.claude/hooks/stop_module_facade.sh`, registered in `.claude/settings.json`),
+  when the working tree has a changed `.rs` or `Cargo.toml` file; a failure is returned to Claude to fix.
+- CI (`.github/workflows/module_facade.yml`).
+
 ## Facade or namespace
 
 A module that other code can reach is one of two shapes. Never mix them for the same child.

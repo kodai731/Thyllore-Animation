@@ -146,6 +146,20 @@ a path that names one of them resolves to that module, and R6 counts its named r
 of the module. A generator therefore emits definitions only. It never emits `pub use`, because a
 re-export inside generated code is the one thing no rule can see.
 
+## Known limits of the checks
+
+These are accepted for now and revisited only when one of them lets a real violation through. Each entry
+names the code that decides it.
+
+| Limit | Where | What slips through |
+|---|---|---|
+| The Stop hook checks the tree of the session's `cwd` | `.claude/hooks/stop_module_facade.sh` (`session_directory`) | a session that stays in the main tree and edits a worktree by path has the main tree checked, not the worktree |
+| A named path through a module whose scope is still being resolved finds nothing | `public_paths.rs` `resolve_scope` (the `scopes_in_progress` branch) and `resolve_name_in_module` (`imported_names_in_progress`) | inside an import cycle, `pub use a::Name` where `a` is unfinished is dropped, so a second public path to `Name` (R6) or an indirect dependency re-export (R3 / R4) can be missed; glob cycles are resolved correctly |
+| The content of `include!` is not read | `public_paths.rs` `includes_generated_source`, `name_generated_items` | a `pub use` or a nested module emitted by a generator (see "Generated sources") |
+| `use` items produced by a macro are not seen | `main.rs` `parse_workspace_sources` (source text only) | a re-export written inside a `macro_rules!` body or produced by a derive |
+| A dependency item is a type when its name starts with a capital letter | `public_paths.rs` `names_module_or_function`, `main.rs` `find_dependency_reexports` | a function or module with a capitalised name, and a lower-case type or constant is reported |
+| `bounds_validation_tests` and `scale_matrix_tests` are root integration tests | `tests/` (see `testing.md`) | `cargo test --lib` no longer runs them; they need the explicit command in `testing.md` |
+
 ## Lints
 
 `[workspace.lints.rust]` denies four lints, so these fail at `cargo build`, before any test runs:

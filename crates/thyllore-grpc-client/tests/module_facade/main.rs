@@ -1,9 +1,3 @@
-//! Public-surface rules for the workspace's own sources (issue #297). A public module is either a facade
-//! (`mod x;` + named `pub use x::Item;`) or a namespace (`pub mod x;` alone); R1-R5 below are decided by
-//! syntax only and carry no exception table. `public_paths.rs` resolves `use` across the files of one
-//! crate: R6 reports a definition or module that has more than one public path, and R3 / R4 there
-//! report a `pub use` that reaches a dependency through an imported module of that dependency.
-
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,6 +14,7 @@ const BUILD_OUTPUT_DIRECTORY: &str = "target";
 const MODULE_ROOT_FILE_NAMES: &[&str] = &["mod.rs", "lib.rs"];
 const PATH_ROOT_KEYWORDS: &[&str] = &["crate", "super"];
 const WORKSPACE_LINTS_OPT_IN: &str = "[lints]\nworkspace = true";
+const CHECKED_ROOT_VARIABLE: &str = "THYLLORE_MODULE_FACADE_ROOT";
 
 struct SourceFile {
     relative_path: PathBuf,
@@ -37,6 +32,10 @@ struct Reexport {
 }
 
 fn workspace_root() -> PathBuf {
+    if let Some(checked_root) = std::env::var_os(CHECKED_ROOT_VARIABLE) {
+        return PathBuf::from(checked_root);
+    }
+
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -295,81 +294,51 @@ fn find_violations_in_every_scope(
     violations
 }
 
-fn assert_no_violations(rule: &str, find_violations: &dyn Fn(&SourceFile) -> Vec<String>) {
-    let violations: Vec<String> = parse_workspace_sources()
-        .iter()
-        .flat_map(|file| {
-            find_violations(file)
-                .into_iter()
-                .map(|violation| format!("{}: {violation}", file.relative_path.display()))
-        })
-        .collect();
+fn find_syntax_violations(file: &SourceFile) -> Vec<String> {
+    let mut violations = Vec::new();
 
-    assert!(violations.is_empty(), "{rule}:\n{}", violations.join("\n"));
+    if is_module_root(file) {
+        violations.extend(
+            file.items
+                .iter()
+                .filter_map(describe_definition)
+                .map(|definition| format!("R1: {definition}")),
+        );
+    }
+
+    violations.extend(find_violations_in_every_scope(
+        &file.items,
+        &find_dual_paths,
+    ));
+    violations.extend(find_violations_in_every_scope(
+        &file.items,
+        &find_dependency_reexports,
+    ));
+
+    if file.relative_path.starts_with(DOMAIN_CRATES_ROOT) {
+        violations.extend(find_violations_in_every_scope(
+            &file.items,
+            &find_public_data_logic_split,
+        ));
+    }
+
+    violations
+        .into_iter()
+        .map(|violation| format!("{}: {violation}", file.relative_path.display()))
+        .collect()
 }
 
 #[test]
-fn module_roots_hold_declarations_and_reexports_only() {
-    assert_no_violations("definitions in mod.rs / lib.rs", &|file| {
-        if !is_module_root(file) {
-            return Vec::new();
-        }
-        file.items
-            .iter()
-            .filter_map(describe_definition)
-            .map(|definition| format!("R1: {definition}"))
-            .collect()
-    });
-}
+fn workspace_sources_follow_the_module_rules() {
+    let files = parse_workspace_sources();
 
-#[test]
-fn public_modules_are_not_reexported_from_the_same_file() {
-    assert_no_violations("dual public paths", &|file| {
-        find_violations_in_every_scope(&file.items, &find_dual_paths)
-    });
-}
-
-#[test]
-fn every_definition_has_one_public_path() {
-    let violations =
-        public_paths::find_definitions_with_several_public_paths(&parse_workspace_sources());
+    let mut violations: Vec<String> = files.iter().flat_map(find_syntax_violations).collect();
+    violations.extend(public_paths::find_public_path_violations(&files));
 
     assert!(
         violations.is_empty(),
-        "several public paths to one definition:\n{}",
+        "module-structure.md violations:\n{}",
         violations.join("\n")
-    );
-}
-
-#[test]
-fn dependencies_are_reexported_only_as_types_and_constants() {
-    assert_no_violations(
-        "re-exported dependency globs, modules or functions",
-        &|file| find_violations_in_every_scope(&file.items, &find_dependency_reexports),
-    );
-}
-
-#[test]
-fn dependencies_are_not_reexported_through_an_imported_dependency_module() {
-    let violations = public_paths::find_indirect_dependency_reexports(&parse_workspace_sources());
-
-    assert!(
-        violations.is_empty(),
-        "dependency globs, modules or functions re-exported through an imported module:\n{}",
-        violations.join("\n")
-    );
-}
-
-#[test]
-fn domain_crates_keep_the_data_logic_split_private() {
-    assert_no_violations(
-        "public `components` / `systems` modules in crates",
-        &|file| {
-            if !file.relative_path.starts_with(DOMAIN_CRATES_ROOT) {
-                return Vec::new();
-            }
-            find_violations_in_every_scope(&file.items, &find_public_data_logic_split)
-        },
     );
 }
 

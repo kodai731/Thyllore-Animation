@@ -22,11 +22,14 @@ cargo test -p thyllore-grpc-client --no-default-features --test module_facade
 
 `scripts/check_module_facade.sh` runs that test and prints only the violations. It runs in three places:
 
-- git `pre-commit` (`scripts/git-hooks/pre-commit`), when a `.rs` or `Cargo.toml` file is staged. A clone
-  enables it once with `git config core.hooksPath scripts/git-hooks`. A git client without `cargo` on its
-  `PATH` (a Windows GUI client on the shared tree) skips the check with a message.
+- git `pre-commit` (`scripts/git-hooks/pre-commit`), when a `.rs` or `Cargo.toml` file is staged. It checks
+  the staged content, not the working tree: the index is written to a temporary directory and the test reads
+  that directory through `THYLLORE_MODULE_FACADE_ROOT`. A clone enables it once with
+  `git config core.hooksPath scripts/git-hooks`. A git client without `cargo` on its `PATH` (a Windows GUI
+  client on the shared tree) skips the check with a message.
 - the Claude Code `Stop` hook (`.claude/hooks/stop_module_facade.sh`, registered in `.claude/settings.json`),
-  when the working tree has a changed `.rs` or `Cargo.toml` file; a failure is returned to Claude to fix.
+  when the working tree of the session's directory (a worktree included) has a changed or new `.rs` or
+  `Cargo.toml` file; a failure is returned to Claude to fix. Without `jq` it skips the check with a message.
 - CI (`.github/workflows/module_facade.yml`).
 
 ## Facade or namespace
@@ -134,6 +137,14 @@ pub use crate::blender_space::MatrixRows;
 // Good: private import; callers keep writing `blender_space::MatrixRows`
 use crate::blender_space::MatrixRows;
 ```
+
+### Generated sources
+
+The test reads source text, so the content of `include!(concat!(env!("OUT_DIR"), ..))` is not visible to
+it. A module with an item-level `include!` is treated as owning a set of unnamed generated definitions:
+a path that names one of them resolves to that module, and R6 counts its named re-exports and the globs
+of the module. A generator therefore emits definitions only. It never emits `pub use`, because a
+re-export inside generated code is the one thing no rule can see.
 
 ## Lints
 

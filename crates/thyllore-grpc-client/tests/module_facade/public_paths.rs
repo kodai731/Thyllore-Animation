@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use syn::{Item, UseTree, Visibility};
 
@@ -12,14 +13,19 @@ const CRATE_SOURCE_DIRECTORY: &str = "src";
 const CRATE_ROOT_FILE_STEM: &str = "lib";
 const MODULE_DIRECTORY_FILE_STEM: &str = "mod";
 const UNNAMED_IMPORT: &str = "_";
+const GENERATED_ITEMS_NAME: &str = "*";
+const SOURCE_INCLUSION_MACRO: &str = "include";
 
 type ModulePath = Vec<String>;
 type Scope = BTreeMap<String, BTreeSet<Target>>;
+type ScopeKey = (ModulePath, Audience);
+type ScopeCache = BTreeMap<ScopeKey, Rc<Scope>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Target {
     Module(ModulePath),
     Definition { module: ModulePath, name: String },
+    GeneratedItems { module: ModulePath },
     Dependency { path: Vec<String> },
 }
 
@@ -34,10 +40,19 @@ struct Import {
     bound_name: Option<String>,
 }
 
+struct ModuleImport<'a> {
+    visibility: &'a Visibility,
+    import: Import,
+}
+
 struct CrateModules<'a> {
     items_by_module: BTreeMap<ModulePath, &'a [Item]>,
-    resolved_scopes: RefCell<BTreeMap<(ModulePath, Audience), Scope>>,
-    scopes_in_progress: RefCell<BTreeSet<(ModulePath, Audience)>>,
+    imports_by_module: BTreeMap<ModulePath, Vec<ModuleImport<'a>>>,
+    declared_names_by_module: BTreeMap<ModulePath, Scope>,
+    settled_scopes: RefCell<ScopeCache>,
+    provisional_scopes: RefCell<ScopeCache>,
+    scopes_in_progress: RefCell<BTreeSet<ScopeKey>>,
+    reentered_scopes: RefCell<BTreeSet<ScopeKey>>,
     imported_names_in_progress: RefCell<BTreeSet<(ModulePath, String)>>,
 }
 
@@ -61,6 +76,23 @@ fn definition_name(item: &Item) -> Option<(&Visibility, String)> {
         _ => return None,
     };
     Some((visibility, ident.to_string()))
+}
+
+fn includes_generated_source(item: &Item) -> bool {
+    matches!(item, Item::Macro(invocation) if invocation.mac.path.is_ident(SOURCE_INCLUSION_MACRO))
+}
+
+fn name_generated_items(generated_items: BTreeSet<Target>, name: &str) -> BTreeSet<Target> {
+    generated_items
+        .into_iter()
+        .filter_map(|target| match target {
+            Target::GeneratedItems { module } => Some(Target::Definition {
+                module,
+                name: name.to_string(),
+            }),
+            Target::Module(_) | Target::Definition { .. } | Target::Dependency { .. } => None,
+        })
+        .collect()
 }
 
 fn collect_imports(tree: &UseTree, prefix: &[String], imports: &mut Vec<Import>) {
@@ -136,7 +168,32 @@ fn describe_target(target: &Target) -> String {
         Target::Definition { module, name } => {
             format!("`{name}` defined in `{}`", describe_module(module))
         }
+        Target::GeneratedItems { module } => {
+            format!("glob of generated items in `{}`", describe_module(module))
+        }
         Target::Dependency { path } => format!("dependency item `{}`", path.join("::")),
+    }
+}
+
+fn add_generated_item_paths(public_paths: &mut BTreeMap<Target, BTreeSet<String>>) {
+    let glob_paths_by_module: BTreeMap<ModulePath, BTreeSet<String>> = public_paths
+        .iter()
+        .filter_map(|(target, paths)| match target {
+            Target::GeneratedItems { module } => Some((module.clone(), paths.clone())),
+            _ => None,
+        })
+        .collect();
+
+    for (target, paths) in public_paths.iter_mut() {
+        let Target::Definition { module, name } = target else {
+            continue;
+        };
+        let Some(glob_paths) = glob_paths_by_module.get(module) else {
+            continue;
+        };
+        paths.extend(glob_paths.iter().map(|glob_path| {
+            format!("{}{name}", glob_path.trim_end_matches(GENERATED_ITEMS_NAME))
+        }));
     }
 }
 
@@ -168,18 +225,32 @@ fn describe_indirect_dependency_reexport(
     }
 }
 
-fn collect_use_imports(item_use: &syn::ItemUse) -> Vec<Import> {
-    let mut imports = Vec::new();
-    collect_imports(&item_use.tree, &[], &mut imports);
-    imports
+fn collect_module_imports(items: &[Item]) -> Vec<ModuleImport<'_>> {
+    let mut module_imports = Vec::new();
+    for item in items {
+        let Item::Use(item_use) = item else {
+            continue;
+        };
+        let mut imports = Vec::new();
+        collect_imports(&item_use.tree, &[], &mut imports);
+        module_imports.extend(imports.into_iter().map(|import| ModuleImport {
+            visibility: &item_use.vis,
+            import,
+        }));
+    }
+    module_imports
 }
 
 impl<'a> CrateModules<'a> {
     fn new() -> Self {
         Self {
             items_by_module: BTreeMap::new(),
-            resolved_scopes: RefCell::new(BTreeMap::new()),
+            imports_by_module: BTreeMap::new(),
+            declared_names_by_module: BTreeMap::new(),
+            settled_scopes: RefCell::new(ScopeCache::new()),
+            provisional_scopes: RefCell::new(ScopeCache::new()),
             scopes_in_progress: RefCell::new(BTreeSet::new()),
+            reentered_scopes: RefCell::new(BTreeSet::new()),
             imported_names_in_progress: RefCell::new(BTreeSet::new()),
         }
     }
@@ -194,11 +265,28 @@ impl<'a> CrateModules<'a> {
                 }
             }
         }
-        self.items_by_module.insert(module, items);
+        self.items_by_module.insert(module.clone(), items);
+        self.imports_by_module
+            .insert(module.clone(), collect_module_imports(items));
+        let declared_names = self.collect_declared_names(&module, Audience::SameCrate);
+        self.declared_names_by_module.insert(module, declared_names);
     }
 
     fn items(&self, module: &ModulePath) -> &'a [Item] {
         self.items_by_module.get(module).copied().unwrap_or(&[])
+    }
+
+    fn imports(&self, module: &ModulePath) -> &[ModuleImport<'a>] {
+        self.imports_by_module
+            .get(module)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    fn find_declared_name(&self, module: &ModulePath, name: &str) -> Option<BTreeSet<Target>> {
+        self.declared_names_by_module
+            .get(module)?
+            .get(name)
+            .cloned()
     }
 
     fn collect_declared_names(&self, module: &ModulePath, audience: Audience) -> Scope {
@@ -229,13 +317,22 @@ impl<'a> CrateModules<'a> {
                 scope.entry(name).or_default().insert(target);
             }
         }
+
+        if self.items(module).iter().any(includes_generated_source) {
+            scope
+                .entry(GENERATED_ITEMS_NAME.to_string())
+                .or_default()
+                .insert(Target::GeneratedItems {
+                    module: module.clone(),
+                });
+        }
         scope
     }
 
     fn enter_segment(&self, target: &Target, segment: &str) -> BTreeSet<Target> {
         let module = match target {
             Target::Module(module) => module,
-            Target::Definition { .. } => return BTreeSet::new(),
+            Target::Definition { .. } | Target::GeneratedItems { .. } => return BTreeSet::new(),
             Target::Dependency { path } => {
                 let mut longer_path = path.clone();
                 longer_path.push(segment.to_string());
@@ -249,9 +346,13 @@ impl<'a> CrateModules<'a> {
                 .into_iter()
                 .collect();
         }
-        self.resolve_scope(module, Audience::SameCrate)
-            .remove(segment)
-            .unwrap_or_default()
+
+        let scope = self.resolve_scope(module, Audience::SameCrate);
+        if let Some(targets) = scope.get(segment) {
+            return targets.clone();
+        }
+        let generated_items = scope.get(GENERATED_ITEMS_NAME).cloned().unwrap_or_default();
+        name_generated_items(generated_items, segment)
     }
 
     fn resolve_path(&self, from: &ModulePath, path: &[String]) -> BTreeSet<Target> {
@@ -283,26 +384,8 @@ impl<'a> CrateModules<'a> {
     }
 
     fn resolve_name_in_module(&self, module: &ModulePath, name: &str) -> Option<BTreeSet<Target>> {
-        if let Some(declared) = self
-            .collect_declared_names(module, Audience::SameCrate)
-            .remove(name)
-        {
+        if let Some(declared) = self.find_declared_name(module, name) {
             return Some(declared);
-        }
-
-        let importing_paths: Vec<Vec<String>> = self
-            .items(module)
-            .iter()
-            .filter_map(|item| match item {
-                Item::Use(item_use) => Some(collect_use_imports(item_use)),
-                _ => None,
-            })
-            .flatten()
-            .filter(|import| import.bound_name.as_deref() == Some(name))
-            .map(|import| import.path)
-            .collect();
-        if importing_paths.is_empty() {
-            return None;
         }
 
         let key = (module.clone(), name.to_string());
@@ -313,12 +396,46 @@ impl<'a> CrateModules<'a> {
         {
             return None;
         }
-        let targets = importing_paths
-            .iter()
-            .flat_map(|path| self.resolve_path(module, path))
-            .collect();
+        let targets = self.resolve_imported_name(module, name);
         self.imported_names_in_progress.borrow_mut().remove(&key);
-        Some(targets)
+        targets
+    }
+
+    fn resolve_imported_name(&self, module: &ModulePath, name: &str) -> Option<BTreeSet<Target>> {
+        let imports = self.imports(module).iter().map(|declared| &declared.import);
+
+        let importing_paths: Vec<&Vec<String>> = imports
+            .clone()
+            .filter(|import| import.bound_name.as_deref() == Some(name))
+            .map(|import| &import.path)
+            .collect();
+        if !importing_paths.is_empty() {
+            let named_targets = importing_paths
+                .into_iter()
+                .flat_map(|path| self.resolve_path(module, path))
+                .collect();
+            return Some(named_targets);
+        }
+
+        let glob_targets: BTreeSet<Target> = imports
+            .filter(|import| import.bound_name.is_none())
+            .flat_map(|import| self.resolve_path(module, &import.path))
+            .flat_map(|glob_source| self.resolve_name_lifted_from(&glob_source, name))
+            .collect();
+        (!glob_targets.is_empty()).then_some(glob_targets)
+    }
+
+    fn resolve_name_lifted_from(&self, glob_source: &Target, name: &str) -> BTreeSet<Target> {
+        let Target::Module(source_module) = glob_source else {
+            return BTreeSet::new();
+        };
+        if let Some(declared) = self.find_declared_name(source_module, name) {
+            return declared;
+        }
+        self.resolve_scope(source_module, Audience::SameCrate)
+            .get(name)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn bind_import(
@@ -329,45 +446,76 @@ impl<'a> CrateModules<'a> {
         scope: &mut Scope,
     ) {
         let targets = self.resolve_path(from, &import.path);
-        match &import.bound_name {
-            Some(bound_name) if !targets.is_empty() => {
-                scope.entry(bound_name.clone()).or_default().extend(targets);
-            }
-            Some(_) => {}
-            None => {
-                for target in targets {
-                    if let Target::Module(glob_source) = target {
-                        for (name, glob_targets) in self.resolve_scope(&glob_source, audience) {
-                            scope.entry(name).or_default().extend(glob_targets);
-                        }
-                    }
-                }
+        let Some(bound_name) = &import.bound_name else {
+            self.bind_glob_import(targets, audience, scope);
+            return;
+        };
+        if !targets.is_empty() {
+            scope.entry(bound_name.clone()).or_default().extend(targets);
+        }
+    }
+
+    fn bind_glob_import(
+        &self,
+        glob_sources: BTreeSet<Target>,
+        audience: Audience,
+        scope: &mut Scope,
+    ) {
+        for glob_source in glob_sources {
+            let Target::Module(source_module) = glob_source else {
+                continue;
+            };
+            for (name, lifted_targets) in self.resolve_scope(&source_module, audience).iter() {
+                scope
+                    .entry(name.clone())
+                    .or_default()
+                    .extend(lifted_targets.iter().cloned());
             }
         }
     }
 
-    fn resolve_scope(&self, module: &ModulePath, audience: Audience) -> Scope {
-        let key = (module.clone(), audience);
-        if let Some(scope) = self.resolved_scopes.borrow().get(&key) {
-            return scope.clone();
-        }
-        if !self.scopes_in_progress.borrow_mut().insert(key.clone()) {
-            return Scope::new();
-        }
-
+    fn collect_scope(&self, module: &ModulePath, audience: Audience) -> Scope {
         let mut scope = self.collect_declared_names(module, audience);
-        for item in self.items(module) {
-            if let Item::Use(item_use) = item {
-                if is_visible_to(&item_use.vis, audience) {
-                    for import in &collect_use_imports(item_use) {
-                        self.bind_import(module, import, audience, &mut scope);
-                    }
-                }
+        for declared in self.imports(module) {
+            if is_visible_to(declared.visibility, audience) {
+                self.bind_import(module, &declared.import, audience, &mut scope);
             }
         }
+        scope
+    }
+
+    fn find_cached_scope(&self, key: &ScopeKey) -> Option<Rc<Scope>> {
+        if let Some(settled) = self.settled_scopes.borrow().get(key) {
+            return Some(settled.clone());
+        }
+        self.provisional_scopes.borrow().get(key).cloned()
+    }
+
+    fn cache_scope(&self, key: ScopeKey, scope: Rc<Scope>) {
+        let misses_names_of_an_unfinished_scope = !self.reentered_scopes.borrow().is_empty();
+        if misses_names_of_an_unfinished_scope {
+            self.provisional_scopes.borrow_mut().insert(key, scope);
+            return;
+        }
+        self.settled_scopes.borrow_mut().insert(key, scope);
+        self.provisional_scopes.borrow_mut().clear();
+    }
+
+    fn resolve_scope(&self, module: &ModulePath, audience: Audience) -> Rc<Scope> {
+        let key = (module.clone(), audience);
+        if let Some(scope) = self.find_cached_scope(&key) {
+            return scope;
+        }
+        if !self.scopes_in_progress.borrow_mut().insert(key.clone()) {
+            self.reentered_scopes.borrow_mut().insert(key);
+            return Rc::new(Scope::new());
+        }
+
+        let scope = Rc::new(self.collect_scope(module, audience));
 
         self.scopes_in_progress.borrow_mut().remove(&key);
-        self.resolved_scopes.borrow_mut().insert(key, scope.clone());
+        self.reentered_scopes.borrow_mut().remove(&key);
+        self.cache_scope(key, scope.clone());
         scope
     }
 
@@ -378,22 +526,19 @@ impl<'a> CrateModules<'a> {
         entered_modules: &mut BTreeSet<ModulePath>,
         public_paths: &mut BTreeMap<Target, BTreeSet<String>>,
     ) {
-        for (name, targets) in self.resolve_scope(module, Audience::OtherCrates) {
+        let scope = self.resolve_scope(module, Audience::OtherCrates);
+        for (name, targets) in scope.iter() {
             let public_path = format!("{public_prefix}::{name}");
             for target in targets {
                 public_paths
                     .entry(target.clone())
                     .or_default()
                     .insert(public_path.clone());
-                if let Target::Module(child) = target {
-                    if entered_modules.insert(child.clone()) {
-                        self.collect_public_paths(
-                            &child,
-                            &public_path,
-                            entered_modules,
-                            public_paths,
-                        );
-                    }
+                let Target::Module(child) = target else {
+                    continue;
+                };
+                if entered_modules.insert(child.clone()) {
+                    self.collect_public_paths(child, &public_path, entered_modules, public_paths);
                 }
             }
         }
@@ -408,6 +553,7 @@ impl<'a> CrateModules<'a> {
             &mut BTreeSet::from([root.clone()]),
             &mut public_paths,
         );
+        add_generated_item_paths(&mut public_paths);
 
         public_paths
             .iter()
@@ -425,21 +571,16 @@ impl<'a> CrateModules<'a> {
     }
 
     fn find_indirect_dependency_reexports_in(&self, module: &ModulePath) -> Vec<String> {
-        self.items(module)
+        self.imports(module)
             .iter()
-            .filter_map(|item| match item {
-                Item::Use(item_use) if matches!(item_use.vis, Visibility::Public(_)) => {
-                    Some(collect_use_imports(item_use))
-                }
-                _ => None,
-            })
-            .flatten()
+            .filter(|declared| matches!(declared.visibility, Visibility::Public(_)))
+            .map(|declared| &declared.import)
             .flat_map(|import| {
                 self.resolve_path(module, &import.path)
                     .into_iter()
                     .filter_map(move |target| match target {
                         Target::Dependency { path } if path != import.path => {
-                            describe_indirect_dependency_reexport(module, &import, &path)
+                            describe_indirect_dependency_reexport(module, import, &path)
                         }
                         _ => None,
                     })
@@ -486,13 +627,21 @@ fn find_violations_per_crate(
         .collect()
 }
 
-pub(crate) fn find_definitions_with_several_public_paths(files: &[SourceFile]) -> Vec<String> {
+fn find_definitions_with_several_public_paths(files: &[SourceFile]) -> Vec<String> {
     find_violations_per_crate(files, &|modules| modules.find_several_public_paths())
 }
 
-pub(crate) fn find_indirect_dependency_reexports(files: &[SourceFile]) -> Vec<String> {
+fn find_indirect_dependency_reexports(files: &[SourceFile]) -> Vec<String> {
     find_violations_per_crate(files, &|modules| {
         modules.find_indirect_dependency_reexports()
+    })
+}
+
+pub(crate) fn find_public_path_violations(files: &[SourceFile]) -> Vec<String> {
+    find_violations_per_crate(files, &|modules| {
+        let mut violations = modules.find_several_public_paths();
+        violations.extend(modules.find_indirect_dependency_reexports());
+        violations
     })
 }
 
@@ -695,4 +844,135 @@ fn a_facade_reexport_of_an_own_function_is_not_a_dependency_reexport() {
     ];
 
     assert!(find_indirect_dependency_reexports(&files).is_empty());
+}
+
+#[test]
+fn a_glob_cycle_still_counts_the_second_public_path() {
+    let files = [
+        parse_source_file("crates/demo/src/lib.rs", "pub mod a; pub mod b;"),
+        parse_source_file("crates/demo/src/a.rs", "pub use crate::b::*; pub struct A;"),
+        parse_source_file("crates/demo/src/b.rs", "pub use crate::a::*;"),
+    ];
+
+    assert_eq!(
+        find_definitions_with_several_public_paths(&files),
+        ["crates/demo: R6: `A` defined in `crate::a` is public as crate::a::A and crate::b::A"]
+    );
+}
+
+#[test]
+fn a_reexport_through_a_glob_imported_module_is_a_second_public_path() {
+    let files = [
+        parse_source_file("crates/demo/src/lib.rs", "pub mod helpers; pub mod child;"),
+        parse_source_file("crates/demo/src/helpers.rs", "pub struct Thing;"),
+        parse_source_file(
+            "crates/demo/src/child.rs",
+            "use super::*; pub use helpers::Thing;",
+        ),
+    ];
+
+    assert_eq!(
+        find_definitions_with_several_public_paths(&files),
+        [
+            "crates/demo: R6: `Thing` defined in `crate::helpers` is public as \
+          crate::child::Thing and crate::helpers::Thing"
+        ]
+    );
+}
+
+#[test]
+fn a_dependency_function_reexported_through_a_glob_imported_dependency_module_is_reported() {
+    let files = [
+        parse_source_file("crates/demo/src/lib.rs", "use dep::search; pub mod child;"),
+        parse_source_file(
+            "crates/demo/src/child.rs",
+            "use super::*; pub use search::find;",
+        ),
+    ];
+
+    assert_eq!(
+        find_indirect_dependency_reexports(&files),
+        [
+            "crates/demo: R4: `pub use search::find` in `crate::child` re-exports module or \
+          function `dep::search::find` of a dependency"
+        ]
+    );
+}
+
+#[test]
+fn a_dependency_imported_under_its_own_name_settles() {
+    let files = [parse_source_file(
+        "crates/demo/src/lib.rs",
+        "use paste::paste; pub use paste::Item;",
+    )];
+
+    assert!(find_indirect_dependency_reexports(&files).is_empty());
+}
+
+#[test]
+fn a_named_reexport_of_a_generated_item_beside_its_glob_is_a_second_public_path() {
+    let files = [
+        parse_source_file(
+            "crates/demo/src/lib.rs",
+            "mod generated; pub use generated::*; pub mod dispatch;",
+        ),
+        parse_source_file(
+            "crates/demo/src/generated.rs",
+            r#"include!(concat!(env!("OUT_DIR"), "/blocks.rs"));"#,
+        ),
+        parse_source_file(
+            "crates/demo/src/dispatch.rs",
+            "pub use crate::generated::Block;",
+        ),
+    ];
+
+    assert_eq!(
+        find_definitions_with_several_public_paths(&files),
+        [
+            "crates/demo: R6: `Block` defined in `crate::generated` is public as \
+          crate::Block and crate::dispatch::Block"
+        ]
+    );
+}
+
+#[test]
+fn two_globs_of_a_generated_module_are_two_public_paths() {
+    let files = [
+        parse_source_file(
+            "crates/demo/src/lib.rs",
+            "mod generated; pub use generated::*; pub mod dispatch;",
+        ),
+        parse_source_file(
+            "crates/demo/src/generated.rs",
+            r#"include!(concat!(env!("OUT_DIR"), "/blocks.rs"));"#,
+        ),
+        parse_source_file(
+            "crates/demo/src/dispatch.rs",
+            "pub use crate::generated::*;",
+        ),
+    ];
+
+    assert_eq!(
+        find_definitions_with_several_public_paths(&files),
+        [
+            "crates/demo: R6: glob of generated items in `crate::generated` is public as \
+          crate::* and crate::dispatch::*"
+        ]
+    );
+}
+
+#[test]
+fn a_glob_facade_of_a_generated_module_is_one_public_path() {
+    let files = [
+        parse_source_file(
+            "crates/demo/src/lib.rs",
+            "mod generated; pub use generated::*;",
+        ),
+        parse_source_file(
+            "crates/demo/src/generated.rs",
+            r#"include!(concat!(env!("OUT_DIR"), "/blocks.rs"));"#,
+        ),
+    ];
+
+    assert!(find_definitions_with_several_public_paths(&files).is_empty());
 }

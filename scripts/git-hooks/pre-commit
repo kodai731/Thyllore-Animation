@@ -12,4 +12,9 @@ if ! command -v cargo >/dev/null 2>&1; then
     exit 0
 fi
 
-exec bash "$REPO_ROOT/scripts/check_module_facade.sh"
+staged_tree="$(mktemp -d)"
+trap 'rm -rf "$staged_tree"' EXIT
+
+git ls-files -z -- '*.rs' '*Cargo.toml' | git checkout-index -z --stdin --prefix="$staged_tree/"
+
+THYLLORE_MODULE_FACADE_ROOT="$staged_tree" bash "$REPO_ROOT/scripts/check_module_facade.sh"

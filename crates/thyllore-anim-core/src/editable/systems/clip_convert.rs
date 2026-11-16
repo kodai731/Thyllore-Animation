@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use glam::Vec3;
 
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::PropertyCurve;
-use crate::editable::components::keyframe::{InterpolationType, SourceClipId};
-use crate::editable::systems::bake::collect_bake_times;
-use crate::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+use super::bake::collect_bake_times;
+use crate::editable::EditableAnimationClip;
+use crate::editable::PropertyCurve;
+use crate::editable::{curve_add_keyframe, curve_sample};
+use crate::editable::{InterpolationType, SourceClipId};
 use crate::{AnimationClip, BoneId, Interpolation, Keyframe, MorphWeightChannel, TransformChannel};
 use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
@@ -195,7 +195,7 @@ fn import_vec3_keyframes(keyframes: &[Keyframe<Vec3>], curves: &mut [&mut Proper
 }
 
 fn set_cubic_bezier_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tangent_value: f32) {
-    use crate::editable::components::keyframe::BezierHandle;
+    use crate::editable::BezierHandle;
 
     if let Some(kf) = curve.get_keyframe_mut(kf_id) {
         kf.interpolation = InterpolationType::Bezier;
@@ -206,7 +206,7 @@ fn set_cubic_bezier_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tang
 }
 
 fn set_cubic_bezier_in_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tangent_value: f32) {
-    use crate::editable::components::keyframe::BezierHandle;
+    use crate::editable::BezierHandle;
 
     if let Some(kf) = curve.get_keyframe_mut(kf_id) {
         let handle_time = dt / 3.0;

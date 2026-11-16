@@ -1,5 +1,5 @@
-pub use anyhow::{anyhow, Result};
-pub use core::result::Result::Ok;
+pub(crate) use anyhow::{anyhow, Result};
+pub(crate) use core::result::Result::Ok;
 // pub use log::*;  // カスタムlog!マクロと競合するため、標準のlogクレートは使わない
 pub(crate) use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 pub(crate) use vulkanalia::prelude::v1_2::*;

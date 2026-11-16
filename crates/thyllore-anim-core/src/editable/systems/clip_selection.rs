@@ -1,4 +1,4 @@
-use crate::editable::components::keyframe::SourceClipId;
+use crate::editable::SourceClipId;
 
 /// The selected clip while it is still loaded, otherwise the oldest loaded clip.
 pub fn select_kept_clip_id(

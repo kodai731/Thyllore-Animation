@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::image::{create_image_3d, create_image_view_3d};
 use crate::resource::GpuResource;
+use crate::resource::{create_image_3d, create_image_view_3d};
 use crate::types::Instance;
 
 #[derive(Clone, Copy, Debug)]

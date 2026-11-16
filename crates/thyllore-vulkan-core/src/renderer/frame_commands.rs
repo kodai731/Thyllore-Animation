@@ -1,4 +1,4 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::types::*;
 use crate::vulkan::*;
 use anyhow::Result;

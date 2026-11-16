@@ -1,5 +1,5 @@
-use crate::animation::editable::EditableAnimationClip;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TextToAnimationStatus {

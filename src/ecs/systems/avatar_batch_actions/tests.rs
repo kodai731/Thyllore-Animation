@@ -2,9 +2,7 @@ use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::world::World;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
 
 use super::chain_gen::*;
 use super::morph::*;

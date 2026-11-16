@@ -1,6 +1,6 @@
 use crate::ecs::component::RenderInfo;
 use crate::gpu_resource;
-use crate::vulkanr::resource::GpuResource;
+use thyllore_vulkan_core::resource::GpuResource;
 
 pub use thyllore_render_core::{BillboardMesh, BillboardTransform, BillboardVertex};
 pub use thyllore_vulkan_core::resource::BillboardRenderState;

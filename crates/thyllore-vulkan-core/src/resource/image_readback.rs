@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::command::*;
-use crate::core::device::*;
-use crate::resource::buffer::create_buffer;
+use crate::core::*;
+use crate::resource::create_buffer;
 use crate::types::Instance;
 use crate::vulkan::*;
 
@@ -136,7 +136,7 @@ unsafe fn copy_out_and_release(
 }
 
 unsafe fn record_image_to_buffer_copy(
-    device: &crate::core::device::Device,
+    device: &crate::core::Device,
     command_buffer: vk::CommandBuffer,
     image: vk::Image,
     buffer: vk::Buffer,

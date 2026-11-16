@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 
 pub use thyllore_vulkan_derive::GpuResource;
 
@@ -94,7 +94,7 @@ impl GpuResource for crate::types::Framebuffer {
 /// A descriptor set that returns to the device allocator of its layout when destroyed.
 #[must_use]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct OwnedDescriptorSet {
+pub(crate) struct OwnedDescriptorSet {
     set: vk::DescriptorSet,
     layout: vk::DescriptorSetLayout,
 }

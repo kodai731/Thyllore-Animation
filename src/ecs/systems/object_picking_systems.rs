@@ -3,10 +3,10 @@ use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     ClipLibrary, HierarchyDisplayMode, ObjectIdReadback, PickRay, TimelineState,
 };
-use crate::ecs::systems::clip_track_systems::resolve_mesh_bone_id;
 use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_reveal_entity, hierarchy_select, hierarchy_toggle_selection,
 };
+use crate::ecs::systems::resolve_mesh_bone_id;
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::hooks::object_pick::ObjectPickHooks;
 use glam::Vec3;

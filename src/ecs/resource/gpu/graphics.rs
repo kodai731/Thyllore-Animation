@@ -1,8 +1,9 @@
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
 
-use crate::vulkanr::resource::graphics_resource::{
-    FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
+use thyllore_vulkan_core::descriptor::{
+    FrameDescriptorSet, MaterialId, MaterialManager, ObjectDescriptorSet,
 };
+use thyllore_vulkan_core::resource::{MeshBuffer, NodeData};
 
 #[derive(Clone, Debug, Default)]
 pub struct GpuDescriptors {

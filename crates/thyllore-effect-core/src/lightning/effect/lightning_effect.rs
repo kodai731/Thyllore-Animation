@@ -47,10 +47,10 @@ pub fn build_lightning_model_matrix(effect: &LightningEffect) -> Mat4 {
 }
 
 impl crate::EffectPresets for LightningEffect {
-    const PRESET_NAMES: &'static [&'static str] = crate::LIGHTNING_PRESET_NAMES;
+    const PRESET_NAMES: &'static [&'static str] = crate::lightning::LIGHTNING_PRESET_NAMES;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        crate::apply_lightning_preset(self, name)
+        crate::lightning::apply_lightning_preset(self, name)
     }
 }
 

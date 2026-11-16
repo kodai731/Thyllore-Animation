@@ -1,10 +1,10 @@
 use super::*;
-use crate::animation::spring_bone::{
-    JointForce, SpringCollisionMode, SpringForceModel, SpringSpace, VrmJointForce,
-};
-use crate::animation::{Bone, Keyframe, TransformChannel};
 use crate::ecs::component::SpringJointParam;
 use glam::{Mat4, Vec3};
+use thyllore_anim_core::spring_bone::{
+    JointForce, SpringCollisionMode, SpringForceModel, SpringSpace, VrmJointForce,
+};
+use thyllore_anim_core::{Bone, Keyframe, TransformChannel};
 
 fn create_test_skeleton() -> Skeleton {
     let bones = vec![

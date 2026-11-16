@@ -1,11 +1,12 @@
-use crate::core::device::*;
-use crate::descriptor::{PassShaders, ShaderStage};
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::*;
+use crate::descriptor::PassShaders;
+use crate::resource::create_buffer;
+use crate::resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
+use thyllore_spirv_reflect::ShaderStage;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
@@ -25,7 +26,7 @@ pub struct RRRayTracingPipeline {
 /// (intersection + closest hit). Records follow the closest hit order of the pass manifest, and an
 /// intersection stage pairs with the closest hit stage listed right after it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HitGroup {
+pub(super) enum HitGroup {
     Triangles {
         closest_hit: usize,
     },
@@ -45,14 +46,14 @@ impl HitGroup {
 }
 
 /// Stage indices of a pass in manifest order, so the SBT can be laid out without naming a shader.
-pub struct TraceStages {
+pub(super) struct TraceStages {
     pub raygen: usize,
     pub miss: usize,
     pub hit_groups: Vec<HitGroup>,
 }
 
 impl TraceStages {
-    pub fn from_pass(pass: &PassShaders) -> Result<Self> {
+    pub(super) fn from_pass(pass: &PassShaders) -> Result<Self> {
         let mut raygen = None;
         let mut miss = None;
         let mut pending_intersection = None;
@@ -390,7 +391,7 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
     Ok(rrdevice.device().create_shader_module(&info, None)?)
 }
 
-pub fn align_up(v: u64, a: u64) -> u64 {
+pub(super) fn align_up(v: u64, a: u64) -> u64 {
     (v + a - 1) & !(a - 1)
 }
 

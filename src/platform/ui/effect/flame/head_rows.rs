@@ -26,12 +26,12 @@ pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>>
         label: "Preset",
         options: |_world, view| {
             preset_options(
-                thyllore_effect_core::FLAME_PRESET_NAMES,
+                thyllore_effect_core::flame::FLAME_PRESET_NAMES,
                 view.preset.as_deref(),
             )
         },
         pick: |view, index| {
-            let names = thyllore_effect_core::FLAME_PRESET_NAMES;
+            let names = thyllore_effect_core::flame::FLAME_PRESET_NAMES;
             if index < names.len() {
                 view.preset = Some(names[index].to_string());
             } else {

@@ -1,10 +1,10 @@
-use crate::animation::{AimConstraintData, BoneId, ConstraintType};
+use thyllore_anim_core::{AimConstraintData, BoneId, ConstraintType};
 
 use super::fields::{common_rows, constraint_params, remove_row, scalar_row, ConstraintView};
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
 
-pub fn aim_rows() -> Vec<UiRow<ConstraintView>> {
+pub(crate) fn aim_rows() -> Vec<UiRow<ConstraintView>> {
     let params = constraint_params();
     let mut rows = common_rows();
 

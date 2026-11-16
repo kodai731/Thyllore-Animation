@@ -1,7 +1,7 @@
 use crate::command::*;
-use crate::core::device::*;
+use crate::core::*;
 use crate::data::UniformBufferObject;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 use crate::types::Instance;
 use crate::vulkan::*;
 use std::ffi::c_void;

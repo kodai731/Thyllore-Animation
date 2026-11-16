@@ -60,12 +60,12 @@ pub fn noise_sharpness_to_shaping_scale(v: f32) -> f32 {
 
 /// Inverse of [`noise_sharpness_to_shaping_scale`]. A non-positive scale means
 /// "delegate to the built-in default" and derives the knob position from
-/// [`crate::flame_wave::WAVE_TANH_SCALE`].
+/// [`crate::flame::WAVE_TANH_SCALE`].
 pub fn shaping_scale_to_noise_sharpness(scale: f32) -> f32 {
     let scale = if scale > 0.0 {
         scale
     } else {
-        crate::flame_wave::WAVE_TANH_SCALE
+        crate::flame::WAVE_TANH_SCALE
     };
     let sharpness = (scale / NOISE_SHARPNESS_SCALE_SOFT).ln()
         / (NOISE_SHARPNESS_SCALE_SHARP / NOISE_SHARPNESS_SCALE_SOFT).ln();
@@ -132,7 +132,7 @@ mod tests {
     fn test_noise_sharpness_delegation_matches_builtin_default() {
         assert_eq!(
             shaping_scale_to_noise_sharpness(0.0),
-            shaping_scale_to_noise_sharpness(crate::flame_wave::WAVE_TANH_SCALE)
+            shaping_scale_to_noise_sharpness(crate::flame::WAVE_TANH_SCALE)
         );
     }
 }

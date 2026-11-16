@@ -3,7 +3,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::{ModelLoadSource, UiCommand};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum AutoRigEvent {
@@ -19,10 +19,10 @@ pub enum AutoRigEvent {
         prompt: String,
         target_faces: u32,
         seed: u32,
-        input_mode: crate::grpc::MeshInputMode,
+        input_mode: thyllore_grpc_client::MeshInputMode,
         input_image_png: Option<Vec<u8>>,
-        model_type: crate::grpc::MeshModelType,
-        t2i_model_type: crate::grpc::TextToImageModelType,
+        model_type: thyllore_grpc_client::MeshModelType,
+        t2i_model_type: thyllore_grpc_client::TextToImageModelType,
     },
     TextToMeshApply,
     TextToMeshCancel,
@@ -53,7 +53,7 @@ fn dispatch_text_to_animation_events(
         auto_rig_submit, detect_rig_presence, text_to_animation_begin, text_to_animation_cancel,
         RigPresence,
     };
-    use crate::grpc::{GrpcRequest, GrpcThreadHandle, TextToMotionRequest};
+    use thyllore_grpc_client::{GrpcRequest, GrpcThreadHandle, TextToMotionRequest};
 
     const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
 
@@ -206,7 +206,7 @@ fn dispatch_model_loaded_for_animation(
 ) {
     use crate::ecs::resource::{TextToAnimationState, TextToAnimationStatus};
     use crate::ecs::systems::text_to_animation_advance_to_motion;
-    use crate::grpc::{GrpcRequest, GrpcThreadHandle, TextToMotionRequest};
+    use thyllore_grpc_client::{GrpcRequest, GrpcThreadHandle, TextToMotionRequest};
 
     for event in events {
         if let AutoRigEvent::ModelLoadedFromMemory { source } = event {
@@ -280,7 +280,7 @@ fn dispatch_model_loaded_for_animation(
 pub(super) fn apply_motion_response(
     world: &mut crate::ecs::world::World,
     assets: &mut crate::asset::AssetStorage,
-    curves: Vec<crate::grpc::RawAnimationCurve>,
+    curves: Vec<thyllore_grpc_client::RawAnimationCurve>,
     generation_time_ms: f32,
     model_used: String,
 ) {
@@ -288,7 +288,7 @@ pub(super) fn apply_motion_response(
         ClipLibrary, TextToAnimationState, TextToAnimationStatus, TimelineState,
     };
     use crate::ecs::systems::{text_to_animation_mark_done, text_to_animation_set_motion_result};
-    use crate::grpc::convert_motion_response_to_clip;
+    use thyllore_grpc_client::convert_motion_response_to_clip;
 
     let (prompt, duration) = {
         let state = world.resource::<TextToAnimationState>();
@@ -329,7 +329,7 @@ pub(super) fn apply_motion_response(
 
     if let Some(clip) = clip {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+        let new_id = crate::ecs::systems::clip_library_register_and_activate(
             &mut clip_library,
             assets,
             clip,
@@ -408,7 +408,7 @@ pub(super) fn handle_mesh_server_status(
     readiness: ServerReadiness,
 ) {
     use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
-    use crate::grpc::GrpcThreadHandle;
+    use thyllore_grpc_client::GrpcThreadHandle;
 
     let mut state = world.resource_mut::<TextToMeshState>();
     if state.status != TextToMeshStatus::WaitingForServer {
@@ -434,7 +434,7 @@ pub(super) fn handle_mesh_server_status(
 
 fn poll_mesh_server_status(world: &mut crate::ecs::world::World) {
     use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
-    use crate::grpc::{GrpcRequest, GrpcThreadHandle};
+    use thyllore_grpc_client::{GrpcRequest, GrpcThreadHandle};
 
     const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -502,7 +502,7 @@ fn collapse_repeated_underscores(input: &str) -> String {
 fn dispatch_text_to_mesh_events(events: &[AutoRigEvent], world: &mut crate::ecs::world::World) {
     use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
     use crate::ecs::systems::{text_to_mesh_cancel, text_to_mesh_submit};
-    use crate::grpc::GrpcThreadHandle;
+    use thyllore_grpc_client::GrpcThreadHandle;
 
     const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
 
@@ -632,7 +632,7 @@ pub(super) fn handle_rigging_server_status(
     readiness: ServerReadiness,
 ) {
     use crate::ecs::resource::{AutoRigState, AutoRigStatus};
-    use crate::grpc::GrpcThreadHandle;
+    use thyllore_grpc_client::GrpcThreadHandle;
 
     let mut state = world.resource_mut::<AutoRigState>();
     if state.status != AutoRigStatus::WaitingForServer {
@@ -658,7 +658,7 @@ pub(super) fn handle_rigging_server_status(
 
 fn poll_rigging_server_status(world: &mut crate::ecs::world::World) {
     use crate::ecs::resource::{AutoRigState, AutoRigStatus};
-    use crate::grpc::{GrpcRequest, GrpcThreadHandle};
+    use thyllore_grpc_client::{GrpcRequest, GrpcThreadHandle};
 
     const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -686,7 +686,7 @@ fn dispatch_auto_rig_events(events: &[AutoRigEvent], world: &mut crate::ecs::wor
     use crate::ecs::component::GlbSource;
     use crate::ecs::resource::{AutoRigState, AutoRigStatus, HierarchyState};
     use crate::ecs::systems::{auto_rig_cancel, auto_rig_submit};
-    use crate::grpc::GrpcThreadHandle;
+    use thyllore_grpc_client::GrpcThreadHandle;
 
     const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
 
@@ -808,7 +808,7 @@ fn resolve_parent_with_glb_source(
 }
 
 fn ensure_mesh_server_running(world: &mut crate::ecs::world::World) {
-    use crate::grpc::MeshServerProcess;
+    use thyllore_grpc_client::MeshServerProcess;
 
     if let Some(mut proc) = world.get_resource_mut::<MeshServerProcess>() {
         if proc.is_running() {

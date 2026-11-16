@@ -1,9 +1,8 @@
 use crate::command::*;
-use crate::core::device::*;
-use crate::core::swapchain::*;
-use crate::render::framebuffer::{create_color_objects, create_framebuffers};
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::*;
+use crate::core::*;
+use crate::render::{create_color_objects, create_framebuffers};
+use crate::resource::GpuResource;
+use crate::resource::*;
 use crate::types::Instance;
 use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
@@ -136,7 +135,7 @@ impl RRRender {
 }
 
 unsafe fn destroy_image_objects(
-    device: &crate::core::device::Device,
+    device: &crate::core::Device,
     view: &mut vk::ImageView,
     image: &mut vk::Image,
     memory: &mut vk::DeviceMemory,

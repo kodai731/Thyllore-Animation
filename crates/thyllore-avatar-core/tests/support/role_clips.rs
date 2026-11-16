@@ -1,8 +1,8 @@
 #![cfg(test)]
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+use thyllore_anim_core::editable::curve_add_keyframe;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 fn role_index(name: &str) -> usize {
     HumanoidRole::from_unity_name(name)
@@ -10,7 +10,7 @@ fn role_index(name: &str) -> usize {
         .unwrap_or_else(|| panic!("role not found in HumanoidRole::ALL: {name}"))
 }
 
-pub fn role_clip(
+pub(crate) fn role_clip(
     name: &str,
     duration: f32,
     rotation_keys: &[(f32, &str, [f32; 3])],
@@ -54,7 +54,7 @@ pub fn role_clip(
     clip
 }
 
-pub fn wave() -> EditableAnimationClip {
+pub(crate) fn wave() -> EditableAnimationClip {
     role_clip(
         "wave_right_hand",
         2.8,
@@ -75,7 +75,7 @@ pub fn wave() -> EditableAnimationClip {
     )
 }
 
-pub fn bow() -> EditableAnimationClip {
+pub(crate) fn bow() -> EditableAnimationClip {
     role_clip(
         "bow",
         2.0,
@@ -98,7 +98,7 @@ pub fn bow() -> EditableAnimationClip {
     )
 }
 
-pub fn hands_on_hips_tilt() -> EditableAnimationClip {
+pub(crate) fn hands_on_hips_tilt() -> EditableAnimationClip {
     role_clip(
         "hands_on_hips_tilt",
         2.0,
@@ -124,7 +124,7 @@ pub fn hands_on_hips_tilt() -> EditableAnimationClip {
     )
 }
 
-pub fn mixed() -> EditableAnimationClip {
+pub(crate) fn mixed() -> EditableAnimationClip {
     role_clip(
         "mixed_axes",
         2.0,

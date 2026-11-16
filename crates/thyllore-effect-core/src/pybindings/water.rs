@@ -27,7 +27,7 @@ declare_effect_pyfunctions! {
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj, frame_index=0))]
-pub fn pack_water_ubo(
+pub(super) fn pack_water_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -44,7 +44,7 @@ pub fn pack_water_ubo(
 }
 
 #[pyfunction]
-pub fn water_bounds_corners(
+pub(super) fn water_bounds_corners(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     position: [f32; 3],
@@ -65,6 +65,6 @@ pub fn water_bounds_corners(
 }
 
 #[pyfunction]
-pub fn water_ubo_size() -> usize {
+pub(super) fn water_ubo_size() -> usize {
     std::mem::size_of::<WaterUBO>()
 }

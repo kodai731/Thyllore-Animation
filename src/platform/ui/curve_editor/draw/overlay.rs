@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{curve_sample, PropertyType};
-use crate::animation::BoneId;
 use crate::ecs::resource::{CurveEditorBuffer, CurveSelectedKeyframe, TweenSession};
+use thyllore_anim_core::editable::{curve_sample, PropertyType};
+use thyllore_anim_core::BoneId;
 
 use super::super::tween::{compute_curve_tween, curve_with_values};
 use super::super::view::{DrawnCurve, ViewTransform};

@@ -4,10 +4,10 @@ use std::sync::LazyLock;
 use glam::{Quat, Vec3};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::Entity;
-use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
+use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::UiRow;
@@ -15,7 +15,7 @@ use crate::platform::ui::ui_rows::UiRow;
 const DEFAULT_POLE_VECTOR: [f32; 3] = [0.0, 0.0, 1.0];
 
 #[derive(Clone)]
-pub struct ConstraintView {
+pub(crate) struct ConstraintView {
     pub entity: Entity,
     pub entry_id: ConstraintId,
     pub constraint: ConstraintType,
@@ -26,7 +26,7 @@ pub struct ConstraintView {
 
 #[derive(Clone, Debug, Default, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
-pub struct ConstraintFields {
+pub(crate) struct ConstraintFields {
     #[persist(ui(min = 0.0, max = 1.0))]
     pub weight: f32,
     #[persist(ui(min = -180.0, max = 180.0, format = "%.1f"))]
@@ -46,7 +46,7 @@ pub struct ConstraintFields {
 }
 
 impl ConstraintFields {
-    pub fn from_constraint(constraint: &ConstraintType) -> Self {
+    pub(crate) fn from_constraint(constraint: &ConstraintType) -> Self {
         match constraint {
             ConstraintType::Ik(data) => Self {
                 weight: data.weight,
@@ -83,7 +83,7 @@ impl ConstraintFields {
         }
     }
 
-    pub fn apply_to(&self, constraint: &mut ConstraintType) {
+    pub(crate) fn apply_to(&self, constraint: &mut ConstraintType) {
         match constraint {
             ConstraintType::Ik(data) => {
                 data.weight = self.weight;
@@ -153,7 +153,7 @@ static CONSTRAINT_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-pub struct ConstraintParams {
+pub(super) struct ConstraintParams {
     pub weight: &'static UiParam,
     pub twist: &'static UiParam,
     pub chain_length: &'static UiParam,
@@ -164,7 +164,7 @@ pub struct ConstraintParams {
     pub rotation_offset: &'static UiParam,
 }
 
-pub fn constraint_params() -> ConstraintParams {
+pub(super) fn constraint_params() -> ConstraintParams {
     let [weight, twist, chain_length, pole_vector, aim_axis, up_axis, offset, rotation_offset] =
         CONSTRAINT_UI_PARAMS.as_slice()
     else {
@@ -182,14 +182,14 @@ pub fn constraint_params() -> ConstraintParams {
     }
 }
 
-pub fn scalar_row(param: &'static UiParam) -> UiRow<ConstraintView> {
+pub(super) fn scalar_row(param: &'static UiParam) -> UiRow<ConstraintView> {
     UiRow::Scalar {
         param,
         scalars: &CONSTRAINT_SCALARS,
     }
 }
 
-pub fn common_rows() -> Vec<UiRow<ConstraintView>> {
+pub(super) fn common_rows() -> Vec<UiRow<ConstraintView>> {
     vec![
         UiRow::Toggle {
             label: "Enabled",
@@ -200,7 +200,7 @@ pub fn common_rows() -> Vec<UiRow<ConstraintView>> {
     ]
 }
 
-pub fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
+pub(super) fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
     [
         UiRow::Choice {
             label: "Applied To",
@@ -229,7 +229,7 @@ pub fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
     ]
 }
 
-pub fn remove_row() -> UiRow<ConstraintView> {
+pub(super) fn remove_row() -> UiRow<ConstraintView> {
     UiRow::Action {
         label: "Remove",
         enabled: |_, _: &ConstraintView| true,
@@ -237,7 +237,7 @@ pub fn remove_row() -> UiRow<ConstraintView> {
     }
 }
 
-pub fn update_event(view: &ConstraintView) -> ConstraintEvent {
+pub(super) fn update_event(view: &ConstraintView) -> ConstraintEvent {
     let mut constraint = view.constraint.clone();
     view.fields.apply_to(&mut constraint);
     ConstraintEvent::Update {
@@ -247,7 +247,7 @@ pub fn update_event(view: &ConstraintView) -> ConstraintEvent {
     }
 }
 
-pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
+pub(super) fn remove_event(view: &ConstraintView) -> ConstraintEvent {
     ConstraintEvent::Remove {
         entity: view.entity,
         constraint_id: view.entry_id,
@@ -258,7 +258,7 @@ pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
 mod tests {
 
     use super::*;
-    use crate::animation::{
+    use thyllore_anim_core::{
         AimConstraintData, IkConstraintData, PositionConstraintData, RotationConstraintData,
         ScaleConstraintData,
     };

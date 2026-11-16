@@ -8,6 +8,9 @@ members = [
 
 [workspace.lints.rust]
 ambiguous_glob_reexports = "deny"
+hidden_glob_reexports = "deny"
+unnameable_types = "deny"
+unreachable_pub = "deny"
 
 [package]
 publish = false
@@ -55,6 +58,7 @@ thyllore-scene-core = { path = "crates/thyllore-scene-core" }
 thyllore-texture-fit-core = { path = "crates/thyllore-texture-fit-core" }
 thyllore-render-core = { path = "crates/thyllore-render-core" }
 thyllore-render-debug = { path = "crates/thyllore-render-debug" }
+thyllore-spirv-reflect = { path = "crates/thyllore-spirv-reflect" }
 thyllore-vulkan-core = { path = "crates/thyllore-vulkan-core" }
 thyllore-grpc-client = { path = "crates/thyllore-grpc-client", optional = true }
 anyhow = "1"

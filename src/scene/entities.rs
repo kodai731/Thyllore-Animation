@@ -2,16 +2,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::scalar_clip_systems::{
+use crate::ecs::systems::{
     despawn_entity_with_clip, ensure_scalar_entity_clip, find_entity_clip_id,
 };
 use crate::ecs::world::{Entity, Name, World};
 use crate::hooks::scene::{
     SceneComponentHook, SceneComponentHooks, SceneComponentRole, SceneValue,
 };
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 /// A named entity stored as the persisted form of its components, keyed by type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,7 +164,7 @@ pub(crate) mod test_support {
 
     /// Test-only owner so scene tests never depend on a concrete effect.
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-    pub struct ProbeOwner {
+    pub(crate) struct ProbeOwner {
         pub position: [f32; 3],
         pub level: f32,
     }
@@ -181,7 +181,7 @@ pub(crate) mod test_support {
 
     /// Test-only attachment restored by insertion.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct ProbeLabel {
+    pub(crate) struct ProbeLabel {
         pub label: String,
     }
 

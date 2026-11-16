@@ -1,7 +1,7 @@
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::PickRay;
 use crate::ecs::world::{Entity, World};
-use thyllore_effect_core::{build_water_model_matrix, pick_torus};
+use thyllore_effect_core::water::{build_water_model_matrix, pick_torus};
 
 /// Nearest water whose torus the ray enters, with the distance at which it enters.
 pub fn find_water_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {

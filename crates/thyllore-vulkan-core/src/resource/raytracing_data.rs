@@ -5,8 +5,8 @@ use thyllore_math_core::AffineRows3x4;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
-use crate::core::device::RRDevice;
-use crate::core::swapchain::RRSwapchain;
+use crate::core::RRDevice;
+use crate::core::RRSwapchain;
 use crate::data::{self as vulkan_data, SceneUniformData};
 use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
@@ -22,10 +22,10 @@ use crate::pipeline::{
 use crate::raytracing::{GpuPrimitive, RRAccelerationStructure};
 use crate::render::RRRender;
 use crate::renderer::GBufferPushConstants;
-use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
-use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
-use crate::resource::uniform_buffer::{Placement, UniformBuffer};
+use crate::resource::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
+use crate::resource::{GraphicsResources, MeshBuffer};
+use crate::resource::{Placement, UniformBuffer};
 use crate::types::Instance;
 
 #[must_use]

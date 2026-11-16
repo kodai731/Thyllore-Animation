@@ -1,6 +1,6 @@
 use imgui::Condition;
 
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
 
@@ -10,7 +10,7 @@ pub trait FormSection {
     fn draw(self: Box<Self>, ui: &imgui::Ui, world: &World);
 }
 
-pub struct TabsSection {
+pub(crate) struct TabsSection {
     pub id: &'static str,
     pub tabs: Vec<(&'static str, Vec<Box<dyn FormSection>>)>,
 }
@@ -29,7 +29,7 @@ impl FormSection for TabsSection {
     }
 }
 
-pub struct RowsSection<V: Clone + 'static> {
+pub(crate) struct RowsSection<V: Clone + 'static> {
     pub rows: Vec<UiRow<V>>,
     pub view: V,
     pub commit: fn(&World, &V, &V),
@@ -45,7 +45,7 @@ impl<V: Clone + 'static> FormSection for RowsSection<V> {
     }
 }
 
-pub fn rows_section<V: Clone + 'static>(
+pub(crate) fn rows_section<V: Clone + 'static>(
     rows: Vec<UiRow<V>>,
     view: V,
     commit: fn(&World, &V, &V),
@@ -58,7 +58,7 @@ pub fn rows_section<V: Clone + 'static>(
     })
 }
 
-pub fn message_section(
+pub(crate) fn message_section(
     title: &'static str,
     initially_open: bool,
     message: String,
@@ -96,7 +96,7 @@ pub struct FormWindow {
     pub sections: Vec<Box<dyn FormSection>>,
 }
 
-pub fn draw_form_window(ui: &imgui::Ui, world: &World, window: FormWindow) {
+pub(crate) fn draw_form_window(ui: &imgui::Ui, world: &World, window: FormWindow) {
     match window.placement {
         FormPlacement::Docked { position, size } => {
             ui.window(window.title)

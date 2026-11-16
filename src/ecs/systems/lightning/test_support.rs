@@ -1,5 +1,5 @@
 use glam::{Mat4, Vec2};
-use thyllore_effect_core::burst_start_time;
+use thyllore_effect_core::lightning::burst_start_time;
 
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::ProjectionData;

@@ -3,7 +3,7 @@ use crate::ecs::events::apply_queued_ui_commands;
 use crate::ecs::systems::validation_report_sync;
 use crate::ecs::world::World;
 use crate::hooks::dispatch_prep::run_dispatch_prep_hooks;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn run_event_dispatch_phase(
     world: &mut World,

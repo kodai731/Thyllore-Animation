@@ -1,4 +1,4 @@
-use crate::animation::BoneId;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeatmapApplication {

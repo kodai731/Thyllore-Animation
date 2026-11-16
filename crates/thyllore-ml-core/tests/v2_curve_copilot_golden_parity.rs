@@ -14,8 +14,8 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession;
 use thyllore_ml_core::model_path::{EXPORTS_SUBDIR, SHARED_DATA_ENV_VAR};
+use thyllore_ml_core::v2::inference::V2CurveCopilotSession;
 
 const GOLDEN_FILENAME: &str = "curve_copilot_20260630_v2_k48opt_golden.json";
 const MATCH_TOLERANCE: f32 = 1e-3;

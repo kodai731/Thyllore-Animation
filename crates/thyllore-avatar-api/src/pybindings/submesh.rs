@@ -11,18 +11,18 @@ use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pytho
 
 /// Every submesh role with its sidecar `name` and `label`, in declaration order.
 #[pyfunction]
-pub fn submesh_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn submesh_roles(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let entries = bridge_submesh_roles().map_err(anyhow_to_pyerr)?;
     pythonize_value(py, &entries)
 }
 
 #[pyfunction]
-pub fn guess_submesh_role(mesh: &str, material: &str) -> String {
+pub(super) fn guess_submesh_role(mesh: &str, material: &str) -> String {
     bridge_guess_submesh_role(mesh, material)
 }
 
 #[pyfunction]
-pub fn find_hidden_triangles<'py>(
+pub(super) fn find_hidden_triangles<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -33,7 +33,7 @@ pub fn find_hidden_triangles<'py>(
 }
 
 #[pyfunction]
-pub fn hidden_mask_defaults(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn hidden_mask_defaults(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let defaults = bridge_hidden_mask_defaults();
     pythonize_value(py, &defaults)
 }

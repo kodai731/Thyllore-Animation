@@ -31,7 +31,7 @@ fn cluster_id(ci: usize) -> i32 {
     CLUSTER_BASE + ci as i32
 }
 
-pub struct RigMesh {
+pub(crate) struct RigMesh {
     pub vertices: Vec<[f64; 3]>,
     pub polygon_vertex_index: Vec<i32>,
     pub cluster_vertex_indices: Vec<Vec<i32>>,
@@ -40,12 +40,12 @@ pub struct RigMesh {
     pub cloth: Option<ClothMaterial>,
 }
 
-pub struct ClothMaterial {
+pub(crate) struct ClothMaterial {
     pub color: [f64; 3],
     pub first_polygon: usize,
 }
 
-pub fn write_rig_fbx(convention: &RigConvention) -> String {
+pub(crate) fn write_rig_fbx(convention: &RigConvention) -> String {
     let nodes = build_rig_nodes(convention);
     let mesh = build_box_mesh(convention, &nodes);
     write_rig_fbx_with_mesh(convention, &nodes, &mesh)
@@ -99,7 +99,10 @@ fn definitions(out: &mut String, mesh: &RigMesh) {
     out.push_str("}\n");
 }
 
-pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::RigNode]) -> RigMesh {
+pub(crate) fn build_box_mesh(
+    convention: &RigConvention,
+    nodes: &[super::rig_nodes::RigNode],
+) -> RigMesh {
     let bones = super::canonical_bones();
     let positions = super::rig_positions::file_positions(convention);
     let mut vertices: Vec<[f64; 3]> = Vec::new();
@@ -155,7 +158,7 @@ pub fn build_box_mesh(convention: &RigConvention, nodes: &[super::rig_nodes::Rig
     }
 }
 
-pub fn write_rig_fbx_with_mesh(
+pub(crate) fn write_rig_fbx_with_mesh(
     convention: &RigConvention,
     nodes: &[super::rig_nodes::RigNode],
     mesh: &RigMesh,
@@ -498,7 +501,7 @@ fn matrix4_flat(m: &DMat4) -> Vec<f64> {
     flat
 }
 
-pub fn cube_vertices(center: DVec3, dir: DVec3, length: f64, half: f64) -> [[f64; 3]; 8] {
+pub(crate) fn cube_vertices(center: DVec3, dir: DVec3, length: f64, half: f64) -> [[f64; 3]; 8] {
     let axis = perpendicular_to(dir);
     let perp = dir.cross(axis).normalize();
 
@@ -563,7 +566,7 @@ fn perpendicular_to(v: DVec3) -> DVec3 {
     }
 }
 
-pub fn stick_polygon_indices(base: i32) -> [i32; 24] {
+pub(crate) fn stick_polygon_indices(base: i32) -> [i32; 24] {
     [
         base,
         base + 1,

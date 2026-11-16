@@ -5,11 +5,11 @@ use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
     StaticLineMesh,
 };
-use crate::ecs::resource::gizmo::grid::GridGizmoData;
-use crate::ecs::resource::gizmo::light::LightGizmoData;
-use crate::math::{
-    coordinate_system::perspective_infinite_reverse, is_point_in_rect,
-    ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
+use crate::ecs::resource::GridGizmoData;
+use crate::ecs::resource::LightGizmoData;
+use thyllore_math_core::{
+    is_point_in_rect, perspective_infinite_reverse, ray_to_line_segment_distance,
+    ray_to_point_distance, screen_to_world_ray, view,
 };
 use thyllore_render_core::FRAMES_IN_FLIGHT;
 use thyllore_render_core::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
@@ -276,7 +276,7 @@ pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelec
 
 pub unsafe fn gizmo_create_static_buffers(
     mesh: &mut StaticLineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     memory_type: BufferMemoryType,
 ) -> Result<()> {
     backend.create_static_line_buffers(mesh, memory_type)
@@ -284,7 +284,7 @@ pub unsafe fn gizmo_create_static_buffers(
 
 pub unsafe fn gizmo_create_buffers_for_every_slot(
     mesh: &mut LineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
 ) -> Result<()> {
     for frame_slot in 0..FRAMES_IN_FLIGHT {
         backend.update_or_create_line_buffers(mesh, frame_slot)?;
@@ -294,14 +294,14 @@ pub unsafe fn gizmo_create_buffers_for_every_slot(
 
 pub unsafe fn gizmo_destroy_static_buffers(
     mesh: &mut StaticLineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
 ) {
     backend.destroy_static_line_buffers(mesh);
 }
 
 pub unsafe fn gizmo_destroy_ray_buffers(
     ray: &mut LineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
 ) {
     backend.destroy_line_buffers(ray);
 }
@@ -375,7 +375,7 @@ pub fn gizmo_update_vertical_lines(
 
 pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
     lines: &mut LineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     frame_slot: usize,
 ) -> Result<()> {
     backend.update_or_create_line_buffers(lines, frame_slot)
@@ -383,7 +383,7 @@ pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
 
 pub unsafe fn gizmo_destroy_vertical_line_buffers(
     lines: &mut LineMesh,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
 ) {
     backend.destroy_line_buffers(lines);
 }
@@ -391,8 +391,8 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::coordinate_system::world_to_screen;
     use glam::vec3;
+    use thyllore_math_core::world_to_screen;
 
     const GIZMO_POSITION: Vec3 = vec3(1.0, 2.0, 3.0);
     const CAMERA_DISTANCE: f32 = 10.0;

@@ -46,7 +46,7 @@ fn is_auto_exposure_enabled(ctx: &PassContext) -> bool {
         && ctx.auto_exposure_buffers.is_some()
 }
 
-pub struct CompositeHdrNode;
+pub(super) struct CompositeHdrNode;
 
 impl RenderPassNode for CompositeHdrNode {
     fn name(&self) -> &'static str {
@@ -75,7 +75,7 @@ impl RenderPassNode for CompositeHdrNode {
     }
 }
 
-pub struct OnionSkinNode;
+pub(super) struct OnionSkinNode;
 
 impl RenderPassNode for OnionSkinNode {
     fn name(&self) -> &'static str {
@@ -107,7 +107,7 @@ impl RenderPassNode for OnionSkinNode {
     }
 }
 
-pub struct BloomDownsampleNode {
+pub(super) struct BloomDownsampleNode {
     mip_index: usize,
 }
 
@@ -175,7 +175,7 @@ impl RenderPassNode for BloomDownsampleNode {
     }
 }
 
-pub struct BloomUpsampleNode {
+pub(super) struct BloomUpsampleNode {
     pass_index: usize,
 }
 
@@ -235,7 +235,7 @@ impl RenderPassNode for BloomUpsampleNode {
     }
 }
 
-pub struct DofNode;
+pub(super) struct DofNode;
 
 impl RenderPassNode for DofNode {
     fn name(&self) -> &'static str {
@@ -291,7 +291,7 @@ impl RenderPassNode for DofNode {
     }
 }
 
-pub struct AutoExposureNode;
+pub(super) struct AutoExposureNode;
 
 impl RenderPassNode for AutoExposureNode {
     fn name(&self) -> &'static str {
@@ -330,7 +330,7 @@ impl RenderPassNode for AutoExposureNode {
     }
 }
 
-pub struct TonemapNode;
+pub(super) struct TonemapNode;
 
 impl RenderPassNode for TonemapNode {
     fn name(&self) -> &'static str {
@@ -372,7 +372,7 @@ impl RenderPassNode for TonemapNode {
     }
 }
 
-pub struct OnionCompositeNode;
+pub(super) struct OnionCompositeNode;
 
 impl RenderPassNode for OnionCompositeNode {
     fn name(&self) -> &'static str {

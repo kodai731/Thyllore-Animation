@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::animation::editable::{
-    clip_add_keyframe, clip_recalculate_duration, EditableAnimationClip, PropertyType,
-};
-use crate::animation::{BoneId, BoneLocalPose, Skeleton};
 use crate::ecs::resource::{ClipLibrary, HumanoidRig, TimelineState};
 use crate::ecs::systems::humanoid_import_systems::{local_pose_to_standard, StandardBoneKey};
+use thyllore_anim_core::editable::{
+    clip_add_keyframe, clip_recalculate_duration, EditableAnimationClip, PropertyType,
+};
+use thyllore_anim_core::{BoneId, BoneLocalPose, Skeleton};
 
 pub fn process_bone_set_key(
     overrides: &HashMap<BoneId, BoneLocalPose>,
@@ -91,7 +91,7 @@ fn key_local_pose(
         clip.add_track(bone_id, bone_name);
     }
 
-    let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
+    let euler = thyllore_math_core::quaternion_to_euler_degrees(&local_pose.rotation);
     let t = &local_pose.translation;
     let s = &local_pose.scale;
     clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);

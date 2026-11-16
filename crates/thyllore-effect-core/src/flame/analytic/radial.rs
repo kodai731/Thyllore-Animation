@@ -1,4 +1,4 @@
-use crate::flame_shell::FLAME_SHELL_BASE_RADIUS;
+use crate::flame::FLAME_SHELL_BASE_RADIUS;
 use thyllore_math_core::{approximate_erf, biweight_profile, evaluate_chebyshev, ChebyshevSeries};
 
 // Mirror of shaders/flame/include/radial_integral.slang; the accuracy tests below cover both.
@@ -12,7 +12,7 @@ use thyllore_math_core::{approximate_erf, biweight_profile, evaluate_chebyshev, 
 /// Exponent variation across a band below which the constant-exponent moments are used.
 const FLAT_EXPONENT: f32 = 2e-2;
 /// Maximum support radius in R(h) units, bounded by the shell proxy headroom.
-pub const FLAME_RADIAL_RMAX: f32 = crate::flame_shell::FLAME_SHELL_SUPPORT_HEADROOM;
+pub const FLAME_RADIAL_RMAX: f32 = crate::flame::FLAME_SHELL_SUPPORT_HEADROOM;
 /// Height taper of the radial density.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameRadialTaper {
@@ -305,7 +305,7 @@ mod tests {
                 let height = step as f32 / 20.0;
                 let density_edge = flame_radial_support_radius(sharpness, 1.0)
                     * flame_radial_radius_scale(height, taper);
-                let proxy = crate::flame_shell::flame_shell_outer_radius(height, 1.0, 1.0);
+                let proxy = crate::flame::flame_shell_outer_radius(height, 1.0, 1.0);
                 assert!(
                     density_edge <= proxy,
                     "k={sharpness} h={height}: support reaches {density_edge} but the proxy cuts at {proxy}"

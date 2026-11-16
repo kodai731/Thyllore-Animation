@@ -1,6 +1,6 @@
-use super::device::*;
 use super::vulkan::*;
-use crate::render::pass::RRRender;
+use crate::core::*;
+use crate::render::RRRender;
 use crate::types::Instance;
 use std::rc::Rc;
 

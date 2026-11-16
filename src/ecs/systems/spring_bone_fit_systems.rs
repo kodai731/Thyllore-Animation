@@ -1,8 +1,8 @@
-use crate::animation::spring_bone::{
+use crate::ecs::component::{ConstraintSet, SpringChain};
+use thyllore_anim_core::spring_bone::{
     compare_tail_trajectories, shared_force_model, JointForce, SpringBoneSetup, SpringTailSample,
 };
-use crate::animation::{AnimationClip, Skeleton};
-use crate::ecs::component::{ConstraintSet, SpringChain};
+use thyllore_anim_core::{AnimationClip, Skeleton};
 use thyllore_math_core::{minimize_nelder_mead, NelderMeadParams};
 
 use super::spring_bone_bake_systems::{simulate_spring_tails, BakeConfig};

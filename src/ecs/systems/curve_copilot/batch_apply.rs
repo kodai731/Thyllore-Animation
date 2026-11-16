@@ -1,8 +1,8 @@
 use anyhow::bail;
 
-use crate::animation::editable::PropertyCurve;
-use thyllore_ml_core::copilot::v2::forecast;
-use thyllore_ml_core::copilot::v2::inference::{V2CurveCopilotRequest, V2CurveCopilotSession};
+use thyllore_anim_core::editable::PropertyCurve;
+use thyllore_ml_core::v2::forecast;
+use thyllore_ml_core::v2::inference::{V2CurveCopilotRequest, V2CurveCopilotSession};
 
 use super::suggestion_systems::{
     build_suggestions_from_curve, build_v2_curve_copilot_context, curve_suggestion_apply,
@@ -111,12 +111,12 @@ pub fn copilot_settle_curve(
 
 #[cfg(test)]
 mod tests {
-    use crate::animation::editable::{
+    use crate::ml::resolve_curve_copilot_model_path;
+    use thyllore_anim_core::editable::{
         curve_add_keyframe_with_tangents, BezierHandle, InterpolationType, PropertyCurve,
         PropertyType,
     };
-    use crate::ml::resolve_curve_copilot_model_path;
-    use thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession;
+    use thyllore_ml_core::v2::inference::V2CurveCopilotSession;
 
     #[test]
     #[ignore]
@@ -184,10 +184,10 @@ mod tests {
 mod punch_probe {
     use std::path::Path;
 
-    use crate::animation::editable::{curve_sample, PropertyCurve, PropertyType};
     use crate::ml::resolve_curve_copilot_model_path;
-    use thyllore_ml_core::copilot::v2::forecast;
-    use thyllore_ml_core::copilot::v2::inference::{V2CurveCopilotRequest, V2CurveCopilotSession};
+    use thyllore_anim_core::editable::{curve_sample, PropertyCurve, PropertyType};
+    use thyllore_ml_core::v2::forecast;
+    use thyllore_ml_core::v2::inference::{V2CurveCopilotRequest, V2CurveCopilotSession};
 
     use super::super::suggestion_systems::build_v2_curve_copilot_context;
 

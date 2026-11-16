@@ -1,6 +1,6 @@
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
 use crate::ecs::world::World;
-use thyllore_avatar_core::expression::components::grouping::ChannelGroup;
+use thyllore_avatar_core::expression::ChannelGroup;
 
 use super::expression_presets::*;
 use super::sections::*;

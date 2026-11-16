@@ -2,11 +2,11 @@ use anyhow::Result;
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 
 use crate::ecs::component::{CameraState, RenderInfo};
-use crate::ecs::resource::billboard::{
+use crate::ecs::resource::{
     BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
 };
 use crate::ecs::world::{BillboardBehavior, Transform, World};
-use crate::vulkanr::VulkanBackend;
+use thyllore_vulkan_core::VulkanBackend;
 
 pub fn create_billboard() -> BillboardData {
     let billboard_size = 0.5;

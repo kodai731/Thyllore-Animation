@@ -1,18 +1,17 @@
 use glam::{Mat4, Vec3};
 
-use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
-use crate::animation::spring_bone::{
+use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
+use thyllore_anim_core::editable::{curve_add_keyframe, EditableAnimationClip};
+use thyllore_anim_core::spring_bone::{
     collect_affected_bone_ids, spring_bone_initialize, spring_bone_update,
     spring_bone_write_back_to_pose, SpringSimulation, SpringSpace, SpringTailSample,
 };
-use crate::animation::{AnimationClip, BoneId, Skeleton};
-use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
-use crate::math::quaternion_to_euler_degrees;
+use thyllore_anim_core::{AnimationClip, BoneId, Skeleton};
+use thyllore_math_core::quaternion_to_euler_degrees;
 
 use super::constraint_solve_systems::apply_constraints;
-use super::skeleton_pose_systems::{
-    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
-};
+use super::skeleton_pose_systems::sample_clip_to_pose;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
 
 pub struct BakeConfig {
     pub start_time: f32,
@@ -233,7 +232,7 @@ fn collect_tail_samples(
 }
 
 fn step_spring_frame(
-    pose: &mut crate::animation::SkeletonPose,
+    pose: &mut thyllore_anim_core::SkeletonPose,
     base_clip: &AnimationClip,
     sample_time: f32,
     skeleton: &Skeleton,
@@ -309,7 +308,7 @@ pub fn clear_baked_tracks(clip: &mut EditableAnimationClip, baked_bone_ids: &[Bo
 }
 
 fn capture_rotation_keyframes(
-    pose: &crate::animation::SkeletonPose,
+    pose: &thyllore_anim_core::SkeletonPose,
     time: f32,
     affected_ids: &[BoneId],
     clip: &mut EditableAnimationClip,
@@ -333,12 +332,12 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::spring_bone::{
-        JointForce, SpringCollisionMode, SpringForceModel, VrmJointForce,
-    };
-    use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
     use glam::{Mat4, Vec3};
+    use thyllore_anim_core::spring_bone::{
+        JointForce, SpringCollisionMode, SpringForceModel, VrmJointForce,
+    };
+    use thyllore_anim_core::{AnimationClip, Bone, Skeleton};
 
     fn create_test_skeleton() -> Skeleton {
         let bones = vec![

@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRCompositeDescriptorSet;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
+use crate::FrameRenderContext;
 
 /// Scene radiance of the empty viewport. Clearing the HDR buffer with it makes the
 /// background an ordinary part of the scene, so exposure and tone mapping apply to it

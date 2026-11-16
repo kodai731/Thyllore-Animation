@@ -9,9 +9,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::MotionPath;
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
-    BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction, ScheduledBatchActions,
-    TimelineState,
+    BatchAnimEdit, BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule,
+    ClipLibrary, DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction,
+    ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
@@ -401,7 +401,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
     let keyframes = level["keyframes"].as_array().unwrap();
     assert_eq!(
         keyframes.len(),
-        crate::ecs::systems::scalar_clip_systems::DEBUG_KEYS_PER_CURVE + 1
+        crate::ecs::systems::DEBUG_KEYS_PER_CURVE + 1
     );
     assert!(keyframes
         .iter()
@@ -728,7 +728,7 @@ fn anim_edit_parses_clip_specs() {
 #[test]
 fn copilot_extend_parses_role_axis_time_frames() {
     use super::anim_edit_spec::anim_edit_parse_spec;
-    use super::BoneAxis;
+    use crate::ecs::resource::BoneAxis;
 
     let edit = anim_edit_parse_spec("copilot_extend=Hips.y@1.5,30").unwrap();
     match edit {
@@ -752,7 +752,7 @@ fn copilot_extend_parses_role_axis_time_frames() {
 
 #[test]
 fn template_then_save_round_trips_a_clip() {
-    use crate::ecs::systems::humanoid_bake_systems::new_empty_clip;
+    use crate::ecs::systems::new_empty_clip;
     use tempfile::tempdir;
 
     let tmp = tempdir().unwrap();

@@ -1,5 +1,3 @@
-use crate::animation::editable::{curve_sample, EditableAnimationClip, PropertyType};
-use crate::animation::BoneId;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     AxisLock, ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState,
@@ -10,9 +8,11 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
-use crate::platform::ui::theme::icons::Icon;
-use crate::platform::ui::theme::widgets::{icon_button, ButtonState};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use crate::platform::ui::theme::Icon;
+use crate::platform::ui::theme::{icon_button, ButtonState};
+use thyllore_anim_core::editable::{curve_sample, EditableAnimationClip, PropertyType};
+use thyllore_anim_core::BoneId;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::context_menu::build_curve_extrapolation_menu;
 use super::dopesheet::{draw_dopesheet, draw_dopesheet_drag_preview};
@@ -328,7 +328,7 @@ pub(super) fn collect_visible_scalar_curves<'a>(
 }
 
 pub(super) fn collect_visible_curves<'a>(
-    track: &'a crate::animation::editable::BoneTrack,
+    track: &'a thyllore_anim_core::editable::BoneTrack,
     editor_state: &CurveEditorState,
 ) -> Vec<DrawnCurve<'a>> {
     let mut curves = Vec::new();
@@ -744,8 +744,7 @@ pub(crate) fn build_curve_editor_tab(
                 .copied()
                 .find(|domain| {
                     (domain.entities)(world).iter().any(|&entity| {
-                        crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(world, entity)
-                            == current
+                        crate::ecs::systems::find_entity_clip_id(world, entity) == current
                     })
                 })
         })

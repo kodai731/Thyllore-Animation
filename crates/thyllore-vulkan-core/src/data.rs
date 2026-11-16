@@ -1,14 +1,13 @@
-use crate::core::device::*;
-use crate::core::swapchain::*;
-use crate::resource::buffer::*;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::*;
+use crate::resource::GpuResource;
+use crate::resource::*;
 use crate::types::Instance;
 use crate::vulkan::*;
 use glam::{Mat4, Vec4};
 use std::mem::offset_of;
 use thyllore_spirv_reflect::declare_gpu_block;
 
-pub use thyllore_model_core::mesh::{Vertex, VertexData};
+pub use thyllore_model_core::{Vertex, VertexData};
 
 // TODO: implement iterator
 #[derive(Clone, Debug)]

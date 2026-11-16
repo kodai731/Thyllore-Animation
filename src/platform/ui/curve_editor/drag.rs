@@ -1,5 +1,5 @@
-use crate::animation::editable::{align_opposite_handle, BezierHandle, TangentContinuity};
 use crate::ecs::resource::{AxisLock, CurveViewMode, DraggingTangent, TangentHandleType};
+use thyllore_anim_core::editable::{align_opposite_handle, BezierHandle, TangentContinuity};
 
 use super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 
@@ -133,7 +133,7 @@ pub(super) fn compute_dragged_tangent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{PropertyType, TangentContinuity};
+    use thyllore_anim_core::editable::{PropertyType, TangentContinuity};
 
     use super::super::test_fixtures::*;
 

@@ -9,7 +9,7 @@ use crate::cloth_setup::components::chain_gen::{
     StrandCenterlineRecord,
 };
 
-pub const CENTERLINE_SAMPLE_COUNT: usize = 16;
+pub(super) const CENTERLINE_SAMPLE_COUNT: usize = 16;
 fn build_v_bin_centroids(
     positions: &[Vec3],
     tex_coords: &[[f32; 2]],
@@ -60,7 +60,7 @@ fn card_cutoff_progress(
         .map(|p| p + root_rigid_length)
 }
 
-pub fn strand_centerline(
+pub(super) fn strand_centerline(
     positions: &[Vec3],
     tex_coords: &[[f32; 2]],
     members: &[u32],

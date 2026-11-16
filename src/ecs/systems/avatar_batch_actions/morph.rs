@@ -20,7 +20,7 @@ pub(super) fn send_to_morph_entities(world: &World, build_event: impl Fn(Entity)
 }
 
 #[derive(Debug)]
-pub struct SetMorphWeight {
+pub(super) struct SetMorphWeight {
     pub(super) channel: String,
     pub(super) weight: f32,
 }
@@ -57,7 +57,7 @@ pub(super) fn morph_weight_parse(text: &str) -> Option<Result<Box<dyn BatchActio
 }
 
 #[derive(Debug, Default)]
-pub struct KeyMorphWeights;
+pub(super) struct KeyMorphWeights;
 
 impl BatchAction for KeyMorphWeights {
     fn name(&self) -> &'static str {
@@ -69,7 +69,7 @@ impl BatchAction for KeyMorphWeights {
 }
 
 #[derive(Debug)]
-pub struct CaptureExpression {
+pub(super) struct CaptureExpression {
     preset_name: String,
 }
 

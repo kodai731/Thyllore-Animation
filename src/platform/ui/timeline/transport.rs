@@ -4,10 +4,8 @@ use crate::ecs::resource::{ClipLibrary, ClipPreview, CurveEditorState, TimelineS
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::systems::timeline_effective_duration;
 use crate::ecs::world::World;
-use crate::platform::ui::theme::icons::Icon;
-use crate::platform::ui::theme::widgets::{
-    icon_button, segmented_control, toolbar_divider, ButtonState,
-};
+use crate::platform::ui::theme::Icon;
+use crate::platform::ui::theme::{icon_button, segmented_control, toolbar_divider, ButtonState};
 
 pub(super) fn build_transport_controls(
     ui: &imgui::Ui,
@@ -95,8 +93,7 @@ pub(super) fn build_clip_selector(
     state: &TimelineState,
     clip_library: &ClipLibrary,
 ) {
-    let clip_names =
-        crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
+    let clip_names = crate::ecs::systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text("No clips available");

@@ -8,6 +8,6 @@ mod mesh_section;
 mod ramp_rows;
 mod section;
 
-pub use bone_section::bone_spring_section;
-pub use mesh_section::mesh_spring_section;
-pub use section::spring_bone_section;
+pub(super) use bone_section::bone_spring_section;
+pub(super) use mesh_section::mesh_spring_section;
+pub(super) use section::spring_bone_section;

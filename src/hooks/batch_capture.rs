@@ -4,10 +4,10 @@ use anyhow::{ensure, Result};
 
 use crate::ecs::world::{Resource, World};
 use crate::vulkanr::context::SwapchainState;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::hdr_buffer::HdrBuffer;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::HdrBuffer;
+use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::resource::{read_image_bytes, write_bgra_png, ReadbackLayout};
 use thyllore_vulkan_core::types::{CommandPool, DeviceSize, Image, Instance};
 

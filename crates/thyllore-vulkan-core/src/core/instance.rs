@@ -1,4 +1,4 @@
-use crate::core::device::{
+use crate::core::{
     create_headless_instance, destroy_headless_instance, RRDevice, VALIDATION_LAYER,
 };
 use crate::types::{Entry, Fence, Instance, Semaphore};
@@ -11,10 +11,10 @@ use winit::window::Window;
 
 pub(crate) const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-const VALIDATION_MODE: crate::core::device::ValidationMode = if cfg!(debug_assertions) {
-    crate::core::device::ValidationMode::Enabled
+const VALIDATION_MODE: crate::core::ValidationMode = if cfg!(debug_assertions) {
+    crate::core::ValidationMode::Enabled
 } else {
-    crate::core::device::ValidationMode::Disabled
+    crate::core::ValidationMode::Disabled
 };
 
 pub(crate) const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
@@ -206,7 +206,7 @@ pub unsafe fn create_headless_context() -> Result<HeadlessContext> {
     match RRDevice::new_headless(
         &entry,
         &instance,
-        crate::core::device::HEADLESS_DEVICE_EXTENSIONS,
+        crate::core::HEADLESS_DEVICE_EXTENSIONS,
         VALIDATION_MODE,
         VALIDATION_LAYER,
         PORTABILITY_MACOS_VERSION,

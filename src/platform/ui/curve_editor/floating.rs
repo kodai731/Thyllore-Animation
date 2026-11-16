@@ -8,7 +8,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const WINDOW_TITLE: &str = "Curve Editor";
 const INITIAL_SIZE: [f32; 2] = [1280.0, 720.0];

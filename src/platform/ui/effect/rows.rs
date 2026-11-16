@@ -1,11 +1,11 @@
 use crate::ecs::world::Entity;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use crate::platform::ui::ui_rows::ChoiceOption;
 
 /// Build instance name list and selected index from effect entities.
 /// Each entity's `Name` component is used if present, otherwise `"{fallback_prefix} {i+1}"`.
-pub fn effect_instances(
+pub(crate) fn effect_instances(
     world: &World,
     entities: &[Entity],
     selected: usize,
@@ -24,7 +24,7 @@ pub fn effect_instances(
     (instances, selected)
 }
 
-pub fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> {
+pub(crate) fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> {
     names
         .iter()
         .enumerate()
@@ -35,7 +35,7 @@ pub fn instance_options(names: &[String], selected: usize) -> Vec<ChoiceOption> 
         .collect()
 }
 
-pub fn preset_options(names: &[&str], applied: Option<&str>) -> Vec<ChoiceOption> {
+pub(crate) fn preset_options(names: &[&str], applied: Option<&str>) -> Vec<ChoiceOption> {
     names
         .iter()
         .map(|&name| ChoiceOption {
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn effect_instances_fallback_names() {
-        let world = crate::ecs::World::new();
+        let world = crate::ecs::world::World::new();
         let (instances, selected) = effect_instances(&world, &[], 0, "Wind");
         assert!(instances.is_empty());
         assert_eq!(selected, 0);

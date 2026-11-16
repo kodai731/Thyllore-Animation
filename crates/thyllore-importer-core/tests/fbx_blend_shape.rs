@@ -30,8 +30,7 @@ fn test_blend_shape_import() {
     let temp_path = copy_fixture_to_temp();
     let path_str = temp_path.to_string_lossy().to_string();
 
-    let fbx_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(&path_str).expect("load FBX");
+    let fbx_model = thyllore_importer_core::fbx::load_fbx_with_ufbx(&path_str).expect("load FBX");
 
     assert_eq!(fbx_model.fbx_data.len(), 1, "expected one mesh");
 

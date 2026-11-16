@@ -1,10 +1,8 @@
 use glam::Mat4;
 
-use crate::animation::{
+use thyllore_anim_core::{
     decompose_transform, AnimationClip, BoneId, BoneLocalPose, Skeleton, SkeletonPose,
 };
-
-pub use crate::animation::{compute_pose_global_transforms, create_pose_from_rest};
 
 pub fn sample_clip_to_pose(
     clip: &AnimationClip,

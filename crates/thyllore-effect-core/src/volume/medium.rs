@@ -4,14 +4,18 @@ use thyllore_math_core::mix;
 
 // One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
 // length comes from the active length (active pieces) so the budget is spent on density.
-pub const MODULATION_CELLS: usize = 64;
-pub const ACTIVE_CELLS_MIN: usize = 16;
+pub(crate) const MODULATION_CELLS: usize = 64;
+pub(crate) const ACTIVE_CELLS_MIN: usize = 16;
 const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
 pub(crate) const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
 /// Cell length along the ray: a fraction of the finest modulation feature (world units, the active
 /// span when none), bounded so the active length holds between ACTIVE_CELLS_MIN and MODULATION_CELLS cells.
-pub fn modulation_step(direction: Vec3, active_length: f32, finest_feature: Option<f32>) -> f32 {
+pub(crate) fn modulation_step(
+    direction: Vec3,
+    active_length: f32,
+    finest_feature: Option<f32>,
+) -> f32 {
     let span = active_length.max(EMPTY_INTERVAL_EPSILON);
     let active_span = span * direction.length();
     let feature = finest_feature.map_or(active_span, |feature| feature.min(active_span));
@@ -22,7 +26,7 @@ pub fn modulation_step(direction: Vec3, active_length: f32, finest_feature: Opti
 }
 
 /// A medium integrated piece by piece in closed form under a cell-sampled linear modulation.
-pub trait RayMedium {
+pub(crate) trait RayMedium {
     type Ray;
 
     fn ray_pieces(
@@ -118,7 +122,7 @@ impl CellModulation {
 }
 
 /// Pieces are walked in ray order and each is cut by the cells of the ray-wide grid it overlaps.
-pub fn cell_modulated_optical_depth<M: RayMedium>(
+pub(crate) fn cell_modulated_optical_depth<M: RayMedium>(
     medium: &M,
     origin: Vec3,
     direction: Vec3,

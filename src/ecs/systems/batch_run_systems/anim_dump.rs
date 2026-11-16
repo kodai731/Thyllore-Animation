@@ -150,7 +150,7 @@ struct AnimDumpJson {
     curve_editor: serde_json::Value,
     hierarchy: Option<HierarchyJson>,
     skeleton_bones: Vec<SkeletonBoneJson>,
-    chain_gen: Option<thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenReport>,
+    chain_gen: Option<thyllore_avatar_core::cloth_setup::ChainGenReport>,
 }
 
 fn skeleton_bones_dump(world: &World) -> Vec<SkeletonBoneJson> {
@@ -275,7 +275,7 @@ fn entity_dumps(world: &World) -> Vec<EntityJson> {
 }
 
 fn entity_dump(world: &World, domain: &ScalarChannelDomain, entity: Entity) -> EntityJson {
-    use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
+    use crate::ecs::systems::find_entity_clip_id;
 
     EntityJson {
         entity,

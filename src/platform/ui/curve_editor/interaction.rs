@@ -5,7 +5,6 @@ use super::hit_test::*;
 use super::selection::*;
 use super::view::*;
 use super::window::{CURVE_PADDING, TIME_RULER_HEIGHT, Y_AXIS_WIDTH};
-use crate::animation::editable::EditableAnimationClip;
 use crate::ecs::resource::{
     AxisLock, BoxSelectMode, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
     CurveTrackRef, CurveViewMode, DraggingTangent, TimelineState, UiPointerOwnerId,
@@ -18,6 +17,7 @@ use crate::platform::ui::curve_editor::context_menu::{
 use crate::platform::ui::pointer::{
     read_ui_pointer, ui_pointer_available, ui_pointer_begin, PointerRegion, UiPointer,
 };
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SelectionModifier {

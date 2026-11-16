@@ -17,7 +17,7 @@ use crate::platform::ui::effect::rows::{instance_options, preset_options};
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 
 #[derive(Clone)]
-pub struct LightningSectionView {
+pub(super) struct LightningSectionView {
     pub instances: Vec<String>,
     pub instance_index: usize,
     pub preset: Option<String>,
@@ -56,7 +56,10 @@ static RENDER_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-fn waypoint_items(_world: &crate::ecs::World, view: &LightningSectionView) -> Vec<(String, usize)> {
+fn waypoint_items(
+    _world: &crate::ecs::world::World,
+    view: &LightningSectionView,
+) -> Vec<(String, usize)> {
     view.waypoints
         .iter()
         .enumerate()
@@ -80,7 +83,7 @@ fn waypoint_on_change(
     Box::new(LightningUiCommand::RemoveWaypoint(item))
 }
 
-pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
+pub(super) fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
     let mut rows = vec![UiRow::Action {
         label: "Add Lightning",
         enabled: |_, _| true,
@@ -101,12 +104,13 @@ pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSe
         label: "Preset",
         options: |_, view: &LightningSectionView| {
             preset_options(
-                thyllore_effect_core::LIGHTNING_PRESET_NAMES,
+                thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES,
                 view.preset.as_deref(),
             )
         },
         pick: |view, index| {
-            view.preset = Some(thyllore_effect_core::LIGHTNING_PRESET_NAMES[index].to_string());
+            view.preset =
+                Some(thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[index].to_string());
         },
     });
 
@@ -158,7 +162,7 @@ pub fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSe
     rows
 }
 
-pub fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
+pub(super) fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
     vec![
         UiRow::Action {
             label: "Curves",

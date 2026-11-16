@@ -4,11 +4,13 @@ use serde_json::{json, Value};
 
 use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect};
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::effect_debug_dump::{
+use crate::ecs::systems::{
     build_camera_json, build_light_json, build_projection_json, build_scene_json, matrix_json,
 };
 use crate::ecs::world::{Entity, Name, World};
-use thyllore_effect_core::{build_wind_ubo, wind_parameter_snapshot, WindShadowSlot, WindUBO};
+use thyllore_effect_core::wind::{
+    build_wind_ubo, wind_parameter_snapshot, WindShadowSlot, WindUBO,
+};
 
 pub const WIND_DEBUG_DUMP_DIRECTORY: &str = "log/wind";
 

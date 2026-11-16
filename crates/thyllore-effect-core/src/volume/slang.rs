@@ -12,7 +12,7 @@ fn v3(v: Vec3) -> Float3 {
     }
 }
 
-pub fn shell_optical_depth(
+pub(super) fn shell_optical_depth(
     shell: &VolumeShell,
     origin: Vec3,
     direction: Vec3,
@@ -23,7 +23,7 @@ pub fn shell_optical_depth(
     unsafe { thylloreShellOpticalDepth(&mut shell, v3(origin), v3(direction), t_near, t_far) }
 }
 
-pub fn shell_optical_depth_toward(
+pub(super) fn shell_optical_depth_toward(
     shell: &VolumeShell,
     origin: Vec3,
     direction: Vec3,
@@ -33,7 +33,7 @@ pub fn shell_optical_depth_toward(
     unsafe { thylloreShellOpticalDepthToward(&mut shell, v3(origin), v3(direction), t_max) }
 }
 
-pub fn shell_density_at(shell: &VolumeShell, point: Vec3) -> f32 {
+pub(super) fn shell_density_at(shell: &VolumeShell, point: Vec3) -> f32 {
     let mut shell = *shell;
     unsafe { thylloreShellDensityAt(&mut shell, v3(point)) }
 }

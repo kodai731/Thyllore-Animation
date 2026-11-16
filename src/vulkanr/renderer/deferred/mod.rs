@@ -1,5 +1,4 @@
 mod composite_pass;
-pub mod gbuffer;
 mod gbuffer_pass;
 mod nodes;
 mod onion_skin_pass;

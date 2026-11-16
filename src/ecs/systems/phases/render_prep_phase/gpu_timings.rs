@@ -1,6 +1,6 @@
 use crate::ecs::resource::{GpuPassTimings, GpuTimingsSink};
 
-pub(super) fn gpu_timings_write(world: &mut crate::ecs::World) {
+pub(super) fn gpu_timings_write(world: &mut crate::ecs::world::World) {
     let timings = match world.get_resource::<GpuPassTimings>() {
         Some(t) => t,
         None => return,

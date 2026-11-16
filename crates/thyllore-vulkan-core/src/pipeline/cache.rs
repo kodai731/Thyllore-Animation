@@ -2,9 +2,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::device::RRDevice;
-use crate::pipeline::builder::{PipelineBuilder, RRPipeline};
-use crate::render::pass::RRRender;
+use crate::core::RRDevice;
+use crate::pipeline::{PipelineBuilder, RRPipeline};
+use crate::render::RRRender;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PipelineKey {

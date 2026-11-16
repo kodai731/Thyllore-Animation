@@ -1,10 +1,8 @@
 use anyhow::Result;
 
 use thyllore_vulkan_core::core::RRDevice;
-use thyllore_vulkan_core::resource::image::{
-    SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter,
-};
-use thyllore_vulkan_core::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use thyllore_vulkan_core::resource::{RenderTargetKey, RenderTargetStorage};
+use thyllore_vulkan_core::resource::{SamplerAddress, SamplerBorder, SamplerDesc, SamplerFilter};
 
 use thyllore_vulkan_core::resource::{
     AccumulationTarget, GpuResource, HistoryTargets, HistoryTargetsDesc, TransientDesc,
@@ -27,7 +25,7 @@ pub struct WaterRenderTargets {
     pub history: HistoryTargets,
     pub caustic_accum: AccumulationTarget,
     #[gpu_resource(skip)]
-    pub frame_instances: Vec<(thyllore_effect_core::WaterUBO, u32)>,
+    pub frame_instances: Vec<(thyllore_effect_core::water::WaterUBO, u32)>,
     #[gpu_resource(skip)]
     bound: Vec<Option<WaterBindingKey>>,
 }
@@ -58,7 +56,7 @@ fn linear_clamp_sampler_desc() -> SamplerDesc {
     }
 }
 
-pub unsafe fn create_water_gpu_targets(
+pub(crate) unsafe fn create_water_gpu_targets(
     instance: &Instance,
     rrdevice: &RRDevice,
     storage: &mut RenderTargetStorage,
@@ -95,7 +93,7 @@ pub unsafe fn create_water_gpu_targets(
     })
 }
 
-pub fn is_depth_view_ready(view: ImageView) -> bool {
+pub(crate) fn is_depth_view_ready(view: ImageView) -> bool {
     view != ImageView::default()
 }
 

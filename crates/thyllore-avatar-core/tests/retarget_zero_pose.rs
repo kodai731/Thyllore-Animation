@@ -8,43 +8,34 @@ mod support;
 fn check_with_world(convention_id: &str) {
     let (bones, skeleton) = support::fixture_bones::load_fixture_rig(convention_id);
 
-    let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+    let (mapping, _) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
 
-    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
-        &mapping, &bones,
-    )
-    .unwrap();
+    let frame = thyllore_avatar_core::humanoid::derive_humanoid_frame(&mapping, &bones).unwrap();
 
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
+    let rest_pose = thyllore_avatar_core::humanoid::detect_rest_pose(&mapping, &bones);
 
-    let ctx = thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context(
+    let ctx = thyllore_avatar_core::motion::build_retarget_context(
         &skeleton, &mapping, &frame, rest_pose,
     )
     .unwrap();
 
-    let pose = thyllore_avatar_core::motion::components::sampled_pose::SampledPose {
+    let pose = thyllore_avatar_core::motion::SampledPose {
         rotations: BTreeMap::new(),
         hips_translation: [0.0, 0.0, 0.0],
         morph: BTreeMap::new(),
     };
 
-    let retargeted =
-        thyllore_avatar_core::motion::systems::retarget_pose::retarget_to_bones(&ctx, &pose);
-    let positions = thyllore_avatar_core::motion::systems::retarget_pose::pose_world_positions(
-        &ctx,
-        &retargeted,
-    );
+    let retargeted = thyllore_avatar_core::motion::retarget_to_bones(&ctx, &pose);
+    let positions = thyllore_avatar_core::motion::pose_world_positions(&ctx, &retargeted);
 
-    let hips_idx =
-        mapping.by_role[&thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips];
+    let hips_idx = mapping.by_role[&thyllore_avatar_core::humanoid::HumanoidRole::Hips];
     let hips_bind = skeleton.bones[hips_idx].world_position;
     let hips_height = ctx.hips_height;
 
     let canonical = support::canonical_bones();
 
     for (_i, cb) in canonical.iter().enumerate() {
-        let role: thyllore_avatar_core::humanoid::components::role::HumanoidRole =
+        let role: thyllore_avatar_core::humanoid::HumanoidRole =
             humanoid_role_from_role_name(cb.role);
 
         let Some(&bone_idx) = mapping.by_role.get(&role) else {
@@ -95,10 +86,8 @@ fn check_with_world(convention_id: &str) {
     }
 }
 
-fn humanoid_role_from_role_name(
-    name: &str,
-) -> thyllore_avatar_core::humanoid::components::role::HumanoidRole {
-    let role = thyllore_avatar_core::humanoid::components::role::HumanoidRole::ALL
+fn humanoid_role_from_role_name(name: &str) -> thyllore_avatar_core::humanoid::HumanoidRole {
+    let role = thyllore_avatar_core::humanoid::HumanoidRole::ALL
         .iter()
         .find(|r| format!("{:?}", r) == name)
         .unwrap();

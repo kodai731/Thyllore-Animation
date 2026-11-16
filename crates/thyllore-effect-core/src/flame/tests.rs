@@ -500,7 +500,7 @@ fn test_noise_contrast_scales_edge_window() {
 
 #[test]
 fn test_self_shadow_tau_slang_matches_rust() {
-    use crate::flame::analytic::slang::flame_self_shadow_tau_slang;
+    use crate::flame::flame_self_shadow_tau_slang;
 
     let effect = FlameEffect::default();
     let baked = FlameBaked::default();

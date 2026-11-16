@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view, transition_image_layout};
+use crate::resource::create_buffer;
+use crate::resource::GpuResource;
+use crate::resource::{create_image, create_image_view, transition_image_layout};
 use crate::types::Instance;
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from

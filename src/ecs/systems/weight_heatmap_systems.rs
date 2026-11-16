@@ -1,11 +1,11 @@
 use glam::{UVec4, Vec3, Vec4};
 
-use crate::animation::{BoneId, SkinData};
-use crate::ecs::resource::gizmo::BoneSelectionState;
+use crate::ecs::resource::BoneSelectionState;
 use crate::ecs::resource::{HeatmapApplication, WeightHeatmapState};
-use crate::vulkanr::data::Vertex;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::mesh_buffer::MeshBuffer;
+use thyllore_anim_core::{BoneId, SkinData};
+use thyllore_vulkan_core::data::Vertex;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
 
 pub fn update_weight_heatmap(
     graphics: &mut GraphicsResources,

@@ -3,17 +3,17 @@ use anyhow::Result;
 use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
 use crate::ecs::systems::flame::descriptors::FlameImageBindings;
 use crate::ecs::EffectContext;
-use crate::vulkanr::context::CommandState;
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::core::CommandState;
+use thyllore_vulkan_core::render::RRRender;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
     let white_pixel = (vec![255u8; 4], 1, 1);
     let Some(source) = source else {
         return white_pixel;
     };
-    match thyllore_effect_core::flame_sdf::load_flame_sdf(&source.path) {
+    match thyllore_effect_core::flame::load_flame_sdf(&source.path) {
         Ok(sdf) => {
-            let pixels = thyllore_effect_core::flame_sdf::encode_sdf_rgba8(&sdf);
+            let pixels = thyllore_effect_core::flame::encode_sdf_rgba8(&sdf);
             (pixels, sdf.width, sdf.height)
         }
         Err(e) => {

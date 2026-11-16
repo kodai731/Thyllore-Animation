@@ -94,7 +94,7 @@ impl Default for FlameEffect {
             radial_sharpness: 4.0,
             spread_gain: 0.0,
             support_margin: 1.0,
-            wave_segments: crate::flame_wave::FLAME_WAVE_SEGMENTS as u32,
+            wave_segments: crate::flame::FLAME_WAVE_SEGMENTS as u32,
             color: FlameColor::default(),
             noise: FlameNoise::default(),
             warp: FlameWarp::default(),
@@ -156,10 +156,10 @@ pub fn build_flame_inverse_model_matrix(effect: &FlameEffect) -> Mat4 {
 }
 
 impl crate::EffectPresets for FlameEffect {
-    const PRESET_NAMES: &'static [&'static str] = crate::FLAME_PRESET_NAMES;
+    const PRESET_NAMES: &'static [&'static str] = crate::flame::FLAME_PRESET_NAMES;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        crate::apply_flame_preset(self, name)
+        crate::flame::apply_flame_preset(self, name)
     }
 }
 

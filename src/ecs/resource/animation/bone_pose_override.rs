@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::animation::{BoneId, BoneLocalPose};
+use thyllore_anim_core::{BoneId, BoneLocalPose};
 
 #[derive(Default)]
 pub struct BonePoseOverride {

@@ -1,10 +1,8 @@
 use anyhow::{anyhow, Result};
 
-use crate::core::device::RRDevice;
-use crate::descriptor::reflected_layout::{
-    DescriptorSetWriter, ReflectedLayoutSpec, ReflectedSetLayout,
-};
-use crate::resource::gpu_resource::{build_gpu_resource, GpuResource, OwnedDescriptorSet};
+use crate::core::RRDevice;
+use crate::descriptor::{DescriptorSetWriter, ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::{build_gpu_resource, GpuResource, OwnedDescriptorSet};
 use crate::types::DescriptorSet;
 
 /// How many sets one layout owns: one row per frame slot, one column per history index.

@@ -4,16 +4,16 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::command::{begin_single_time_commands, end_single_time_commands, RRCommandPool};
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::descriptor::ReflectedSetLayout;
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::{GpuResource, OwnedDescriptorSet};
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::create_buffer;
+use crate::resource::{create_image, create_image_view};
+use crate::resource::{GpuResource, OwnedDescriptorSet};
 use crate::types::Instance;
 use thyllore_spirv_reflect::ShaderBinding;
 
 pub(crate) const SAMPLED_TEXTURE_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
-pub const SAMPLED_TEXTURE_BYTES_PER_PIXEL: usize = 4;
+pub(super) const SAMPLED_TEXTURE_BYTES_PER_PIXEL: usize = 4;
 
 /// Tightly packed rows of RGBA8 pixels destined for a rectangle of a texture.
 pub struct PixelRegion<'a> {

@@ -37,7 +37,7 @@ fn flame_history_index(ctx: &PassContext, flames: &[Entity]) -> usize {
 
 /// Everything the flame node agrees on for one frame. `None` means nothing records this frame.
 struct FlameFrame {
-    ubos: Vec<thyllore_effect_core::FlameUBO>,
+    ubos: Vec<thyllore_effect_core::flame::FlameUBO>,
     scissors: Vec<Option<Rect2D>>,
     history_index: usize,
 }
@@ -63,7 +63,7 @@ fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
 
     let mut flames = ctx.world.entities_with::<FlameEffect>();
     sort_flames_back_to_front(ctx, &mut flames);
-    flames.truncate(thyllore_effect_core::FLAME_MAX_INSTANCES);
+    flames.truncate(thyllore_effect_core::flame::FLAME_MAX_INSTANCES);
     if flames.is_empty() {
         return None;
     }
@@ -116,13 +116,16 @@ fn sort_flames_back_to_front(ctx: &PassContext, flames: &mut [Entity]) {
     });
 }
 
-fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effect_core::FlameUBO> {
+fn build_instance_ubo(
+    ctx: &PassContext,
+    flame: Entity,
+) -> Option<thyllore_effect_core::flame::FlameUBO> {
     let world = &ctx.world;
     let effect = world.get_component::<crate::ecs::component::FlameEffect>(flame)?;
     let trail = world.get_component::<crate::ecs::component::FlameTrail>(flame);
     let is_noise_mode = world
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
-        .map(|s| s.shading_mode == thyllore_effect_core::FlameShadingMode::NoiseRaymarch)
+        .map(|s| s.shading_mode == thyllore_effect_core::flame::FlameShadingMode::NoiseRaymarch)
         .unwrap_or(false);
     let baked = world
         .get_component::<crate::ecs::component::FlameBaked>(flame)
@@ -133,7 +136,7 @@ fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effec
         .cloned()
         .unwrap_or_default();
 
-    Some(thyllore_effect_core::build_flame_ubo_with_trail(
+    Some(thyllore_effect_core::flame::build_flame_ubo_with_trail(
         &effect,
         &baked,
         &temporal_accum,
@@ -145,23 +148,23 @@ fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effec
 fn instance_scissor(
     ctx: &PassContext,
     extent: Extent2D,
-    ubo: &thyllore_effect_core::FlameUBO,
+    ubo: &thyllore_effect_core::flame::FlameUBO,
 ) -> Option<Rect2D> {
     let bend_offset = [
         ubo.wind_bend.wind_direction[0] * ubo.wind_bend.bend_amount,
         ubo.wind_bend.wind_direction[1] * ubo.wind_bend.bend_amount,
     ];
-    let support_scale = thyllore_effect_core::flame_shell_support_scale(
+    let support_scale = thyllore_effect_core::flame::flame_shell_support_scale(
         ubo.emitter_params.kind as u32,
         ubo.emitter_params.ring_major_ratio,
         ubo.support_motion.support_margin,
     );
-    let bounds = thyllore_effect_core::flame_local_bounds(
+    let bounds = thyllore_effect_core::flame::flame_local_bounds(
         bend_offset,
         support_scale,
         ubo.support_motion.support_margin,
-        thyllore_effect_core::FlameProxyPad {
-            radial: thyllore_effect_core::flame_proxy_radial_pad(
+        thyllore_effect_core::flame::FlameProxyPad {
+            radial: thyllore_effect_core::flame::flame_proxy_radial_pad(
                 ubo.branch_field.bounding_pad,
                 ubo.support_motion.meander_amp,
             ),
@@ -172,7 +175,7 @@ fn instance_scissor(
         ctx.world,
         extent,
         &ubo.model.to_mat4(),
-        thyllore_effect_core::flame_local_bounds_corners(&bounds),
+        thyllore_effect_core::flame::flame_local_bounds_corners(&bounds),
     )
 }
 

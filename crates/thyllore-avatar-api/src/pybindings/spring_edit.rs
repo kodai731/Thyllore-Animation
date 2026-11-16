@@ -13,7 +13,7 @@ use thyllore_ml_api::python::{depythonize_error_to_pyerr, pythonize_value};
 
 /// Registers every run of existing non-humanoid bones under `root_bone` with at least `min_joints` bones as a spring chain; adds no bones.
 #[pyfunction]
-pub fn use_existing_bones_as_springs<'py>(
+pub(super) fn use_existing_bones_as_springs<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -28,7 +28,7 @@ pub fn use_existing_bones_as_springs<'py>(
 /// capsule (or a capsule fitted to the skin on the root bone) in the fitted body group, and the
 /// chains bound to that group. `bones` carry `bind_matrix` like the collider fit.
 #[pyfunction]
-pub fn register_generated_chains<'py>(
+pub(super) fn register_generated_chains<'py>(
     py: Python<'py>,
     request: &Bound<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -40,7 +40,10 @@ pub fn register_generated_chains<'py>(
 }
 
 #[pyfunction]
-pub fn apply_ramp<'py>(py: Python<'py>, request: &Bound<PyAny>) -> PyResult<Bound<'py, PyAny>> {
+pub(super) fn apply_ramp<'py>(
+    py: Python<'py>,
+    request: &Bound<PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let request: ApplyRampRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
     let output = apply_ramp_to_chains(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))?;
@@ -48,14 +51,14 @@ pub fn apply_ramp<'py>(py: Python<'py>, request: &Bound<PyAny>) -> PyResult<Boun
 }
 
 #[pyfunction]
-pub fn chains_in_scope(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+pub(super) fn chains_in_scope(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
     let request: ChainsInScopeRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
     bridge_chains_in_scope(&request)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:#}", e)))
 }
 
 #[pyfunction]
-pub fn chains_under_bone(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+pub(super) fn chains_under_bone(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
     let request: ChainsUnderBoneRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     bridge_chains_under_bone(&request)
@@ -63,7 +66,7 @@ pub fn chains_under_bone(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
 }
 
 #[pyfunction]
-pub fn chains_with_radius(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
+pub(super) fn chains_with_radius(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
     let request: ChainsWithRadiusRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     bridge_chains_with_radius(&request)
@@ -71,7 +74,7 @@ pub fn chains_with_radius(request: &Bound<PyAny>) -> PyResult<Vec<String>> {
 }
 
 #[pyfunction]
-pub fn spring_gizmo_style<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+pub(super) fn spring_gizmo_style<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     use thyllore_anim_core::spring_bone::{
         CHAIN_RADIUS_SEGMENTS, CIRCLE_SEGMENTS, COLOR_CHAIN, COLOR_COLLIDER, COLOR_INACTIVE_ALPHA,
     };
@@ -95,7 +98,7 @@ struct SpringGizmoStyle {
 }
 
 #[pyfunction]
-pub fn resolve_root_bone(request: &Bound<PyAny>) -> PyResult<String> {
+pub(super) fn resolve_root_bone(request: &Bound<PyAny>) -> PyResult<String> {
     let request: ResolveRootBoneRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     resolve_root_bone_name(&request)

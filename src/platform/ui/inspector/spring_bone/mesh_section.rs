@@ -2,27 +2,27 @@ use std::rc::Rc;
 
 use thyllore_anim_core::spring_bone::SpringChainId;
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::systems::chains_skinned_to_entity;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::platform::ui::bone_choice::collect_bone_list;
 use crate::platform::ui::form_window::{rows_section, FormSection};
 use crate::platform::ui::ui_rows::{ListRows, UiRow};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SkinnedChain {
+pub(super) struct SkinnedChain {
     pub chain_id: SpringChainId,
     pub name: String,
     pub root_bone: BoneId,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct MeshSpringView {
+pub(super) struct MeshSpringView {
     pub chains: Vec<SkinnedChain>,
     /// The one bone every skinned chain hangs from, where a ramp reaches all of them at once
     pub chain_parent: Option<BoneId>,
@@ -30,7 +30,7 @@ pub struct MeshSpringView {
 }
 
 impl MeshSpringView {
-    pub fn bone_name(&self, bone_id: BoneId) -> String {
+    pub(super) fn bone_name(&self, bone_id: BoneId) -> String {
         self.bones
             .iter()
             .find(|(id, _)| *id == bone_id)
@@ -40,7 +40,7 @@ impl MeshSpringView {
 }
 
 /// The chains that move the selected mesh, with a jump to the bone whose Spring section edits them.
-pub fn mesh_spring_section(
+pub(crate) fn mesh_spring_section(
     world: &World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
@@ -87,7 +87,7 @@ pub fn mesh_spring_section(
 }
 
 fn common_parent(
-    skeleton: Option<&crate::animation::Skeleton>,
+    skeleton: Option<&thyllore_anim_core::Skeleton>,
     roots: impl Iterator<Item = BoneId>,
 ) -> Option<BoneId> {
     let skeleton = skeleton?;
@@ -103,7 +103,7 @@ fn common_parent(
     parent
 }
 
-pub fn mesh_spring_rows() -> Vec<UiRow<MeshSpringView>> {
+pub(super) fn mesh_spring_rows() -> Vec<UiRow<MeshSpringView>> {
     vec![
         UiRow::Canvas(|ui, _, view: &MeshSpringView| {
             let parent = view
@@ -153,8 +153,8 @@ fn skinned_chain_rows() -> Vec<UiRow<SkinnedChain>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::{Bone, Skeleton};
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use thyllore_anim_core::{Bone, Skeleton};
 
     fn skeleton(parents: &[Option<BoneId>]) -> Skeleton {
         let mut skeleton = Skeleton::default();

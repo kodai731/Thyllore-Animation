@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use glam::{Mat4, Quat, Vec3};
 
-use crate::animation::{
+use thyllore_anim_core::{
     compose_transform, decompose_transform, BoneId, BoneLocalPose, Skeleton, SkeletonPose,
 };
 

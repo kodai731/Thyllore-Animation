@@ -1,8 +1,8 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::{SetRole, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE};
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::*;
 use crate::descriptor::shader_bindings::bloom_downsample;
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::descriptor::{SetRole, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]

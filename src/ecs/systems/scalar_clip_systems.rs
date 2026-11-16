@@ -1,15 +1,15 @@
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::animation::editable::{
-    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
-    EditableAnimationClip, SourceClipId,
-};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_domain_for_entity, ClipSchedule, ScalarChannelDomain,
 };
 use crate::ecs::resource::{ClipLibrary, HierarchyState};
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::{
+    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
+    EditableAnimationClip, SourceClipId,
+};
 
 pub fn find_entity_clip_id(world: &World, entity: Entity) -> Option<SourceClipId> {
     world
@@ -221,21 +221,21 @@ pub(crate) mod test_support {
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect.
-    pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
+    pub(crate) const PROBE_LEVEL: ScalarChannel = ScalarChannel {
         display_name: "Level",
         cli_name: "probe_level",
         debug_value_range: (0.0, 1.0),
         renamed_from: &[],
     };
 
-    pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
+    pub(crate) const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
         display_name: "Height",
         cli_name: "probe_height",
         debug_value_range: (0.5, 4.0),
         renamed_from: &[],
     };
 
-    pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
+    pub(crate) static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
         name: "Probe",
         channel_table: || &[PROBE_LEVEL, PROBE_HEIGHT],
         has_component: probe_has_component,
@@ -246,13 +246,13 @@ pub(crate) mod test_support {
 
     crate::scalar_channel_domain!(PROBE_DOMAIN);
 
-    pub fn probe_property(channel: &ScalarChannel) -> PropertyType {
+    pub(crate) fn probe_property(channel: &ScalarChannel) -> PropertyType {
         PROBE_DOMAIN
             .property_type_of(channel)
             .expect("channel belongs to the Probe domain")
     }
 
-    pub const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    pub(crate) const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
         key: "probe",
         max_instances: 4,
         spawn: spawn_probe_instance,
@@ -293,7 +293,7 @@ pub(crate) mod test_support {
         spawn_probe_with_clip(world, assets, &format!("Probe {}", ordinal + 1))
     }
 
-    pub fn spawn_probe(world: &mut World, name: &str) -> Entity {
+    pub(crate) fn spawn_probe(world: &mut World, name: &str) -> Entity {
         spawn_scene_owner(
             world,
             name,
@@ -304,7 +304,7 @@ pub(crate) mod test_support {
         )
     }
 
-    pub fn spawn_probe_with_clip(
+    pub(crate) fn spawn_probe_with_clip(
         world: &mut World,
         assets: &mut AssetStorage,
         name: &str,

@@ -1,9 +1,9 @@
 use crate::app::{App, AppData};
-use crate::ecs::resource::billboard::BillboardData;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::swapchain::RRSwapchain;
+use crate::ecs::resource::BillboardData;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::core::RRSwapchain;
+use thyllore_vulkan_core::render::RRRender;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 use thyllore_vulkan_core::types::Instance;
 

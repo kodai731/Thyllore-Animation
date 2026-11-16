@@ -1,21 +1,21 @@
 use std::collections::BTreeMap;
 
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshRole};
-use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
+use thyllore_avatar_core::cloth_setup::{
     find_hidden_triangle_indices, mask_mesh_from_skin, merge_mask_meshes,
 };
-use thyllore_avatar_core::vrchat::sidecar::SidecarHiddenTriangles;
+use thyllore_avatar_core::cloth_setup::{HiddenMaskParams, MaskMesh};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::vrchat::SidecarHiddenTriangles;
 
-use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, NodeAssets};
 use crate::ecs::systems::avatar_submesh_role_systems::{
     collect_submesh_meshes, skin_geometry_to_model,
 };
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_anim_core::Skeleton;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
 
 pub fn compute_hidden_triangles(
     world: &mut World,

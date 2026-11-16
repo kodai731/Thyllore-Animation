@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use crate::core::device::RRDevice;
-use crate::descriptor::pass_manifest::IMGUI;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::imgui;
+use crate::descriptor::IMGUI;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::types::{DescriptorSet, ImageView, Pipeline, PipelineLayout, Sampler};
 use crate::vulkan::*;
 

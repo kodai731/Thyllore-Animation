@@ -2,13 +2,13 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::{RRPipeline, SampleCount};
-use crate::render::pass::{get_depth_format, RRRender};
+use crate::render::{get_depth_format, RRRender};
 use crate::renderer::push_constants::GBufferPushConstants;
-use crate::resource::graphics_resource::MeshBuffer;
+use crate::resource::MeshBuffer;
 use crate::resource::{create_image, create_image_view, RRGBuffer};
 use crate::types::Instance;
+use crate::FrameRenderContext;
 
 pub unsafe fn record_gbuffer_pass(
     ctx: &FrameRenderContext,

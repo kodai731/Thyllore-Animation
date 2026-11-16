@@ -1,8 +1,6 @@
-use crate::lightning::analytic::{
-    build_lightning_segments, compute_lightning_flash, LIGHTNING_MAX_SEGMENTS,
-};
-use crate::lightning::gpu::components::{LightningSegmentsUBO, LightningUBO};
 use crate::lightning::{build_lightning_model_matrix, LightningEffect};
+use crate::lightning::{build_lightning_segments, compute_lightning_flash, LIGHTNING_MAX_SEGMENTS};
+use crate::lightning::{LightningSegmentsUBO, LightningUBO};
 use glam::Mat4;
 
 pub fn build_lightning_ubo(
@@ -71,7 +69,7 @@ pub fn build_lightning_ubo(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LightningShape;
+    use crate::lightning::LightningShape;
     use glam::Vec3;
 
     fn make_effect() -> LightningEffect {
@@ -89,7 +87,7 @@ mod tests {
     }
 
     fn sustain_midpoint_time(effect: &LightningEffect) -> f32 {
-        crate::lightning::analytic::burst_start_time(effect, 0)
+        crate::lightning::burst_start_time(effect, 0)
             + effect.timing.attack_time
             + effect.timing.sustain_time * 0.5
     }
@@ -97,7 +95,7 @@ mod tests {
     #[test]
     fn test_count_zero_before_burst() {
         let mut effect = make_effect();
-        effect.time = crate::lightning::analytic::burst_start_time(&effect, 0) - 1.0;
+        effect.time = crate::lightning::burst_start_time(&effect, 0) - 1.0;
         let (ubo, segments) = build_lightning_ubo(&effect, Mat4::IDENTITY);
 
         assert!(
@@ -150,14 +148,13 @@ mod tests {
             );
         }
 
-        let (k, tau) = crate::lightning::analytic::active_burst(&effect, effect.time)
-            .expect("should have active burst");
-        let timing_intensity = crate::lightning::analytic::stroke_intensity(&effect, tau)
-            * crate::lightning::analytic::flicker_factor(&effect, effect.timing.seed, k, tau);
+        let (k, tau) =
+            crate::lightning::active_burst(&effect, effect.time).expect("should have active burst");
+        let timing_intensity = crate::lightning::stroke_intensity(&effect, tau)
+            * crate::lightning::flicker_factor(&effect, effect.timing.seed, k, tau);
         let burst_seed = thyllore_math_core::hash_u32(&[effect.timing.seed, k]);
-        let reseed = crate::lightning::analytic::reseed_index(&effect, tau);
-        let base_segments =
-            crate::lightning::analytic::build_strike_segments(&effect, burst_seed, reseed);
+        let reseed = crate::lightning::reseed_index(&effect, tau);
+        let base_segments = crate::lightning::build_strike_segments(&effect, burst_seed, reseed);
 
         for i in 0..count {
             let expected = base_segments[i].intensity * timing_intensity;

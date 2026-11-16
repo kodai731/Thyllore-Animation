@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
-use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+use thyllore_anim_core::AnimationSystem;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {

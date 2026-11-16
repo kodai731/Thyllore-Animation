@@ -1,5 +1,5 @@
 use super::*;
-use thyllore_avatar_core::vrchat::sidecar_spring::SidecarJointForce;
+use thyllore_avatar_core::vrchat::SidecarJointForce;
 
 fn make_bones() -> Vec<BoneSpec> {
     let identity = [
@@ -99,28 +99,26 @@ fn collider_bridge_fit_produces_collider_on_spine() {
 #[test]
 fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
     let mut spring = empty_spring();
-    spring.chains.push(
-        thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringChain {
+    spring
+        .chains
+        .push(thyllore_avatar_core::vrchat::SidecarSpringChain {
             name: "Spine".into(),
             center: None,
             collider_groups: Vec::new(),
-            joints: vec![
-                thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
-                    bone: "Spine".into(),
-                    force: SidecarJointForce::Vrm {
-                        stiffness: 0.5,
-                        gravity_power: 1.0,
-                    },
-                    drag_force: 0.0,
-                    gravity_dir: [0.0, -1.0, 0.0],
-                    hit_radius: 0.0,
+            joints: vec![thyllore_avatar_core::vrchat::SidecarSpringJoint {
+                bone: "Spine".into(),
+                force: SidecarJointForce::Vrm {
+                    stiffness: 0.5,
+                    gravity_power: 1.0,
                 },
-            ],
+                drag_force: 0.0,
+                gravity_dir: [0.0, -1.0, 0.0],
+                hit_radius: 0.0,
+            }],
             tail: None,
             enabled: true,
             origin: Default::default(),
-        },
-    );
+        });
 
     let bones = make_bones();
     let skins = make_cylinder_skin(&bones);
@@ -154,40 +152,38 @@ fn collider_bridge_fit_has_fitted_body_group_on_all_chains() {
 #[test]
 fn collider_bridge_assign_collider_groups_replaces() {
     let mut spring = empty_spring();
-    spring.chains.push(
-        thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringChain {
+    spring
+        .chains
+        .push(thyllore_avatar_core::vrchat::SidecarSpringChain {
             name: "Spine".into(),
             center: None,
             collider_groups: vec!["Existing".to_string()],
-            joints: vec![
-                thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
-                    bone: "Spine".into(),
-                    force: SidecarJointForce::Vrm {
-                        stiffness: 0.5,
-                        gravity_power: 1.0,
-                    },
-                    drag_force: 0.0,
-                    gravity_dir: [0.0, -1.0, 0.0],
-                    hit_radius: 0.0,
+            joints: vec![thyllore_avatar_core::vrchat::SidecarSpringJoint {
+                bone: "Spine".into(),
+                force: SidecarJointForce::Vrm {
+                    stiffness: 0.5,
+                    gravity_power: 1.0,
                 },
-            ],
+                drag_force: 0.0,
+                gravity_dir: [0.0, -1.0, 0.0],
+                hit_radius: 0.0,
+            }],
             tail: None,
             enabled: true,
             origin: Default::default(),
-        },
-    );
-    spring.collider_groups.push(
-        thyllore_avatar_core::vrchat::sidecar_spring::SidecarColliderGroup {
+        });
+    spring
+        .collider_groups
+        .push(thyllore_avatar_core::vrchat::SidecarColliderGroup {
             name: "Existing".to_string(),
             colliders: Vec::new(),
-        },
-    );
-    spring.collider_groups.push(
-        thyllore_avatar_core::vrchat::sidecar_spring::SidecarColliderGroup {
+        });
+    spring
+        .collider_groups
+        .push(thyllore_avatar_core::vrchat::SidecarColliderGroup {
             name: "New".to_string(),
             colliders: Vec::new(),
-        },
-    );
+        });
 
     let bones = make_bones();
 
@@ -206,28 +202,26 @@ fn collider_bridge_assign_collider_groups_replaces() {
 #[test]
 fn collider_bridge_assign_collider_groups_unknown_group_is_err() {
     let mut spring = empty_spring();
-    spring.chains.push(
-        thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringChain {
+    spring
+        .chains
+        .push(thyllore_avatar_core::vrchat::SidecarSpringChain {
             name: "Spine".into(),
             center: None,
             collider_groups: Vec::new(),
-            joints: vec![
-                thyllore_avatar_core::vrchat::sidecar_spring::SidecarSpringJoint {
-                    bone: "Spine".into(),
-                    force: SidecarJointForce::Vrm {
-                        stiffness: 0.5,
-                        gravity_power: 1.0,
-                    },
-                    drag_force: 0.0,
-                    gravity_dir: [0.0, -1.0, 0.0],
-                    hit_radius: 0.0,
+            joints: vec![thyllore_avatar_core::vrchat::SidecarSpringJoint {
+                bone: "Spine".into(),
+                force: SidecarJointForce::Vrm {
+                    stiffness: 0.5,
+                    gravity_power: 1.0,
                 },
-            ],
+                drag_force: 0.0,
+                gravity_dir: [0.0, -1.0, 0.0],
+                hit_radius: 0.0,
+            }],
             tail: None,
             enabled: true,
             origin: Default::default(),
-        },
-    );
+        });
     let bones = make_bones();
 
     let err = assign_collider_groups(&AssignColliderGroupsRequest {

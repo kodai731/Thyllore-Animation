@@ -6,7 +6,10 @@ use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pytho
 
 /// Bakes a `.anim.ron` humanoid clip onto `bones` (with `bind_matrix`) at `fps`, as the engine plays a template.
 #[pyfunction]
-pub fn bake_clip_file<'py>(py: Python<'py>, request: &Bound<PyAny>) -> PyResult<Bound<'py, PyAny>> {
+pub(super) fn bake_clip_file<'py>(
+    py: Python<'py>,
+    request: &Bound<PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let req: BakeClipFileRequest = depythonize(request).map_err(depythonize_error_to_pyerr)?;
     let baked = bridge_bake_clip_file(&req).map_err(anyhow_to_pyerr)?;
     pythonize_value(py, &baked)

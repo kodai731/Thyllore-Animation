@@ -121,7 +121,7 @@ fn retain_keyed_tracks(clip: &mut EditableAnimationClip) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editable::systems::curve_ops::curve_add_keyframe;
+    use crate::editable::curve_add_keyframe;
 
     fn clip_with_scalar_curve(property_type: PropertyType) -> EditableAnimationClip {
         let mut clip = EditableAnimationClip::new(1, "clip".to_string());

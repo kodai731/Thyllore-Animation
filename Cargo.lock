@@ -3994,6 +3994,7 @@ dependencies = [
  "thyllore-render-core",
  "thyllore-render-debug",
  "thyllore-scene-core",
+ "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
  "thyllore-vulkan-core",
  "ufbx",
@@ -4034,6 +4035,7 @@ dependencies = [
  "strum",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-math-core",
  "thyllore-model-core",
@@ -4123,6 +4125,7 @@ dependencies = [
  "protox",
  "serde_json",
  "sha2",
+ "syn",
  "tempfile",
  "thyllore-anim-core",
  "thyllore-log-core",
@@ -4246,7 +4249,6 @@ version = "0.0.1"
 dependencies = [
  "glam 0.34.2",
  "serde",
- "thyllore-color-core",
  "thyllore-scene-derive",
 ]
 

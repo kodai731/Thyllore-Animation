@@ -1,10 +1,10 @@
-use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ClipBrowserEvent {
@@ -29,14 +29,12 @@ fn dispatch_clip_browser_events(
         match event {
             ClipBrowserEvent::CreateEmpty => {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
-                let editable =
-                    crate::ecs::systems::humanoid_bake_systems::new_empty_clip("New Clip");
-                let id =
-                    crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                        &mut clip_library,
-                        assets,
-                        editable,
-                    );
+                let editable = crate::ecs::systems::new_empty_clip("New Clip");
+                let id = crate::ecs::systems::clip_library_register_and_activate(
+                    &mut clip_library,
+                    assets,
+                    editable,
+                );
 
                 let source = clip_library.source_clips.get(&id).cloned();
                 drop(clip_library);
@@ -52,12 +50,11 @@ fn dispatch_clip_browser_events(
                 if let Some(original) = clip_library.get(*source_id).cloned() {
                     let mut duplicate = original;
                     duplicate.name = format!("{} (copy)", duplicate.name);
-                    let new_id =
-                        crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                            &mut clip_library,
-                            assets,
-                            duplicate,
-                        );
+                    let new_id = crate::ecs::systems::clip_library_register_and_activate(
+                        &mut clip_library,
+                        assets,
+                        duplicate,
+                    );
 
                     let source = clip_library.source_clips.get(&new_id).cloned();
                     drop(clip_library);
@@ -95,9 +92,8 @@ fn dispatch_clip_browser_events(
             }
 
             ClipBrowserEvent::ResampleSelectedModelAnimations { fps } => {
-                match crate::ecs::systems::clip_library_systems::clip_library_resample_selected_model(
-                    world, assets, *fps,
-                ) {
+                match crate::ecs::systems::clip_library_resample_selected_model(world, assets, *fps)
+                {
                     Some(count) => log!(
                         "Created {} resampled clip(s) of selected model at {} fps",
                         count,
@@ -113,7 +109,7 @@ fn dispatch_clip_browser_events(
 fn record_clip_added(
     world: &mut World,
     clip_id: SourceClipId,
-    source: crate::animation::editable::SourceClip,
+    source: thyllore_anim_core::editable::SourceClip,
 ) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();
@@ -124,7 +120,7 @@ fn record_clip_added(
 fn record_clip_removed(
     world: &mut World,
     clip_id: SourceClipId,
-    removed: crate::animation::editable::SourceClip,
+    removed: thyllore_anim_core::editable::SourceClip,
 ) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();

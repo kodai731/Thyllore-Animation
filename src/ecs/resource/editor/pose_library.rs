@@ -1,4 +1,4 @@
-use crate::animation::editable::SourceClipId;
+use thyllore_anim_core::editable::SourceClipId;
 
 #[derive(Clone, Debug)]
 pub struct PoseEntry {

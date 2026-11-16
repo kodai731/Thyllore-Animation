@@ -1,7 +1,7 @@
 use glam::Mat4;
 
-use crate::animation::SkeletonId;
 use crate::ecs::resource::AnimationType;
+use thyllore_anim_core::SkeletonId;
 
 pub struct AnimationEvalResult {
     pub updated_meshes: Vec<usize>,
@@ -13,8 +13,8 @@ pub(crate) struct ActiveInstanceInfo {
     pub(crate) asset_id: crate::asset::AssetId,
     pub(crate) local_time: f32,
     pub(crate) weight: f32,
-    pub(crate) blend_mode: crate::animation::editable::BlendMode,
-    pub(crate) ease_out: crate::animation::editable::EaseType,
+    pub(crate) blend_mode: thyllore_anim_core::editable::BlendMode,
+    pub(crate) ease_out: thyllore_anim_core::editable::EaseType,
     pub(crate) start_time: f32,
     pub(crate) end_time: f32,
 }

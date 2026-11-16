@@ -1,13 +1,13 @@
 use glam::Vec3;
 
-use crate::animation::{
+use crate::asset::AssetStorage;
+use crate::ecs::component::{Constrained, ConstraintSet};
+use crate::ecs::resource::ConstraintGizmoData;
+use crate::ecs::world::{Animator, Entity, World};
+use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, PositionConstraintData, Skeleton,
     PRIORITY_AIM, PRIORITY_IK, PRIORITY_POSITION,
 };
-use crate::asset::storage::AssetStorage;
-use crate::ecs::component::{Constrained, ConstraintSet};
-use crate::ecs::resource::gizmo::ConstraintGizmoData;
-use crate::ecs::world::{Animator, Entity, World};
 
 pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {
     let entities = world.component_entities::<Animator>();

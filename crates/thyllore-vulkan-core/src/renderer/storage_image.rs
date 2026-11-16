@@ -1,4 +1,4 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::resource::VolumeImage;
 use crate::types::{CommandBuffer, Extent2D, Extent3D, Image, Offset3D};
 use vulkanalia::prelude::v1_0::*;

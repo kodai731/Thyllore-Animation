@@ -2,17 +2,17 @@ use std::rc::Rc;
 
 use crate::app::viewport::ViewportState;
 use crate::asset::AssetStorage;
-use crate::ecs::{GpuSceneContext, World};
+use crate::ecs::world::World;
+use crate::ecs::GpuSceneContext;
 use crate::hooks::effect::EffectHooks;
 use crate::hooks::pass::PassGraph;
 use crate::platform::ImguiData;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::{GpuBufferRegistry, GpuResource, PipelineStorage};
-use thyllore_vulkan_core::renderer::{FrameTransients, ImageStateTracker};
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::renderer::{FrameTransients, ImageStateTracker, OnionSkinGpuState};
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::RayTracingData;
+use thyllore_vulkan_core::resource::{GpuBufferRegistry, GpuResource, PipelineStorage};
 use thyllore_vulkan_core::types::Instance;
 
 #[must_use]

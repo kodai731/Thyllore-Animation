@@ -2,7 +2,7 @@ mod animation;
 mod editor;
 mod flame;
 mod lightning;
-pub mod mesh;
+mod mesh;
 mod ml;
 mod model;
 mod render;

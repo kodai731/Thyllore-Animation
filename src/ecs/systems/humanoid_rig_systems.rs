@@ -2,15 +2,15 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig;
+use thyllore_avatar_core::humanoid::load_or_infer_rig;
+use thyllore_avatar_core::humanoid::AvatarRig;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
-use crate::animation::Skeleton;
 use crate::ecs::resource::HumanoidRig;
 use crate::ecs::systems::avatar_setup_systems::skeleton_to_bone_inputs;
-use crate::ecs::systems::humanoid_bake_systems::build_role_retarget_context;
+use crate::ecs::systems::build_role_retarget_context;
+use thyllore_anim_core::Skeleton;
 
 pub fn build_humanoid_rig(
     model_path: &Path,
@@ -96,13 +96,13 @@ pub fn build_track_name_table(
     (track_bones, track_names)
 }
 
-use thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids;
+use thyllore_anim_core::editable::clip_remap_bone_ids;
 
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
     let Some(model_path) = find_model_path(world) else {
@@ -196,14 +196,13 @@ pub fn engine_bone_name_to_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::SourceClip;
+    use thyllore_anim_core::editable::SourceClip;
 
-    use thyllore_avatar_core::humanoid::systems::mapping_io::save_generic_rig;
+    use thyllore_avatar_core::humanoid::save_generic_rig;
 
     fn load_skeleton(fbx_path: &Path) -> Skeleton {
-        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
-            fbx_path.to_str().unwrap(),
-        );
+        let load_result =
+            thyllore_importer_core::fbx::load_fbx_to_graphics_resources(fbx_path.to_str().unwrap());
         let (fbx_result, _) = load_result.expect("Failed to load FBX");
         fbx_result
             .animation_system
@@ -358,7 +357,7 @@ mod tests {
             let mut clip = EditableAnimationClip::new(source_id, "user".to_string());
             let track = clip.add_track(999, "Head".to_string());
             let curve = track.get_curve_mut(thyllore_anim_core::editable::PropertyType::RotationX);
-            thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe(curve, 0.0, 0.5);
+            thyllore_anim_core::editable::curve_add_keyframe(curve, 0.0, 0.5);
             library
                 .source_clips
                 .insert(source_id, SourceClip::new(source_id, clip));
@@ -454,9 +453,8 @@ mod tests {
 #[cfg(test)]
 pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
     let skeleton = {
-        let load_result = thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(
-            fbx_path.to_str().unwrap(),
-        );
+        let load_result =
+            thyllore_importer_core::fbx::load_fbx_to_graphics_resources(fbx_path.to_str().unwrap());
         let (fbx_result, _) = load_result.expect("Failed to load FBX");
         fbx_result
             .animation_system

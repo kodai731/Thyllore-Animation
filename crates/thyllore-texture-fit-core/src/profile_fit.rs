@@ -1,7 +1,3 @@
-pub use thyllore_color_core::{
-    chromaticity_xy, is_saturated, luminance, mccamy_cct, srgb_to_linear,
-};
-
 /// Percentile by linear interpolation over a sorted slice. Returns None on empty input.
 pub fn percentile(sorted_values: &[f32], p: f32) -> Option<f32> {
     if sorted_values.is_empty() {
@@ -411,6 +407,9 @@ pub fn boundary_wiggle(mask: &[bool], width: usize, height: usize) -> Option<(f3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_color_core::{
+        chromaticity_xy, is_saturated, luminance, mccamy_cct, srgb_to_linear,
+    };
 
     #[test]
     fn test_srgb_round_trip_anchor_points() {

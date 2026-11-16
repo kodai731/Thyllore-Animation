@@ -289,9 +289,9 @@ if ($ExpectedAbi -eq "MISSING") {
     throw "EXPECTED_ABI_MARKER not found in blender_addon/__init__.py"
 }
 
-$ApiMarker = & python -c "import re, pathlib; m = re.search(r'pub const ABI_MARKER:\s*u32\s*=\s*(\d+)', pathlib.Path(r'$RepoRoot/crates/thyllore-ml-api/src/lib.rs').read_text(encoding='utf-8')); print(m.group(1) if m else 'MISSING')"
+$ApiMarker = & python -c "import re, pathlib; m = re.search(r'pub const ABI_MARKER:\s*u32\s*=\s*(\d+)', pathlib.Path(r'$RepoRoot/crates/thyllore-ml-api/src/abi_marker.rs').read_text(encoding='utf-8')); print(m.group(1) if m else 'MISSING')"
 if ($ApiMarker -eq "MISSING") {
-    throw "ABI_MARKER not found in crates/thyllore-ml-api/src/lib.rs"
+    throw "ABI_MARKER not found in crates/thyllore-ml-api/src/abi_marker.rs"
 }
 
 if ($ExpectedAbi.Trim() -ne $ApiMarker.Trim()) {

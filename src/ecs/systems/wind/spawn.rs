@@ -10,7 +10,7 @@ pub const DEFAULT_WIND_NAME: &str = "Wind";
 
 pub const WIND_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "wind",
-    max_instances: thyllore_effect_core::WIND_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::wind::WIND_MAX_INSTANCES,
     spawn: spawn_wind_instance,
     entities: wind_entities,
     default_in_empty_scene: false,
@@ -46,12 +46,7 @@ pub fn spawn_wind_with_clip(
     effect: WindTornadoEffect,
 ) -> Entity {
     let entity = spawn_wind(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &WIND_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &WIND_DOMAIN);
     entity
 }
 

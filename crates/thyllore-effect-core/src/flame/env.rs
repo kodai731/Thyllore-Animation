@@ -8,7 +8,7 @@ pub(crate) fn read_env_wave_k_ratio() -> f32 {
         std::env::var("THYLLORE_FLAME_WAVE_K_RATIO")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_K_RATIO)
+            .unwrap_or(crate::flame::WAVE_K_RATIO)
     })
 }
 
@@ -17,7 +17,7 @@ pub(crate) fn read_env_wave_tanh() -> f32 {
         std::env::var("THYLLORE_FLAME_WAVE_TANH")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_TANH_SCALE)
+            .unwrap_or(crate::flame::WAVE_TANH_SCALE)
     })
 }
 
@@ -32,8 +32,8 @@ pub(crate) fn read_env_wave_track() -> usize {
         std::env::var("THYLLORE_FLAME_WAVE_TRACK")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_MODE_COUNT)
-            .clamp(1, crate::flame_wave::WAVE_MODE_COUNT)
+            .unwrap_or(crate::flame::WAVE_MODE_COUNT)
+            .clamp(1, crate::flame::WAVE_MODE_COUNT)
     })
 }
 
@@ -42,7 +42,7 @@ pub(crate) fn read_env_wave_env_mu() -> f32 {
         std::env::var("THYLLORE_FLAME_WAVE_ENV_MU")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_ENV_MU)
+            .unwrap_or(crate::flame::WAVE_ENV_MU)
     })
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn read_env_wave_cf_shear() -> f32 {
         std::env::var("THYLLORE_FLAME_WAVE_CF_SHEAR")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_CF_SHEAR_GAIN)
+            .unwrap_or(crate::flame::WAVE_CF_SHEAR_GAIN)
     })
 }
 
@@ -74,8 +74,8 @@ pub(crate) fn read_env_wave_cf_layers() -> usize {
         std::env::var("THYLLORE_FLAME_WAVE_CF_LAYERS")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(crate::flame_wave::WAVE_CF_SHEAR_LAYERS)
-            .min(crate::flame_wave::WAVE_MODE_SLOTS - crate::flame_wave::WAVE_CF_SHEAR_SLOT)
+            .unwrap_or(crate::flame::WAVE_CF_SHEAR_LAYERS)
+            .min(crate::flame::WAVE_MODE_SLOTS - crate::flame::WAVE_CF_SHEAR_SLOT)
     })
 }
 

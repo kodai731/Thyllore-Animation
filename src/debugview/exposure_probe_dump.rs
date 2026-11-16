@@ -161,7 +161,7 @@ struct PixelRect {
 }
 
 fn viewport_pixel_rect(
-    world: &crate::ecs::World,
+    world: &crate::ecs::world::World,
     image_width: u32,
     image_height: u32,
 ) -> PixelRect {

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use glam::Quat;
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use crate::motion::components::baked_motion::BakedMotion;
 use crate::motion::components::retarget_context::RetargetContext;

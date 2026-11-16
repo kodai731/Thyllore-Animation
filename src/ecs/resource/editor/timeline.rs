@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
-use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
+use thyllore_anim_core::BoneId;
 
 pub use thyllore_anim_core::editable::SnapSettings;
 

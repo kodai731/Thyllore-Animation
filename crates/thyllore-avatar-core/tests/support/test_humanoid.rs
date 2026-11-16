@@ -2,17 +2,16 @@
 use glam::{DQuat, DVec3};
 
 use super::fbx_ascii::{cube_vertices, stick_polygon_indices, ClothMaterial, RigMesh};
-pub use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
+pub(crate) use super::fixtures::{extra_bones, ExtraBone, ExtraParent};
 use super::rig_convention::rig_convention;
 use super::rig_nodes::RigNode;
-pub use thyllore_avatar_core::humanoid::canonical::skeleton::{
-    skeleton, CanonicalBone, CanonicalTip,
-};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::skeleton;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+pub(crate) use thyllore_avatar_core::humanoid::{CanonicalBone, CanonicalTip};
 
 const EXTRA_BONE_HALF_WIDTH: f64 = 0.012;
 
-pub fn test_humanoid_nodes(bones: &[CanonicalBone], extras: &[ExtraBone]) -> Vec<RigNode> {
+pub(crate) fn test_humanoid_nodes(bones: &[CanonicalBone], extras: &[ExtraBone]) -> Vec<RigNode> {
     let mut nodes: Vec<RigNode> = bones
         .iter()
         .enumerate()
@@ -55,7 +54,7 @@ fn is_finger_or_eye(name: &str) -> bool {
         .any(|s| name.contains(s))
 }
 
-pub fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMesh {
+pub(crate) fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMesh {
     let mut vertices: Vec<[f64; 3]> = Vec::new();
     let mut polygon_vertex_index: Vec<i32> = Vec::new();
     let mut cluster_vertex_indices: Vec<Vec<i32>> = Vec::new();
@@ -144,7 +143,7 @@ pub fn build_stick_mesh(bones: &[CanonicalBone], extras: &[ExtraBone]) -> RigMes
     }
 }
 
-pub fn write_test_humanoid_fbx() -> String {
+pub(crate) fn write_test_humanoid_fbx() -> String {
     let bones = skeleton();
     let extras = extra_bones();
     let nodes = test_humanoid_nodes(&bones, &extras);
@@ -152,8 +151,8 @@ pub fn write_test_humanoid_fbx() -> String {
     super::fbx_ascii::write_rig_fbx_with_mesh(&rig_convention("vrm_normalized"), &nodes, &mesh)
 }
 
-pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()> {
-    use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+pub(crate) fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()> {
+    use thyllore_avatar_core::humanoid::BoneInput;
 
     let bones = skeleton();
     let extras = extra_bones();
@@ -172,7 +171,7 @@ pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()>
         })
         .collect();
 
-    let mapping = thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping {
+    let mapping = thyllore_avatar_core::humanoid::HumanoidMapping {
         by_role: bones
             .iter()
             .enumerate()
@@ -180,28 +179,21 @@ pub fn write_test_humanoid_sidecar(path: &std::path::Path) -> anyhow::Result<()>
             .collect(),
     };
 
-    thyllore_avatar_core::humanoid::systems::mapping_io::save_mapping(
-        path,
-        &mapping,
-        &bone_inputs,
-    )?;
+    thyllore_avatar_core::humanoid::save_mapping(path, &mapping, &bone_inputs)?;
     Ok(())
 }
 
-pub fn build_ctx() -> (
-    thyllore_avatar_core::motion::components::retarget_context::RetargetContext,
-    Vec<thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput>,
+pub(crate) fn build_ctx() -> (
+    thyllore_avatar_core::motion::RetargetContext,
+    Vec<thyllore_avatar_core::humanoid::BoneInput>,
 ) {
     let fbx_text = write_test_humanoid_fbx();
     let (bones, skeleton) = super::fixture_bones::load_rig_from_fbx_text("test", &fbx_text);
-    let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
-    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
-        &mapping, &bones,
-    )
-    .expect("derive character frame");
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
-    let ctx = thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context(
+    let (mapping, _) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
+    let frame = thyllore_avatar_core::humanoid::derive_humanoid_frame(&mapping, &bones)
+        .expect("derive character frame");
+    let rest_pose = thyllore_avatar_core::humanoid::detect_rest_pose(&mapping, &bones);
+    let ctx = thyllore_avatar_core::motion::build_retarget_context(
         &skeleton, &mapping, &frame, rest_pose,
     )
     .expect("build context");

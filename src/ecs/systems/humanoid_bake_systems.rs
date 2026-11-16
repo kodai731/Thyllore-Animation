@@ -1,18 +1,16 @@
 use std::collections::HashSet;
 
 use glam::{Quat, Vec3};
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
-use thyllore_anim_core::editable::systems::clip_convert::clip_to_animation;
-use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::motion::components::baked_motion::BakedMotion;
-use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
-use thyllore_avatar_core::motion::components::retarget_skeleton::{RetargetBone, RetargetSkeleton};
+use thyllore_anim_core::editable::clip_to_animation;
+use thyllore_anim_core::editable::curve_add_keyframe;
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::motion::BakedMotion;
+use thyllore_avatar_core::motion::RetargetContext;
+use thyllore_avatar_core::motion::{RetargetBone, RetargetSkeleton};
 use thyllore_math_core::{continuous_euler, decompose, quaternion_to_euler_degrees};
 
-use crate::animation::editable::SourceClipId;
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::{AnimationClipAsset, AssetId, AssetStorage};
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::resource::{
@@ -22,8 +20,10 @@ use crate::ecs::resource::{
 use crate::ecs::systems::avatar_setup_systems::{
     compute_bone_global_transform, find_first_skeleton, skeleton_to_bone_inputs,
 };
-use crate::ecs::systems::clip_schedule_systems::find_preview_owner;
+use crate::ecs::systems::find_preview_owner;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub fn request_bake_scan(world: &mut World) {
     if let Some(mut baked_clips) = world.get_resource_mut::<BakedHumanoidClips>() {
@@ -112,16 +112,13 @@ pub fn build_role_retarget_context(
     mapping: &HumanoidMapping,
 ) -> anyhow::Result<RetargetContext> {
     let bones = skeleton_to_bone_inputs(skeleton);
-    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
-        mapping, &bones,
-    )
-    .ok_or_else(|| anyhow::anyhow!("failed to derive character frame"))?;
+    let frame = thyllore_avatar_core::humanoid::derive_humanoid_frame(mapping, &bones)
+        .ok_or_else(|| anyhow::anyhow!("failed to derive character frame"))?;
 
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(mapping, &bones);
+    let rest_pose = thyllore_avatar_core::humanoid::detect_rest_pose(mapping, &bones);
 
     let retarget_skeleton = skeleton_to_retarget_skeleton(skeleton);
-    let ctx = thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context(
+    let ctx = thyllore_avatar_core::motion::build_retarget_context(
         &retarget_skeleton,
         mapping,
         &frame,
@@ -138,8 +135,7 @@ pub fn bake_to_bone_clip(
     rig: &HumanoidRig,
     fps: u32,
 ) -> anyhow::Result<EditableAnimationClip> {
-    let baked =
-        thyllore_avatar_core::motion::systems::bake::bake_humanoid_clip(&rig.context, clip, fps);
+    let baked = thyllore_avatar_core::motion::bake_humanoid_clip(&rig.context, clip, fps);
     let hips_bone = *rig
         .mapping
         .by_role
@@ -526,8 +522,8 @@ mod tests {
 
     #[test]
     fn refresh_bakes_a_scheduled_clip_once() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -579,8 +575,8 @@ mod tests {
 
     #[test]
     fn refresh_does_not_rescan_when_nothing_changed() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -636,8 +632,8 @@ mod tests {
 
     #[test]
     fn refresh_without_rig_drops_baked_clips() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -736,8 +732,8 @@ mod tests {
 
     #[test]
     fn rig_revision_change_clears_failed_bakes() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -840,8 +836,8 @@ mod tests {
 
     #[test]
     fn bone_clip_is_baked_on_a_humanoid_model() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
@@ -925,8 +921,8 @@ mod tests {
 
     #[test]
     fn clip_is_still_baked_on_a_humanoid_model() {
-        use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
-        use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+        use crate::ecs::systems::clip_library_register_and_activate;
+        use crate::ecs::systems::clip_schedule_add_instance;
 
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());

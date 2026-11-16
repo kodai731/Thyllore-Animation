@@ -1,8 +1,8 @@
-use crate::ecs::resource::gizmo::TransformGizmoData;
-use crate::ecs::resource::gizmo::{BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData};
 use crate::ecs::resource::ProjectionData;
+use crate::ecs::resource::TransformGizmoData;
+use crate::ecs::resource::{BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData};
 use crate::ecs::resource::{Exposure, SceneBrightness, TransformGizmoState};
-use crate::ecs::systems::render_data_systems::{
+use crate::ecs::systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
     transform_gizmo_render_data,
@@ -37,7 +37,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     };
 
     let camera_position = {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
+        use crate::ecs::systems::compute_camera_position;
         compute_camera_position(&ctx.camera())
     };
 
@@ -132,7 +132,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         .phases
         .insert("render_prep", sub);
 
-    crate::ecs::systems::raytracing_systems::refresh_tlas_mesh_transforms(ctx)?;
+    crate::ecs::systems::refresh_tlas_mesh_transforms(ctx)?;
 
     Ok(())
 }

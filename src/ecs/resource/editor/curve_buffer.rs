@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::animation::editable::PropertyType;
-use crate::animation::BoneId;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, Default)]
 pub struct CurveEditorBuffer {

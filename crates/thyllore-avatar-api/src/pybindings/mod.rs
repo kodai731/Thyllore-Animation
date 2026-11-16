@@ -11,4 +11,4 @@ mod spring_preview;
 mod submesh;
 mod vrm;
 
-pub use spring_preview::PySpringPreview;
+pub(crate) use spring_preview::PySpringPreview;

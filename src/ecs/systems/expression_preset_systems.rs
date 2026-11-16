@@ -1,19 +1,17 @@
 use std::path::Path;
 
-use thyllore_avatar_core::expression::components::preset::ExpressionLibrary;
-use thyllore_avatar_core::expression::systems::library_io::{
-    expression_library_path, load_library, save_library,
-};
-use thyllore_avatar_core::expression::systems::preset::{apply_preset, capture_preset};
-use thyllore_avatar_core::vrchat::gesture::gesture_template_library;
+use thyllore_avatar_core::expression::ExpressionLibrary;
+use thyllore_avatar_core::expression::{apply_preset, capture_preset};
+use thyllore_avatar_core::expression::{expression_library_path, load_library, save_library};
+use thyllore_avatar_core::vrchat::gesture_template_library;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::resource::{ExpressionLibraryState, ModelState};
 use crate::ecs::systems::morph_weight_systems::for_each_morph_sibling;
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use thyllore_model_core::MeshMorph;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn sync_expression_library(world: &mut World) {
     let Some(model_path) = world

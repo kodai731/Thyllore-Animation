@@ -1,4 +1,4 @@
-use crate::editable::components::snap_settings::SnapSettings;
+use crate::editable::SnapSettings;
 
 pub fn snap_time(
     raw_time: f32,

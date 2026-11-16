@@ -99,7 +99,7 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             );
 
             let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-            match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+            match crate::ecs::systems::clip_library_load_from_file(
                 &mut clip_library,
                 &mut app.data.ecs_assets,
                 &path,
@@ -174,7 +174,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
     match command {
         OutputCommand::TakeScreenshot => {
             log!("Taking screenshot...");
-            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+            let image_index = app.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT;
             match app.save_screenshot(image_index) {
                 Ok(path) => msg_info!("Screenshot saved: {}", path),
                 Err(e) => log_error!("Screenshot failed: {:?}", e),
@@ -216,7 +216,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveClipToFile { source_id, path } => {
-            use crate::ecs::systems::clip_library_systems::{
+            use crate::ecs::systems::{
                 clip_library_save_to_file, clip_library_update_save_metadata,
             };
 
@@ -236,7 +236,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveSpringBoneBake { baked_id, path } => {
-            use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+            use crate::ecs::systems::clip_library_save_to_file;
 
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             match clip_library_save_to_file(&clip_library, baked_id, &path) {
@@ -313,7 +313,7 @@ unsafe fn apply_model_scale_command(
 ) -> anyhow::Result<()> {
     app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 
@@ -354,11 +354,11 @@ unsafe fn apply_hidden_triangles(
     app: &mut App,
     meshes: Vec<(usize, Vec<u32>)>,
 ) -> anyhow::Result<()> {
-    use thyllore_avatar_core::cloth_setup::systems::hidden_mask::order_visible_triangles_first;
+    use thyllore_avatar_core::cloth_setup::order_visible_triangles_first;
 
     app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 

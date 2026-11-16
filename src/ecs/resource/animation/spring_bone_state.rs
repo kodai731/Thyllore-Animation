@@ -1,5 +1,5 @@
-use crate::animation::spring_bone::SpringSimulation;
-use crate::animation::BoneId;
+use thyllore_anim_core::spring_bone::SpringSimulation;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum SpringBoneMode {

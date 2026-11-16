@@ -11,13 +11,14 @@ use crate::hooks::pass::{
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
-use thyllore_effect_core::{
-    build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
-    WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
+use thyllore_effect_core::water::inverse_view_proj_f64;
+use thyllore_effect_core::wind::{
+    build_wind_ubo, wind_local_bounds_corners, WindDebugView, WindResolveScale, WindShadowSlot,
+    WindUBO, WIND_MAX_INSTANCES,
 };
 use thyllore_vulkan_core::descriptor::SetSlot;
+use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::renderer::{
     union_scissor, OverlayInstanceDraw, OverlayResolveScale, ShadingPushConstants, UPSAMPLE_OVERLAY,
 };
@@ -26,7 +27,7 @@ use thyllore_vulkan_core::FrameRenderContext;
 
 const REDUCED_COLOR_SLOT: TransientSlot = TransientSlot("wind.reduced_color");
 
-pub struct WindPassNode;
+pub(super) struct WindPassNode;
 
 /// Everything the wind node agrees on for one frame. `None` means nothing records this frame.
 struct WindFrame {

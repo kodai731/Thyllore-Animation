@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::ecs::resource::WaterGpuState;
-use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
+use crate::ecs::systems::ensure_effect_trace_pipeline;
 use crate::ecs::systems::water::caustic_descriptors::{
     write_water_caustic_apply_set, write_water_caustic_splat_set, WaterCausticBindings,
 };
@@ -11,8 +11,8 @@ use crate::ecs::systems::water::gpu_targets::{
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::GpuResource;
+use thyllore_vulkan_core::render::RRRender;
+use thyllore_vulkan_core::resource::GpuResource;
 
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",

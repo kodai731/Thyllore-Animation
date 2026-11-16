@@ -1,14 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::core::descriptor_allocator::PoolSignature;
-use crate::core::device::RRDevice;
-use crate::descriptor::pass_manifest::{passes_with_role, PassShaders, SetRole, ShaderFile};
-use crate::descriptor::reflection::{
-    kind_accepts, reflect_shader_bytes, DescriptorSetTable, LayoutMismatch, ShaderReflection,
-};
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::uniform_buffer::UniformBuffer;
+use crate::core::PoolSignature;
+use crate::core::RRDevice;
+use crate::descriptor::{kind_accepts, DescriptorSetTable, LayoutMismatch};
+use crate::descriptor::{passes_with_role, PassShaders, SetRole, ShaderFile};
+use crate::resource::GpuResource;
+use crate::resource::UniformBuffer;
+use thyllore_spirv_reflect::{reflect_shader_bytes, ShaderReflection};
 use thyllore_spirv_reflect::{GpuBlock, ShaderBinding};
 
 #[derive(Clone, Copy, Debug)]

@@ -1,9 +1,9 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::COMPOSITE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::core::*;
 use crate::descriptor::shader_bindings::composite;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::uniform_buffer::{Placement, UniformBuffer};
+use crate::descriptor::COMPOSITE;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::GpuResource;
+use crate::resource::{Placement, UniformBuffer};
 use crate::types::Instance;
 use crate::vulkan::*;
 use thyllore_spirv_reflect::declare_gpu_block;

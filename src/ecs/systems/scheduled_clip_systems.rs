@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
 use super::scalar_clip_systems::{find_entity_clip_id, schedule_entity_clip};
-use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::ClipLibrary;
@@ -13,6 +12,7 @@ use crate::hooks::scene::{
     decode_component, encode_scene_value, entities_with, SceneComponentHook, SceneComponentRole,
     SceneValue,
 };
+use thyllore_anim_core::editable::SourceClipId;
 
 /// The clip an entity schedules, named after the clip file the scene lists in `animation_clips`.
 #[derive(Debug, Clone, Serialize, Deserialize)]

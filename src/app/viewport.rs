@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{
     allocate_imgui_texture_set, imgui_layout_spec, imgui_texture_id, write_imgui_texture_set,
     ReflectedSetLayout,
 };
-use crate::vulkanr::resource::{
+use thyllore_vulkan_core::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
@@ -68,7 +68,7 @@ impl ViewportState {
 
         Ok(Self {
             storage,
-            transient: RenderTargetTransient::new(crate::app::init::MAX_FRAMES_IN_FLIGHT),
+            transient: RenderTargetTransient::new(crate::ecs::MAX_FRAMES_IN_FLIGHT),
             offscreen: Some(offscreen),
             hdr_buffer: Some(hdr_buffer),
             bloom_chain: Some(bloom_chain),

@@ -1,13 +1,11 @@
-use crate::core::device::*;
-use crate::core::swapchain::*;
-use crate::descriptor::{
-    shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout, ShaderStage,
-};
-use crate::render::pass::RRRender;
+use crate::core::*;
+use crate::descriptor::{shader_stage_flags, verify_pass_layouts, PassShaders, ReflectedSetLayout};
+use crate::render::RRRender;
 use crate::types::{Pipeline, PipelineLayout, RenderPass};
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
+use thyllore_spirv_reflect::ShaderStage;
 use vulkanalia::bytecode::Bytecode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,7 +138,7 @@ pub struct RRPipeline {
     pub(crate) pipeline: vk::Pipeline,
 }
 
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 
 /// Vertex input configuration for pipeline
 pub enum VertexInputConfig {

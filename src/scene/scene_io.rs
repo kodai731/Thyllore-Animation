@@ -98,9 +98,7 @@ fn save_animation_clips(
     let mut animation_clips = Vec::new();
     let mut saved_paths = std::collections::HashSet::new();
 
-    for (clip_id, clip_name) in
-        crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library)
-    {
+    for (clip_id, clip_name) in crate::ecs::systems::clip_library_clip_names(&clip_library) {
         if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
             let relative_path = format!("animations/{}.anim.ron", clip_filename);
@@ -192,7 +190,7 @@ pub struct LoadedScene {
     pub scene: SceneFile,
     /// `None` when the scene has no model or its mesh was generated in-app.
     pub model_path: Option<PathBuf>,
-    pub clips: Vec<crate::animation::editable::EditableAnimationClip>,
+    pub clips: Vec<thyllore_anim_core::editable::EditableAnimationClip>,
 }
 
 fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<Option<PathBuf>> {

@@ -2,8 +2,8 @@ use super::warp_strain::build_warp_form_params;
 use super::wave::{
     build_segment_params, build_wave_cf_params, build_wave_ubo_fields, WaveUboFields,
 };
+use crate::flame::FlameTrailState;
 use crate::flame::*;
-use crate::flame_trail::FlameTrailState;
 use glam::{Mat4, Vec3};
 use thyllore_math_core::{evaluate_chebyshev, fit_erf_response};
 

@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use glam::Vec3;
 
-use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::cloth_setup::ChainGenRequest;
 
 use crate::ecs::resource::SkeletonSnapshot;
 use crate::ecs::world::Entity;

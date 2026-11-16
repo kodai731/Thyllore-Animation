@@ -1,9 +1,9 @@
 use crate::asset::{AssetStorage, NodeAsset};
 use crate::ecs::resource::NodeAssets;
 use crate::ecs::world::World;
-use crate::loader::ModelLoadResult;
-use crate::vulkanr::resource::graphics_resource::NodeData;
 use glam::Mat4;
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_vulkan_core::resource::NodeData;
 
 pub(super) fn replace_node_assets(
     world: &mut World,

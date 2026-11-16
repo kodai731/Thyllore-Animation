@@ -45,7 +45,7 @@ fn to_vectors(points: &[[f32; 3]]) -> Vec<Vec3> {
 /// The weights of every target vertex transferred from the skinned source surface; both surfaces
 /// are in the same space and `weights` is one row per source vertex.
 #[pyfunction]
-pub fn transfer_skin_weights(request: &Bound<PyAny>) -> PyResult<Vec<Vec<f32>>> {
+pub(super) fn transfer_skin_weights(request: &Bound<PyAny>) -> PyResult<Vec<Vec<f32>>> {
     let request: TransferSkinWeightsRequest =
         depythonize(request).map_err(depythonize_error_to_pyerr)?;
     let (source, target) = (&request.source, &request.target);

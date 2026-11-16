@@ -7,14 +7,14 @@ use thyllore_file_format_core::fbx::scale_fbx_model;
 use thyllore_math_core::scale_translation;
 use thyllore_model_core::{scale_morph, scale_skeleton, scale_skin, scale_vertex_positions};
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::resource::{ClipLibrary, FbxModelCache, HumanoidRigState, NodeAssets};
-use crate::ecs::systems::humanoid_bake_systems::request_bake_scan;
 use crate::ecs::systems::refresh_after_skeleton_edit;
+use crate::ecs::systems::request_bake_scan;
 use crate::ecs::world::{Entity, MeshRef, Parent, Transform, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const UNIFORM_SCALE_TOLERANCE: f32 = 1e-4;
 

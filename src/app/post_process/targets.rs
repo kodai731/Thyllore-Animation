@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::ecs::resource::PostProcessFrameTargets;
 use crate::ecs::PassContext;
 use crate::hooks::pass::TransientSlot;
-use crate::vulkanr::resource::BloomMipTarget;
+use thyllore_vulkan_core::resource::BloomMipTarget;
 use thyllore_vulkan_core::types::{Extent2D, ImageView, Sampler};
 
 pub const DOF_OUTPUT: TransientSlot = TransientSlot("dof.output");

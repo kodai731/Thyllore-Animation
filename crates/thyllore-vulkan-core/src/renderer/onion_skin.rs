@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::frame_context::FrameRenderContext;
 use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::renderer::push_constants::OnionSkinPushConstants;
 use crate::resource::OnionSkinPassResources;
+use crate::FrameRenderContext;
 
 pub unsafe fn record_onion_skin_ghost_pass(
     ctx: &FrameRenderContext,

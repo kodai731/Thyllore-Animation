@@ -1,24 +1,24 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
-use crate::ecs::resource::gizmo::BoneSelectionState;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
+use crate::ecs::resource::BoneSelectionState;
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::ProjectionData;
+use crate::ecs::resource::{BoneDisplayStyle, BoneGizmoData};
+use crate::ecs::systems::{
+    build_bone_line_mesh, build_box_bone_meshes_with_selection,
+    build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
+};
 use crate::ecs::systems::{
     chains_skinned_to_entity, compute_bone_draw_set, spring_chain_bone_indices, BoneDrawSet,
 };
 use crate::ecs::world::World;
 use crate::ecs::FrameContext;
-use crate::ecs::{
-    build_bone_line_mesh, build_box_bone_meshes_with_selection,
-    build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
-};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use anyhow::Result;
 use glam::{Mat4, Vec3};
 use thyllore_anim_core::spring_bone::SpringChainId;
 use thyllore_math_core::ScreenSpaceScale;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(super) unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
@@ -172,7 +172,7 @@ pub(super) fn find_spring_bone_setup(world: &World) -> Option<SpringBoneSetup> {
 }
 
 fn joint_marker_scale(ctx: &FrameContext) -> ScreenSpaceScale {
-    use crate::ecs::systems::camera_systems::compute_camera_position;
+    use crate::ecs::systems::compute_camera_position;
     let camera = ctx.world.resource::<Camera>();
     let viewport_height = ctx.world.resource::<ProjectionData>().screen_size.y;
     ScreenSpaceScale::new(
@@ -193,7 +193,7 @@ fn compute_visual_scale(
     }
 
     let camera_pos = {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
+        use crate::ecs::systems::compute_camera_position;
         compute_camera_position(&ctx.world.resource::<Camera>())
     };
 
@@ -212,7 +212,7 @@ fn compute_visual_scale(
 
 unsafe fn update_stick_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     mesh_scale: f32,
@@ -255,7 +255,7 @@ unsafe fn update_stick_bone_mesh(
 
 unsafe fn update_octahedral_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
@@ -302,7 +302,7 @@ unsafe fn update_octahedral_bone_mesh(
 
 unsafe fn update_box_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,
@@ -349,7 +349,7 @@ unsafe fn update_box_bone_mesh(
 
 unsafe fn update_sphere_bone_mesh(
     ctx: &mut FrameContext,
-    skeleton: &crate::animation::Skeleton,
+    skeleton: &thyllore_anim_core::Skeleton,
     transforms: &[Mat4],
     offsets: &[[f32; 3]],
     visual_scale: f32,

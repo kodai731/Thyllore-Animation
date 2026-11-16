@@ -4,10 +4,11 @@ use crate::ecs::resource::{NodeAssets, TimelineState};
 use crate::ecs::systems::animation::apply::{
     apply_skinning_to_single_mesh, prepare_node_animation,
 };
+use crate::ecs::systems::sample_clip_to_pose;
 use crate::ecs::world::World;
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
-use crate::loader::ModelLoadResult;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(super) fn apply_initial_pose(
     world: &mut World,

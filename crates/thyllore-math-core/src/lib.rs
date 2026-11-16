@@ -6,7 +6,7 @@ mod circular;
 mod compact_support;
 mod connected_components;
 mod constants;
-pub mod coordinate_system;
+mod coordinate_system;
 mod cross_section;
 mod faddeeva;
 mod gpu_matrix;

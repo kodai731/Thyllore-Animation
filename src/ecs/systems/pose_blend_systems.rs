@@ -1,7 +1,7 @@
 use glam::{Quat, Vec3};
 
-use crate::animation::editable::EaseType;
-use crate::animation::{normalize_quat, BoneLocalPose, SkeletonPose};
+use thyllore_anim_core::editable::EaseType;
+use thyllore_anim_core::{normalize_quat, BoneLocalPose, SkeletonPose};
 
 pub fn blend_poses_override(
     base: &SkeletonPose,

@@ -597,9 +597,9 @@ per-feature `AddPass`).
   request resource here (`batch_capture!`, `capture_action!`, see "Feature isolation"). CPU mirrors of
   shader math go to `thyllore-render-debug` instead
 - `src/ml/` — inference thread, feedback, licensing worker
-- `src/logger/` — logger and message buffer
-- `src/loader/`, `src/exporter/`, `src/grpc/`, `src/math/`, `src/animation.rs` — thin `pub use` shims over
-  the crates; add nothing else there
+- The crates are referenced by crate name (`thyllore_anim_core::`, `thyllore_math_core::`,
+  `thyllore_importer_core::`, `thyllore_exporter_core::`, `thyllore_grpc_client::`, `thyllore_ml_core::`,
+  `thyllore_vulkan_core::`, `thyllore_log_core::`); `src/` has no module that re-exports a crate
 - `src/bin/` — standalone tools
 
 ## The three "render" places

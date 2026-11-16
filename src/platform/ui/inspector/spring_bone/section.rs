@@ -5,18 +5,18 @@ use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, SpringChain, WithSpringBone};
-use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::resource::{
     AddChainForm, AddColliderForm, AvatarSetupState, HierarchyState, SpringBoneInspectorState,
 };
+use crate::ecs::resource::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::{Entity, World};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::chain_rows::chain_list_row;
 use super::collider_rows::collider_list_row;
 use super::group_rows::group_list_row;
-use crate::animation::BoneId;
+use thyllore_anim_core::BoneId;
 
 use crate::platform::ui::bone_choice::{bone_options, collect_bone_list};
 use crate::platform::ui::form_window::{message_section, rows_section, FormSection};
@@ -49,7 +49,7 @@ static ADD_CHAIN_UI_PARAMS: LazyLock<Vec<thyllore_scene_core::UiParam>> = LazyLo
 });
 
 #[derive(Clone)]
-pub struct SpringView {
+pub(super) struct SpringView {
     pub entity: Entity,
     pub chains: Vec<SpringChain>,
     pub colliders: Vec<SpringColliderDef>,
@@ -65,11 +65,11 @@ pub struct SpringView {
 }
 
 impl SpringView {
-    pub fn chain_root_bone(&self) -> Option<BoneId> {
+    pub(super) fn chain_root_bone(&self) -> Option<BoneId> {
         self.add_chain.root_bone.or(self.default_bone)
     }
 
-    pub fn collider_bone(&self) -> Option<BoneId> {
+    pub(super) fn collider_bone(&self) -> Option<BoneId> {
         self.add_collider.bone.or(self.default_bone)
     }
 }
@@ -100,7 +100,7 @@ fn bone_choice_options(view: &SpringView, current: Option<BoneId>) -> Vec<Choice
     }
 }
 
-pub fn spring_bone_section(
+pub(crate) fn spring_bone_section(
     world: &World,
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
@@ -180,7 +180,7 @@ fn find_spring_bone_entity(world: &World) -> Option<Entity> {
         .map(|(e, _)| e)
 }
 
-pub fn section_rows() -> Vec<UiRow<SpringView>> {
+pub(super) fn section_rows() -> Vec<UiRow<SpringView>> {
     let mut rows: Vec<UiRow<SpringView>> = Vec::new();
 
     rows.push(chain_list_row());

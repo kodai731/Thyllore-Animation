@@ -70,8 +70,8 @@ fn extract_skin_data(
     ctx: &FrameContext,
     mesh_index: usize,
 ) -> Option<(
-    crate::animation::SkinData,
-    Vec<crate::vulkanr::data::Vertex>,
+    thyllore_anim_core::SkinData,
+    Vec<thyllore_vulkan_core::data::Vertex>,
 )> {
     let mesh = &ctx.graphics.meshes[mesh_index];
     let skin_data = mesh.skin_data.as_ref()?;

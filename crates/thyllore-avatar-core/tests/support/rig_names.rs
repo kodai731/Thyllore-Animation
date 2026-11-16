@@ -1,5 +1,5 @@
 #![cfg(test)]
-pub const CONVENTIONS: [&str; 8] = [
+pub(crate) const CONVENTIONS: [&str; 8] = [
     "blender",
     "maya",
     "max_biped",
@@ -143,7 +143,7 @@ fn bone_name_for_convention(convention: &str, left_role: &str) -> &'static str {
     }
 }
 
-pub fn bone_name(convention: &str, role: &str) -> String {
+pub(crate) fn bone_name(convention: &str, role: &str) -> String {
     let left = match left_role(role) {
         Some(l) => l,
         None => {

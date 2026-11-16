@@ -1,4 +1,3 @@
-use crate::animation::spring_bone::replace_fitted_body_colliders;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{CapsuleFitParams, SpringBoneSetup};
 use crate::ecs::resource::AvatarSetupState;
@@ -8,11 +7,12 @@ use crate::ecs::systems::avatar_setup_systems::{
 use crate::ecs::systems::avatar_submesh_role_systems::skin_role_skins;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::{Mat4, Vec3};
+use thyllore_anim_core::spring_bone::replace_fitted_body_colliders;
 use thyllore_anim_core::spring_bone::{fit_bone_capsule, FittedCapsule};
-use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
-use thyllore_avatar_core::collider::systems::body_fit::fit_body_capsules;
+use thyllore_avatar_core::collider::fit_body_capsules;
+use thyllore_avatar_core::collider::HeadCapsule;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn fit_body_colliders(
     world: &mut World,
@@ -75,7 +75,7 @@ pub(crate) fn fit_body_collider(
     world: &World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
-    skeleton_id: crate::animation::SkeletonId,
+    skeleton_id: thyllore_anim_core::SkeletonId,
     root: thyllore_model_core::BoneId,
 ) -> Option<FittedCapsule> {
     let skins = skin_role_skins(world, assets, graphics, skeleton_id);

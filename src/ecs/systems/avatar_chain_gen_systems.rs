@@ -10,44 +10,40 @@ use crate::ecs::systems::avatar_submesh_geometry_systems::{merge_submesh_geometr
 use crate::ecs::systems::avatar_submesh_role_systems::{
     collect_submesh_meshes, skin_geometry_to_model, skin_role_surfaces,
 };
-use crate::ecs::systems::skeleton_edit_systems::{
+use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
+use crate::ecs::systems::{
     capture_skeleton_snapshot, record_skeleton_edit, refresh_after_skeleton_edit,
     remove_bone_subtree, restore_skeleton_snapshot,
 };
-use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
-use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     add_generated_chains, ChainOrigin, ColliderShape, FittedCapsule, SpringBoneSetup, SpringChain,
     SpringJointParam,
 };
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::joint_half_thicknesses;
+use thyllore_avatar_core::cloth_setup::root_head_capsule;
+use thyllore_avatar_core::cloth_setup::{append_chain_bones, write_chain_weights, ChainBoneIds};
+use thyllore_avatar_core::cloth_setup::{
+    cap_root_band, component_labels, compute_chain_weights, place_chains_with_strands,
+    root_attachment_positions, RootBand,
+};
+use thyllore_avatar_core::cloth_setup::{
     chain_name, default_root_of_submesh, BodyCollider, ChainGenInput, ChainGenParams,
     ChainGenReport, ChainGenRequest, ChainGenSettings, ChainPlacement, ChainWeightRecord,
     GeneratedBoneRecord, GeneratedChain, GeneratedJoint, HeadCapsuleRecord, InfluenceTarget,
     RootBandRecord, StrandPlacement, VertexInfluences,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{SubmeshKey, SubmeshSelector};
-use thyllore_avatar_core::cloth_setup::systems::chain_bones::{
-    append_chain_bones, write_chain_weights, ChainBoneIds,
-};
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::root_head_capsule;
-use thyllore_avatar_core::cloth_setup::systems::chain_gen::{
-    cap_root_band, component_labels, compute_chain_weights, place_chains_with_strands,
-    root_attachment_positions, RootBand,
-};
-use thyllore_avatar_core::cloth_setup::systems::collider_surface::{
-    collider_surfaces, retain_torso_skin, supports_garments,
-};
-use thyllore_avatar_core::cloth_setup::systems::joint_radius::joint_half_thicknesses;
-use thyllore_avatar_core::collider::components::capsule::HeadCapsule;
-use thyllore_avatar_core::collider::systems::torso_volume::RoleBone;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::{collider_surfaces, retain_torso_skin, supports_garments};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshSelector};
+use thyllore_avatar_core::collider::HeadCapsule;
+use thyllore_avatar_core::collider::RoleBone;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_math_core::world_y_axis;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub struct GeneratedChainBones {
+pub(super) struct GeneratedChainBones {
     pub report: ChainGenReport,
     pub chains: Vec<SpringChain>,
     pub root_collider: Option<FittedCapsule>,
@@ -345,7 +341,7 @@ fn find_root_bone(
 
 fn find_skeleton_mut(
     assets: &mut AssetStorage,
-    skeleton_id: crate::animation::SkeletonId,
+    skeleton_id: thyllore_anim_core::SkeletonId,
 ) -> anyhow::Result<&mut thyllore_model_core::Skeleton> {
     assets
         .skeletons

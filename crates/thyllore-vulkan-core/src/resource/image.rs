@@ -1,7 +1,7 @@
 use crate::command::*;
-use crate::core::device::*;
-use crate::resource::buffer::*;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::*;
+use crate::resource::GpuResource;
+use crate::resource::*;
 use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;

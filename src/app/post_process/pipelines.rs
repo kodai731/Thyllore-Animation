@@ -1,23 +1,25 @@
 use crate::app::{App, AppData};
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{
     RRAutoExposureAverageDescriptorSet, RRAutoExposureHistogramDescriptorSet,
     RRBloomDescriptorSets, RRDofDescriptorSet, RRToneMapDescriptorSet, AUTO_EXPOSURE_AVERAGE,
     AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, DOF, TONEMAP,
 };
-use crate::vulkanr::pipeline::{
+use thyllore_vulkan_core::pipeline::{
     compute_push_constant_range, BlendConfig, DepthCompare, DepthTestConfig, FillMode,
     PipelineBuilder, PushConstantConfig, RRPipeline, SampleCount, ShaderStages, Topology,
     VertexInputConfig,
 };
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::BloomChain;
+use thyllore_vulkan_core::render::RRRender;
 use thyllore_vulkan_core::renderer::ToneMapPushConstants;
+use thyllore_vulkan_core::resource::BloomChain;
 
 use anyhow::Result;
 use thyllore_vulkan_core::types::{DeviceSize, ImageView};
 
-fn fullscreen_pipeline(pass: &'static crate::vulkanr::descriptor::PassShaders) -> PipelineBuilder {
+fn fullscreen_pipeline(
+    pass: &'static thyllore_vulkan_core::descriptor::PassShaders,
+) -> PipelineBuilder {
     PipelineBuilder::from_pass(pass)
         .vertex_input(VertexInputConfig::Custom {
             bindings: vec![],
@@ -76,7 +78,7 @@ impl App {
             std::mem::size_of::<thyllore_vulkan_core::data::SceneUniformData>() as DeviceSize;
 
         let tonemap_descriptor =
-            RRToneMapDescriptorSet::new(rrdevice, crate::app::init::MAX_FRAMES_IN_FLIGHT)?;
+            RRToneMapDescriptorSet::new(rrdevice, crate::ecs::MAX_FRAMES_IN_FLIGHT)?;
         tonemap_descriptor.write_all(
             rrdevice,
             hdr_image_view,
@@ -210,10 +212,8 @@ impl App {
             }
         };
 
-        let histogram_descriptor = RRAutoExposureHistogramDescriptorSet::new(
-            rrdevice,
-            crate::app::init::MAX_FRAMES_IN_FLIGHT,
-        )?;
+        let histogram_descriptor =
+            RRAutoExposureHistogramDescriptorSet::new(rrdevice, crate::ecs::MAX_FRAMES_IN_FLIGHT)?;
         histogram_descriptor.update_bindings(
             rrdevice,
             hdr_image_view,
@@ -261,7 +261,7 @@ unsafe fn build_bloom_pipelines(
     let bloom_descriptors = RRBloomDescriptorSets::new(
         rrdevice,
         bloom_chain.mip_count(),
-        crate::app::init::MAX_FRAMES_IN_FLIGHT,
+        crate::ecs::MAX_FRAMES_IN_FLIGHT,
     )?;
 
     let downsample_pipeline = fullscreen_pipeline(&BLOOM_DOWNSAMPLE)

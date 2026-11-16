@@ -1,15 +1,15 @@
 use anyhow::Result;
 
 use crate::app::{App, AppData};
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST};
-use crate::vulkanr::pipeline::{
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST};
+use thyllore_vulkan_core::pipeline::{
     BlendConfig, CullFace, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
     SampleCount, ShaderStages, Topology, VertexInputConfig,
 };
-use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{GraphicsResources, OnionSkinPassResources};
+use thyllore_vulkan_core::render::RRRender;
 use thyllore_vulkan_core::renderer::{OnionSkinPushConstants, OverlayBlend};
+use thyllore_vulkan_core::resource::{GraphicsResources, OnionSkinPassResources};
 use thyllore_vulkan_core::types::{Extent2D, Format, ImageView, Instance};
 
 impl App {

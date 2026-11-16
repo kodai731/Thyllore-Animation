@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::ml::{InferenceActorId, InferenceRequestId, InferenceResult, InferenceThreadHandle};
+use crate::ml::InferenceThreadHandle;
+use thyllore_ml_core::{InferenceActorId, InferenceRequestId, InferenceResult};
 
 pub struct ActorRuntime {
     pub(crate) thread_handle: InferenceThreadHandle,

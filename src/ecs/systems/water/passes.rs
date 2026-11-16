@@ -14,17 +14,16 @@ use crate::hooks::pass::{
     TargetUse, TransientRequest, TransientSlot,
 };
 use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use thyllore_spirv_reflect::GpuBlock;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
-use thyllore_vulkan_core::descriptor::{
-    push_constant_range, write_effect_trace_set, GpuBlock, SetSlot,
-};
+use thyllore_vulkan_core::descriptor::{push_constant_range, write_effect_trace_set, SetSlot};
 use thyllore_vulkan_core::renderer::{ClearColor, TracePush};
 use thyllore_vulkan_core::renderer::{OverlayAttachmentLoad, OverlayInstanceDraw};
 use thyllore_vulkan_core::resource::RenderTargetKey;
 use thyllore_vulkan_core::types::{AccelerationStructure, Buffer, CommandBuffer, Rect2D};
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
-pub const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[
+pub(super) const WATER_PASS_NODES: &[&dyn RenderPassNode] = &[
     &WaterFrameNode,
     &WaterTraceNode,
     &WaterCausticClearNode,
@@ -68,7 +67,7 @@ fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
     water_scene_bindings(ctx)?;
 
     let mut waters: Vec<Entity> = ctx.world.entities_with::<WaterTorusEffect>();
-    waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
+    waters.truncate(thyllore_effect_core::water::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;
     }
@@ -113,7 +112,7 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<Rect2D>
                 .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
                 .map(|accum| accum.frame_index as u32)
                 .unwrap_or(0);
-            let model = thyllore_effect_core::build_water_ubo(&effect, frame_index)
+            let model = thyllore_effect_core::water::build_water_ubo(&effect, frame_index)
                 .model
                 .to_mat4();
             compute_bounds_scissor(
@@ -152,21 +151,24 @@ fn first_water_accum(
 
 impl WaterFrame {
     /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
-    fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::WaterSecondaryRays {
+    fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::water::WaterSecondaryRays {
         let trace_available = ctx
             .world
             .get_resource::<EffectTraceGpuState>()
             .is_some_and(|state| state.pipeline.is_some() && state.descriptor.is_some());
         match self.settings.secondary_rays {
-            thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
-                thyllore_effect_core::WaterSecondaryRays::RayQuery
+            thyllore_effect_core::water::WaterSecondaryRays::RayTracingPipeline
+                if !trace_available =>
+            {
+                thyllore_effect_core::water::WaterSecondaryRays::RayQuery
             }
             requested => requested,
         }
     }
 
     fn is_trace_enabled(&self, ctx: &PassContext) -> bool {
-        self.secondary_rays(ctx) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
+        self.secondary_rays(ctx)
+            == thyllore_effect_core::water::WaterSecondaryRays::RayTracingPipeline
             && ctx
                 .world
                 .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
@@ -215,7 +217,7 @@ fn frame_uses(
         .unwrap_or_default()
 }
 
-pub struct WaterTraceNode;
+pub(super) struct WaterTraceNode;
 
 impl RenderPassNode for WaterTraceNode {
     fn name(&self) -> &'static str {
@@ -269,10 +271,8 @@ impl RenderPassNode for WaterTraceNode {
             &[trace_descriptor.set(SetSlot::frame_slot(frame_slot))?],
         );
         let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
-        let inv_view_proj = crate::ecs::systems::water::probe::inverse_view_proj_f64(
-            projection.proj,
-            projection.view,
-        );
+        let inv_view_proj =
+            thyllore_effect_core::water::inverse_view_proj_f64(projection.proj, projection.view);
         let view_inverse = projection.view.try_inverse().unwrap_or(Mat4::IDENTITY);
         let light_position = ctx
             .world
@@ -306,7 +306,7 @@ impl RenderPassNode for WaterTraceNode {
 
 /// Borrows the frame's scene color / trace images, rebinds the water descriptors of this frame slot,
 /// and uploads the per-instance UBOs before any water pass reads them.
-pub struct WaterFrameNode;
+pub(super) struct WaterFrameNode;
 
 impl RenderPassNode for WaterFrameNode {
     fn name(&self) -> &'static str {
@@ -423,7 +423,7 @@ impl RenderPassNode for WaterFrameNode {
     }
 }
 
-pub struct WaterCausticClearNode;
+pub(super) struct WaterCausticClearNode;
 
 impl RenderPassNode for WaterCausticClearNode {
     fn name(&self) -> &'static str {
@@ -469,7 +469,7 @@ impl RenderPassNode for WaterCausticClearNode {
 
 /// Splats refracted light into the accumulation image.
 /// The G-buffer position image stays in GENERAL from the ray query pass and is not declared here.
-pub struct WaterCausticSplatNode;
+pub(super) struct WaterCausticSplatNode;
 
 impl RenderPassNode for WaterCausticSplatNode {
     fn name(&self) -> &'static str {
@@ -551,7 +551,7 @@ impl RenderPassNode for WaterCausticSplatNode {
 }
 
 /// Adds the accumulated caustic light to the HDR color.
-pub struct WaterCausticApplyNode;
+pub(super) struct WaterCausticApplyNode;
 
 impl RenderPassNode for WaterCausticApplyNode {
     fn name(&self) -> &'static str {
@@ -625,7 +625,7 @@ impl RenderPassNode for WaterCausticApplyNode {
     }
 }
 
-pub struct WaterSceneColorCopyNode;
+pub(super) struct WaterSceneColorCopyNode;
 
 impl RenderPassNode for WaterSceneColorCopyNode {
     fn name(&self) -> &'static str {
@@ -678,7 +678,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
     }
 }
 
-pub struct WaterHistoryClearNode;
+pub(super) struct WaterHistoryClearNode;
 
 impl RenderPassNode for WaterHistoryClearNode {
     fn name(&self) -> &'static str {
@@ -727,7 +727,7 @@ impl RenderPassNode for WaterHistoryClearNode {
     }
 }
 
-pub struct WaterShadingNode;
+pub(super) struct WaterShadingNode;
 
 impl RenderPassNode for WaterShadingNode {
     fn name(&self) -> &'static str {
@@ -826,13 +826,15 @@ impl RenderPassNode for WaterShadingNode {
 unsafe fn record_water_ubo_updates(
     ctx: &PassContext,
     render: &thyllore_vulkan_core::FrameRenderContext,
-    water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<thyllore_effect_core::WaterUBO>,
+    water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<
+        thyllore_effect_core::water::WaterUBO,
+    >,
     waters: &[crate::ecs::world::Entity],
     command_buffer: CommandBuffer,
-) -> Result<Vec<(thyllore_effect_core::WaterUBO, u32)>> {
+) -> Result<Vec<(thyllore_effect_core::water::WaterUBO, u32)>> {
     let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
     let inv_view_proj =
-        crate::ecs::systems::water::probe::inverse_view_proj_f64(projection.proj, projection.view);
+        thyllore_effect_core::water::inverse_view_proj_f64(projection.proj, projection.view);
     let settings = ctx
         .world
         .get_resource::<crate::ecs::resource::WaterRenderSettings>()
@@ -851,7 +853,8 @@ unsafe fn record_water_ubo_updates(
             .cloned()
             .unwrap_or_default();
 
-        let mut ubo = thyllore_effect_core::build_water_ubo(effect, accum.frame_index as u32);
+        let mut ubo =
+            thyllore_effect_core::water::build_water_ubo(effect, accum.frame_index as u32);
         ubo.inv_view_proj = inv_view_proj.into();
         ubo.temporal = [accum.weight, accum.frame_index as f32, 0.0, 0.0];
         ubo.composite[3] = settings.caustic_debug as f32;

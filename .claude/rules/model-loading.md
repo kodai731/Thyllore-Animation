@@ -10,7 +10,7 @@ paths:
 # Model Loading
 
 - Importers (glTF / FBX / PNG) live in `crates/thyllore-importer-core` and return pure model-core + anim-core
-  types; `src/loader/` only re-exports them.
+  types; the engine uses them as `thyllore_importer_core::`.
 - The FBX scene data both the importer and the exporter use (`FbxModel`, `FbxData`, `BoneNode`, ...) lives in
   `crates/thyllore-file-format-core`; `thyllore-exporter-core` depends on that crate and names
   `thyllore-importer-core` only in tests, never the other way round.

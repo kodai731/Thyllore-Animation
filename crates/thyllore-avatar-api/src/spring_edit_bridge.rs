@@ -6,12 +6,12 @@ use thyllore_anim_core::spring_bone::{
     ChainRamp, JointForce, RampScope, RampShape, SpringBoneSetup, SpringChainGizmoMode,
     SpringChainId, SpringJointParam,
 };
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::name_match::infer_mapping;
-use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::humanoid::find_chains_under;
+use thyllore_avatar_core::humanoid::infer_mapping;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, spring_setup_from_sidecar, BoneRestFrame, SidecarJointForce,
     SidecarSpring,
 };

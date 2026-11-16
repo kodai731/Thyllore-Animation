@@ -835,7 +835,7 @@ mod tests {
     use super::*;
     use crate::systems::fbx::build::build_full_export_data;
     use fbxcel::low::FbxVersion;
-    use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+    use thyllore_anim_core::editable::EditableAnimationClip;
 
     fn load_test_humanoid_for_roundtrip() -> (
         thyllore_file_format_core::fbx::FbxModel,
@@ -848,10 +848,9 @@ mod tests {
         );
 
         let fbx_model =
-            thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
-        let (load_result, _) =
-            thyllore_importer_core::fbx::loader::load_fbx_to_graphics_resources(path)
-                .expect("Failed to load graphics");
+            thyllore_importer_core::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
+        let (load_result, _) = thyllore_importer_core::fbx::load_fbx_to_graphics_resources(path)
+            .expect("Failed to load graphics");
 
         let skeleton = load_result
             .animation_system

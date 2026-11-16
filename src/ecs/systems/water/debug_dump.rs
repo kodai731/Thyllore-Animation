@@ -4,12 +4,12 @@ use serde_json::{json, Value};
 
 use crate::ecs::component::{AppliedWaterPreset, WaterTemporalAccum, WaterTorusEffect};
 use crate::ecs::resource::{WaterHistorySnapshotState, WaterRenderSettings};
-use crate::ecs::systems::effect_debug_dump::{
+use crate::ecs::systems::{
     build_camera_json, build_light_json, build_projection_json, build_scene_json, matrix_json,
 };
 use crate::ecs::world::{Entity, Name, World};
-use thyllore_effect_core::water::analytic::laplace_beltrami_basis::compute_laplace_beltrami_modes_cached;
-use thyllore_effect_core::{build_water_ubo, generate_water_wave_modes, WaterUBO};
+use thyllore_effect_core::water::compute_laplace_beltrami_modes_cached;
+use thyllore_effect_core::water::{build_water_ubo, generate_water_wave_modes, WaterUBO};
 
 pub const WATER_DEBUG_DUMP_DIRECTORY: &str = "log/water";
 

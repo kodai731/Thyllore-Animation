@@ -62,6 +62,8 @@ vcpkg = ["dep:vcpkg"]
 [lib]
 name = "build_support"
 path = "src/lib.rs"
+test = false
+bench = false
 
 [dependencies.cc]
 version = "1.2"

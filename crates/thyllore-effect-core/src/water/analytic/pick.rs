@@ -2,8 +2,8 @@ use glam::{Mat4, Vec3, Vec4};
 
 use super::slang::{water_height_and_gradient_slang, water_lb_height_and_gradient_slang};
 use super::wave::WATER_WAVE_MODE_COUNT;
-use crate::water::effect::WaterTorusEffect;
-use crate::water::gpu::systems::build_water_ubo;
+use crate::water::build_water_ubo;
+use crate::water::WaterTorusEffect;
 use thyllore_math_core::intersect_torus;
 
 pub fn pick_torus(

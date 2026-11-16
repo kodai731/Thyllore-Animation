@@ -3,9 +3,7 @@ use std::thread;
 
 use anyhow::Result;
 
-use thyllore_ml_core::copilot::v2::inference::{
-    V2CurveCopilotRequest, V2CurveCopilotSession, MAX_HORIZON,
-};
+use thyllore_ml_core::v2::inference::{V2CurveCopilotRequest, V2CurveCopilotSession, MAX_HORIZON};
 use thyllore_ml_core::{
     InferenceActorId, InferenceModelKind, InferenceRequest, InferenceRequestKind, InferenceResult,
     InferenceResultKind,

@@ -1,4 +1,4 @@
-use crate::logger::message_buffer::{Message, MessageLevel, MESSAGE_BUFFER};
+use thyllore_log_core::message_buffer::{Message, MessageLevel, MESSAGE_BUFFER};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MessageFilter {

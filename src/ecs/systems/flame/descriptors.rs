@@ -1,13 +1,13 @@
 use anyhow::Result;
 
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
-use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
-use crate::vulkanr::descriptor::{
+use thyllore_effect_core::flame::FlameUBO;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::shader_bindings::flame_resolve;
+use thyllore_vulkan_core::descriptor::FLAME_RESOLVE;
+use thyllore_vulkan_core::descriptor::{
     DescriptorKind, ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot,
 };
-use crate::vulkanr::image::create_scene_depth_sampler;
-use thyllore_effect_core::FlameUBO;
+use thyllore_vulkan_core::resource::create_scene_depth_sampler;
 use thyllore_vulkan_core::resource::{build_gpu_resource, GpuResource, UniformBuffer};
 use thyllore_vulkan_core::types::{ImageView, Sampler};
 

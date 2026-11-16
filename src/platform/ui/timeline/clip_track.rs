@@ -8,8 +8,6 @@ use super::layout::{
     CLIP_BLOCK_COLORS, CLIP_BLOCK_MIN_WIDTH, CLIP_TRACK_HEIGHT, PIXELS_PER_SECOND,
     TRACK_LABEL_WIDTH,
 };
-use crate::animation::editable::SourceClipId;
-use crate::animation::BoneId;
 use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
@@ -25,6 +23,8 @@ use crate::ecs::world::{Entity, World};
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::pointer::{read_ui_pointer, ui_pointer_begin, PointerRegion};
 use imgui::MouseButton;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::BoneId;
 
 struct ClipTrackPointer {
     pos: [f32; 2],

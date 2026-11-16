@@ -1,3 +1,3 @@
 #![cfg(feature = "text-to-motion")]
 
-pub mod mock_server;
+pub(crate) mod mock_server;

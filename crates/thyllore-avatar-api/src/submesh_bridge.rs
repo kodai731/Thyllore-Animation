@@ -1,13 +1,11 @@
 use glam::Vec3;
 use strum::VariantArray;
 
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::{find_hidden_triangle_indices, merge_mask_meshes};
+use thyllore_avatar_core::cloth_setup::{
     guess_submesh_role as core_guess_submesh_role, SubmeshKey, SubmeshRole,
 };
-use thyllore_avatar_core::cloth_setup::systems::hidden_mask::{
-    find_hidden_triangle_indices, merge_mask_meshes,
-};
+use thyllore_avatar_core::cloth_setup::{HiddenMaskParams, MaskMesh};
 
 /// A submesh role as the addon lists it: its sidecar name and its label.
 #[derive(serde::Serialize)]

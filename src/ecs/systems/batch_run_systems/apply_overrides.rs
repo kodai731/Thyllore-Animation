@@ -3,7 +3,7 @@ use crate::ecs::resource::{
     BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
     GpuTimingsSink, PendingBatchAnimEdits, ScheduledBatchActions, TimelineState,
 };
-use crate::ecs::systems::clip_library_systems::find_best_clip;
+use crate::ecs::systems::find_best_clip;
 use crate::ecs::world::World;
 use glam::Vec3;
 

@@ -1,6 +1,6 @@
 use crate::ecs::events::UiCommand;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::numeric_format::numeric_format;
 use crate::platform::ui::pointer::is_last_item_double_clicked;
 use crate::platform::ui::theme::{
@@ -10,7 +10,7 @@ use crate::platform::ui::theme::{
 use imgui::{ColorDataType, ColorPickerFlags, ColorPickerOptions};
 use std::borrow::Cow;
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_effect_core::{
+use thyllore_effect_core::water::{
     absorption_to_transmitted_color, transmitted_color_to_absorption, ABSORPTION_REFERENCE_DISTANCE,
 };
 use thyllore_scene_core::{find_scalar_param, ScalarParam, UiKind, UiParam};
@@ -375,7 +375,7 @@ fn draw_choices<C>(
         let label_color = if item.emphasized {
             CHOICES_WARNING_COLOR
         } else {
-            crate::platform::ui::theme::colors::srgb_to_linear_rgba(
+            thyllore_color_core::srgb_to_linear_rgba(
                 crate::platform::ui::theme::colors::TEXT_SECONDARY,
             )
         };

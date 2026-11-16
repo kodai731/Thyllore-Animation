@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRBloomDescriptorSets;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
-use crate::resource::bloom_chain::{BloomChain, BloomMipTarget};
+use crate::resource::{BloomChain, BloomMipTarget};
+use crate::FrameRenderContext;
 use thyllore_render_core::BloomSettings;
 
 #[repr(C)]

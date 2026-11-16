@@ -3,13 +3,13 @@ use crate::analytic_manifest::{float_constant, int_constant, shader_source};
 use crate::test_support::BitwiseAgreement;
 use crate::volume::{shell_and_puff_knots, ACTIVE_CELLS_MIN};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
-use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
-use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::slang::{
+use crate::wind::rotation_phase;
+use crate::wind::{build_wind_ubo, WindShadowSlot, WindTornadoEffect};
+use crate::wind::{
     wind_clamp_ray_to_cone_slang, wind_density_at_slang, wind_envelope_radius_slang,
     wind_optical_depth_slang, wind_optical_depth_toward_slang,
 };
-use crate::wind::{build_wind_ubo, WindShadowSlot, WindTornadoEffect};
+use crate::wind::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,

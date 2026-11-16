@@ -1,1 +1,1 @@
-pub mod compose_motion;
+pub(crate) mod compose_motion;

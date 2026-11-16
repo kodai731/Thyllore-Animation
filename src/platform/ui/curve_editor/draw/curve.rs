@@ -1,8 +1,8 @@
-use crate::animation::editable::{
+use crate::ecs::resource::CurveSelectedKeyframe;
+use thyllore_anim_core::editable::{
     curve_sample, segment_uses_bezier, EditableKeyframe, InterpolationType, PropertyCurve,
     TangentContinuity, TangentType, TangentWeightMode,
 };
-use crate::ecs::resource::CurveSelectedKeyframe;
 
 use super::super::view::{find_drawn_curve, DrawnCurve, ViewTransform};
 

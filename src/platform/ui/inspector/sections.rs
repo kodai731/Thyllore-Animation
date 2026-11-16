@@ -174,7 +174,7 @@ fn commit_transform_view(world: &World, shown: &TransformView, view: &TransformV
     if shown.rotation != view.rotation {
         let rot = view.rotation.unwrap_or([0.0, 0.0, 0.0]);
         let euler = Vec3::new(rot[0], rot[1], rot[2]);
-        let quat = crate::math::euler_degrees_to_quaternion(&euler);
+        let quat = thyllore_math_core::euler_degrees_to_quaternion(&euler);
         world.send_command(HierarchyEvent::SetEntityRotation(view.entity, quat));
     }
     if shown.scale != view.scale {

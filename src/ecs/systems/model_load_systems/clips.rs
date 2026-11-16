@@ -1,18 +1,16 @@
-use crate::animation::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
-use crate::animation::AnimationClip;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
-use crate::ecs::systems::clip_library_systems::{
-    clip_library_register_and_activate, find_best_clip,
-};
-use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+use crate::ecs::systems::clip_schedule_add_instance;
 use crate::ecs::systems::{
     build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
     timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
 };
+use crate::ecs::systems::{clip_library_register_and_activate, find_best_clip};
 use crate::ecs::world::World;
-use crate::loader::ModelLoadResult;
+use thyllore_anim_core::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
+use thyllore_anim_core::AnimationClip;
+use thyllore_importer_core::ModelLoadResult;
 
 const EMPTY_CLIP_DEFAULT_DURATION_SECONDS: f32 = 5.0;
 
@@ -91,7 +89,7 @@ fn import_editable_clips(
 ) -> Vec<EditableAnimationClip> {
     let editable_clips = loaded_clips
         .iter()
-        .map(|clip| crate::animation::editable::clip_from_animation(0, clip, bone_names));
+        .map(|clip| thyllore_anim_core::editable::clip_from_animation(0, clip, bone_names));
 
     let (Some(model_path), Some(skeleton)) = (find_model_path(world), find_first_skeleton(assets))
     else {
@@ -238,7 +236,7 @@ pub fn build_initial_clip_schedule(
     schedule
 }
 
-pub fn keeps_selected_user_clip(world: &World) -> bool {
+pub(super) fn keeps_selected_user_clip(world: &World) -> bool {
     let (Some(timeline), Some(library)) = (
         world.get_resource::<TimelineState>(),
         world.get_resource::<ClipLibrary>(),
@@ -251,7 +249,7 @@ pub fn keeps_selected_user_clip(world: &World) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::Skeleton;
+    use thyllore_anim_core::Skeleton;
 
     #[test]
     fn model_load_keeps_a_selected_user_clip() {
@@ -337,8 +335,8 @@ mod tests {
 
     #[test]
     fn auto_created_clip_keeps_its_length_after_the_first_key() {
-        use crate::animation::editable::{clip_add_keyframe, clip_recalculate_duration};
-        use crate::animation::editable::{BoneTrack, PropertyType};
+        use thyllore_anim_core::editable::{clip_add_keyframe, clip_recalculate_duration};
+        use thyllore_anim_core::editable::{BoneTrack, PropertyType};
 
         let mut world = World::new();
         let mut assets = AssetStorage::default();

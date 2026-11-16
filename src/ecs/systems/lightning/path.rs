@@ -1,5 +1,5 @@
 use glam::Vec3;
-use thyllore_effect_core::LIGHTNING_MAX_WAYPOINTS;
+use thyllore_effect_core::lightning::LIGHTNING_MAX_WAYPOINTS;
 
 use super::target::find_entity_named;
 use crate::ecs::component::{EditorDisplay, LightningEffect, LightningPath, Locator};

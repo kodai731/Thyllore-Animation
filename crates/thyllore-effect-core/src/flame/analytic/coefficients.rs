@@ -34,7 +34,7 @@ pub fn default_radial_falloff(radius01: f64) -> f64 {
 /// Compact-support biweight radial falloff with the support radius derived from sharpness.
 fn biweight_radial_falloff(radius01: f64, radial_sharpness: f32, support_margin: f32) -> f64 {
     let support =
-        crate::flame_radial::flame_radial_support_radius(radial_sharpness, support_margin) as f64;
+        crate::flame::flame_radial_support_radius(radial_sharpness, support_margin) as f64;
     let inside = (1.0 - (radius01 / support) * (radius01 / support)).max(0.0);
     inside * inside
 }

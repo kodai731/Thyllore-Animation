@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, LIGHTNING_SCALAR_PARAMS, LIGHTNING_UI_PARAMS};
+use thyllore_effect_core::lightning::{LIGHTNING_SCALAR_PARAMS, LIGHTNING_UI_PARAMS};
+use thyllore_effect_core::{ScalarParam, UiParam};
 
 use super::effect::LightningEffect;
 use crate::ecs::component::{

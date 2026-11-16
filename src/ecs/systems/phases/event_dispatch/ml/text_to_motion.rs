@@ -7,7 +7,7 @@ use super::auto_rig::{
 };
 use crate::asset::AssetStorage;
 use crate::ecs::world::World;
-use crate::grpc::{GrpcResponse, GrpcThreadHandle};
+use thyllore_grpc_client::{GrpcResponse, GrpcThreadHandle};
 
 fn take_grpc_responses(world: &World) -> Vec<GrpcResponse> {
     let Some(handle) = world.get_resource::<GrpcThreadHandle>() else {

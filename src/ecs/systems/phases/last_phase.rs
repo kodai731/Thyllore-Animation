@@ -4,7 +4,7 @@ use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::world::{
     batch_run_record_capture, capture_output_path, requested_capture,
 };
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::hooks::batch_capture::{BatchCaptureHooks, CaptureContext, CaptureSlot};
 
 /// Post-render: with the GPU idle, runs every registered readback, then takes the schedule's

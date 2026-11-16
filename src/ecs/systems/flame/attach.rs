@@ -5,7 +5,7 @@ use glam::{Quat, Vec3};
 
 pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
     use crate::ecs::component::resolve_bone_index;
-    use crate::ecs::resource::gizmo::BoneGizmoData;
+    use crate::ecs::resource::BoneGizmoData;
 
     let (skeleton_id, cached_global_transforms, bone_local_offsets, mesh_scale) = {
         let bone_gizmo = match ctx.world.get_resource::<BoneGizmoData>() {

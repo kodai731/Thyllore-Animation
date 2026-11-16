@@ -36,7 +36,7 @@ gitignored.
 ## ABI marker handshake
 
 Both wheels export `__abi_marker__` (sourced from
-`crates/thyllore-ml-api/src/lib.rs::ABI_MARKER`). The build script verifies
+`crates/thyllore-ml-api/src/abi_marker.rs::ABI_MARKER`). The build script verifies
 that this value matches `EXPECTED_ABI_MARKER` in `blender_addon/__init__.py`
 **before** producing a ZIP, so a wheel update without an addon update is
 caught at build time rather than at user-facing register time.

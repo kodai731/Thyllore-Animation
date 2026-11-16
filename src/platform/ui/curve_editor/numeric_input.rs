@@ -1,7 +1,7 @@
-use crate::animation::editable::EditableKeyframe;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::EditableKeyframe;
 
 use super::view::{find_drawn_curve, DrawnCurve};
 
@@ -9,7 +9,7 @@ const SHARED_VALUE_TOLERANCE: f32 = 1e-6;
 const FIELD_WIDTH: f32 = 80.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum NumericEdit {
+pub(super) enum NumericEdit {
     Set(f32),
     Add(f32),
     Multiply(f32),
@@ -21,7 +21,7 @@ enum KeyField {
     Value,
 }
 
-pub fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
+pub(super) fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
     let text = text.trim();
 
     if let Some(rest) = text.strip_prefix("*=") {
@@ -38,7 +38,7 @@ pub fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
     }
 }
 
-pub fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
+pub(super) fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
     match edit {
         NumericEdit::Set(value) => value,
         NumericEdit::Add(delta) => current + delta,
@@ -46,7 +46,7 @@ pub fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
     }
 }
 
-pub fn shared_value(mut values: impl Iterator<Item = f32>) -> Option<f32> {
+pub(super) fn shared_value(mut values: impl Iterator<Item = f32>) -> Option<f32> {
     let first = values.next()?;
     values
         .all(|value| (value - first).abs() <= SHARED_VALUE_TOLERANCE)

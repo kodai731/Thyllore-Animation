@@ -47,3 +47,4 @@ pub use ui_command::*;
 mod test_support;
 #[cfg(test)]
 mod tests;
+pub use descriptors::{FlameImageBindings, RRFlameDescriptorSet};

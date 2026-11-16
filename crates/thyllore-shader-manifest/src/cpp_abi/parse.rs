@@ -203,7 +203,7 @@ fn parse_uniform_passing(structs: &[CppStruct]) -> Result<UniformPassing, CppAbi
 
 /// `Vector<float, 3>  o_13` -> (`Vector<float, 3>`, `o_13`); `KernelContext_0 * ctx` keeps the
 /// `*` on the type side.
-pub fn split_trailing_identifier(text: &str) -> Option<(&str, &str)> {
+pub(super) fn split_trailing_identifier(text: &str) -> Option<(&str, &str)> {
     let text = text.trim();
     let name_start = text.rfind(|c: char| !c.is_alphanumeric() && c != '_')? + 1;
     let (type_name, name) = (text[..name_start].trim(), &text[name_start..]);
@@ -213,7 +213,7 @@ pub fn split_trailing_identifier(text: &str) -> Option<(&str, &str)> {
     Some((type_name, name))
 }
 
-pub fn split_top_level(text: &str, separator: char) -> Vec<&str> {
+pub(super) fn split_top_level(text: &str, separator: char) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0;
     let mut start = 0;
@@ -236,7 +236,7 @@ pub fn split_top_level(text: &str, separator: char) -> Vec<&str> {
 
 /// The backend suffixes every identifier with `_<n>` to keep it unique; `pad0_11` -> `pad0`,
 /// `WindUBO_natural_0` -> `WindUBO_natural`.
-pub fn strip_suffix_index(name: &str) -> &str {
+pub(super) fn strip_suffix_index(name: &str) -> &str {
     match name.rsplit_once('_') {
         Some((base, suffix))
             if !suffix.is_empty() && suffix.bytes().all(|b| b.is_ascii_digit()) =>

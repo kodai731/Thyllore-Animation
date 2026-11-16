@@ -1,8 +1,8 @@
 use anyhow::Result;
 use glam::{Mat4, Vec3, Vec4};
 
-use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
@@ -22,7 +22,7 @@ pub(crate) fn build_node_based_bone_transforms(
     transforms
 }
 
-pub fn apply_skinning_to_single_mesh(
+pub(crate) fn apply_skinning_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     global_transforms: &[Mat4],
@@ -68,7 +68,7 @@ pub fn apply_skinning_to_single_mesh(
     true
 }
 
-pub fn apply_node_animation_to_single_mesh(
+pub(crate) fn apply_node_animation_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     nodes: &[NodeData],
@@ -170,7 +170,7 @@ pub fn compute_node_global_transforms(
 }
 
 pub unsafe fn upload_animations(
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     updated_meshes: &[usize],
 ) -> Result<()> {
     for &mesh_idx in updated_meshes {
@@ -185,7 +185,7 @@ pub unsafe fn upload_animations(
     Ok(())
 }
 
-pub fn prepare_node_animation(
+pub(crate) fn prepare_node_animation(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     skeleton: &Skeleton,

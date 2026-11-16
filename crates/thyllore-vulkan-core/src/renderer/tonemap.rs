@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRToneMapDescriptorSet;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
+use crate::FrameRenderContext;
 use thyllore_render_core::{BloomSettings, Exposure, LensEffects, ToneMapping};
 
 #[repr(C)]

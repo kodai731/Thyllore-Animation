@@ -1,15 +1,15 @@
 use glam::Vec3;
 
-use crate::animation::{Bone, BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::{Bone, BoneId, Skeleton};
 
 use crate::platform::ui::form_window::{message_section, rows_section, FormSection};
 use crate::platform::ui::ui_rows::UiRow;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct BoneView {
+pub(crate) struct BoneView {
     pub bone_id: BoneId,
     pub name: String,
     pub parent_name: String,
@@ -18,7 +18,7 @@ pub struct BoneView {
     pub child_offset: Vec3,
 }
 
-pub fn bone_section(assets: &AssetStorage, bone_id: BoneId) -> Box<dyn FormSection> {
+pub(crate) fn bone_section(assets: &AssetStorage, bone_id: BoneId) -> Box<dyn FormSection> {
     let Some(view) = assets
         .skeletons
         .values()
@@ -73,7 +73,7 @@ fn default_child_name(skeleton: &Skeleton, bone: &Bone) -> String {
         .expect("the name sequence is unbounded")
 }
 
-pub fn bone_rows() -> Vec<UiRow<BoneView>> {
+pub(crate) fn bone_rows() -> Vec<UiRow<BoneView>> {
     vec![
         UiRow::Canvas(|ui, _, view: &BoneView| {
             ui.text(format!("Bone: {}", view.name));

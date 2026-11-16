@@ -1,23 +1,22 @@
-use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::App;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
-use crate::ecs::systems::render_data_systems::{
+use crate::ecs::resource::{GridGizmoData, LightGizmoData};
+use crate::ecs::systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
-use crate::vulkanr::context::{
-    CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
-};
-use crate::vulkanr::descriptor::CompositeGBufferViews;
+use crate::ecs::MAX_FRAMES_IN_FLIGHT;
+use crate::vulkanr::context::{PipelineState, RenderTargets, SwapchainState};
 use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
+use thyllore_vulkan_core::descriptor::CompositeGBufferViews;
 use thyllore_vulkan_core::renderer::create_gbuffer_framebuffer;
 
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use thyllore_vulkan_core::core::{
-    acquire_swapchain_image, submit_and_present, AcquireOutcome, FrameSubmit, PresentOutcome,
+    acquire_swapchain_image, submit_and_present, AcquireOutcome, CommandState, FrameSubmit,
+    FrameSync, PresentOutcome,
 };
 use thyllore_vulkan_core::renderer::{
     begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed,
@@ -460,7 +459,7 @@ impl App {
     pub unsafe fn begin_offscreen_render_pass(
         &self,
         command_buffer: CommandBuffer,
-        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+        offscreen: &thyllore_vulkan_core::resource::OffscreenFramebuffer,
     ) {
         begin_render_pass_cleared(
             &self.rrdevice,
@@ -477,7 +476,7 @@ impl App {
         &self,
         command_buffer: CommandBuffer,
         image_index: usize,
-        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+        offscreen: &thyllore_vulkan_core::resource::OffscreenFramebuffer,
     ) -> Result<()> {
         let extent = offscreen.extent();
         set_full_viewport_and_scissor(&self.rrdevice, command_buffer, extent);
@@ -485,7 +484,7 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
-            use crate::ecs::systems::camera_systems::compute_camera_position;
+            use crate::ecs::systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
         };
 
@@ -613,7 +612,7 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
         let frame_slot = self.resource::<FrameSync>().current_frame;
         let camera_pos = {
-            use crate::ecs::systems::camera_systems::compute_camera_position;
+            use crate::ecs::systems::compute_camera_position;
             compute_camera_position(&self.resource::<Camera>())
         };
 

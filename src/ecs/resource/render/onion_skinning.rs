@@ -1,4 +1,4 @@
-use crate::vulkanr::data::Vertex;
+use thyllore_vulkan_core::data::Vertex;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OnionSkinningConfig {

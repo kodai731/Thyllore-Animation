@@ -1,5 +1,5 @@
-use crate::copilot::v2::inference::CONTEXT_LENGTH;
 use crate::degrade::DEGRADED_CONTEXT_LENGTH;
+use crate::v2::inference::CONTEXT_LENGTH;
 
 /// Distribution mode SSoT for Curve Copilot. The engine launch flag
 /// (`--curve-copilot full|degrade|private`) and the Blender addon build mode

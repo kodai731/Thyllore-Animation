@@ -1,18 +1,18 @@
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
+use thyllore_avatar_core::cloth_setup::{
     refresh_submesh_roles as refresh_roles_for_keys, SubmeshKey, SubmeshRole,
 };
 
 use glam::{Mat4, UVec4, Vec3, Vec4};
 
-use crate::animation::{Skeleton, SkeletonId, SkinData};
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::resource::{AvatarSetupState, HierarchyState, NodeAssets};
 use crate::ecs::systems::avatar_setup_systems::compute_bone_global_transform;
 use crate::ecs::systems::hierarchy_systems::{hierarchy_reveal_entity, hierarchy_select};
 use crate::ecs::world::{Entity, MeshRef, World};
-use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{RootAttachment, SkinSurface};
+use thyllore_anim_core::{Skeleton, SkeletonId, SkinData};
+use thyllore_avatar_core::cloth_setup::{RootAttachment, SkinSurface};
 use thyllore_model_core::BoneId;
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 /// Maps a skin's geometry-space positions (`SkinData::base_positions`) into model space at the rest pose.
 pub(crate) fn skin_geometry_to_model(skeleton: &Skeleton, bone: usize) -> Mat4 {

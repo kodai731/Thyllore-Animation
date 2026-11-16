@@ -1,8 +1,8 @@
-use crate::animation::editable::{PropertyCurve, PropertyType};
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveValueDisplay, FrameRequest,
 };
 use crate::platform::ui::pointer::UiPointer;
+use thyllore_anim_core::editable::{PropertyCurve, PropertyType};
 
 const PAN_SPEED: f32 = 30.0;
 
@@ -429,7 +429,7 @@ pub(super) fn apply_frame_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{curve_add_keyframe, PropertyType};
+    use thyllore_anim_core::editable::{curve_add_keyframe, PropertyType};
 
     const TOLERANCE: f32 = 1e-4;
 

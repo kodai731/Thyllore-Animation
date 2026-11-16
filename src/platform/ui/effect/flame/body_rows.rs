@@ -1,9 +1,9 @@
-use thyllore_effect_core::FlameEffect;
+use thyllore_effect_core::flame::FlameEffect;
 
 use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
 use crate::ecs::systems::flame::FlameUiCommand;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use crate::platform::ui::param_widgets::rows_from_params;
 use crate::platform::ui::ui_rows::{ChoiceOption, FieldRows, UiRow};
@@ -91,8 +91,8 @@ fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
 
 fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
     let mut rows = rows_from_params(
-        &thyllore_effect_core::FLAME_UI_PARAMS,
-        &thyllore_effect_core::FLAME_SCALAR_PARAMS,
+        &thyllore_effect_core::flame::FLAME_UI_PARAMS,
+        &thyllore_effect_core::flame::FLAME_SCALAR_PARAMS,
         &[],
     );
 
@@ -119,11 +119,13 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
             max: 1.0,
             format: "%.2f",
             get: |effect| {
-                thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale)
+                thyllore_effect_core::flame::shaping_scale_to_noise_sharpness(
+                    effect.noise.shaping_scale,
+                )
             },
             set: |effect, sharpness| {
                 effect.noise.shaping_scale =
-                    thyllore_effect_core::noise_sharpness_to_shaping_scale(sharpness);
+                    thyllore_effect_core::flame::noise_sharpness_to_shaping_scale(sharpness);
             },
         },
         UiRow::Tooltip(
@@ -135,8 +137,8 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
         ),
         UiRow::IntSlider {
             label: "Noise Segments",
-            min: thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
-            max: thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
+            min: thyllore_effect_core::flame::WAVE_SEGMENTS_MIN as i32,
+            max: thyllore_effect_core::flame::WAVE_SEGMENTS_MAX as i32,
             get: |effect| effect.wave_segments as i32,
             set: |effect, segments| {
                 effect.wave_segments = segments as u32;
@@ -153,10 +155,11 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
             max: 1.0,
             format: "%.2f",
             get: |effect| {
-                (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0)
+                (effect.twist.gain / thyllore_effect_core::flame::VORTEX_MACRO_MAX_GAIN)
+                    .clamp(0.0, 1.0)
             },
             set: |effect, vortex| {
-                let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
+                let (gain, speed) = thyllore_effect_core::flame::vortex_macro_parameters(vortex);
                 effect.twist.gain = gain;
                 effect.twist.speed = speed;
             },

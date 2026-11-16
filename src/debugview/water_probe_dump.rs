@@ -6,10 +6,9 @@ use glam::{Mat4, Vec3};
 use crate::debugview::flame_history_dump::decode_rgba16f;
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{ProjectionData, WaterProbeCapture};
-use crate::ecs::systems::water::probe::{
-    compute_water_probe_report, inverse_view_proj_f64, ProbeRoot,
-};
+use crate::ecs::systems::water::{compute_water_probe_report, ProbeRoot};
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
+use thyllore_effect_core::water::inverse_view_proj_f64;
 use thyllore_vulkan_core::resource::ReadbackLayout;
 use thyllore_vulkan_core::types::{DeviceSize, Image};
 
@@ -39,7 +38,7 @@ impl BatchCapture for WaterProbeCapture {
         let camera_pos = Vec3::new(inv_view.col(3)[0], inv_view.col(3)[1], inv_view.col(3)[2]);
         drop(proj_data);
 
-        let inverse_model = thyllore_effect_core::build_water_model_matrix(&effect)
+        let inverse_model = thyllore_effect_core::water::build_water_model_matrix(&effect)
             .try_inverse()
             .unwrap_or(Mat4::IDENTITY);
         let root = probe_root_of(ctx);

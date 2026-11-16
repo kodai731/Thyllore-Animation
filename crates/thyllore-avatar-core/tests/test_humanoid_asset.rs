@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use support::fixture_bones::load_rig_from_fbx_text;
 use support::fixtures::ExtraParent;
 use support::test_humanoid::{
-    build_stick_mesh, extra_bones, skeleton, write_test_humanoid_fbx, write_test_humanoid_sidecar,
+    build_stick_mesh, extra_bones, write_test_humanoid_fbx, write_test_humanoid_sidecar,
     CanonicalTip,
 };
-use thyllore_avatar_core::expression::components::side::Side;
-use thyllore_avatar_core::humanoid::components::mapping::StoredHumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
+use thyllore_avatar_core::expression::Side;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::humanoid::StoredHumanoidMapping;
+use thyllore_avatar_core::humanoid::{humanoid_mapping_path, skeleton};
 
 #[test]
 fn test_humanoid_covers_every_role_once() {
@@ -249,8 +249,7 @@ fn parse_sidecar(text: &str) -> StoredHumanoidMapping {
 #[test]
 fn test_humanoid_maps_every_role() {
     let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
-    let (mapping, unresolved) =
-        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+    let (mapping, unresolved) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
 
     let found: BTreeSet<HumanoidRole> = mapping.by_role.keys().copied().collect();
     let all: BTreeSet<HumanoidRole> = HumanoidRole::ALL.iter().copied().collect();
@@ -262,12 +261,8 @@ fn test_humanoid_maps_every_role() {
     );
     assert!(unresolved.is_empty(), "unresolved roles: {:?}", unresolved);
 
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
-    assert_eq!(
-        rest_pose,
-        thyllore_avatar_core::humanoid::components::rest_pose::RestPose::TPose
-    );
+    let rest_pose = thyllore_avatar_core::humanoid::detect_rest_pose(&mapping, &bones);
+    assert_eq!(rest_pose, thyllore_avatar_core::humanoid::RestPose::TPose);
 }
 
 #[test]
@@ -335,8 +330,7 @@ fn extra_bones_have_unique_names_without_dots() {
 #[test]
 fn test_humanoid_infers_only_roles() {
     let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
-    let (mapping, unresolved) =
-        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+    let (mapping, unresolved) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
 
     assert!(unresolved.is_empty(), "unresolved roles: {:?}", unresolved);
 
@@ -379,16 +373,12 @@ fn test_humanoid_sidecar_loads_as_confirmed_identity() {
 
     let (bones, _) = load_rig_from_fbx_text("test_humanoid", &write_test_humanoid_fbx());
 
-    let (rig, missing) = thyllore_avatar_core::humanoid::systems::mapping_io::load_or_infer_rig(
-        &model_path,
-        &bones,
-        None,
-    )
-    .unwrap();
+    let (rig, missing) =
+        thyllore_avatar_core::humanoid::load_or_infer_rig(&model_path, &bones, None).unwrap();
     assert!(missing.is_empty(), "missing bones: {:?}", missing);
 
     match rig {
-        thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig::Humanoid(mapping) => {
+        thyllore_avatar_core::humanoid::AvatarRig::Humanoid(mapping) => {
             for role in HumanoidRole::ALL {
                 let unity_name = role.unity_name();
                 let index = *mapping

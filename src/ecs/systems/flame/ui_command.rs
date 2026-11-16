@@ -8,7 +8,7 @@ pub enum FlameUiCommand {
         entity: Entity,
         effect: Box<FlameEffect>,
     },
-    UpdateBaked(Box<thyllore_effect_core::FlameBaked>),
+    UpdateBaked(Box<thyllore_effect_core::flame::FlameBaked>),
     ApplyPreset(String),
     ApplyTextureFit {
         path: String,

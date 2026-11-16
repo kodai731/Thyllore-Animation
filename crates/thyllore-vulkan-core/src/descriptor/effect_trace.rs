@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use crate::core::device::RRDevice;
-use crate::descriptor::pass_manifest::EFFECT_TRACE;
+use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::effect_trace;
+use crate::descriptor::EFFECT_TRACE;
 use crate::descriptor::{ReflectedDescriptorSets, ReflectedLayoutSpec, SetGrid, SetSlot};
 
 pub unsafe fn create_effect_trace_sets(

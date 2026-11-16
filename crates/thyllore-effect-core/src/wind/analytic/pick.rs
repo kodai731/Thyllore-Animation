@@ -1,5 +1,5 @@
-use crate::wind::analytic::slang::{wind_clamp_ray_to_cone_slang, wind_envelope_radius_slang};
 use crate::wind::WindUBO;
+use crate::wind::{wind_clamp_ray_to_cone_slang, wind_envelope_radius_slang};
 use glam::{Mat4, Vec3};
 
 const PICK_T_MAX: f32 = 1e4;

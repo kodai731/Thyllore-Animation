@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use crate::core::device::RRDevice;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::{create_image, create_image_view};
+use crate::core::RRDevice;
+use crate::resource::GpuResource;
+use crate::resource::{create_image, create_image_view};
 use crate::types::Instance;
 use crate::vulkan::*;
 
-pub const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
+pub(super) const TRANSIENT_EVICT_AFTER_FRAMES: u64 = 4;
 const MAX_FRAMEBUFFER_ATTACHMENTS: usize = 4;
 
 #[derive(Clone, Copy, Debug)]

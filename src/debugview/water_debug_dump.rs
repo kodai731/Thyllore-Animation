@@ -6,13 +6,13 @@ use crate::ecs::systems::{
 };
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
-use crate::vulkanr::data::Vertex;
 use anyhow::Result;
 use thyllore_math_core::write_npy_u32;
+use thyllore_vulkan_core::data::Vertex;
 
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
-use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::MeshBuffer;
 use thyllore_vulkan_core::resource::{read_buffer_bytes, ReadbackLayout};
 use thyllore_vulkan_core::types::DeviceSize;
 

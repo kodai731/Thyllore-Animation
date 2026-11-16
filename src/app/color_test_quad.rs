@@ -7,17 +7,17 @@ use anyhow::Result;
 
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::world::{Transform, World};
-use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::data::{Vertex, VertexData};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::MeshBuffer;
 use glam::{Vec2, Vec3, Vec4};
 use thyllore_render_core::MaterialUBO;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::data::{Vertex, VertexData};
 use thyllore_vulkan_core::raytracing::GpuPrimitive;
-use thyllore_vulkan_core::resource::image::{create_rgba8_texture, TextureColorSpace};
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
+use thyllore_vulkan_core::resource::RayTracingData;
+use thyllore_vulkan_core::resource::{create_rgba8_texture, TextureColorSpace};
+use thyllore_vulkan_core::resource::{RRIndexBuffer, RRVertexBuffer};
 use thyllore_vulkan_core::types::DeviceSize;
 use thyllore_vulkan_core::types::Instance;
 
@@ -205,7 +205,7 @@ unsafe fn create_quad_material(
     graphics: &mut GraphicsResources,
     mesh: &MeshBuffer,
     index: usize,
-) -> Result<crate::vulkanr::resource::graphics_resource::MaterialId> {
+) -> Result<thyllore_vulkan_core::descriptor::MaterialId> {
     let name = format!("color_test_material_{}", index);
     let material_id = graphics.materials.create_material_with_texture(
         instance,

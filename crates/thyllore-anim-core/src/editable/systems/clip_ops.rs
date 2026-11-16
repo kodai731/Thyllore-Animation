@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::PropertyType;
-use crate::editable::components::track::BoneTrack;
-use crate::editable::systems::curve_ops::curve_resample_at_fps;
+use crate::editable::curve_resample_at_fps;
+use crate::editable::BoneTrack;
+use crate::editable::EditableAnimationClip;
+use crate::editable::PropertyType;
 use crate::BoneId;
 
 const ALL_PROPERTY_TYPES: [PropertyType; 9] = [
@@ -84,7 +84,7 @@ pub fn clip_remap_bone_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+    use crate::editable::{curve_add_keyframe, curve_sample};
 
     #[test]
     fn resample_rebakes_curve_onto_60fps_grid() {

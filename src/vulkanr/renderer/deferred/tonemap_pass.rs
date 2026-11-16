@@ -76,7 +76,7 @@ pub unsafe fn record_tonemap_to_offscreen(
     );
     let frame_slot = ctx
         .world
-        .resource::<crate::vulkanr::context::FrameSync>()
+        .resource::<thyllore_vulkan_core::core::FrameSync>()
         .current_frame;
     thyllore_vulkan_core::renderer::record_tonemap_draw(
         &render,

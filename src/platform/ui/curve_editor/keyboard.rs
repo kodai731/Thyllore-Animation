@@ -3,9 +3,6 @@ use super::tween::apply_tween;
 use super::view::{find_drawn_curve, DrawnCurve};
 #[cfg(feature = "ml")]
 use super::window::SuggestionOverlay;
-use crate::animation::editable::{InterpolationType, TangentContinuity, TangentType};
-#[cfg(feature = "ml")]
-use crate::animation::BoneId;
 use crate::ecs::resource::{
     CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe, CurveTrackRef, FrameRequest,
 };
@@ -14,6 +11,9 @@ use crate::ecs::systems::phases::event_dispatch::ml::curve_suggestion::CurveSugg
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::key_modifier::{current_key_modifier, KeyModifier};
+use thyllore_anim_core::editable::{InterpolationType, TangentContinuity, TangentType};
+#[cfg(feature = "ml")]
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CurveEditorKeyAction {
@@ -291,7 +291,7 @@ pub(super) fn handle_suggestion_keyboard(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableKeyframe, PropertyCurve, PropertyType};
+    use thyllore_anim_core::editable::{EditableKeyframe, PropertyCurve, PropertyType};
 
     fn make_curve(property_type: PropertyType) -> PropertyCurve {
         PropertyCurve::from_keyframes(

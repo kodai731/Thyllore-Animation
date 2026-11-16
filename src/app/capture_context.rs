@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext, CaptureSlot};
-use crate::vulkanr::context::CommandState;
+use thyllore_vulkan_core::core::CommandState;
 
 impl App {
     pub fn capture_context(&self, image_index: usize, slot: CaptureSlot) -> CaptureContext<'_> {
@@ -19,7 +19,7 @@ impl App {
 
     pub fn interactive_capture_context(&self) -> CaptureContext<'_> {
         self.capture_context(
-            self.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT,
+            self.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT,
             CaptureSlot::interactive(),
         )
     }

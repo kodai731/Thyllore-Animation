@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::copilot::v2::inference::{
+use crate::v2::inference::{
     V2CurveCopilotRequest, V2CurveCopilotSession, CONTEXT_LENGTH, MAX_HORIZON,
 };
 

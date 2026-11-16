@@ -12,7 +12,7 @@ pub const DEFAULT_LIGHTNING_PRESET: &str = "bolt";
 
 pub const LIGHTNING_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "lightning",
-    max_instances: thyllore_effect_core::LIGHTNING_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::lightning::LIGHTNING_MAX_INSTANCES,
     spawn: spawn_lightning_instance,
     entities: lightning_entities,
     default_in_empty_scene: false,
@@ -55,12 +55,7 @@ pub fn spawn_lightning_with_clip(
     effect: LightningEffect,
 ) -> Entity {
     let entity = spawn_lightning(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &LIGHTNING_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &LIGHTNING_DOMAIN);
     entity
 }
 

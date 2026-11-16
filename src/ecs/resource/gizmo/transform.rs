@@ -1,8 +1,8 @@
 use glam::{Quat, Vec3};
 
-use crate::animation::BoneId;
 use crate::ecs::component::{GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo};
-use crate::ecs::Entity;
+use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 pub use thyllore_render_core::TransformGizmoHandle;
 

@@ -6,7 +6,7 @@ use crate::ecs::systems::flame::gpu_targets::{create_flame_history, recreate_fla
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::render::RRRender;
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
@@ -75,7 +75,7 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
     drop(flame_targets);
     ctx.world.insert_resource(gpu_state);
 
-    crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline(
+    crate::ecs::systems::ensure_effect_trace_pipeline(
         ctx.instance,
         ctx.rrdevice,
         ctx.world,

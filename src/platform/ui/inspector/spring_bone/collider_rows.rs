@@ -3,16 +3,16 @@ use std::sync::LazyLock;
 use thyllore_anim_core::spring_bone::{ColliderShape, SpringColliderDef};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
-use crate::animation::BoneId;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 use super::section::SpringView;
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 
 #[derive(Clone)]
-pub struct ColliderView {
+pub(super) struct ColliderView {
     pub entity: Entity,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
@@ -22,7 +22,7 @@ pub struct ColliderView {
 
 #[derive(Clone, Debug, Default, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
-pub struct ColliderFields {
+pub(super) struct ColliderFields {
     #[persist(ui(kind = Offset, min = -1.0, max = 1.0))]
     pub offset: [f32; 3],
     #[persist(ui(min = 0.001, max = 1.0, format = "%.3f"))]
@@ -32,7 +32,7 @@ pub struct ColliderFields {
 }
 
 impl ColliderFields {
-    pub fn from_collider(collider: &SpringColliderDef) -> Self {
+    pub(super) fn from_collider(collider: &SpringColliderDef) -> Self {
         let (radius, tail) = match &collider.shape {
             ColliderShape::Sphere { radius } => match ColliderShape::default_capsule() {
                 ColliderShape::Capsule { tail, .. } => (*radius, tail),
@@ -47,7 +47,7 @@ impl ColliderFields {
         }
     }
 
-    pub fn apply_to(&self, collider: &mut SpringColliderDef) {
+    pub(super) fn apply_to(&self, collider: &mut SpringColliderDef) {
         collider.offset.x = self.offset[0];
         collider.offset.y = self.offset[1];
         collider.offset.z = self.offset[2];
@@ -91,7 +91,7 @@ static COLLIDER_UI_PARAMS: LazyLock<Vec<thyllore_scene_core::UiParam>> = LazyLoc
     out
 });
 
-pub fn collider_list_row() -> UiRow<SpringView> {
+pub(super) fn collider_list_row() -> UiRow<SpringView> {
     UiRow::List(Box::new(ListRows::<SpringView, ColliderView> {
         title: "Colliders",
         items: |_, view: &SpringView| {
@@ -131,7 +131,7 @@ pub fn collider_list_row() -> UiRow<SpringView> {
     }))
 }
 
-pub fn collider_rows(view: &ColliderView) -> Vec<UiRow<ColliderView>> {
+pub(super) fn collider_rows(view: &ColliderView) -> Vec<UiRow<ColliderView>> {
     let [offset_param, radius_param, tail_param] = COLLIDER_UI_PARAMS.as_slice() else {
         unreachable!("ColliderFields declares offset, radius and tail");
     };

@@ -1,20 +1,20 @@
 use anyhow::Result;
 use glam::{Mat4, Vec3, Vec4};
 
-use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::{
+use crate::ecs::resource::MeshAssets;
+use crate::ecs::resource::{
     BoneGizmoData, BoneSelectionState, ConstraintGizmoData, SpringBoneGizmoData,
 };
-use crate::ecs::resource::MeshAssets;
 use crate::ecs::systems::BoneDrawSet;
 use crate::ecs::world::World;
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
 use crate::hooks::model_load::LoadedModel;
-use crate::loader::ModelLoadResult;
-use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
+use thyllore_anim_core::Skeleton;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_importer_core::ModelLoadResult;
 use thyllore_math_core::ScreenSpaceScale;
+use thyllore_math_core::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
 const JOINT_MARKER_COLOR: [f32; 3] = [1.0, 1.0, 0.0];
@@ -530,7 +530,7 @@ pub fn select_bone_by_ray(
 
 pub unsafe fn update_bone_gizmo_buffers(
     bone_gizmo: &mut BoneGizmoData,
-    backend: &mut crate::vulkanr::VulkanBackend<'_>,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     frame_slot: usize,
 ) -> Result<()> {
     backend.update_or_create_line_buffers(&mut bone_gizmo.stick_mesh, frame_slot)
@@ -641,12 +641,12 @@ fn find_closest_triangle_hit(
     best
 }
 
-fn vertex_position(vertex: &crate::vulkanr::data::Vertex) -> Vec3 {
+fn vertex_position(vertex: &thyllore_vulkan_core::data::Vertex) -> Vec3 {
     Vec3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)
 }
 
 fn pick_dominant_bone_from_triangle(
-    skin: &crate::animation::SkinData,
+    skin: &thyllore_anim_core::SkinData,
     hit: &MeshTriangleHit,
 ) -> Option<usize> {
     let mut accumulated: std::collections::HashMap<u32, f32> = std::collections::HashMap::new();
@@ -1006,12 +1006,12 @@ fn append_sphere_wire_colored(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::SkinData;
-    use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
-    use crate::loader::{LoadedNode, ModelLoadResult};
-    use crate::vulkanr::data::{Vertex, VertexData};
-    use crate::vulkanr::resource::graphics_resource::MeshBuffer;
     use glam::UVec4;
+    use thyllore_anim_core::SkinData;
+    use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+    use thyllore_importer_core::{LoadedNode, ModelLoadResult};
+    use thyllore_vulkan_core::data::{Vertex, VertexData};
+    use thyllore_vulkan_core::resource::MeshBuffer;
 
     fn make_mesh_buffer_single_triangle(
         bone_indices: [[u32; 4]; 3],
@@ -1146,7 +1146,7 @@ mod tests {
         if !std::path::Path::new(path).exists() {
             return None;
         }
-        let gltf = unsafe { crate::loader::gltf::load_gltf_file(path) }.ok()?;
+        let gltf = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) }.ok()?;
         Some(ModelLoadResult::from_gltf(gltf))
     }
 
@@ -1155,7 +1155,7 @@ mod tests {
         if !std::path::Path::new(path).exists() {
             return None;
         }
-        let gltf = unsafe { crate::loader::gltf::load_gltf_file(path) }.ok()?;
+        let gltf = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) }.ok()?;
         Some(ModelLoadResult::from_gltf(gltf))
     }
 
@@ -1406,12 +1406,10 @@ mod tests {
         );
     }
 
-    fn to_node_data(
-        nodes: &[LoadedNode],
-    ) -> Vec<crate::vulkanr::resource::graphics_resource::NodeData> {
+    fn to_node_data(nodes: &[LoadedNode]) -> Vec<thyllore_vulkan_core::resource::NodeData> {
         nodes
             .iter()
-            .map(|n| crate::vulkanr::resource::graphics_resource::NodeData {
+            .map(|n| thyllore_vulkan_core::resource::NodeData {
                 index: n.index,
                 name: n.name.clone(),
                 parent_index: n.parent_index,
@@ -1613,7 +1611,7 @@ mod tests {
         let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
         let offsets = compute_bone_local_offsets(skeleton, &transforms);
 
-        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::TransformGizmoData::default();
         let mut at_origin_count = 0u32;
         let mut total = 0u32;
 
@@ -1623,7 +1621,7 @@ mod tests {
             }
             total += 1;
 
-            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+            crate::ecs::systems::transform_gizmo_sync_to_bone(
                 &mut gizmo,
                 Some(idx),
                 &transforms,
@@ -1662,7 +1660,7 @@ mod tests {
 
         let display = compute_display_transforms(&globals, &offsets, 1.0);
 
-        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::TransformGizmoData::default();
         let mut failures = Vec::new();
 
         for (idx, bone) in skeleton.bones.iter().enumerate() {
@@ -1670,7 +1668,7 @@ mod tests {
                 continue;
             }
 
-            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+            crate::ecs::systems::transform_gizmo_sync_to_bone(
                 &mut gizmo,
                 Some(idx),
                 &globals,
@@ -1711,7 +1709,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_finds_bone_transform() {
-        use crate::vulkanr::resource::graphics_resource::NodeData;
+        use thyllore_vulkan_core::resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("mismatched_name", None);
@@ -1740,7 +1738,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_prefers_name_match() {
-        use crate::vulkanr::resource::graphics_resource::NodeData;
+        use thyllore_vulkan_core::resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("correct_name", None);

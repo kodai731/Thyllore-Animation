@@ -1,4 +1,3 @@
-use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AvatarSetupState, ExpressionLibraryState, MaterialTextureState};
 use crate::ecs::systems::avatar_hidden_mask_systems::restore_hidden_triangles;
@@ -6,18 +5,20 @@ use crate::ecs::systems::avatar_setup_systems::{
     animated_spring_space, find_first_skeleton, find_model_path,
     find_or_create_spring_bone_setup_entity, find_spring_bone_setup,
 };
+use crate::ecs::systems::find_mesh_morph;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
+use crate::ecs::world::MeshRef;
 use crate::ecs::world::{Entity, World};
-use crate::ecs::{find_mesh_morph, MeshRef};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use std::collections::BTreeMap;
 use std::path::Path;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshKey;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::vrchat::sidecar::{
+use thyllore_anim_core::Skeleton;
+use thyllore_avatar_core::cloth_setup::SubmeshKey;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::vrchat::{
     build_sidecar, count_viseme_channels, read_sidecar_json, sidecar_path, write_sidecar_json,
     AvatarSidecar, SidecarInput, SidecarSubmeshRole,
 };
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 /// The sidecar's role and attachment of a submesh the loaded model has; another submesh is ignored.
 fn restore_submesh_role(state: &mut AvatarSetupState, role: &SidecarSubmeshRole) {
@@ -38,7 +39,7 @@ fn restore_submesh_role(state: &mut AvatarSetupState, role: &SidecarSubmeshRole)
         }
     }
 }
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, rest_frames_from_globals, spring_setup_from_sidecar, BoneRestFrame,
     SidecarSpring,
 };
@@ -50,9 +51,9 @@ pub(crate) fn current_rest_frames(
     skeleton: &Skeleton,
     bones: &[BoneInput],
 ) -> anyhow::Result<Vec<BoneRestFrame>> {
-    let rest_globals = crate::ecs::compute_pose_global_transforms(
+    let rest_globals = thyllore_anim_core::compute_pose_global_transforms(
         skeleton,
-        &crate::ecs::create_pose_from_rest(skeleton),
+        &thyllore_anim_core::create_pose_from_rest(skeleton),
     );
     rest_frames_from_globals(
         &rest_globals,

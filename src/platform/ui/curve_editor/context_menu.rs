@@ -1,21 +1,22 @@
 use std::collections::HashSet;
 
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 
 use super::track_list::{collect_humanoid_bone_roles, find_bone_role, is_role_curve_allowed};
 use super::view::DrawnCurve;
 use super::window::ALL_PROPERTY_TYPES;
-use crate::animation::editable::{
-    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyType, TangentType,
-    TangentWeightMode,
-};
-use crate::animation::BoneId;
 use crate::ecs::component::scalar_channel_for_property;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::bone_track::EnsureBoneTrack;
-use crate::ecs::systems::phases::event_dispatch::timeline::{ExtrapolationEnd, TimelineEvent};
+use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use crate::ecs::systems::timeline::keyframe_edit::ExtrapolationEnd;
 use crate::ecs::world::World;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
+use thyllore_anim_core::editable::{
+    CurveExtrapolation, EditableAnimationClip, InterpolationType, PropertyType, TangentType,
+    TangentWeightMode,
+};
+use thyllore_anim_core::BoneId;
 
 const SECTION_COLOR: [f32; 4] = [0.6, 0.8, 1.0, 1.0];
 
@@ -282,7 +283,7 @@ pub(super) fn add_key_target_property(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::PropertyCurve;
+    use thyllore_anim_core::editable::PropertyCurve;
 
     #[test]
     fn add_key_on_a_role_bone_skips_translations_left_visible_by_default() {

@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
-use crate::ecs::run_frame;
+use crate::ecs::systems::run_frame;
 use crate::ecs::FrameContext;
-use crate::vulkanr::device::RRDevice;
+use thyllore_vulkan_core::core::RRDevice;
 
 use anyhow::Result;
 use thyllore_vulkan_core::resource::{GpuResource, HostBuffer, HostBufferUsage};
@@ -28,7 +28,7 @@ impl App {
         let command_pool = self
             .data
             .ecs_world
-            .resource::<crate::vulkanr::context::CommandState>()
+            .resource::<thyllore_vulkan_core::core::CommandState>()
             .pool
             .clone();
 
@@ -40,7 +40,7 @@ impl App {
                 time,
                 delta_time,
                 image_index,
-                frame_slot: self.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT,
+                frame_slot: self.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT,
                 swapchain_extent: viewport_extent,
                 graphics: &mut self.data.graphics_resources,
                 raytracing: &mut self.data.raytracing,

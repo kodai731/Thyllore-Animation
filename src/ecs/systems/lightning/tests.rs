@@ -9,7 +9,7 @@ use crate::ecs::systems::effect_edit::apply_effect_preset;
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
 use glam::{Mat4, Vec3};
-use thyllore_effect_core::{
+use thyllore_effect_core::lightning::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
     LightningShape,
 };
@@ -89,9 +89,9 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         Some(0.9)
     );
 
-    let preset_name = thyllore_effect_core::LIGHTNING_PRESET_NAMES[0];
+    let preset_name = thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[0];
     let mut expected = LightningEffect::default();
-    assert!(thyllore_effect_core::apply_lightning_preset(
+    assert!(thyllore_effect_core::lightning::apply_lightning_preset(
         &mut expected,
         preset_name
     ));
@@ -445,7 +445,7 @@ fn spawn_waypoint_returns_none_at_cap() {
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
 
-    use thyllore_effect_core::LIGHTNING_MAX_WAYPOINTS;
+    use thyllore_effect_core::lightning::LIGHTNING_MAX_WAYPOINTS;
 
     for _ in 0..LIGHTNING_MAX_WAYPOINTS {
         assert!(spawn_lightning_waypoint(&mut world, lightning).is_some());

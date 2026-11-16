@@ -2,10 +2,10 @@ use glam::{Mat4, Vec3};
 use thyllore_math_core::{Aabb, BoundingSphere};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::world::{Children, Entity, GlobalTransform, MeshRef, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub const EMPTY_ENTITY_RADIUS: f32 = 0.5;
 pub const BONE_RADIUS_FALLBACK: f32 = 0.1;

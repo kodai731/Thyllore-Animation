@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{SceneLoadCommand, SceneLoadQueue, SceneState, TimelineState};
-use crate::ecs::systems::clip_library_systems::clip_library_register_loaded;
+use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::model_load_systems::build_initial_clip_schedule;
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::spawn_empty_scene_defaults;

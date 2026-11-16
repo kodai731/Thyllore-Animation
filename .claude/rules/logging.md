@@ -6,8 +6,7 @@ paths:
 
 # Logging
 
-- The logger and its macros are defined in `crates/thyllore-log-core/src/logger.rs`; `src/logger/` re-exports
-  them
+- The logger and its macros are defined in `crates/thyllore-log-core/src/logger.rs`
 - Logs are output to `log/log_N.txt`
 - Do NOT output to standard console; use the log files instead
 

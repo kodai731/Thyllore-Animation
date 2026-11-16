@@ -4,15 +4,13 @@ use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{
+use thyllore_avatar_core::cloth_setup::{
     attachment_or_default, default_attachment, default_root_of_submesh, ChainGenRequest,
     ChainGenSettings, RootAttachment, CHAIN_GEN_UI_PARAMS,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
 const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [
@@ -23,13 +21,13 @@ const SUBMESH_ROLE_CHOICES: [SubmeshRole; 4] = [
 ];
 
 #[derive(Clone)]
-pub struct SubmeshesView {
+pub(super) struct SubmeshesView {
     pub submeshes: Vec<SubmeshItem>,
     pub chain_gen: ChainGenSettings,
 }
 
 #[derive(Clone)]
-pub struct SubmeshItem {
+pub(super) struct SubmeshItem {
     pub key: SubmeshKey,
     pub role: SubmeshRole,
     pub attachment: Option<RootAttachment>,
@@ -57,7 +55,7 @@ static CHAIN_GEN_SCALARS: LazyLock<Vec<ScalarParam<SubmeshesView>>> = LazyLock::
 });
 
 impl SubmeshesView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         let submeshes: Vec<SubmeshItem> = state
             .submesh_roles
             .iter()
@@ -124,7 +122,7 @@ fn chain_generation_group() -> UiRow<SubmeshesView> {
     }
 }
 
-pub fn rows() -> Vec<UiRow<SubmeshesView>> {
+pub(super) fn rows() -> Vec<UiRow<SubmeshesView>> {
     let mut out = vec![chain_generation_group()];
     out.push(UiRow::List(Box::new(ListRows::<
         SubmeshesView,

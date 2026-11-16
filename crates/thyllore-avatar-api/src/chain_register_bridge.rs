@@ -3,8 +3,8 @@ use thyllore_anim_core::spring_bone::{
     add_generated_chains, fit_bone_capsule, CapsuleFitParams, ChainOrigin, FittedCapsule,
     RootAttachment, SpringChain, SpringJointParam, SpringSpace,
 };
-use thyllore_avatar_core::cloth_setup::components::submesh_role::SubmeshSelector;
-use thyllore_avatar_core::vrchat::sidecar_spring::{
+use thyllore_avatar_core::cloth_setup::SubmeshSelector;
+use thyllore_avatar_core::vrchat::{
     build_sidecar_spring, spring_setup_from_sidecar, SidecarSpring,
 };
 use thyllore_model_core::{BoneId, Skeleton, SkinData};
@@ -12,7 +12,7 @@ use thyllore_model_core::{BoneId, Skeleton, SkinData};
 use crate::avatar_setup_bridge::{bone_inputs, rest_frames, BoneSpec};
 use crate::chain_gen_bridge::CapsuleOut;
 use crate::collider_bridge::{skeleton_with_bind_poses, skin_data_from_fit_skin, FitSkin};
-use thyllore_avatar_core::vrchat::sidecar_spring::BoneRestFrame;
+use thyllore_avatar_core::vrchat::BoneRestFrame;
 
 #[derive(Clone, serde::Deserialize)]
 pub struct GeneratedChainIn {

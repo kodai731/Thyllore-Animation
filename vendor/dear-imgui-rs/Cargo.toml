@@ -59,6 +59,8 @@ wasm-font-atlas-experimental = []
 [lib]
 name = "dear_imgui_rs"
 path = "src/lib.rs"
+test = false
+bench = false
 
 [[example]]
 name = "custom_renderer_headless"

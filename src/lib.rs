@@ -17,7 +17,6 @@ pub mod effect;
 pub mod hooks;
 #[cfg(feature = "ml")]
 pub mod ml;
-pub mod paths;
 pub mod platform;
 pub mod scene;
 pub mod scratch;

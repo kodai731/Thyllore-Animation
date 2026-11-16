@@ -19,3 +19,7 @@ Re-apply when updating the vendored crate.
   `snapshot_preserves_standard_sampler_callbacks` each count into their own static. With the
   `opt-level = 2` this workspace sets for the crate, two empty functions are merged to one address
   and both commands are read as `SetSamplerLinear`.
+- `../imgui-winit-support/Cargo.toml`: a target-specific `winit` dependency enables `x11` and
+  `wayland` on Linux / BSD only. Upstream leaves the backend to the application, so the crate built
+  on its own (`cargo test -p imgui-winit-support`) had no backend and winit refused to compile.
+  Windows and macOS need no backend feature and are left as upstream.

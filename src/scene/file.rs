@@ -7,8 +7,6 @@ use crate::hooks::scene::SceneValue;
 
 pub const SCENE_FORMAT_VERSION: u32 = 8;
 
-pub use thyllore_anim_core::editable::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
-
 /// On-disk scene: the model, the clip files, every registered resource and entity component
 /// keyed by its type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]

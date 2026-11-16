@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::hooks::batch_capture::{BatchCapture, CaptureContext, CaptureSlot};
-use crate::vulkanr::context::CommandState;
+use thyllore_vulkan_core::core::CommandState;
 
 impl App {
     pub fn capture_context(&self, image_index: usize, slot: CaptureSlot) -> CaptureContext<'_> {

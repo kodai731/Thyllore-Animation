@@ -313,7 +313,7 @@ unsafe fn apply_model_scale_command(
 ) -> anyhow::Result<()> {
     app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 
@@ -358,7 +358,7 @@ unsafe fn apply_hidden_triangles(
 
     app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 

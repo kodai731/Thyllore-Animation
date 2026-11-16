@@ -6,10 +6,7 @@ use crate::ecs::resource::{
     ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState, NodeAssets,
 };
 use crate::ecs::systems::{create_default_grid_scale, create_grid_mesh};
-use crate::vulkanr::context::{
-    CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
-    SwapchainState,
-};
+use crate::vulkanr::context::{PipelineState, RenderConfig, RenderTargets, SwapchainState};
 use thyllore_vulkan_core::command::*;
 use thyllore_vulkan_core::core::*;
 use thyllore_vulkan_core::descriptor::*;

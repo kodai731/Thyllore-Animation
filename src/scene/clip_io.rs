@@ -7,7 +7,7 @@ use crate::ecs::component::{scalar_channel_for_cli_name, scalar_channel_for_prop
 use thyllore_anim_core::editable::EditableAnimationClip;
 
 use super::error::{SceneError, SceneResult};
-use super::file::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
+use thyllore_anim_core::editable::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
 
 pub fn save_animation_clip(path: &Path, clip: &EditableAnimationClip) -> SceneResult<()> {
     let clip_file =

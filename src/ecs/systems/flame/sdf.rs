@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
 use crate::ecs::systems::flame::descriptors::FlameImageBindings;
 use crate::ecs::EffectContext;
-use crate::vulkanr::context::CommandState;
+use thyllore_vulkan_core::core::CommandState;
 use thyllore_vulkan_core::render::RRRender;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {

@@ -1,9 +1,9 @@
+use crate::volume::VolumeShell;
 #[cfg(test)]
 use crate::volume::{
     cell_modulated_optical_depth, modulation_step, shell_and_puff_density, shell_and_puff_knots,
-    RayKnots, RayMedium, RayPuffs,
+    RayKnots, RayMedium, RayPuffs, StreakModulation,
 };
-use crate::volume::{StreakModulation, VolumeShell};
 use crate::wind::build_wind_puffs;
 #[cfg(test)]
 use crate::wind::rotation_phase;
@@ -165,7 +165,8 @@ impl WindShellParams {
         &self.puffs[..self.puff_count]
     }
 
-    pub(crate) fn streak(&self) -> StreakModulation {
+    #[cfg(test)]
+    fn streak(&self) -> StreakModulation {
         StreakModulation {
             order: self.streak_order,
             twist: self.streak_twist,

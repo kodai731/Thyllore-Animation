@@ -6,8 +6,8 @@ use crate::ecs::resource::ImguiTextures;
 use crate::ecs::systems::{
     ensure_rgba32, imgui_texture_create, imgui_texture_destroy, imgui_texture_update,
 };
-use crate::vulkanr::context::CommandState;
 use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::CommandState;
 use thyllore_vulkan_core::resource::PixelRegion;
 
 impl App {

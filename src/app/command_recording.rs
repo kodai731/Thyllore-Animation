@@ -15,7 +15,7 @@ impl App {
         frame_slot: usize,
     ) -> Result<()> {
         let command_buffer = self
-            .resource::<crate::vulkanr::context::CommandState>()
+            .resource::<thyllore_vulkan_core::core::CommandState>()
             .buffers
             .command_buffers()[image_index];
 

@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::app::{App, AppData};
 use crate::ecs::PassContext;
-use crate::vulkanr::context::FrameSync;
 use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::FrameSync;
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::resource::GpuBufferRegistry;
 use thyllore_vulkan_core::resource::GraphicsResources;

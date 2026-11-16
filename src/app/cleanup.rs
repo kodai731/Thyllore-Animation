@@ -1,11 +1,9 @@
 use crate::app::App;
 use crate::ecs::world::Resource;
 use crate::hooks::gpu_resource::GpuResourceHooks;
-use crate::vulkanr::context::{
-    CommandState, FrameSync, RenderTargets, SurfaceState, SwapchainState,
-};
+use crate::vulkanr::context::{RenderTargets, SwapchainState};
 use thyllore_vulkan_core::command::RRCommandBuffer;
-use thyllore_vulkan_core::core::RRSwapchain;
+use thyllore_vulkan_core::core::{CommandState, FrameSync, RRSwapchain, SurfaceState};
 use thyllore_vulkan_core::render::create_depth_objects;
 use thyllore_vulkan_core::render::{create_color_objects, create_framebuffers};
 use thyllore_vulkan_core::resource::{destroy_all_in_reverse, GpuResource};
@@ -75,7 +73,7 @@ impl App {
         };
 
         let surface = self
-            .resource::<crate::vulkanr::context::SurfaceState>()
+            .resource::<thyllore_vulkan_core::core::SurfaceState>()
             .surface();
         let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice)?;
         let image_count = new_swapchain.swapchain_images().len();

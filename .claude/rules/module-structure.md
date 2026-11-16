@@ -30,7 +30,8 @@ cargo test -p thyllore-grpc-client --no-default-features --test module_facade
 - the Claude Code `Stop` hook (`.claude/hooks/stop_module_facade.sh`, registered in `.claude/settings.json`),
   when the working tree of the session's directory (a worktree included) has a changed or new `.rs` or
   `Cargo.toml` file; a failure is returned to Claude to fix. Without `jq` it skips the check with a message.
-- CI (`.github/workflows/module_facade.yml`).
+- CI (`.github/workflows/module_facade.yml`), which also runs `cargo check --workspace --no-default-features`
+  so that the workspace lints cover every member, not only the crates the root library depends on.
 
 ## Facade or namespace
 

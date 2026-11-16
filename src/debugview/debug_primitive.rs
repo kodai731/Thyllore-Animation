@@ -1,8 +1,8 @@
 use crate::app::App;
 use crate::ecs::events::DebugPrimitiveKind;
-use crate::vulkanr::context::CommandState;
 use anyhow::Result;
 use glam::Vec3;
+use thyllore_vulkan_core::core::CommandState;
 
 impl App {
     pub unsafe fn spawn_debug_primitive(&mut self, kind: DebugPrimitiveKind) -> Result<()> {

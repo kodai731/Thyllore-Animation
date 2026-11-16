@@ -28,7 +28,7 @@ impl App {
         let command_pool = self
             .data
             .ecs_world
-            .resource::<crate::vulkanr::context::CommandState>()
+            .resource::<thyllore_vulkan_core::core::CommandState>()
             .pool
             .clone();
 

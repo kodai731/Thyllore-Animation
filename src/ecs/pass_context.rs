@@ -2,9 +2,8 @@ use anyhow::Result;
 
 use crate::asset::AssetStorage;
 use crate::ecs::world::World;
-use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
 use thyllore_vulkan_core::core::RRDevice;
-use thyllore_vulkan_core::renderer::{FrameTransients, TransientSlot};
+use thyllore_vulkan_core::renderer::{FrameTransients, OnionSkinGpuState, TransientSlot};
 use thyllore_vulkan_core::resource::GraphicsResources;
 use thyllore_vulkan_core::resource::RayTracingData;
 use thyllore_vulkan_core::resource::{

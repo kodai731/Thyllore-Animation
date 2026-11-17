@@ -2,9 +2,9 @@ use crate::ecs::resource::{AvatarSetupState, MaterialTextureState};
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::form_window::{FormPlacement, FormWindow, TabsSection};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
+use thyllore_avatar_core::humanoid::GeometryWarning;
+use thyllore_avatar_core::humanoid::RestPose;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::export_rows::ExportView;
 use super::humanoid_rows::HumanoidView;
@@ -117,7 +117,7 @@ fn close_avatar_setup(world: &World) {
 }
 
 #[derive(Clone)]
-pub struct ValidationView {
+pub(super) struct ValidationView {
     pub rest_pose: RestPose,
     pub issues: Vec<String>,
     pub warnings: Vec<String>,
@@ -125,7 +125,7 @@ pub struct ValidationView {
 }
 
 impl ValidationView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         Self {
             rest_pose: state.rest_pose,
             issues: state.issues.iter().map(|i| i.to_string()).collect(),
@@ -206,7 +206,7 @@ mod tests {
     use super::*;
     use crate::ecs::resource::AvatarSetupState;
     use thyllore_anim_core::spring_bone::CapsuleFitParams;
-    use thyllore_avatar_core::vrchat::rank::Platform;
+    use thyllore_avatar_core::vrchat::Platform;
 
     #[test]
     fn test_commit_export_no_change() {
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_commit_stats_change() {
         let mut world = World::new();
-        world.insert_resource(crate::ecs::events::queue::EventQueue::<
+        world.insert_resource(crate::ecs::events::EventQueue::<
             Box<dyn crate::ecs::events::UiCommand>,
         >::default());
         let shown = StatsView {

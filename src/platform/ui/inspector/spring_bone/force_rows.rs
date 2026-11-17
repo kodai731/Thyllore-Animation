@@ -49,7 +49,7 @@ static REST_RELATIVE_SCALARS: LazyLock<Vec<ScalarParam<JointForceForm>>> = LazyL
 });
 
 /// The model choice followed by the magnitudes of the chosen model.
-pub fn force_form_rows(form: &JointForceForm) -> Vec<UiRow<JointForceForm>> {
+pub(super) fn force_form_rows(form: &JointForceForm) -> Vec<UiRow<JointForceForm>> {
     let mut rows = vec![UiRow::Choice {
         label: "Force Model",
         options: |_, form: &JointForceForm| {
@@ -87,7 +87,7 @@ pub fn force_form_rows(form: &JointForceForm) -> Vec<UiRow<JointForceForm>> {
 }
 
 /// The force form of a view embedded as one field block.
-pub fn force_field_row<C: 'static>(
+pub(super) fn force_field_row<C: 'static>(
     scope: &'static str,
     form: &JointForceForm,
     field: fn(&mut C) -> &mut JointForceForm,

@@ -1,5 +1,5 @@
 use crate::flame::*;
-use cgmath::Vector2;
+use glam::Vec2;
 
 /// Rising warp of the noise coordinate.
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
@@ -29,7 +29,7 @@ impl Default for FlameWarp {
             rise_speed: 1.5,
             taper_power: 1.4,
             y_scale: 0.6,
-            reach: crate::flame_wave::WARP_REACH_DEFAULT,
+            reach: crate::flame::WARP_REACH_DEFAULT,
         }
     }
 }
@@ -39,7 +39,7 @@ impl Default for FlameWarp {
 #[params(tag = ParameterOwner, owner = Frame)]
 pub struct FlameWind {
     #[persist(curve, as = [f32; 2], scalars, debug_range = (-1.0, 1.0))]
-    pub direction: Vector2<f32>,
+    pub direction: Vec2,
     #[persist(curve, debug_range = (0.0, 1.0))]
     pub bend_amount: f32,
     #[persist]
@@ -49,7 +49,7 @@ pub struct FlameWind {
 impl Default for FlameWind {
     fn default() -> Self {
         Self {
-            direction: Vector2::new(0.0, 0.0),
+            direction: Vec2::new(0.0, 0.0),
             bend_amount: 0.0,
             bend_power: 1.7,
         }

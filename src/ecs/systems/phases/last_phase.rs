@@ -1,11 +1,10 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::world::{
     batch_run_record_capture, capture_output_path, requested_capture,
 };
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::hooks::batch_capture::{BatchCaptureHooks, CaptureContext, CaptureSlot};
 
 /// Post-render: with the GPU idle, runs every registered readback, then takes the schedule's
@@ -19,7 +18,7 @@ unsafe fn run_batch_capture(ctx: &CaptureContext, hooks: &BatchCaptureHooks) -> 
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    ctx.device.device.device_wait_idle()?;
+    ctx.device.wait_idle()?;
     hooks.run_all(ctx);
 
     let saved = ctx

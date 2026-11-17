@@ -11,10 +11,11 @@ use crate::ecs::systems::{query_hierarchy_tree, CameraMotion};
 use crate::ecs::world::{Entity, World};
 use crate::platform::key_bindings::default_bindings;
 use crate::platform::ui::shortcuts::format_chord;
-use crate::platform::ui::theme::colors::{srgb_to_linear_rgba, ACCENT, TEXT, TEXT_SECONDARY};
+use crate::platform::ui::theme::colors::{ACCENT, TEXT, TEXT_SECONDARY};
 use crate::platform::ui::theme::search_field;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_color_core::srgb_to_linear_rgba;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const PALETTE_WINDOW_TITLE: &str = "Command Palette";
 const PALETTE_WIDTH: f32 = 520.0;
@@ -41,7 +42,7 @@ pub(crate) const PALETTE_KEY_BINDING: PaletteKeyBinding = PaletteKeyBinding {
     label: "Command palette",
 };
 
-pub enum PaletteItem {
+pub(super) enum PaletteItem {
     Command {
         label: &'static str,
         chord: String,
@@ -74,7 +75,7 @@ enum PaletteOutcome {
     Close,
 }
 
-pub fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
+pub(super) fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
     let mut query_chars = query.chars().flat_map(char::to_lowercase).peekable();
     let mut score = 0;
     let mut previous_char = None;
@@ -104,7 +105,7 @@ fn match_bonus(index: usize, previous_char: Option<char>, last_match_index: Opti
     }
 }
 
-pub fn rank_candidates(query: &str, items: &[PaletteItem]) -> Vec<usize> {
+pub(super) fn rank_candidates(query: &str, items: &[PaletteItem]) -> Vec<usize> {
     let mut scored: Vec<(usize, u32)> = items
         .iter()
         .enumerate()

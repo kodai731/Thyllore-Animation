@@ -1,5 +1,5 @@
 use crate::ecs::resource::{MessageFilter, MessageLog};
-use crate::logger::message_buffer::{
+use thyllore_log_core::message_buffer::{
     Message, MessageLevel, MESSAGE_BUFFER, VALIDATION_MESSAGE_PREFIX,
 };
 

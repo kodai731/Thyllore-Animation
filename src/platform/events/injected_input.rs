@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use imgui::MouseButton;
 
 use crate::ecs::resource::{InjectedInput, UiFocusState};
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 /// Releases last frame's injected chords and presses the queued ones before imgui starts the frame.
 pub(super) fn feed_injected_keys(io: &mut imgui::Io, world: &World) {

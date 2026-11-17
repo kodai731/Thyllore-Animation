@@ -6,7 +6,7 @@
 //! agnostic and forces a 3-file diff whenever the marker bumps.
 //!
 //! Files inspected:
-//!   - `crates/thyllore-ml-api/src/lib.rs`   (L2 SSOT)
+//!   - `crates/thyllore-ml-api/src/abi_marker.rs`   (L2 SSOT)
 //!   - `blender_addon/__init__.py`           (L4 addon)
 //!
 //! Run::
@@ -55,9 +55,9 @@ fn extract_python_int(source: &str, identifier: &str) -> Option<u32> {
 fn rust_abi_marker_matches_addon_expected_value() {
     let root = workspace_root();
 
-    let rust_source = read(&root.join("crates/thyllore-ml-api/src/lib.rs"));
+    let rust_source = read(&root.join("crates/thyllore-ml-api/src/abi_marker.rs"));
     let rust_value = extract_rust_const(&rust_source).expect(
-        "ABI_MARKER not found in crates/thyllore-ml-api/src/lib.rs -- \
+        "ABI_MARKER not found in crates/thyllore-ml-api/src/abi_marker.rs -- \
          expected `pub const ABI_MARKER: u32 = N;`",
     );
 

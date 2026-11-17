@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRBloomDescriptorSets;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
-use crate::resource::bloom_chain::{BloomChain, BloomMipTarget};
+use crate::resource::{BloomChain, BloomMipTarget};
+use crate::FrameRenderContext;
 use thyllore_render_core::BloomSettings;
 
 #[repr(C)]
@@ -26,9 +26,10 @@ pub unsafe fn record_bloom_downsample_mip(
     mip_index: usize,
     frame_slot: usize,
     settings: &BloomSettings,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     let Some(mip) = mips.get(mip_index) else {
         return Ok(());
     };
@@ -90,9 +91,10 @@ pub unsafe fn record_bloom_upsample_pass(
     mips: &[BloomMipTarget],
     pass_index: usize,
     frame_slot: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     let Some(target_mip_index) = bloom_upsample_target_mip(mips.len(), pass_index) else {
         return Ok(());
     };

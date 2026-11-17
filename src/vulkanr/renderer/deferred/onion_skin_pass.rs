@@ -1,11 +1,11 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::PassContext;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 pub unsafe fn record_onion_skin_pass(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let Some(resources) = ctx.raytracing.onion_skin_pass.as_ref() else {
@@ -35,7 +35,7 @@ pub unsafe fn record_onion_skin_pass(
 
 pub unsafe fn record_onion_skin_composite(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<()> {
     let Some(resources) = ctx.raytracing.onion_skin_pass.as_ref() else {
         return Ok(());

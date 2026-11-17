@@ -1,7 +1,8 @@
 use crate::command::*;
-use crate::core::device::*;
+use crate::core::*;
 use crate::data::UniformBufferObject;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -10,8 +11,8 @@ use thyllore_render_core::FRAMES_IN_FLIGHT;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRUniformBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub uniform_buffer_object: UniformBufferObject,
 }
 
@@ -49,14 +50,14 @@ impl RRUniformBuffer {
         rrdevice: &RRDevice,
         ubo: &UniformBufferObject,
     ) -> anyhow::Result<()> {
-        let memory = rrdevice.device.map_memory(
+        let memory = rrdevice.device().map_memory(
             self.buffer_memory,
             0,
             size_of::<UniformBufferObject>() as u64,
             vk::MemoryMapFlags::empty(),
         )?;
         memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(self.buffer_memory);
+        rrdevice.device().unmap_memory(self.buffer_memory);
 
         self.uniform_buffer_object = ubo.clone();
 
@@ -65,11 +66,11 @@ impl RRUniformBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
     }
@@ -95,13 +96,18 @@ impl Drop for RRUniformBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRIndexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub indices: u32,
     pub capacity: usize,
 }
 
 impl RRIndexBuffer {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.buffer)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -174,11 +180,11 @@ impl RRIndexBuffer {
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
         self.indices = 0;
@@ -195,9 +201,9 @@ impl Drop for RRIndexBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct StagingBuffer {
-    pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
-    pub capacity: u64,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) capacity: u64,
 }
 
 impl StagingBuffer {
@@ -222,11 +228,11 @@ impl StagingBuffer {
 
     pub unsafe fn free(&mut self, rrdevice: &RRDevice) {
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.memory, None);
+            rrdevice.device().free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
         self.capacity = 0;
@@ -246,10 +252,10 @@ impl StagingBuffer {
 
         let map_memory =
             rrdevice
-                .device
+                .device()
                 .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
         memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device.unmap_memory(self.memory);
+        rrdevice.device().unmap_memory(self.memory);
 
         Ok(())
     }
@@ -261,13 +267,18 @@ impl StagingBuffer {
 
 #[derive(Clone, Debug, Default)]
 pub struct RRVertexBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) buffer_memory: vk::DeviceMemory,
     pub vertices: u32,
-    pub staging: [StagingBuffer; FRAMES_IN_FLIGHT],
+    pub(crate) staging: [StagingBuffer; FRAMES_IN_FLIGHT],
 }
 
 impl RRVertexBuffer {
+    #[inline]
+    pub fn buffer(&self) -> crate::types::Buffer {
+        crate::types::Buffer(self.buffer)
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -314,11 +325,11 @@ impl RRVertexBuffer {
             staging.free(rrdevice);
         }
         if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
+            rrdevice.device().destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
         if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
+            rrdevice.device().free_memory(self.buffer_memory, None);
             self.buffer_memory = vk::DeviceMemory::null();
         }
         self.vertices = 0;
@@ -354,7 +365,7 @@ impl RRVertexBuffer {
         Ok(())
     }
 
-    pub unsafe fn record_copy(
+    pub(crate) unsafe fn record_copy(
         &self,
         frame_slot: usize,
         device: &vulkanalia::Device,
@@ -385,50 +396,7 @@ impl RRVertexBuffer {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RRBuffer {
-    pub buffer: vk::Buffer,
-    pub buffer_memory: vk::DeviceMemory,
-    pub indices: u32,
-}
-
-impl RRBuffer {
-    pub unsafe fn new(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        size: vk::DeviceSize,
-        usage: vk::BufferUsageFlags,
-        properties: vk::MemoryPropertyFlags,
-    ) -> Result<Self> {
-        let mut rrbuffer = RRBuffer::default();
-        let (buffer, buffer_memory) = create_buffer(instance, rrdevice, size, usage, properties)?;
-        rrbuffer.buffer = buffer;
-        rrbuffer.buffer_memory = buffer_memory;
-        Ok(rrbuffer)
-    }
-
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.indices = 0;
-    }
-}
-
-impl Drop for RRBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRBuffer dropped without calling destroy()");
-        }
-    }
-}
-
-pub unsafe fn create_buffer(
+pub(crate) unsafe fn create_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     size: vk::DeviceSize,
@@ -440,8 +408,8 @@ pub unsafe fn create_buffer(
         .usage(usage)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-    let buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-    let requirements = rrdevice.device.get_buffer_memory_requirements(buffer);
+    let buffer = rrdevice.device().create_buffer(&buffer_info, None)?;
+    let requirements = rrdevice.device().get_buffer_memory_requirements(buffer);
 
     let mut memory_allocate_flags_info =
         vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
@@ -459,9 +427,9 @@ pub unsafe fn create_buffer(
         memory_info = memory_info.push_next(&mut memory_allocate_flags_info);
     }
 
-    let buffer_memory = rrdevice.device.allocate_memory(&memory_info, None)?;
+    let buffer_memory = rrdevice.device().allocate_memory(&memory_info, None)?;
     rrdevice
-        .device
+        .device()
         .bind_buffer_memory(buffer, buffer_memory, 0)?;
 
     Ok((buffer, buffer_memory))
@@ -482,19 +450,21 @@ unsafe fn upload_through_staging(
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
     )?;
-    let map_memory =
-        rrdevice
-            .device
-            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    let map_memory = rrdevice.device().map_memory(
+        staging_buffer_memory,
+        0,
+        size,
+        vk::MemoryMapFlags::empty(),
+    )?;
     memcpy(data, map_memory.cast(), size as usize);
-    rrdevice.device.unmap_memory(staging_buffer_memory);
+    rrdevice.device().unmap_memory(staging_buffer_memory);
     copy_buffer(rrdevice, rr_command_pool, staging_buffer, destination, size)?;
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
+    rrdevice.device().destroy_buffer(staging_buffer, None);
+    rrdevice.device().free_memory(staging_buffer_memory, None);
     Ok(())
 }
 
-pub unsafe fn copy_buffer(
+pub(crate) unsafe fn copy_buffer(
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
     source: vk::Buffer,
@@ -504,13 +474,13 @@ pub unsafe fn copy_buffer(
     with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
         let regions = vk::BufferCopy::builder().size(size);
         rrdevice
-            .device
+            .device()
             .cmd_copy_buffer(cmd, source, destination, &[regions]);
         Ok(())
     })
 }
 
-pub unsafe fn copy_buffer_to_image(
+pub(crate) unsafe fn copy_buffer_to_image(
     rrdevice: &RRDevice,
     rrcommand_buffer: &RRCommandPool,
     buffer: vk::Buffer,
@@ -537,7 +507,7 @@ pub unsafe fn copy_buffer_to_image(
             depth: 1,
         });
 
-    rrdevice.device.cmd_copy_buffer_to_image(
+    rrdevice.device().cmd_copy_buffer_to_image(
         command_buffer,
         buffer,
         image,

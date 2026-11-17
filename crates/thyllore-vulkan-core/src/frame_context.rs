@@ -1,4 +1,4 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::resource::{GpuBufferRegistry, GraphicsResources, PipelineStorage};
 
 pub struct FrameRenderContext<'a> {

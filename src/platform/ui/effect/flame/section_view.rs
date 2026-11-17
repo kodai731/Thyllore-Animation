@@ -4,7 +4,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::world::Entity;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use super::body_rows::FlameBodyView;
 use super::fit_browser::validate_texture_fit_path;
@@ -166,7 +166,7 @@ pub(super) fn send_flame_requests(
 
     let flame_ui = &view.flame_ui;
     if view.requests.apply_fit {
-        let groups = thyllore_effect_core::TextureFitGroups {
+        let groups = thyllore_effect_core::flame::TextureFitGroups {
             silhouette: flame_ui.texture_fit_groups[0],
             color: flame_ui.texture_fit_groups[1],
             turbulence: flame_ui.texture_fit_groups[2],
@@ -220,8 +220,8 @@ fn read_flame_body_view(world: &World, flame: Option<Entity>) -> FlameBodyView {
     let render = world
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
         .map(|s| *s);
-    let jitter = thyllore_effect_core::flame_wave::read_env_wave_jitter();
-    let jitter_freq = thyllore_effect_core::flame_wave::read_env_wave_jitter_freq();
+    let jitter = thyllore_effect_core::flame::read_env_wave_jitter();
+    let jitter_freq = thyllore_effect_core::flame::read_env_wave_jitter_freq();
     let viewport_size = world
         .get_resource::<ViewportInput>()
         .map(|viewport| viewport.size)
@@ -299,10 +299,10 @@ fn send_flame_body_changes(
         world.send_command(FlameUiCommand::UpdateRenderSettings(view.render.clone()));
     }
     if view.jitter != shown.jitter {
-        thyllore_effect_core::flame_wave::set_wave_jitter(view.jitter);
+        thyllore_effect_core::flame::set_wave_jitter(view.jitter);
     }
     if view.jitter_freq != shown.jitter_freq {
-        thyllore_effect_core::flame_wave::set_wave_jitter_freq(view.jitter_freq);
+        thyllore_effect_core::flame::set_wave_jitter_freq(view.jitter_freq);
     }
 }
 

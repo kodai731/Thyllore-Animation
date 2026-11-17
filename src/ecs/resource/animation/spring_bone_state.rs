@@ -1,5 +1,5 @@
-use crate::animation::spring_bone::SpringSimulation;
-use crate::animation::BoneId;
+use thyllore_anim_core::spring_bone::SpringSimulation;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum SpringBoneMode {
@@ -18,3 +18,5 @@ pub struct SpringBoneState {
     pub baked_bone_ids: Vec<BoneId>,
     pub original_clip_source_id: Option<u64>,
 }
+
+crate::startup_resource!(SpringBoneState, Editor);

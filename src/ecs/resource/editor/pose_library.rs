@@ -1,4 +1,4 @@
-use crate::animation::editable::SourceClipId;
+use thyllore_anim_core::editable::SourceClipId;
 
 #[derive(Clone, Debug)]
 pub struct PoseEntry {
@@ -11,6 +11,8 @@ pub struct PoseLibrary {
     pub poses: Vec<PoseEntry>,
     pub selected_pose_id: Option<SourceClipId>,
 }
+
+crate::startup_resource!(PoseLibrary, Editor);
 
 impl PoseLibrary {
     pub fn add_pose(&mut self, id: SourceClipId, captured_time: f32) {

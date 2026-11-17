@@ -1,6 +1,4 @@
-use crate::editable::components::keyframe::{
-    BezierHandle, EditableKeyframe, TangentType, TangentWeightMode,
-};
+use crate::editable::{BezierHandle, EditableKeyframe, TangentType, TangentWeightMode};
 
 pub fn sample_bezier(
     k0_time: f32,

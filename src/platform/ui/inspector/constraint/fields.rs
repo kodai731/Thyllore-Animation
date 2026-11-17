@@ -1,13 +1,13 @@
 use std::rc::Rc;
 use std::sync::LazyLock;
 
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
 use crate::ecs::world::Entity;
-use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
+use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::UiRow;
@@ -15,7 +15,7 @@ use crate::platform::ui::ui_rows::UiRow;
 const DEFAULT_POLE_VECTOR: [f32; 3] = [0.0, 0.0, 1.0];
 
 #[derive(Clone)]
-pub struct ConstraintView {
+pub(crate) struct ConstraintView {
     pub entity: Entity,
     pub entry_id: ConstraintId,
     pub constraint: ConstraintType,
@@ -26,7 +26,7 @@ pub struct ConstraintView {
 
 #[derive(Clone, Debug, Default, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
-pub struct ConstraintFields {
+pub(crate) struct ConstraintFields {
     #[persist(ui(min = 0.0, max = 1.0))]
     pub weight: f32,
     #[persist(ui(min = -180.0, max = 180.0, format = "%.1f"))]
@@ -46,7 +46,7 @@ pub struct ConstraintFields {
 }
 
 impl ConstraintFields {
-    pub fn from_constraint(constraint: &ConstraintType) -> Self {
+    pub(crate) fn from_constraint(constraint: &ConstraintType) -> Self {
         match constraint {
             ConstraintType::Ik(data) => Self {
                 weight: data.weight,
@@ -83,7 +83,7 @@ impl ConstraintFields {
         }
     }
 
-    pub fn apply_to(&self, constraint: &mut ConstraintType) {
+    pub(crate) fn apply_to(&self, constraint: &mut ConstraintType) {
         match constraint {
             ConstraintType::Ik(data) => {
                 data.weight = self.weight;
@@ -119,11 +119,11 @@ impl ConstraintFields {
     }
 }
 
-fn displayed_pole_vector(pole_vector: Option<Vector3<f32>>) -> [f32; 3] {
+fn displayed_pole_vector(pole_vector: Option<Vec3>) -> [f32; 3] {
     pole_vector.map_or(DEFAULT_POLE_VECTOR, Into::into)
 }
 
-fn displayed_rotation_offset(offset: Quaternion<f32>) -> [f32; 3] {
+fn displayed_rotation_offset(offset: Quat) -> [f32; 3] {
     quaternion_to_euler_degrees(&offset).into()
 }
 
@@ -153,7 +153,7 @@ static CONSTRAINT_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-pub struct ConstraintParams {
+pub(super) struct ConstraintParams {
     pub weight: &'static UiParam,
     pub twist: &'static UiParam,
     pub chain_length: &'static UiParam,
@@ -164,7 +164,7 @@ pub struct ConstraintParams {
     pub rotation_offset: &'static UiParam,
 }
 
-pub fn constraint_params() -> ConstraintParams {
+pub(super) fn constraint_params() -> ConstraintParams {
     let [weight, twist, chain_length, pole_vector, aim_axis, up_axis, offset, rotation_offset] =
         CONSTRAINT_UI_PARAMS.as_slice()
     else {
@@ -182,14 +182,14 @@ pub fn constraint_params() -> ConstraintParams {
     }
 }
 
-pub fn scalar_row(param: &'static UiParam) -> UiRow<ConstraintView> {
+pub(super) fn scalar_row(param: &'static UiParam) -> UiRow<ConstraintView> {
     UiRow::Scalar {
         param,
         scalars: &CONSTRAINT_SCALARS,
     }
 }
 
-pub fn common_rows() -> Vec<UiRow<ConstraintView>> {
+pub(super) fn common_rows() -> Vec<UiRow<ConstraintView>> {
     vec![
         UiRow::Toggle {
             label: "Enabled",
@@ -200,7 +200,7 @@ pub fn common_rows() -> Vec<UiRow<ConstraintView>> {
     ]
 }
 
-pub fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
+pub(super) fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
     [
         UiRow::Choice {
             label: "Applied To",
@@ -229,7 +229,7 @@ pub fn applied_to_rows() -> [UiRow<ConstraintView>; 2] {
     ]
 }
 
-pub fn remove_row() -> UiRow<ConstraintView> {
+pub(super) fn remove_row() -> UiRow<ConstraintView> {
     UiRow::Action {
         label: "Remove",
         enabled: |_, _: &ConstraintView| true,
@@ -237,7 +237,7 @@ pub fn remove_row() -> UiRow<ConstraintView> {
     }
 }
 
-pub fn update_event(view: &ConstraintView) -> ConstraintEvent {
+pub(super) fn update_event(view: &ConstraintView) -> ConstraintEvent {
     let mut constraint = view.constraint.clone();
     view.fields.apply_to(&mut constraint);
     ConstraintEvent::Update {
@@ -247,7 +247,7 @@ pub fn update_event(view: &ConstraintView) -> ConstraintEvent {
     }
 }
 
-pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
+pub(super) fn remove_event(view: &ConstraintView) -> ConstraintEvent {
     ConstraintEvent::Remove {
         entity: view.entity,
         constraint_id: view.entry_id,
@@ -256,10 +256,9 @@ pub fn remove_event(view: &ConstraintView) -> ConstraintEvent {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::InnerSpace;
 
     use super::*;
-    use crate::animation::{
+    use thyllore_anim_core::{
         AimConstraintData, IkConstraintData, PositionConstraintData, RotationConstraintData,
         ScaleConstraintData,
     };
@@ -292,14 +291,14 @@ mod tests {
     #[test]
     fn ik_round_trip_keeps_pole_vector() {
         let constraint = ConstraintType::Ik(IkConstraintData {
-            pole_vector: Some(Vector3::new(1.0, 2.0, 3.0)),
+            pole_vector: Some(Vec3::new(1.0, 2.0, 3.0)),
             ..Default::default()
         });
 
         let ConstraintType::Ik(data) = round_trip(&constraint) else {
             panic!("round trip changed the constraint kind");
         };
-        assert_eq!(data.pole_vector, Some(Vector3::new(1.0, 2.0, 3.0)));
+        assert_eq!(data.pole_vector, Some(Vec3::new(1.0, 2.0, 3.0)));
     }
 
     #[test]
@@ -316,15 +315,15 @@ mod tests {
         let ConstraintType::Ik(data) = constraint else {
             panic!("apply_to changed the constraint kind");
         };
-        assert_eq!(data.pole_vector, Some(Vector3::new(1.0, 0.0, 0.0)));
+        assert_eq!(data.pole_vector, Some(Vec3::new(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn aim_round_trip_keeps_axes() {
         let constraint = ConstraintType::Aim(AimConstraintData {
             weight: 0.6,
-            aim_axis: Vector3::new(1.0, 0.0, 0.0),
-            up_axis: Vector3::new(0.0, 0.0, 1.0),
+            aim_axis: Vec3::new(1.0, 0.0, 0.0),
+            up_axis: Vec3::new(0.0, 0.0, 1.0),
             ..Default::default()
         });
 
@@ -332,15 +331,15 @@ mod tests {
             panic!("round trip changed the constraint kind");
         };
         assert_eq!(data.weight, 0.6);
-        assert_eq!(data.aim_axis, Vector3::new(1.0, 0.0, 0.0));
-        assert_eq!(data.up_axis, Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(data.aim_axis, Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(data.up_axis, Vec3::new(0.0, 0.0, 1.0));
     }
 
     #[test]
     fn position_round_trip_keeps_offset() {
         let constraint = ConstraintType::Position(PositionConstraintData {
             weight: 0.4,
-            offset: Vector3::new(1.0, -2.0, 3.0),
+            offset: Vec3::new(1.0, -2.0, 3.0),
             ..Default::default()
         });
 
@@ -348,25 +347,25 @@ mod tests {
             panic!("round trip changed the constraint kind");
         };
         assert_eq!(data.weight, 0.4);
-        assert_eq!(data.offset, Vector3::new(1.0, -2.0, 3.0));
+        assert_eq!(data.offset, Vec3::new(1.0, -2.0, 3.0));
     }
 
     #[test]
     fn scale_round_trip_keeps_offset() {
         let constraint = ConstraintType::Scale(ScaleConstraintData {
-            offset: Vector3::new(2.0, 3.0, 4.0),
+            offset: Vec3::new(2.0, 3.0, 4.0),
             ..Default::default()
         });
 
         let ConstraintType::Scale(data) = round_trip(&constraint) else {
             panic!("round trip changed the constraint kind");
         };
-        assert_eq!(data.offset, Vector3::new(2.0, 3.0, 4.0));
+        assert_eq!(data.offset, Vec3::new(2.0, 3.0, 4.0));
     }
 
     #[test]
     fn rotation_round_trip_keeps_quaternion() {
-        let offset = euler_degrees_to_quaternion(&Vector3::new(10.0, 20.0, 30.0));
+        let offset = euler_degrees_to_quaternion(&Vec3::new(10.0, 20.0, 30.0));
         let constraint = ConstraintType::Rotation(RotationConstraintData {
             weight: 0.7,
             offset,
@@ -392,6 +391,6 @@ mod tests {
             panic!("apply_to changed the constraint kind");
         };
         let displayed = quaternion_to_euler_degrees(&data.offset);
-        assert!((displayed - Vector3::new(0.0, 45.0, 0.0)).magnitude() < 1e-3);
+        assert!((displayed - Vec3::new(0.0, 45.0, 0.0)).length() < 1e-3);
     }
 }

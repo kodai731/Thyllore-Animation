@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
-use cgmath::Vector4;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use glam::{UVec4, Vec4};
+use thyllore_avatar_core::humanoid::HumanoidMapping;
 
-use crate::animation::editable::{BoneTrack, SourceClipId};
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{BoneTrack, SourceClipId};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 /// Skin weights of one graphics mesh, identified by its index in the graphics resources.
 #[derive(Clone, Debug)]
 pub struct SkinSnapshot {
     pub mesh_index: usize,
-    pub bone_indices: Vec<Vector4<u32>>,
-    pub bone_weights: Vec<Vector4<f32>>,
+    pub bone_indices: Vec<UVec4>,
+    pub bone_weights: Vec<Vec4>,
 }
 
 /// Everything a skeleton edit can change, taken before and after the edit for undo / redo.

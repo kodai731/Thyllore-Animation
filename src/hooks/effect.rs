@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::ecs::EffectContext;
 use crate::hooks::pass::{PassGraph, RenderPassNode};
-use crate::vulkanr::render::RRRender;
+use thyllore_vulkan_core::render::RRRender;
 
 pub type EffectSetupHook = unsafe fn(&mut EffectContext, &RRRender) -> Result<()>;
 pub type EffectHookFn = unsafe fn(&mut EffectContext) -> Result<()>;

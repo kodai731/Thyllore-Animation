@@ -2,7 +2,7 @@
 
 A listener thread accepts connections and queues request lines; a ``bpy.app.timers`` pump runs
 them on the main thread (bpy is not thread-safe) and hands the responses back to the connection
-thread. Registered only in a debug build (``_debuglog.is_debug_enabled``); the socket has no
+thread. Registered only in a debug build (``_debuglog.is_debug_build``); the socket has no
 authentication, so it binds the loopback address unless ``THYLLORE_DEBUG_RPC_HOST`` says otherwise.
 """
 from __future__ import annotations

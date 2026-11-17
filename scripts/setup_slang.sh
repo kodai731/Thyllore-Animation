@@ -21,13 +21,13 @@ case "$(uname -s)-$(uname -m)" in
     *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 2 ;;
 esac
 
+source "$REPO_ROOT/scripts/lib/github_release.sh"
+
 if [[ -x "$SLANG_ROOT/bin/slangc" ]] && "$SLANG_ROOT/bin/slangc" -v 2>&1 | grep -q "$SLANG_VERSION"; then
     echo "slangc $SLANG_VERSION already at $SLANG_ROOT"
 else
-    URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${ASSET}"
     TMP="$(mktemp -d)"
-    echo "downloading $URL"
-    curl -sSL -o "$TMP/$ASSET" "$URL"
+    download_github_release_asset shader-slang/slang "v${SLANG_VERSION}" "$ASSET" "$TMP"
     rm -rf "$SLANG_ROOT"
     mkdir -p "$SLANG_ROOT"
     case "$ASSET" in

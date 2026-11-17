@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
-use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
+use thyllore_anim_core::BoneId;
 
 pub use thyllore_anim_core::editable::SnapSettings;
 
@@ -111,6 +111,8 @@ pub struct TimelineState {
     /// source clip is shorter (or empty).
     pub schedule_extent_seconds: f32,
 }
+
+crate::startup_resource!(TimelineState, Editor);
 
 impl TimelineState {
     pub fn new() -> Self {

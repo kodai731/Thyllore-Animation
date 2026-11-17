@@ -1,7 +1,7 @@
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ModelState, TextToAnimationState, TextToAnimationStatus};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RigPresence {
@@ -100,7 +100,7 @@ mod tests {
         assets.add_skeleton(SkeletonAsset {
             id: 0,
             skeleton_id: 0,
-            skeleton: crate::animation::Skeleton::new("test"),
+            skeleton: thyllore_anim_core::Skeleton::new("test"),
         });
         assets
     }

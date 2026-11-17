@@ -8,8 +8,7 @@ paths:
   - "src/ecs/systems/skeleton_*"
   - "src/ecs/systems/pose_*"
   - "src/ecs/systems/phases/animation_phase.rs"
-  - "src/app/model/**"
-  - "src/app/scene_model.rs"
+  - "src/ecs/systems/model_load_systems/**"
 ---
 
 # Animation System
@@ -44,7 +43,7 @@ This project supports three types of animation:
 | `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
-| `src/app/model/`, `src/app/scene_model.rs`        | Load a model into `AssetStorage` and GPU meshes                         |
+| `src/ecs/systems/model_load_systems/`           | Load a model into `AssetStorage` and GPU meshes |
 
 ## Transform Calculation Basics
 
@@ -97,4 +96,4 @@ Bones are `Skeleton.bones: Vec<Bone>` identified by `BoneId`; see `ecs-architect
 - [glTF 2.0 Specification - Animation](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#animations)
 - [glTF 2.0 Specification - Skins](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#skins)
 - [Bevy Engine - Animation](https://github.com/bevyengine/bevy/tree/main/crates/bevy_animation)
-- [cgmath crate documentation](https://docs.rs/cgmath/latest/cgmath/)
+- [glam crate documentation](https://docs.rs/glam/latest/glam/)

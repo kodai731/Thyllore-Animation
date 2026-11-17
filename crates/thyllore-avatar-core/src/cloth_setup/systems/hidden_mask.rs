@@ -1,12 +1,12 @@
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_math_core::{cone_directions, TriangleBvh};
 use thyllore_model_core::SkinData;
 
 use crate::cloth_setup::components::hidden_mask::{HiddenMaskParams, MaskMesh};
 
 pub fn find_hidden_body_vertices(
-    body_positions: &[Vector3<f32>],
-    body_normals: &[Vector3<f32>],
+    body_positions: &[Vec3],
+    body_normals: &[Vec3],
     garment: &TriangleBvh,
     params: &HiddenMaskParams,
 ) -> Vec<bool> {
@@ -67,11 +67,7 @@ pub fn find_hidden_triangle_indices(
 }
 
 /// A skin's geometry-space vertices and index buffer carried into model space.
-pub fn mask_mesh_from_skin(
-    skin: &SkinData,
-    indices: &[u32],
-    geometry_to_model: Matrix4<f32>,
-) -> MaskMesh {
+pub fn mask_mesh_from_skin(skin: &SkinData, indices: &[u32], geometry_to_model: Mat4) -> MaskMesh {
     let positions = skin
         .base_positions
         .iter()

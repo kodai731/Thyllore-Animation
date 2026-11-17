@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "thyllore-model-core"
 version = "0.0.1"
 edition = "2021"
@@ -7,6 +8,9 @@ authors = ["kodai731"]
 description = "Layer 1 static model definitions for ThylloreAnimation (Skeleton, Bone, SkinData) — shared SSOT for ml-core, anim-core, importer-core"
 repository = "https://github.com/kodai731/Thyllore-Animation"
 
+[lints]
+workspace = true
+
 [dependencies]
 thyllore-math-core = { path = "../thyllore-math-core" }
-cgmath = "0.18"
+glam = "0.34"

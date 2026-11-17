@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
-use cgmath::Vector3;
+use glam::Vec3;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpringTailSample {
     pub frame: usize,
     pub chain: String,
     pub bone: String,
-    pub position: Vector3<f32>,
+    pub position: Vec3,
 }
 
 pub fn format_tail_csv(samples: &[SpringTailSample]) -> String {
@@ -57,7 +57,7 @@ pub fn parse_tail_csv(text: &str) -> anyhow::Result<Vec<SpringTailSample>> {
             frame,
             chain,
             bone,
-            position: Vector3::new(x, y, z),
+            position: Vec3::new(x, y, z),
         });
     }
     Ok(samples)
@@ -83,7 +83,7 @@ pub fn compare_tail_trajectories(
     reference: &[SpringTailSample],
     candidate: &[SpringTailSample],
 ) -> Vec<ChainTrajectoryError> {
-    let mut lookup: HashMap<(usize, &str, &str), Vector3<f32>> = HashMap::new();
+    let mut lookup: HashMap<(usize, &str, &str), Vec3> = HashMap::new();
     for entry in candidate {
         lookup.insert((entry.frame, &entry.chain, &entry.bone), entry.position);
     }
@@ -127,7 +127,7 @@ pub fn compare_tail_trajectories(
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     use super::*;
 
@@ -143,7 +143,7 @@ mod tests {
             frame,
             chain: chain.to_string(),
             bone: bone.to_string(),
-            position: Vector3::new(x, y, z),
+            position: Vec3::new(x, y, z),
         }
     }
 

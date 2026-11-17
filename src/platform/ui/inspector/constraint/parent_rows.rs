@@ -2,8 +2,8 @@ use std::sync::LazyLock;
 
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::animation::{BoneId, ConstraintType, ParentConstraintData};
 use crate::ecs::systems::phases::event_dispatch::constraint::ConstraintEvent;
+use thyllore_anim_core::{BoneId, ConstraintType, ParentConstraintData};
 
 use super::fields::{applied_to_rows, common_rows, remove_row, update_event, ConstraintView};
 use crate::platform::ui::bone_choice::bone_options;
@@ -12,7 +12,7 @@ use crate::platform::ui::ui_rows::{ListRows, UiRow};
 const NEW_SOURCE: (BoneId, f32) = (0, 1.0);
 
 #[derive(Clone)]
-pub struct SourceView {
+pub(crate) struct SourceView {
     pub view: ConstraintView,
     pub source_index: usize,
     pub bone: BoneId,
@@ -21,7 +21,7 @@ pub struct SourceView {
 
 #[derive(Clone, Debug, Default, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = thyllore_scene_core::SingleOwner, owner = Component)]
-pub struct SourceFields {
+pub(crate) struct SourceFields {
     #[persist(ui(min = 0.0, max = 1.0))]
     pub weight: f32,
 }
@@ -52,7 +52,7 @@ static SOURCE_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-pub fn parent_rows() -> Vec<UiRow<ConstraintView>> {
+pub(crate) fn parent_rows() -> Vec<UiRow<ConstraintView>> {
     let mut rows = common_rows();
     rows.extend(applied_to_rows());
 

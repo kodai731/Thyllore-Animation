@@ -1,4 +1,4 @@
-use crate::platform::ui::theme::colors::srgb_to_linear_rgba;
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const SHADOW_SPREAD: f32 = 12.0;
 const SHADOW_LAYER_COUNT: usize = 8;
@@ -6,12 +6,12 @@ const SHADOW_BASE_ALPHA: f32 = 0.35;
 const SHADOW_Y_OFFSET: f32 = 3.0;
 
 #[derive(Clone, Copy, Debug)]
-pub struct ShadowLayer {
+pub(crate) struct ShadowLayer {
     pub offset: f32,
     pub alpha: f32,
 }
 
-pub fn shadow_layers(spread: f32, layer_count: usize) -> Vec<ShadowLayer> {
+pub(crate) fn shadow_layers(spread: f32, layer_count: usize) -> Vec<ShadowLayer> {
     if spread <= 0.0 || layer_count == 0 {
         return Vec::new();
     }
@@ -27,7 +27,7 @@ pub fn shadow_layers(spread: f32, layer_count: usize) -> Vec<ShadowLayer> {
     layers
 }
 
-pub fn draw_window_shadow(ui: &imgui::Ui, rounding: f32) {
+pub(crate) fn draw_window_shadow(ui: &imgui::Ui, rounding: f32) {
     let draw_list = ui.get_window_draw_list();
     let window_pos = ui.window_pos();
     let window_size = ui.window_size();

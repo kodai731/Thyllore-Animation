@@ -1,5 +1,5 @@
-use thyllore_anim_core::editable::components::morph_track::MorphTrack;
 use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_anim_core::editable::MorphTrack;
 
 use crate::components::fbx::FbxBlendShapeExport;
 use crate::components::morph::MORPH_WEIGHT_TO_PERCENT;

@@ -146,15 +146,6 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
@@ -685,17 +676,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
-name = "cgmath"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
-dependencies = [
- "approx 0.4.0",
- "num-traits",
- "serde",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -980,10 +960,10 @@ dependencies = [
 name = "dear-imgui-rs"
 version = "0.18.0"
 dependencies = [
- "approx 0.5.1",
+ "approx",
  "bitflags 2.11.0",
  "dear-imgui-sys",
- "glam",
+ "glam 0.32.1",
  "mint",
  "once_cell",
  "parking_lot",
@@ -1003,7 +983,7 @@ dependencies = [
  "cc",
  "dear-imgui-build-support",
  "flate2",
- "glam",
+ "glam 0.32.1",
  "mint",
  "tar",
 ]
@@ -1477,6 +1457,15 @@ name = "glam"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
+
+[[package]]
+name = "glam"
+version = "0.34.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54af5066834d6c2d404eb26ea036a15b15d9ff80db510b9a73ff95ab07f30831"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "glob"
@@ -3554,6 +3543,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3810,6 +3809,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3918,10 +3938,11 @@ name = "thyllore-anim-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "thyllore-math-core",
  "thyllore-model-core",
  "thyllore-scene-core",
@@ -3933,13 +3954,13 @@ version = "0.0.1-preview"
 dependencies = [
  "anyhow",
  "bincode",
- "cgmath",
  "chrono",
  "clap",
  "copypasta",
  "dear-imgui-rs",
  "env_logger",
  "fbxcel",
+ "glam 0.34.2",
  "gltf",
  "imgui-winit-support",
  "inventory",
@@ -3973,11 +3994,33 @@ dependencies = [
  "thyllore-render-core",
  "thyllore-render-debug",
  "thyllore-scene-core",
+ "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
  "thyllore-vulkan-core",
  "ufbx",
- "vulkanalia",
  "winit",
+]
+
+[[package]]
+name = "thyllore-avatar-api"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "glam 0.34.2",
+ "pyo3",
+ "pythonize",
+ "ron",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "strum",
+ "thyllore-anim-core",
+ "thyllore-avatar-core",
+ "thyllore-exporter-core",
+ "thyllore-math-core",
+ "thyllore-ml-api",
+ "thyllore-model-core",
+ "thyllore-scene-core",
 ]
 
 [[package]]
@@ -3985,12 +4028,14 @@ name = "thyllore-avatar-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "serde_json",
+ "strum",
  "tempfile",
  "thyllore-anim-core",
+ "thyllore-file-format-core",
  "thyllore-importer-core",
  "thyllore-math-core",
  "thyllore-model-core",
@@ -4014,8 +4059,8 @@ name = "thyllore-effect-core"
 version = "0.0.1"
 dependencies = [
  "cc",
- "cgmath",
  "fastrand",
+ "glam 0.34.2",
  "numpy",
  "pyo3",
  "pythonize",
@@ -4045,8 +4090,8 @@ name = "thyllore-exporter-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "fbxcel",
+ "glam 0.34.2",
  "gltf",
  "ron",
  "serde_json",
@@ -4065,7 +4110,7 @@ dependencies = [
 name = "thyllore-file-format-core"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "thyllore-anim-core",
  "thyllore-math-core",
  "thyllore-model-core",
@@ -4080,6 +4125,7 @@ dependencies = [
  "protox",
  "serde_json",
  "sha2",
+ "syn",
  "tempfile",
  "thyllore-anim-core",
  "thyllore-log-core",
@@ -4096,7 +4142,7 @@ name = "thyllore-importer-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "gltf",
  "png 0.17.16",
  "serde",
@@ -4123,13 +4169,20 @@ name = "thyllore-math-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "fastrand",
+ "glam 0.34.2",
 ]
 
 [[package]]
 name = "thyllore-ml-api"
 version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "pyo3",
+ "pythonize",
+ "serde",
+]
 
 [[package]]
 name = "thyllore-ml-core"
@@ -4137,8 +4190,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cgmath",
- "chrono",
  "ed25519-dalek",
  "flate2",
  "ndarray 0.16.1",
@@ -4148,18 +4199,14 @@ dependencies = [
  "ort",
  "pyo3",
  "pythonize",
- "ron",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thyllore-anim-core",
- "thyllore-avatar-core",
- "thyllore-exporter-core",
  "thyllore-math-core",
  "thyllore-ml-api",
  "thyllore-model-core",
- "thyllore-scene-core",
  "ureq 2.12.1",
 ]
 
@@ -4167,7 +4214,7 @@ dependencies = [
 name = "thyllore-model-core"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "thyllore-math-core",
 ]
 
@@ -4176,7 +4223,7 @@ name = "thyllore-render-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
+ "glam 0.34.2",
  "ron",
  "serde",
  "thyllore-anim-core",
@@ -4189,7 +4236,7 @@ dependencies = [
 name = "thyllore-render-debug"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "serde_json",
  "thyllore-effect-core",
  "thyllore-math-core",
@@ -4200,9 +4247,8 @@ dependencies = [
 name = "thyllore-scene-core"
 version = "0.0.1"
 dependencies = [
- "cgmath",
+ "glam 0.34.2",
  "serde",
- "thyllore-color-core",
  "thyllore-scene-derive",
 ]
 
@@ -4254,8 +4300,8 @@ name = "thyllore-vulkan-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "cgmath",
  "dear-imgui-rs",
+ "glam 0.34.2",
  "log",
  "png 0.17.16",
  "thiserror 1.0.69",

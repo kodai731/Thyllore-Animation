@@ -1,45 +1,24 @@
 extern crate self as thyllore_effect_core;
 
-pub mod debug;
-pub mod effect_facade;
+mod debug;
+mod effect_facade;
 pub mod flame;
-pub mod gpu_pack;
+mod gpu_pack;
 pub mod lightning;
-pub mod scene_convert;
-pub mod volume;
+mod scene_convert;
+pub(crate) mod volume;
 pub mod water;
 pub mod wind;
 
-pub use thyllore_texture_fit_core as flame_fit;
+pub use thyllore_scene_core::{ScalarParam, SceneComponent, UiParam};
 
-pub use thyllore_scene_core::{
-    find_scalar_param, find_ui_param, title_case_snake, ScalarParam, SceneComponent, UiParam,
-};
-
-pub use debug::flame_wall_probe::{
+pub use debug::{
     probe_flame_wall, WallProbeRay, WallProbeReport, WallProbeView, WALL_PROBE_GRID_COLS,
     WALL_PROBE_GRID_ROWS,
 };
 pub use effect_facade::{EffectPresets, Placement};
-pub use flame::*;
 pub use gpu_pack::UboPack;
-pub use lightning::*;
 pub use thyllore_effect_derive::UboPack;
-pub use volume::{
-    clamp_ray_to_cone_frustum, RayKnots, RayPuffs, VolumeShell, PUFFS_PER_RAY, RAY_MAX_KNOTS,
-};
-pub use water::*;
-pub use wind::*;
-
-pub use flame::analytic::field_manifest as flame_field_manifest;
-pub use flame::analytic::pick as flame_pick;
-pub use flame::analytic::radial as flame_radial;
-pub use flame::analytic::shell as flame_shell;
-pub use flame::analytic::wave as flame_wave;
-pub use flame::bake::sdf as flame_sdf;
-pub use flame::bake::texture_fit as flame_texture_fit;
-pub use flame::plume as flame_plume;
-pub use flame::trail as flame_trail;
 
 #[cfg(test)]
 mod analytic_manifest;

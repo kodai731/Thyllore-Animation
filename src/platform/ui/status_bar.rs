@@ -3,12 +3,12 @@ use crate::ecs::resource::{
     Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
     ValidationReport, ViewportInput,
 };
-use crate::ecs::systems::camera_fly_speed;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
+use crate::ecs::systems::{camera_fly_speed, sum_compute_ms, sum_wait_ms};
 use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::message_window::{COLOR_ERROR, COLOR_WARNING};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const FPS_BUFFER_SIZE: usize = 60;
 const MEMORY_UPDATE_INTERVAL: u32 = 60;
@@ -40,8 +40,17 @@ fn stable_item_offsets<'a>(ui: &imgui::Ui, items: impl Iterator<Item = &'a str>)
         .collect()
 }
 
+#[derive(Debug)]
+pub struct FrameTimeValues {
+    pub cpu_ms: f32,
+    pub wait_ms: f32,
+    pub gpu_ms: Option<f32>,
+}
+
 pub struct StatusBarState {
     fps_buffer: [f32; FPS_BUFFER_SIZE],
+    cpu_buffer: [f32; FPS_BUFFER_SIZE],
+    wait_buffer: [f32; FPS_BUFFER_SIZE],
     write_index: usize,
     sample_count: usize,
     memory_mb: f32,
@@ -53,6 +62,8 @@ impl Default for StatusBarState {
     fn default() -> Self {
         Self {
             fps_buffer: [0.0; FPS_BUFFER_SIZE],
+            cpu_buffer: [0.0; FPS_BUFFER_SIZE],
+            wait_buffer: [0.0; FPS_BUFFER_SIZE],
             write_index: 0,
             sample_count: 0,
             memory_mb: 0.0,
@@ -63,9 +74,12 @@ impl Default for StatusBarState {
 }
 
 impl StatusBarState {
-    pub fn update_fps(&mut self, delta_time: f32) {
-        self.fps_buffer[self.write_index] = delta_time;
-        self.write_index = (self.write_index + 1) % FPS_BUFFER_SIZE;
+    pub fn update_frame(&mut self, delta_time: f32, cpu_ms: f32, wait_ms: f32) {
+        let i = self.write_index;
+        self.fps_buffer[i] = delta_time;
+        self.cpu_buffer[i] = cpu_ms;
+        self.wait_buffer[i] = wait_ms;
+        self.write_index = (i + 1) % FPS_BUFFER_SIZE;
         if self.sample_count < FPS_BUFFER_SIZE {
             self.sample_count += 1;
         }
@@ -84,6 +98,14 @@ impl StatusBarState {
         }
     }
 
+    pub fn average_cpu_ms(&self) -> f32 {
+        average_of(&self.cpu_buffer[..self.sample_count])
+    }
+
+    pub fn average_wait_ms(&self) -> f32 {
+        average_of(&self.wait_buffer[..self.sample_count])
+    }
+
     pub fn update_memory(&mut self) {
         self.memory_update_counter += 1;
         if self.memory_update_counter >= MEMORY_UPDATE_INTERVAL {
@@ -93,23 +115,26 @@ impl StatusBarState {
     }
 }
 
-fn draw_status_bar(
-    ui: &imgui::Ui,
-    state: &mut StatusBarState,
+struct StatusBarInputs<'a> {
     delta_time: f32,
-    cpu_ms: f32,
-    gpu_ms: Option<f32>,
-    viewport: &ViewportInput,
-    model: &ModelState,
-    timeline_state: &TimelineState,
+    times: FrameTimeValues,
+    viewport: &'a ViewportInput,
+    model: &'a ModelState,
+    timeline_state: &'a TimelineState,
     clip_duration: f32,
     errors: usize,
     warnings: usize,
+}
+
+fn draw_status_bar(
+    ui: &imgui::Ui,
+    state: &mut StatusBarState,
+    inputs: &StatusBarInputs,
 ) -> Option<OverlayEvent> {
-    state.update_fps(delta_time);
+    state.update_frame(inputs.delta_time, inputs.times.cpu_ms, inputs.times.wait_ms);
     state.update_memory();
 
-    let gpu_ms = match gpu_ms {
+    let gpu_ms = match inputs.times.gpu_ms {
         Some(ms) => {
             state.last_gpu_ms = ms;
             ms
@@ -118,22 +143,27 @@ fn draw_status_bar(
     };
 
     let fps = state.average_fps();
-    let frame_rate = timeline_state.snap_settings.frame_rate;
-    let current_frame = (timeline_state.current_time * frame_rate).round() as i32;
-    let total_frames = (clip_duration * frame_rate).round() as i32;
-    let current_time = timeline_state.current_time;
-    let playback_icon = if timeline_state.playing { ">" } else { "||" };
+    let frame_rate = inputs.timeline_state.snap_settings.frame_rate;
+    let current_frame = (inputs.timeline_state.current_time * frame_rate).round() as i32;
+    let total_frames = (inputs.clip_duration * frame_rate).round() as i32;
+    let current_time = inputs.timeline_state.current_time;
+    let playback_icon = if inputs.timeline_state.playing {
+        ">"
+    } else {
+        "||"
+    };
 
     let model_text = format!(
         "{}  {}",
-        model_file_name(&model.model_path),
-        model.load_status
+        model_file_name(&inputs.model.model_path),
+        inputs.model.load_status
     );
-    let validation_text = format_validation_status(errors, warnings);
-    let validation_color = validation_status_color(errors, warnings);
+    let validation_text = format_validation_status(inputs.errors, inputs.warnings);
+    let validation_color = validation_status_color(inputs.errors, inputs.warnings);
 
     let fps_text = format!("FPS:{:.0}", fps);
-    let cpu_text = format!("CPU {:.1}ms", cpu_ms);
+    let cpu_text = format!("CPU {:.1}ms", state.average_cpu_ms());
+    let wait_text = format!("Wait {:.1}ms", state.average_wait_ms());
     let gpu_text = format!("GPU {:.1}ms", gpu_ms);
     let frame_text = format!("F:{}/{}", current_frame, total_frames);
     let time_text = format!("{:.3}s", current_time);
@@ -142,6 +172,7 @@ fn draw_status_bar(
         (model_text.as_str(), TEXT_COLOR),
         (fps_text.as_str(), TEXT_COLOR),
         (cpu_text.as_str(), TEXT_COLOR),
+        (wait_text.as_str(), TEXT_COLOR),
         (gpu_text.as_str(), TEXT_COLOR),
         (frame_text.as_str(), TEXT_COLOR),
         (time_text.as_str(), TEXT_COLOR),
@@ -152,8 +183,8 @@ fn draw_status_bar(
     let item_x = stable_item_offsets(ui, items.iter().map(|(text, _)| *text));
     let last_item_end = item_x[items.len() - 1] + stable_text_width(ui, validation_text.as_str());
 
-    let vp_right = viewport.position[0] + viewport.size[0];
-    let vp_bottom = viewport.position[1] + viewport.size[1];
+    let vp_right = inputs.viewport.position[0] + inputs.viewport.size[0];
+    let vp_bottom = inputs.viewport.position[1] + inputs.viewport.size[1];
     let window_width = last_item_end + OVERLAY_PADDING;
     let window_height = ui.text_line_height() + OVERLAY_PADDING * 2.0;
     let window_pos = [vp_right - window_width, vp_bottom - window_height];
@@ -174,8 +205,8 @@ fn draw_status_bar(
                 for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
                     ui.set_cursor_pos([x, text_y]);
                     ui.text_colored(*color, text);
-                    if index == 0 && ui.is_item_hovered() && !model.model_path.is_empty() {
-                        ui.tooltip_text(&model.model_path);
+                    if index == 0 && ui.is_item_hovered() && !inputs.model.model_path.is_empty() {
+                        ui.tooltip_text(&inputs.model.model_path);
                     }
                     if index == items.len() - 1 {
                         validation_clicked = ui.is_item_clicked();
@@ -214,6 +245,13 @@ fn format_validation_status(errors: usize, warnings: usize) -> String {
     format!("VK E:{} W:{}", errors, warnings)
 }
 
+fn average_of(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    samples.iter().sum::<f32>() / samples.len() as f32
+}
+
 fn read_rss_mb() -> f32 {
     parse_rss_from_statm(&std::fs::read_to_string("/proc/self/statm").unwrap_or_default())
 }
@@ -245,7 +283,7 @@ mod tests {
         let mut state = StatusBarState::default();
         // 60 FPS = 1/60 delta_time
         for _ in 0..10 {
-            state.update_fps(1.0 / 60.0);
+            state.update_frame(1.0 / 60.0, 0.0, 0.0);
         }
         let fps = state.average_fps();
         assert!((fps - 60.0).abs() < 0.1);
@@ -256,11 +294,20 @@ mod tests {
         let mut state = StatusBarState::default();
         // Fill 100 samples (exceeds buffer of 60)
         for _ in 0..100 {
-            state.update_fps(1.0 / 30.0);
+            state.update_frame(1.0 / 30.0, 0.0, 0.0);
         }
         assert_eq!(state.sample_count, FPS_BUFFER_SIZE);
         let fps = state.average_fps();
         assert!((fps - 30.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_cpu_and_wait_average() {
+        let mut state = StatusBarState::default();
+        state.update_frame(1.0 / 60.0, 2.0, 1.0);
+        state.update_frame(1.0 / 60.0, 4.0, 3.0);
+        assert!((state.average_cpu_ms() - 3.0).abs() < 1e-6);
+        assert!((state.average_wait_ms() - 2.0).abs() < 1e-6);
     }
 
     #[test]
@@ -355,14 +402,24 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
         &world.resource::<Camera>(),
     );
 
-    let frame_ms = world
-        .get_resource::<CpuFrameTimings>()
-        .map(|timings| timings.dt_ms)
-        .unwrap_or(0.0);
+    let (frame_ms, frame_cpu_ms, frame_wait_ms) =
+        world
+            .get_resource::<CpuFrameTimings>()
+            .map_or((0.0, 0.0, 0.0), |timings| {
+                (
+                    timings.dt_ms,
+                    sum_compute_ms(&timings.compute),
+                    sum_wait_ms(&timings.wait),
+                )
+            });
     let delta_time = (frame_ms / 1000.0).max(0.001);
-    let gpu_ms = world
-        .get_resource::<GpuPassTimings>()
-        .and_then(|timings| timings.frame_total_ms);
+    let times = FrameTimeValues {
+        cpu_ms: frame_cpu_ms,
+        wait_ms: frame_wait_ms,
+        gpu_ms: world
+            .get_resource::<GpuPassTimings>()
+            .and_then(|timings| timings.frame_total_ms),
+    };
     let viewport = world.resource::<ViewportInput>();
     let model = world.resource::<ModelState>();
     let timeline_state = world.resource::<TimelineState>();
@@ -379,15 +436,16 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
     if let Some(event) = draw_status_bar(
         ui,
         &mut state,
-        delta_time,
-        frame_ms,
-        gpu_ms,
-        &viewport,
-        &model,
-        &timeline_state,
-        clip_duration,
-        errors,
-        warnings,
+        &StatusBarInputs {
+            delta_time,
+            times,
+            viewport: &viewport,
+            model: &model,
+            timeline_state: &timeline_state,
+            clip_duration,
+            errors,
+            warnings,
+        },
     ) {
         world.send_command(event);
     }

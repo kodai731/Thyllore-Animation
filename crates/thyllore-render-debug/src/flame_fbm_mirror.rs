@@ -8,6 +8,7 @@ fn glsl_fract(x: f32) -> f32 {
     x - x.floor()
 }
 
+#[allow(clippy::approx_constant)]
 pub fn hash_cell(cell: [f32; 3]) -> f32 {
     let mut p = [
         glsl_fract(cell[0] * 0.318_309_9 + 0.1),
@@ -58,7 +59,7 @@ pub fn fbm3(p: [f32; 3]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_effect_core::flame_wave::{WAVE_NOISE_MEAN, WAVE_NOISE_STD};
+    use thyllore_effect_core::flame::{WAVE_NOISE_MEAN, WAVE_NOISE_STD};
 
     /// The calibration constants the wave basis reproduces are the measured
     /// lattice statistics of this fbm (mean = 0.5 * (0.5 + 0.25 + 0.125)).

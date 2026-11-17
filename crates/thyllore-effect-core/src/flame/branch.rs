@@ -1,7 +1,5 @@
 use super::*;
-use crate::flame_radial::{
-    flame_radial_radius_scale, flame_radial_support_radius, FlameRadialTaper,
-};
+use crate::flame::{flame_radial_radius_scale, flame_radial_support_radius, FlameRadialTaper};
 #[cfg(test)]
 use std::f32::consts::TAU;
 #[cfg(test)]
@@ -480,7 +478,7 @@ pub fn build_branch_field(effect: &FlameEffect, baked: &FlameBaked) -> FlameBran
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flame::analytic::slang::{
+    use crate::flame::{
         flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang,
         flame_branch_pull_back_slang,
     };

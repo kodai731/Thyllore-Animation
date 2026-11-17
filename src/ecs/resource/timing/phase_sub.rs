@@ -4,3 +4,5 @@ use std::collections::HashMap;
 pub struct PhaseSubTimings {
     pub phases: HashMap<&'static str, HashMap<String, f32>>,
 }
+
+crate::startup_resource!(PhaseSubTimings, CoreResources);

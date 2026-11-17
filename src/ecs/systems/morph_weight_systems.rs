@@ -1,16 +1,16 @@
 use std::collections::HashSet;
 
-use thyllore_avatar_core::expression::components::grouping::ExpressionGrouping;
-use thyllore_avatar_core::expression::systems::grouping::group_channels;
-use thyllore_avatar_core::expression::systems::side::find_mirror_channel;
+use thyllore_avatar_core::expression::find_mirror_channel;
+use thyllore_avatar_core::expression::group_channels;
+use thyllore_avatar_core::expression::ExpressionGrouping;
 use thyllore_model_core::MeshMorph;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedMorphWeights, MorphChannelCatalog, MorphWeights};
 use crate::ecs::resource::BlendShapeInspectorState;
 use crate::ecs::world::{Entity, MeshRef, Parent, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::mesh_buffer::MeshBuffer;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::MeshBuffer;
 
 pub fn apply_morph_weights(
     world: &mut World,
@@ -291,9 +291,9 @@ fn apply_morph_to_mesh(mesh: &mut MeshBuffer, weights: &[f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vulkanr::data::Vertex;
-    use thyllore_math_core::{Vec2, Vec3, Vec4};
+    use glam::{Vec2, Vec3, Vec4};
     use thyllore_model_core::{MeshMorph, MorphChannel, SparseDelta};
+    use thyllore_vulkan_core::data::Vertex;
 
     fn make_test_mesh() -> MeshBuffer {
         let vertices = vec![

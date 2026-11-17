@@ -1,9 +1,9 @@
 use std::io::{Seek, Write};
 use std::path::Path;
 
-use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
+use glam::{Mat4, Vec3};
 
 use crate::systems::fbx::writer::ARRAY_ENCODING;
 
@@ -76,7 +76,6 @@ impl FbxChannel {
 pub(crate) struct FbxBoneExport {
     pub model_uid: i64,
     pub name: String,
-    pub is_root: bool,
     pub parent_model_uid: Option<i64>,
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
@@ -159,28 +158,28 @@ pub(crate) fn convert_tangent_to_fbx_slope_weight(
     (slope, weight)
 }
 
-pub(crate) fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], [f64; 3]) {
-    let tx = m[3][0] as f64;
-    let ty = m[3][1] as f64;
-    let tz = m[3][2] as f64;
+pub(crate) fn decompose_matrix_to_trs(m: &Mat4) -> ([f64; 3], [f64; 3], [f64; 3]) {
+    let tx = m.col(3)[0] as f64;
+    let ty = m.col(3)[1] as f64;
+    let tz = m.col(3)[2] as f64;
 
-    let sx = Vector3::new(m[0][0], m[0][1], m[0][2]).magnitude() as f64;
-    let sy = Vector3::new(m[1][0], m[1][1], m[1][2]).magnitude() as f64;
-    let sz = Vector3::new(m[2][0], m[2][1], m[2][2]).magnitude() as f64;
+    let sx = Vec3::new(m.col(0)[0], m.col(0)[1], m.col(0)[2]).length() as f64;
+    let sy = Vec3::new(m.col(1)[0], m.col(1)[1], m.col(1)[2]).length() as f64;
+    let sz = Vec3::new(m.col(2)[0], m.col(2)[1], m.col(2)[2]).length() as f64;
 
     let sx_safe = if sx > 1e-8 { sx } else { 1.0 };
     let sy_safe = if sy > 1e-8 { sy } else { 1.0 };
     let sz_safe = if sz > 1e-8 { sz } else { 1.0 };
 
-    let r00 = m[0][0] as f64 / sx_safe;
-    let r01 = m[0][1] as f64 / sx_safe;
-    let r02 = m[0][2] as f64 / sx_safe;
-    let _r10 = m[1][0] as f64 / sy_safe;
-    let r11 = m[1][1] as f64 / sy_safe;
-    let r12 = m[1][2] as f64 / sy_safe;
-    let _r20 = m[2][0] as f64 / sz_safe;
-    let r21 = m[2][1] as f64 / sz_safe;
-    let r22 = m[2][2] as f64 / sz_safe;
+    let r00 = m.col(0)[0] as f64 / sx_safe;
+    let r01 = m.col(0)[1] as f64 / sx_safe;
+    let r02 = m.col(0)[2] as f64 / sx_safe;
+    let _r10 = m.col(1)[0] as f64 / sy_safe;
+    let r11 = m.col(1)[1] as f64 / sy_safe;
+    let r12 = m.col(1)[2] as f64 / sy_safe;
+    let _r20 = m.col(2)[0] as f64 / sz_safe;
+    let r21 = m.col(2)[1] as f64 / sz_safe;
+    let r22 = m.col(2)[2] as f64 / sz_safe;
 
     let ry = (-r02).asin();
     let (rx, rz) = if ry.cos().abs() > 1e-6 {
@@ -225,7 +224,6 @@ pub(crate) fn build_bone_export_list(
         skeleton_idx_to_export_idx.push(Some(export_idx));
 
         let model_uid = uid_alloc.allocate();
-        let is_root = bone.parent_id.is_none();
 
         let (mut translation, rotation, scaling) = decompose_matrix_to_trs(&bone.local_transform);
 
@@ -243,7 +241,6 @@ pub(crate) fn build_bone_export_list(
         bones.push(FbxBoneExport {
             model_uid,
             name: bone.name.clone(),
-            is_root,
             parent_model_uid: None,
             translation,
             rotation,
@@ -262,9 +259,7 @@ fn attach_root_transform_node(
     uid_alloc: &mut UidAllocator,
     inv_unit_scale: f32,
 ) {
-    use cgmath::SquareMatrix;
-
-    if skeleton.root_transform == Matrix4::identity() {
+    if skeleton.root_transform == Mat4::IDENTITY {
         return;
     }
 
@@ -289,7 +284,6 @@ fn attach_root_transform_node(
     bones.push(FbxBoneExport {
         model_uid: root_uid,
         name,
-        is_root: true,
         parent_model_uid: None,
         translation,
         rotation,
@@ -1479,7 +1473,7 @@ mod tests {
         let mut ref_count = Vec::new();
         build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
 
-        let base_bezier = 0x0000_0408;
+        let _base_bezier = 0x0000_0408;
         let weighted_right = 0x0100_0000;
         let weighted_next_left = 0x0400_0000;
         for &flag in &flags {

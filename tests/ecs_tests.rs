@@ -3,15 +3,14 @@ use thyllore_animation::ecs::storage::{Components, SparseSet};
 use thyllore_animation::ecs::world::{
     Entity, Name, Resources, Transform, Visibility, Visible, World,
 };
-use thyllore_animation::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+use thyllore_render_core::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {
     use thyllore_animation::ecs::resource::GridMeshData;
     use thyllore_animation::ecs::systems::create_grid_mesh;
     use thyllore_animation::ecs::world::World;
-    use thyllore_animation::loader::ModelLoadResult;
+    use thyllore_importer_core::ModelLoadResult;
 
-    #[allow(deprecated)]
     #[test]
     fn test_grid_mesh_xz_toggle_in_release() {
         let (mesh, xz_only_index_count) = create_grid_mesh();
@@ -41,7 +40,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -57,7 +56,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_importer_core::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -70,11 +69,7 @@ mod release_build_tests {
     fn test_ecs_world_resource_roundtrip_in_release() {
         let mut world = World::new();
 
-        let (mesh, xz_only_index_count) = {
-            #[allow(deprecated)]
-            let (m, c) = create_grid_mesh();
-            (m, c)
-        };
+        let (mesh, xz_only_index_count) = create_grid_mesh();
 
         world.insert_resource(GridMeshData {
             mesh,
@@ -100,77 +95,70 @@ mod release_build_tests {
         }
     }
 
-    use thyllore_animation::vulkanr;
-
-    unsafe fn create_headless_test_device(
-    ) -> Option<(vulkanr::Entry, vulkanr::Instance, vulkanr::RRDevice)> {
-        let loader = vulkanr::LibloadingLoader::new(vulkanr::LIBRARY).ok()?;
-        let entry = vulkanr::Entry::new(loader).ok()?;
-        let instance = vulkanr::create_headless_instance(&entry).ok()?;
-
-        match vulkanr::RRDevice::new_headless(
-            &entry,
-            &instance,
-            vulkanr::HEADLESS_DEVICE_EXTENSIONS,
-            if cfg!(debug_assertions) {
-                vulkanr::ValidationMode::Enabled
-            } else {
-                vulkanr::ValidationMode::Disabled
-            },
-            vulkanr::VALIDATION_LAYER,
-            vulkanr::Version::new(1, 3, 216),
-        ) {
-            Ok(device) => Some((entry, instance, device)),
-            Err(_) => {
-                vulkanr::destroy_headless_instance(&instance);
-                None
-            }
-        }
+    unsafe fn create_headless_test_device() -> Option<thyllore_vulkan_core::core::HeadlessContext> {
+        thyllore_vulkan_core::core::create_headless_context().ok()
     }
 
     #[test]
     fn test_vulkan_headless_device_creation() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        assert!(device.has_graphics_queue());
-        assert!(device.min_uniform_buffer_offset_alignment > 0);
+        assert!(headless.rrdevice.has_graphics_queue());
+        assert!(headless.rrdevice.min_uniform_buffer_offset_alignment > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+        unsafe {
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            )
+        };
     }
 
     #[test]
     fn test_vulkan_headless_physical_device_properties() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        let api_version = unsafe { device.query_physical_device_api_version(&instance) };
+        let api_version = unsafe {
+            headless
+                .rrdevice
+                .query_physical_device_api_version(&headless.instance)
+        };
         assert!(api_version > 0);
-        assert!(device.msaa_samples.bits() > 0);
+        assert!(headless.rrdevice.msaa_samples().bits() > 0);
 
-        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+        unsafe {
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            )
+        };
     }
 
     #[test]
     fn test_vulkan_headless_queue_operations() {
         let result = unsafe { create_headless_test_device() };
-        let Some((_entry, instance, device)) = result else {
+        let Some(headless) = result else {
             println!("Skipping: Vulkan headless device not available");
             return;
         };
 
-        assert!(device.has_graphics_queue());
-        assert!(!device.has_present_queue());
+        assert!(headless.rrdevice.has_graphics_queue());
+        assert!(!headless.rrdevice.has_present_queue());
 
         unsafe {
-            device.wait_graphics_queue_idle().unwrap();
-            vulkanr::destroy_headless_device(&device, &instance);
+            headless.rrdevice.wait_graphics_queue_idle().unwrap();
+            thyllore_vulkan_core::core::destroy_headless_device(
+                &headless.rrdevice,
+                &headless.instance,
+            );
         }
     }
 }
@@ -407,12 +395,14 @@ mod resources_tests {
 mod component_registry_tests {
     use super::*;
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Position {
         x: f32,
         y: f32,
     }
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     struct Velocity {
         dx: f32,
@@ -425,7 +415,7 @@ mod component_registry_tests {
 
         let info = registry.register::<Position>();
 
-        assert!(info.size() >= 0);
+        assert_eq!(info.size(), std::mem::size_of::<Position>());
         assert!(registry.is_registered::<Position>());
     }
 
@@ -471,7 +461,7 @@ mod component_registry_tests {
 
 mod world_tests {
     use super::*;
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     #[test]
     fn test_world_new() {
@@ -524,14 +514,14 @@ mod world_tests {
         world.insert_component(
             entity,
             Transform {
-                translation: Vector3::new(0.0, 0.0, 0.0),
+                translation: Vec3::new(0.0, 0.0, 0.0),
                 ..Transform::default()
             },
         );
 
         {
             let transform = world.get_component_mut::<Transform>(entity).unwrap();
-            transform.translation = Vector3::new(10.0, 20.0, 30.0);
+            transform.translation = Vec3::new(10.0, 20.0, 30.0);
         }
 
         let transform = world.get_component::<Transform>(entity).unwrap();
@@ -781,8 +771,8 @@ mod components_tests {
 }
 
 mod constraint_solver_tests {
-    use cgmath::{assert_relative_eq, InnerSpace, Quaternion, Vector3};
-    use thyllore_animation::animation::{
+    use glam::{Mat4, Quat, Vec3};
+    use thyllore_anim_core::{
         BoneLocalPose, ConstraintType, IkConstraintData, PositionConstraintData,
         RotationConstraintData, ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
         PRIORITY_POSITION, PRIORITY_ROTATION, PRIORITY_SCALE,
@@ -798,17 +788,14 @@ mod constraint_solver_tests {
             let bone_id = skeleton.add_bone(&format!("bone_{}", i), parent);
 
             let bone = skeleton.get_bone_mut(bone_id).unwrap();
-            bone.local_transform = cgmath::Matrix4::from_translation(Vector3::new(
-                0.0,
-                if i == 0 { 0.0 } else { bone_length },
-                0.0,
-            ));
+            bone.local_transform =
+                Mat4::from_translation(Vec3::new(0.0, if i == 0 { 0.0 } else { bone_length }, 0.0));
         }
         skeleton
     }
 
     fn create_rest_pose(skeleton: &Skeleton) -> SkeletonPose {
-        use thyllore_animation::animation::decompose_transform;
+        use thyllore_anim_core::decompose_transform;
         let bone_poses = skeleton
             .bones
             .iter()
@@ -838,21 +825,9 @@ mod constraint_solver_tests {
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
         for (i, bp) in pose.bone_poses.iter().enumerate() {
-            assert_relative_eq!(
-                bp.translation.x,
-                original.bone_poses[i].translation.x,
-                epsilon = 0.001
-            );
-            assert_relative_eq!(
-                bp.translation.y,
-                original.bone_poses[i].translation.y,
-                epsilon = 0.001
-            );
-            assert_relative_eq!(
-                bp.translation.z,
-                original.bone_poses[i].translation.z,
-                epsilon = 0.001
-            );
+            assert!((bp.translation.x - original.bone_poses[i].translation.x).abs() < 0.001);
+            assert!((bp.translation.y - original.bone_poses[i].translation.y).abs() < 0.001);
+            assert!((bp.translation.z - original.bone_poses[i].translation.z).abs() < 0.001);
         }
     }
 
@@ -877,10 +852,8 @@ mod constraint_solver_tests {
 
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        assert_relative_eq!(
-            pose.bone_poses[1].translation.y,
-            original.bone_poses[1].translation.y,
-            epsilon = 0.001
+        assert!(
+            (pose.bone_poses[1].translation.y - original.bone_poses[1].translation.y).abs() < 0.001
         );
     }
 
@@ -905,10 +878,8 @@ mod constraint_solver_tests {
 
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        assert_relative_eq!(
-            pose.bone_poses[1].translation.y,
-            original.bone_poses[1].translation.y,
-            epsilon = 0.001
+        assert!(
+            (pose.bone_poses[1].translation.y - original.bone_poses[1].translation.y).abs() < 0.001
         );
     }
 
@@ -917,7 +888,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[2].translation = Vector3::new(5.0, 5.0, 5.0);
+        pose.bone_poses[2].translation = Vec3::new(5.0, 5.0, 5.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -925,7 +896,7 @@ mod constraint_solver_tests {
             ConstraintType::Position(PositionConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Vector3::new(0.0, 0.0, 0.0),
+                offset: Vec3::new(0.0, 0.0, 0.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -936,8 +907,7 @@ mod constraint_solver_tests {
         let original_y = pose.bone_poses[1].translation.y;
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        let moved =
-            (pose.bone_poses[1].translation - Vector3::new(0.0, original_y, 0.0)).magnitude();
+        let moved = (pose.bone_poses[1].translation - Vec3::new(0.0, original_y, 0.0)).length();
         assert!(moved > 0.01, "bone should have moved");
     }
 
@@ -946,7 +916,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        let target_rot = Quaternion::new(0.7071, 0.0, 0.7071, 0.0);
+        let target_rot = Quat::from_xyzw(0.0, 0.7071, 0.0, 0.7071);
         pose.bone_poses[2].rotation = target_rot;
 
         let mut constraint_set = ConstraintSet::new();
@@ -955,7 +925,7 @@ mod constraint_solver_tests {
             ConstraintType::Rotation(RotationConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                offset: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -966,10 +936,10 @@ mod constraint_solver_tests {
         let original_rot = pose.bone_poses[1].rotation;
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
-        let dot = pose.bone_poses[1].rotation.s * original_rot.s
-            + pose.bone_poses[1].rotation.v.x * original_rot.v.x
-            + pose.bone_poses[1].rotation.v.y * original_rot.v.y
-            + pose.bone_poses[1].rotation.v.z * original_rot.v.z;
+        let dot = pose.bone_poses[1].rotation.w * original_rot.w
+            + pose.bone_poses[1].rotation.x * original_rot.x
+            + pose.bone_poses[1].rotation.y * original_rot.y
+            + pose.bone_poses[1].rotation.z * original_rot.z;
         assert!(dot.abs() < 0.999, "rotation should have changed");
     }
 
@@ -978,7 +948,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[2].scale = Vector3::new(2.0, 2.0, 2.0);
+        pose.bone_poses[2].scale = Vec3::new(2.0, 2.0, 2.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -986,7 +956,7 @@ mod constraint_solver_tests {
             ConstraintType::Scale(ScaleConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
-                offset: Vector3::new(1.0, 1.0, 1.0),
+                offset: Vec3::new(1.0, 1.0, 1.0),
                 affect_axes: [true, true, true],
                 enabled: true,
                 weight: 1.0,
@@ -1008,7 +978,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(4, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[3].translation = Vector3::new(1.0, 1.0, 0.0);
+        pose.bone_poses[3].translation = Vec3::new(1.0, 1.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -1017,7 +987,7 @@ mod constraint_solver_tests {
                 chain_length: 2,
                 target_bone: 3,
                 effector_bone: 2,
-                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_vector: Some(Vec3::new(0.0, 0.0, 1.0)),
                 pole_target: None,
                 twist: 0.0,
                 enabled: true,
@@ -1030,10 +1000,10 @@ mod constraint_solver_tests {
 
         let rot_changed = {
             let rest = create_rest_pose(&skeleton);
-            let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
-                + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
-                + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
-                + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+            let dot = pose.bone_poses[0].rotation.w * rest.bone_poses[0].rotation.w
+                + pose.bone_poses[0].rotation.x * rest.bone_poses[0].rotation.x
+                + pose.bone_poses[0].rotation.y * rest.bone_poses[0].rotation.y
+                + pose.bone_poses[0].rotation.z * rest.bone_poses[0].rotation.z;
             dot.abs() < 0.9999
         };
         assert!(rot_changed, "IK should have modified bone rotations");
@@ -1044,7 +1014,7 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(4, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        pose.bone_poses[3].translation = Vector3::new(0.0, 100.0, 0.0);
+        pose.bone_poses[3].translation = Vec3::new(0.0, 100.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
         constraint_set_add(
@@ -1053,7 +1023,7 @@ mod constraint_solver_tests {
                 chain_length: 2,
                 target_bone: 3,
                 effector_bone: 2,
-                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_vector: Some(Vec3::new(0.0, 0.0, 1.0)),
                 pole_target: None,
                 twist: 0.0,
                 enabled: true,
@@ -1065,10 +1035,10 @@ mod constraint_solver_tests {
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
         let rest = create_rest_pose(&skeleton);
-        let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
-            + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
-            + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
-            + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+        let dot = pose.bone_poses[0].rotation.w * rest.bone_poses[0].rotation.w
+            + pose.bone_poses[0].rotation.x * rest.bone_poses[0].rotation.x
+            + pose.bone_poses[0].rotation.y * rest.bone_poses[0].rotation.y
+            + pose.bone_poses[0].rotation.z * rest.bone_poses[0].rotation.z;
         assert!(
             dot.abs() > 0.9,
             "unreachable target should still produce valid (near-rest) pose"
@@ -1078,14 +1048,14 @@ mod constraint_solver_tests {
 
 mod transform_tests {
     use super::*;
-    use cgmath::{assert_relative_eq, Quaternion, Vector3};
+    use glam::{Quat, Vec3};
 
     #[test]
     fn test_transform_default() {
         let transform = Transform::default();
 
-        assert_eq!(transform.translation, Vector3::new(0.0, 0.0, 0.0));
-        assert_eq!(transform.scale, Vector3::new(1.0, 1.0, 1.0));
+        assert_eq!(transform.translation, Vec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.scale, Vec3::new(1.0, 1.0, 1.0));
     }
 
     #[test]
@@ -1096,9 +1066,9 @@ mod transform_tests {
         for i in 0..4 {
             for j in 0..4 {
                 if i == j {
-                    assert_relative_eq!(matrix[i][j], 1.0, epsilon = 0.0001);
+                    assert!((matrix.col(i)[j] - 1.0).abs() < 0.0001);
                 } else {
-                    assert_relative_eq!(matrix[i][j], 0.0, epsilon = 0.0001);
+                    assert!((matrix.col(i)[j] - 0.0).abs() < 0.0001);
                 }
             }
         }
@@ -1107,58 +1077,58 @@ mod transform_tests {
     #[test]
     fn test_transform_to_matrix_translation() {
         let transform = Transform {
-            translation: Vector3::new(10.0, 20.0, 30.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            scale: Vector3::new(1.0, 1.0, 1.0),
+            translation: Vec3::new(10.0, 20.0, 30.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
         };
         let matrix = transform.to_matrix();
 
-        assert_relative_eq!(matrix[3][0], 10.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[3][1], 20.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[3][2], 30.0, epsilon = 0.0001);
+        assert!((matrix.col(3)[0] - 10.0).abs() < 0.0001);
+        assert!((matrix.col(3)[1] - 20.0).abs() < 0.0001);
+        assert!((matrix.col(3)[2] - 30.0).abs() < 0.0001);
     }
 
     #[test]
     fn test_transform_to_matrix_scale() {
         let transform = Transform {
-            translation: Vector3::new(0.0, 0.0, 0.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-            scale: Vector3::new(2.0, 3.0, 4.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+            scale: Vec3::new(2.0, 3.0, 4.0),
         };
         let matrix = transform.to_matrix();
 
-        assert_relative_eq!(matrix[0][0], 2.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[1][1], 3.0, epsilon = 0.0001);
-        assert_relative_eq!(matrix[2][2], 4.0, epsilon = 0.0001);
+        assert!((matrix.col(0)[0] - 2.0).abs() < 0.0001);
+        assert!((matrix.col(1)[1] - 3.0).abs() < 0.0001);
+        assert!((matrix.col(2)[2] - 4.0).abs() < 0.0001);
     }
 }
 
 mod message_log_tests {
     use thyllore_animation::ecs::resource::{MessageFilter, MessageLog};
-    use thyllore_animation::ecs::systems::message_log_systems::{
+    use thyllore_animation::ecs::systems::{
         message_log_clear_buffer, message_log_filtered_messages,
     };
-    use thyllore_animation::logger::message_buffer::{MessageBuffer, MessageLevel};
+    use thyllore_log_core::message_buffer::{MessageBuffer, MessageLevel};
 
     fn make_log_with_messages() -> MessageLog {
         let mut log = MessageLog::default();
         log.messages = vec![
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Model loaded".to_string(),
                 timestamp: "12:00:00".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Warning,
                 text: "Missing bone: Spine2".to_string(),
                 timestamp: "12:00:01".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Error,
                 text: "Failed to load texture".to_string(),
                 timestamp: "12:00:02".to_string(),
             },
-            thyllore_animation::logger::message_buffer::Message {
+            thyllore_log_core::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Screenshot saved".to_string(),
                 timestamp: "12:00:03".to_string(),

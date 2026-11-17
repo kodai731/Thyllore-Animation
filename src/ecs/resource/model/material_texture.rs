@@ -5,6 +5,8 @@ pub struct MaterialTextureState {
     pub save_state: MaterialTextureSaveState,
 }
 
+crate::startup_resource!(MaterialTextureState, Editor);
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterialTextureSlot {
     pub material: String,

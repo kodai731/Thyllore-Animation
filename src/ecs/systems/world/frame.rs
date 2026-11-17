@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
-use crate::animation::SkeletonId;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{AnimationType, UpdatePhaseTimings};
 use crate::ecs::systems::phases::{
@@ -11,6 +10,7 @@ use crate::ecs::systems::phases::{
     run_view_phase_ecs,
 };
 use crate::ecs::FrameContext;
+use thyllore_anim_core::SkeletonId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FramePhase {
@@ -69,7 +69,7 @@ pub fn update_phases() -> impl Iterator<Item = FramePhase> {
 
 struct Carry {
     updated_meshes: Vec<usize>,
-    bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
 impl Carry {

@@ -10,9 +10,12 @@ PyO3 wheel that ships inside the Blender addon. This crate defines:
   `SkeletonSnapshot`). All schemas are `serde`-serializable so the same payload
   can travel through typed methods or through the generic `call_op` dispatch.
 - The [`MlError`] enum used uniformly across the boundary.
-- `ABI_MARKER`, a compile-time constant the wheel re-exports as
-  `thyllore_ml_core.__abi_marker__`. The Blender addon compares it against its
-  own `EXPECTED_ABI_MARKER` at startup to decide whether to activate.
+- `ABI_MARKER`, a compile-time constant both wheels (`thyllore_ml_core`,
+  `thyllore_avatar_api`) re-export as `__abi_marker__`. The Blender addon
+  compares it against its own `EXPECTED_ABI_MARKER` at startup to decide whether
+  to activate.
+- `debug_log` (feature `debug-log`): the addon file logger and its PyO3
+  functions, registered by whichever wheel is built with the feature.
 
 The crate intentionally has no runtime dependencies beyond `serde` and
 `thiserror`, so the contract has the smallest possible surface area. New

@@ -1,13 +1,13 @@
 use super::draw::draw_rows;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::events::UiCommand;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::theme::{section_header, SectionDefault};
 use std::borrow::Cow;
 use thyllore_scene_core::{ScalarParam, UiParam};
 
 /// Scalar rows whose name resolves in the domain get a key button after the widget.
-pub type KeyDomain = Option<&'static ScalarChannelDomain>;
+pub(crate) type KeyDomain = Option<&'static ScalarChannelDomain>;
 
 pub enum UiRow<C: 'static> {
     Scalar {
@@ -125,7 +125,7 @@ pub struct NamedChoice {
     pub options: Vec<ChoiceOption>,
 }
 
-pub struct ListRows<C, I: 'static> {
+pub(crate) struct ListRows<C, I: 'static> {
     pub title: &'static str,
     pub items: fn(&World, &C) -> Vec<(String, I)>,
     pub rows: fn(&I) -> Vec<UiRow<I>>,
@@ -141,7 +141,7 @@ pub trait DrawField<C> {
     fn widget_ids(&self) -> Vec<String>;
 }
 
-pub struct FieldRows<C, I: 'static> {
+pub(crate) struct FieldRows<C, I: 'static> {
     pub scope: &'static str,
     pub field: fn(&mut C) -> &mut I,
     pub rows: Vec<UiRow<I>>,

@@ -1,4 +1,4 @@
-use cgmath::{Matrix3, Matrix4, SquareMatrix, Vector3};
+use glam::{Mat3, Mat4, Vec3};
 use thyllore_anim_core::spring_bone::FittedCapsule;
 use thyllore_math_core::mean_axis_scale;
 use thyllore_model_core::{BoneId, Skeleton};
@@ -12,7 +12,7 @@ use crate::humanoid::components::role::{HumanoidRole, HUMANOID_CHAINS};
 pub struct RoleBone {
     pub role: HumanoidRole,
     pub bone: BoneId,
-    pub head: Vector3<f32>,
+    pub head: Vec3,
 }
 
 /// The torso chain from the hips to the head, in order.
@@ -38,7 +38,7 @@ fn mean_radius(colliders: &[BodyCollider], bones: &[BoneId]) -> Option<f32> {
 
 /// The radius a torso bone's own skin gives its fallback capsule around the axis `head` → `tail`,
 /// None when the bone drives too little skin.
-pub type OwnRadius<'a> = &'a dyn Fn(BoneId, Vector3<f32>, Vector3<f32>) -> Option<f32>;
+pub type OwnRadius<'a> = &'a dyn Fn(BoneId, Vec3, Vec3) -> Option<f32>;
 
 /// Capsules for the torso bones without a collider, so a rig whose torso skin was removed still has a
 /// body there: the pelvis spans the upper legs' heads (when both legs are mapped) and the spine bones
@@ -96,18 +96,18 @@ pub fn torso_fallback_colliders(
 }
 
 struct BindFrame {
-    to_model: Matrix4<f32>,
-    to_local: Matrix4<f32>,
+    to_model: Mat4,
+    to_local: Mat4,
     scale: f32,
 }
 
 fn bind_frame(skeleton: &Skeleton, bone: BoneId) -> Option<BindFrame> {
     let to_local = skeleton.get_bone(bone)?.inverse_bind_pose;
-    let to_model = to_local.invert()?;
-    let linear = Matrix3::from_cols(
-        to_model.x.truncate(),
-        to_model.y.truncate(),
-        to_model.z.truncate(),
+    let to_model = to_local.try_inverse()?;
+    let linear = Mat3::from_cols(
+        to_model.x_axis.truncate(),
+        to_model.y_axis.truncate(),
+        to_model.z_axis.truncate(),
     );
     Some(BindFrame {
         to_model,
@@ -116,7 +116,7 @@ fn bind_frame(skeleton: &Skeleton, bone: BoneId) -> Option<BindFrame> {
     })
 }
 
-fn place(matrix: &Matrix4<f32>, point: Vector3<f32>) -> Vector3<f32> {
+fn place(matrix: &Mat4, point: Vec3) -> Vec3 {
     (matrix * point.extend(1.0)).truncate()
 }
 
@@ -136,7 +136,7 @@ pub fn fitted_torso_fallback(
             Some(RoleBone {
                 role,
                 bone: bone as BoneId,
-                head: frame.to_model.w.truncate(),
+                head: frame.to_model.w_axis.truncate(),
             })
         })
         .collect();
@@ -170,14 +170,13 @@ pub fn fitted_torso_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::InnerSpace;
     use thyllore_model_core::Bone;
 
     fn role_bone(role: HumanoidRole, bone: BoneId, y: f32, x: f32) -> RoleBone {
         RoleBone {
             role,
             bone,
-            head: Vector3::new(x, y, 0.0),
+            head: Vec3::new(x, y, 0.0),
         }
     }
 
@@ -192,8 +191,8 @@ mod tests {
         ];
         let leg = |bone: BoneId, x: f32, radius: f32| BodyCollider {
             bone,
-            head: Vector3::new(x, 0.95, 0.0),
-            tail: Vector3::new(x, 0.5, 0.0),
+            head: Vec3::new(x, 0.95, 0.0),
+            tail: Vec3::new(x, 0.5, 0.0),
             radius,
         };
         (bones, vec![leg(4, 0.09, 0.08), leg(5, -0.09, 0.10)])
@@ -208,8 +207,8 @@ mod tests {
         assert_eq!(fallback.len(), 3);
         let pelvis = &fallback[0];
         assert_eq!(pelvis.bone, 0);
-        assert_eq!(pelvis.head, Vector3::new(0.09, 0.95, 0.0));
-        assert_eq!(pelvis.tail, Vector3::new(-0.09, 0.95, 0.0));
+        assert_eq!(pelvis.head, Vec3::new(0.09, 0.95, 0.0));
+        assert_eq!(pelvis.tail, Vec3::new(-0.09, 0.95, 0.0));
         assert!((pelvis.radius - 0.09).abs() < 1e-6);
         assert_eq!((fallback[1].bone, fallback[1].tail.y), (1, 1.3));
         assert_eq!((fallback[2].bone, fallback[2].tail.y), (2, 1.5));
@@ -220,8 +219,8 @@ mod tests {
         let (bones, mut existing) = legs_with_colliders();
         existing.push(BodyCollider {
             bone: 0,
-            head: Vector3::new(0.0, 1.0, 0.0),
-            tail: Vector3::new(0.0, 1.0, 0.0),
+            head: Vec3::new(0.0, 1.0, 0.0),
+            tail: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.2,
         });
 
@@ -249,8 +248,8 @@ mod tests {
         let (bones, mut existing) = legs_with_colliders();
         existing.push(BodyCollider {
             bone: 1,
-            head: Vector3::new(0.0, 1.1, 0.0),
-            tail: Vector3::new(0.0, 1.3, 0.0),
+            head: Vec3::new(0.0, 1.1, 0.0),
+            tail: Vec3::new(0.0, 1.3, 0.0),
             radius: 0.2,
         });
 
@@ -273,11 +272,11 @@ mod tests {
         let (role_bones, existing) = legs_with_colliders();
         let mut skeleton = Skeleton::default();
         for role_bone in &role_bones {
-            let bind = Matrix4::from_translation(role_bone.head) * Matrix4::from_scale(2.0);
+            let bind = Mat4::from_translation(role_bone.head) * Mat4::from_scale(Vec3::splat(2.0));
             skeleton.bones.push(Bone {
                 id: role_bone.bone,
                 name: format!("{:?}", role_bone.role),
-                inverse_bind_pose: bind.invert().unwrap(),
+                inverse_bind_pose: bind.try_inverse().unwrap(),
                 ..Bone::default()
             });
         }
@@ -313,7 +312,7 @@ mod tests {
 
         let pelvis = fallback.iter().find(|c| c.bone_id == 0).expect("pelvis");
         assert!((pelvis.radius - 0.045).abs() < 1e-5);
-        assert!((pelvis.head - Vector3::new(0.045, -0.025, 0.0)).magnitude() < 1e-5);
-        assert!((pelvis.tail - Vector3::new(-0.045, -0.025, 0.0)).magnitude() < 1e-5);
+        assert!((pelvis.head - Vec3::new(0.045, -0.025, 0.0)).length() < 1e-5);
+        assert!((pelvis.tail - Vec3::new(-0.045, -0.025, 0.0)).length() < 1e-5);
     }
 }

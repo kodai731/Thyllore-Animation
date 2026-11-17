@@ -1,10 +1,11 @@
-pub mod backend;
 mod billboard;
 mod buffer_handle;
+mod buffer_memory_type;
 mod gizmo;
 mod gizmo_data;
-pub mod lighting;
-pub mod luminance_statistics;
+mod id;
+mod lighting;
+mod luminance_statistics;
 mod mesh;
 mod projection;
 mod render_data;
@@ -12,14 +13,15 @@ mod settings;
 mod settings_scene_format;
 mod ubo;
 
-pub use backend::RenderBackend;
 pub use billboard::{BillboardMesh, BillboardTransform, BillboardVertex};
 pub use buffer_handle::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+pub use buffer_memory_type::BufferMemoryType;
 pub use gizmo::{
     BoneDisplayStyle, BoneDrawMode, ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition,
     GizmoSelectable, TransformGizmoHandle,
 };
 pub use gizmo_data::{BoneGizmoData, ConstraintGizmoData, GridMeshData, LightGizmoData};
+pub use id::{MeshId, PipelineId};
 pub use lighting::{lit_white_radiance, AMBIENT_INTENSITY, DIRECT_LIGHT_COLOR};
 pub use luminance_statistics::{
     luminance_statistics, rec709_luminance, LuminanceStatistics, Percentile,
@@ -35,12 +37,3 @@ pub use settings::{
     PhysicalCameraParameters, SceneBrightness, ToneMapOperator, ToneMapping,
 };
 pub use ubo::{FrameUBO, MaterialUBO, ObjectUBO};
-
-pub type MeshId = usize;
-pub type PipelineId = usize;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BufferMemoryType {
-    DeviceLocal,
-    HostVisible,
-}

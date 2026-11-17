@@ -3,4 +3,4 @@ mod sections;
 #[cfg(test)]
 mod tests;
 
-pub use sections::blend_shape_sections;
+pub(super) use sections::blend_shape_sections;

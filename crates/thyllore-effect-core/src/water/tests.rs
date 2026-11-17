@@ -1,11 +1,11 @@
 use super::*;
-use cgmath::{Deg, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
 #[test]
 fn test_default_water_effect_values() {
     let effect = WaterTorusEffect::default();
-    assert_eq!(effect.position, Vector3::new(0.0, 0.0, 0.0));
-    assert_eq!(effect.rotation, Quaternion::new(1.0, 0.0, 0.0, 0.0));
+    assert_eq!(effect.position, Vec3::new(0.0, 0.0, 0.0));
+    assert_eq!(effect.rotation, Quat::from_xyzw(0.0, 0.0, 0.0, 1.0));
     assert_eq!(effect.time, 0.0);
     assert_eq!(effect.time_scale, 1.0);
     assert_eq!(effect.time_offset, 0.0);
@@ -50,16 +50,16 @@ fn test_advance_water_time_negative_is_noop() {
 fn test_build_water_model_matrix_identity() {
     let effect = WaterTorusEffect::default();
     let matrix = build_water_model_matrix(&effect);
-    let expected: Matrix4<f32> = SquareMatrix::identity();
+    let expected = Mat4::IDENTITY;
     for i in 0..4 {
         for j in 0..4 {
             assert!(
-                (matrix[i][j] - expected[i][j]).abs() < 1e-6,
+                (matrix.col(i)[j] - expected.col(i)[j]).abs() < 1e-6,
                 "matrix[{}][{}] = {}, expected {}",
                 i,
                 j,
-                matrix[i][j],
-                expected[i][j]
+                matrix.col(i)[j],
+                expected.col(i)[j]
             );
         }
     }
@@ -68,34 +68,34 @@ fn test_build_water_model_matrix_identity() {
 #[test]
 fn test_build_water_model_matrix_translation() {
     let effect = WaterTorusEffect {
-        position: Vector3::new(1.0, 2.0, 3.0),
+        position: Vec3::new(1.0, 2.0, 3.0),
         ..WaterTorusEffect::default()
     };
     let matrix = build_water_model_matrix(&effect);
-    assert!((matrix[3][0] - 1.0).abs() < 1e-6);
-    assert!((matrix[3][1] - 2.0).abs() < 1e-6);
-    assert!((matrix[3][2] - 3.0).abs() < 1e-6);
+    assert!((matrix.col(3)[0] - 1.0).abs() < 1e-6);
+    assert!((matrix.col(3)[1] - 2.0).abs() < 1e-6);
+    assert!((matrix.col(3)[2] - 3.0).abs() < 1e-6);
 }
 
 #[test]
 fn test_build_water_model_matrix_rotation() {
     let effect = WaterTorusEffect {
-        rotation: Quaternion::from_angle_z(Deg(90.0)),
+        rotation: Quat::from_rotation_z(f32::to_radians(90.0)),
         major_radius: 1.0,
         minor_radius: 1.0,
         ..WaterTorusEffect::default()
     };
     let matrix = build_water_model_matrix(&effect);
-    let expected_rotation = Matrix4::from(effect.rotation);
+    let expected_rotation = Mat4::from_quat(effect.rotation);
     for i in 0..3 {
         for j in 0..3 {
             assert!(
-                (matrix[i][j] - expected_rotation[i][j]).abs() < 1e-6,
+                (matrix.col(i)[j] - expected_rotation.col(i)[j]).abs() < 1e-6,
                 "rotation matrix[{}][{}] = {}, expected {}",
                 i,
                 j,
-                matrix[i][j],
-                expected_rotation[i][j]
+                matrix.col(i)[j],
+                expected_rotation.col(i)[j]
             );
         }
     }

@@ -169,10 +169,8 @@ pub(super) fn run_sequence_analyze(args: &[String]) -> Result<()> {
 
         // Extract descriptors
         let descriptors =
-            thyllore_texture_fit_core::sequence_descriptors::extract_sequence_descriptors(
-                &frames, width, height, fps,
-            )
-            .with_context(|| format!("failed to extract descriptors for {dir}"))?;
+            thyllore_texture_fit_core::extract_sequence_descriptors(&frames, width, height, fps)
+                .with_context(|| format!("failed to extract descriptors for {dir}"))?;
 
         let descriptors_json = serde_json::to_value(&descriptors)?;
         sequences.push(json!({

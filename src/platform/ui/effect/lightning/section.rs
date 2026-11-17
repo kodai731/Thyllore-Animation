@@ -7,7 +7,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 use super::rows::{lightning_head_rows, lightning_tail_rows, LightningSectionView};
 use crate::platform::ui::effect::rows::effect_instances;
@@ -72,8 +72,8 @@ fn effect_rows(view: &LightningSectionView) -> UiRow<LightningSectionView> {
         scope: "effect",
         field: |view: &mut LightningSectionView| &mut view.effect,
         rows: rows_from_params(
-            &thyllore_effect_core::LIGHTNING_UI_PARAMS,
-            &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+            &thyllore_effect_core::lightning::LIGHTNING_UI_PARAMS,
+            &thyllore_effect_core::lightning::LIGHTNING_SCALAR_PARAMS,
             hidden,
         ),
     }))
@@ -186,7 +186,7 @@ mod tests {
     fn commit_preset_change_clears_keys_and_applies_preset_without_update() {
         let shown = selected_view();
         let view = LightningSectionView {
-            preset: Some(thyllore_effect_core::LIGHTNING_PRESET_NAMES[0].to_string()),
+            preset: Some(thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[0].to_string()),
             ..shown.clone()
         };
 

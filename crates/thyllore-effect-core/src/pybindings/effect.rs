@@ -1,5 +1,5 @@
 use crate::water::{inverse_view_proj_f64, ABSORPTION_REFERENCE_DISTANCE};
-use cgmath::Matrix4;
+use glam::Mat4;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde::de::DeserializeOwned;
@@ -9,12 +9,12 @@ use thyllore_spirv_reflect::GpuBlock;
 
 use crate::{EffectPresets, Placement};
 
-pub trait ParameterOwnerName {
+pub(super) trait ParameterOwnerName {
     fn owner_name(self) -> &'static str;
 }
 
 /// One effect as seen from Python: its parameter tables, presets and the placement every pack call sets.
-pub trait PyEffect:
+pub(super) trait PyEffect:
     SceneTables + Placement + EffectPresets + Default + Serialize + DeserializeOwned
 {
     fn parameter_owner_name(name: &str) -> &'static str;
@@ -62,7 +62,7 @@ fn effect_dict<'py, E: PyEffect>(py: Python<'py>, effect: &E) -> PyResult<Bound<
     Ok(pythonize::pythonize(py, effect)?.cast_into::<PyDict>()?)
 }
 
-pub fn preset_names<E: PyEffect>() -> Vec<&'static str> {
+pub(super) fn preset_names<E: PyEffect>() -> Vec<&'static str> {
     E::PRESET_NAMES.to_vec()
 }
 
@@ -92,7 +92,7 @@ fn set_nested_item(root: &Bound<'_, PyDict>, path: &str, value: Bound<'_, PyAny>
     parent.set_item(leaf, value)
 }
 
-pub fn ui_params<E: PyEffect>(py: Python<'_>) -> PyResult<Bound<'_, PyList>> {
+pub(super) fn ui_params<E: PyEffect>(py: Python<'_>) -> PyResult<Bound<'_, PyList>> {
     let default_dict = effect_dict(py, &E::default())?;
     let list = PyList::empty(py);
     for param in E::ui_params().iter().filter(|param| param.persisted) {
@@ -110,7 +110,7 @@ pub fn ui_params<E: PyEffect>(py: Python<'_>) -> PyResult<Bound<'_, PyList>> {
     Ok(list)
 }
 
-pub fn preset_params<'py, E: PyEffect>(
+pub(super) fn preset_params<'py, E: PyEffect>(
     py: Python<'py>,
     name: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
@@ -129,7 +129,7 @@ fn parameter_path<E: PyEffect>(key: &str) -> &str {
         .map_or(key, |(_, path)| path)
 }
 
-pub fn parameter_paths<E: PyEffect>() -> Vec<(&'static str, &'static str)> {
+pub(super) fn parameter_paths<E: PyEffect>() -> Vec<(&'static str, &'static str)> {
     E::parameter_paths().to_vec()
 }
 
@@ -145,7 +145,7 @@ fn write_parameters<E: PyEffect>(
 }
 
 /// Default effect overwritten by `params` (UI names or dotted serde paths), placed at the given pose.
-pub fn build_effect_from_params<E: PyEffect>(
+pub(super) fn build_effect_from_params<E: PyEffect>(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -164,25 +164,66 @@ pub fn build_effect_from_params<E: PyEffect>(
     Ok(effect)
 }
 
-pub fn gpu_block_bytes<T: GpuBlock>(block: &T) -> Vec<u8> {
+pub(super) fn gpu_block_bytes<T: GpuBlock>(block: &T) -> Vec<u8> {
     block.as_bytes().to_vec()
 }
 
 /// Row-major Blender-to-engine axis conversion, the single source the addon's `coordinates.C` mirrors.
 #[pyfunction]
-pub fn blender_to_engine_matrix() -> [[f32; 4]; 4] {
+pub(super) fn blender_to_engine_matrix() -> [[f32; 4]; 4] {
     thyllore_math_core::blender_to_engine_rows()
 }
 
-pub fn matrix_from_column_major(values: [f32; 16]) -> Matrix4<f32> {
-    Matrix4::new(
+fn matrix_from_rows(rows: &[[f32; 4]; 4]) -> Mat4 {
+    Mat4::from_cols_array_2d(rows).transpose()
+}
+
+fn rows_of(matrix: Mat4) -> [[f32; 4]; 4] {
+    matrix.transpose().to_cols_array_2d()
+}
+
+/// The engine's projection (row-major): Vulkan clip space, reversed infinite depth.
+#[pyfunction]
+pub(super) fn engine_projection(fovy_radians: f32, aspect: f32, near: f32) -> [[f32; 4]; 4] {
+    rows_of(thyllore_math_core::perspective_infinite_reverse(
+        fovy_radians,
+        aspect,
+        near,
+    ))
+}
+
+/// The engine's projection (row-major) for a viewport whose Blender `window_matrix` is given as rows.
+#[pyfunction]
+pub(super) fn engine_projection_from_window(
+    window_matrix: [[f32; 4]; 4],
+    near: f32,
+) -> [[f32; 4]; 4] {
+    rows_of(thyllore_math_core::perspective_infinite_reverse_focal(
+        window_matrix[0][0],
+        window_matrix[1][1],
+        near,
+    ))
+}
+
+/// Blender world points in the local space of the object whose `matrix_world` rows are given.
+#[pyfunction]
+pub(super) fn object_local_points(
+    object_world: [[f32; 4]; 4],
+    points: Vec<[f32; 3]>,
+) -> PyResult<Vec<[f32; 3]>> {
+    thyllore_math_core::world_to_local_points(&matrix_from_rows(&object_world), &points)
+        .map_err(|error| value_error(error.to_string()))
+}
+
+pub(super) fn matrix_from_column_major(values: [f32; 16]) -> Mat4 {
+    Mat4::from_cols_array(&[
         values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
         values[8], values[9], values[10], values[11], values[12], values[13], values[14],
         values[15],
-    )
+    ])
 }
 
-pub fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Matrix4<f32> {
+pub(super) fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Mat4 {
     inverse_view_proj_f64(
         matrix_from_column_major(proj),
         matrix_from_column_major(view),
@@ -200,32 +241,32 @@ macro_rules! declare_effect_pyfunctions {
         extra: [$($extra:ident),* $(,)?]
     ) => {
         #[pyo3::pyfunction]
-        pub fn $preset_names() -> Vec<&'static str> {
+        pub(crate) fn $preset_names() -> Vec<&'static str> {
             $crate::pybindings::effect::preset_names::<$effect>()
         }
 
         /// (public name, dotted serde path) of every persisted parameter.
         #[pyo3::pyfunction]
-        pub fn $parameter_paths() -> Vec<(&'static str, &'static str)> {
+        pub(crate) fn $parameter_paths() -> Vec<(&'static str, &'static str)> {
             $crate::pybindings::effect::parameter_paths::<$effect>()
         }
 
         #[pyo3::pyfunction]
-        pub fn $ui_params(
+        pub(crate) fn $ui_params(
             py: pyo3::Python<'_>,
         ) -> pyo3::PyResult<pyo3::Bound<'_, pyo3::types::PyList>> {
             $crate::pybindings::effect::ui_params::<$effect>(py)
         }
 
         #[pyo3::pyfunction]
-        pub fn $preset_params<'py>(
+        pub(crate) fn $preset_params<'py>(
             py: pyo3::Python<'py>,
             name: &str,
         ) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::types::PyDict>> {
             $crate::pybindings::effect::preset_params::<$effect>(py, name)
         }
 
-        pub fn register(m: &pyo3::Bound<pyo3::types::PyModule>) -> pyo3::PyResult<()> {
+        pub(crate) fn register(m: &pyo3::Bound<pyo3::types::PyModule>) -> pyo3::PyResult<()> {
             use pyo3::prelude::PyModuleMethods;
             m.add_function(pyo3::wrap_pyfunction!($preset_names, m)?)?;
             m.add_function(pyo3::wrap_pyfunction!($ui_params, m)?)?;

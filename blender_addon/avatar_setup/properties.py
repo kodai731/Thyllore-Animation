@@ -1,6 +1,6 @@
-"""Blender property groups for avatar setup (spring bones, submesh roles).
+"""Blender property groups for avatar setup (spring bones, submesh roles, hidden skin mask).
 
-Registered on ``bpy.types.Armature`` (spring) and ``bpy.types.Object`` (submesh).
+Registered on ``bpy.types.Armature`` (spring, hidden mask) and ``bpy.types.Object`` (submesh).
 """
 from __future__ import annotations
 
@@ -9,25 +9,30 @@ import re
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
+from ..common.avatar_sidecar import AUTO_ATTACHMENT, attachment_enum_items
 from ..common.effect_properties import build_param_properties
 from ..common.spring_properties import configure_force_params
 from ..common.vrm_export import VRM_META_DEFAULT_VERSION, VRM_META_FIELDS
 
 
-SPRING_JOINT_FORCE_MODELS: list[dict] = tml.spring_joint_force_ui_params() if _TML_AVAILABLE else []
+SPRING_JOINT_FORCE_MODELS: list[dict] = avatar_api.spring_joint_force_ui_params() if _AVATAR_API_AVAILABLE else []
 
 SPRING_JOINT_PARAM_NAMES: tuple[str, ...] = (
-    tuple(p["name"] for p in tml.spring_joint_ui_params()) if _TML_AVAILABLE else ()
+    tuple(p["name"] for p in avatar_api.spring_joint_ui_params()) if _AVATAR_API_AVAILABLE else ()
 )
 RAMP_END_PARAM_NAMES: tuple[str, ...] = tuple(name for name in SPRING_JOINT_PARAM_NAMES if name != "hit_radius")
-CHAIN_GEN_UI_PARAMS: list[dict] = tml.chain_gen_ui_params() if _TML_AVAILABLE else []
+CHAIN_GEN_UI_PARAMS: list[dict] = avatar_api.chain_gen_ui_params() if _AVATAR_API_AVAILABLE else []
+ATTACHMENT_ENUM_ITEMS = attachment_enum_items(avatar_api.root_attachments() if _AVATAR_API_AVAILABLE else [])
+SUBMESH_ROLE_ITEMS: list[tuple[str, str, str]] = (
+    [(entry["name"], entry["label"], "") for entry in avatar_api.submesh_roles()] if _AVATAR_API_AVAILABLE else []
+)
 
 configure_force_params({
     model["model"]: tuple(p["name"] for p in model["params"]) for model in SPRING_JOINT_FORCE_MODELS
@@ -46,13 +51,13 @@ def _force_model_property():
 def _spring_joint_annotations() -> dict[str, object]:
     """Property annotations for one spring joint item: the force model with every model's
     magnitudes, then the parameters all models share, from the engine's UI params."""
-    if not _TML_AVAILABLE:
+    if not _AVATAR_API_AVAILABLE:
         return {}
     annotations: dict[str, object] = {"force_model": _force_model_property()}
     for model in SPRING_JOINT_FORCE_MODELS:
         for param in model["params"]:
             annotations.update(build_param_properties(param))
-    for param in tml.spring_joint_ui_params():
+    for param in avatar_api.spring_joint_ui_params():
         annotations.update(build_param_properties(param))
     return annotations
 
@@ -72,7 +77,6 @@ class THYLLORE_PG_ChainGeneration(bpy.types.PropertyGroup):
         description="Bone the generated chains hang from (a role name such as Head is resolved); empty hangs hair from the head and a garment from the bone that supports it",
         default="",
     )
-
     __annotations__.update(_chain_generation_annotations())
 
 
@@ -101,7 +105,7 @@ class THYLLORE_PG_SpringChain(bpy.types.PropertyGroup):
     collider_groups: bpy.props.CollectionProperty(type=THYLLORE_PG_NameItem)
     origin_mesh: bpy.props.StringProperty(name="Origin Mesh")
     origin_material: bpy.props.StringProperty(name="Origin Material")
-    origin_role: bpy.props.StringProperty(name="Origin Role")
+    origin_attachment: bpy.props.StringProperty(name="Origin Attachment")
 
 
 class THYLLORE_PG_Collider(bpy.types.PropertyGroup):
@@ -248,19 +252,19 @@ class THYLLORE_PG_SubmeshRole(bpy.types.PropertyGroup):
     material: bpy.props.StringProperty(name="Material")
     role: bpy.props.EnumProperty(
         name="Role",
-        items=[
-            ("skin", "Skin", ""),
-            ("garment", "Garment", ""),
-            ("hair", "Hair", ""),
-            ("accessory", "Accessory", ""),
-        ],
-        default="skin",
+        items=SUBMESH_ROLE_ITEMS,
         update=_mark_role_as_user,
     )
     source: bpy.props.EnumProperty(
         name="Source",
         items=[("guessed", "Guessed", ""), ("user", "User", "")],
         default="guessed",
+    )
+    attachment: bpy.props.EnumProperty(
+        name="Attachment",
+        description="How the root of the chains generated on this submesh attaches to the mesh",
+        items=ATTACHMENT_ENUM_ITEMS,
+        default=AUTO_ATTACHMENT,
     )
 
 
@@ -276,6 +280,86 @@ class THYLLORE_PG_SubmeshSettings(bpy.types.PropertyGroup):
     roles: bpy.props.CollectionProperty(type=THYLLORE_PG_SubmeshRole)
     hidden_triangles: bpy.props.CollectionProperty(type=THYLLORE_PG_HiddenTriangles)
     active_role_index: bpy.props.IntProperty(name="Active Role Index", default=-1)
+
+
+HIDDEN_MASK_DEFAULTS: dict = avatar_api.hidden_mask_defaults() if _AVATAR_API_AVAILABLE else {}
+
+
+def _hidden_mask_enabled(settings) -> bool:
+    from .hidden_mask import armature_object, is_hidden_mask_applied
+
+    arm = armature_object(settings.id_data)
+    return arm is not None and is_hidden_mask_applied(arm)
+
+
+def _set_hidden_mask_enabled(settings, enabled: bool) -> None:
+    from .hidden_mask import apply_hidden_mask, armature_object, clear_hidden_mask
+
+    arm = armature_object(settings.id_data)
+    if arm is None:
+        return
+    if enabled:
+        apply_hidden_mask(arm, settings.params(), bpy.context.scene.unit_settings.scale_length)
+    else:
+        clear_hidden_mask(arm)
+
+
+def _reapply_hidden_mask(settings, _context) -> None:
+    if settings.enabled:
+        _set_hidden_mask_enabled(settings, True)
+
+
+def _hidden_mask_annotations() -> dict[str, object]:
+    return {
+        "cover_distance": bpy.props.FloatProperty(
+            name="Cover Distance",
+            description="Distance along the normal within which a garment counts as covering the skin",
+            default=HIDDEN_MASK_DEFAULTS.get("cover_distance", 0.05),
+            min=0.0,
+            update=_reapply_hidden_mask,
+        ),
+        "cone_angle_deg": bpy.props.FloatProperty(
+            name="Cone Angle (deg)",
+            description="Spread of the rays cast around the vertex normal",
+            default=HIDDEN_MASK_DEFAULTS.get("cone_angle_deg", 120.0),
+            min=0.0,
+            max=180.0,
+            update=_reapply_hidden_mask,
+        ),
+        "ray_count": bpy.props.IntProperty(
+            name="Ray Count",
+            description="Rays cast per skin vertex",
+            default=HIDDEN_MASK_DEFAULTS.get("ray_count", 8),
+            min=1,
+            update=_reapply_hidden_mask,
+        ),
+        "hidden_ratio": bpy.props.FloatProperty(
+            name="Hidden Ratio",
+            description="Share of the rays that must hit a garment for the vertex to be hidden",
+            default=HIDDEN_MASK_DEFAULTS.get("hidden_ratio", 0.5),
+            min=0.0,
+            max=1.0,
+            update=_reapply_hidden_mask,
+        ),
+    }
+
+
+class THYLLORE_PG_HiddenMask(bpy.types.PropertyGroup):
+    """Hidden skin mask settings stored on the armature (bpy.types.Armature.thyllore_hidden_mask).
+
+    ``enabled`` reads and writes the hidden triangle lists of the bound meshes, which are the state."""
+
+    __annotations__ = _hidden_mask_annotations()
+
+    enabled: bpy.props.BoolProperty(
+        name="Hide Covered Skin",
+        description="Hide the skin triangles covered by garment materials; off shows them again",
+        get=_hidden_mask_enabled,
+        set=_set_hidden_mask_enabled,
+    )
+
+    def params(self) -> dict:
+        return {name: getattr(self, name) for name in HIDDEN_MASK_DEFAULTS}
 
 
 class THYLLORE_PG_RampForm(bpy.types.PropertyGroup):
@@ -318,6 +402,7 @@ CLASSES = (
     THYLLORE_PG_SubmeshRole,
     THYLLORE_PG_HiddenTriangles,
     THYLLORE_PG_SubmeshSettings,
+    THYLLORE_PG_HiddenMask,
     THYLLORE_PG_RampForm,
     THYLLORE_PG_VrmMeta,
 )
@@ -334,6 +419,7 @@ def register() -> None:
         type=THYLLORE_PG_SubmeshSettings
     )
     bpy.types.Armature.thyllore_vrm = bpy.props.PointerProperty(type=THYLLORE_PG_VrmMeta)
+    bpy.types.Armature.thyllore_hidden_mask = bpy.props.PointerProperty(type=THYLLORE_PG_HiddenMask)
     bpy.types.WindowManager.thyllore_ramp = bpy.props.PointerProperty(
         type=THYLLORE_PG_RampForm
     )
@@ -341,6 +427,7 @@ def register() -> None:
 
 def unregister() -> None:
     del bpy.types.WindowManager.thyllore_ramp
+    del bpy.types.Armature.thyllore_hidden_mask
     del bpy.types.Armature.thyllore_vrm
     del bpy.types.Object.thyllore_submesh
     del bpy.types.Armature.thyllore_spring

@@ -4,17 +4,18 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.chain_bone_display import remove_chain_collections
-from ..common.chain_bones import chain_of_membership_group
+from ..common.chain_migration import rename_legacy_chains
 from ..common.spring_properties import generated_chain_bones, remove_chains_generated_on
 from .chain_bone_edit import remove_bones, remove_vertex_groups
+from .chain_inputs import VERTEX_GROUP_NAMES
 from .chain_inputs import resolve_submesh
 from .operators import target_armature
 
@@ -33,10 +34,25 @@ def _clear_vertex_groups(obj, names: list[str]) -> None:
             group.remove(every_vertex)
 
 
-def _membership_groups_of_submesh(obj, role: str, target: str) -> list[str]:
-    chains = {chain_of_membership_group(vg.name): vg.name for vg in obj.vertex_groups}
+def _membership_groups_of_submesh(obj, target: str) -> list[str]:
+    chains = {VERTEX_GROUP_NAMES.chain_of(vg.name): vg.name for vg in obj.vertex_groups}
     chains.pop(None, None)
-    return [chains[name] for name in tml.submesh_chain_names(role, target, list(chains))]
+    return [chains[name] for name in avatar_api.submesh_chain_names(target, list(chains))]
+
+
+def remove_generated_chains(context, arm, obj, material: str) -> tuple[int, int]:
+    """Drop the chains generated on one submesh with their bones, weights and display; returns
+    (chain count, joint bone count)."""
+    settings = arm.data.thyllore_spring
+    origin = {"mesh": obj.name, "material": material}
+    chain_bones = generated_chain_bones(settings, origin)
+    joint_bones = [bone for bones in chain_bones.values() for bone in bones]
+
+    remove_chains_generated_on(settings, origin)
+    remove_bones(context, arm, joint_bones)
+    remove_vertex_groups(obj, joint_bones)
+    remove_chain_collections(arm, sorted(chain_bones))
+    return len(chain_bones), len(joint_bones)
 
 
 class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
@@ -52,32 +68,31 @@ class THYLLORE_OT_ResetChainGeneration(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
         try:
-            obj, role, _ = resolve_submesh(arm, self.mesh, self.material)
+            obj, _, _ = resolve_submesh(arm, self.mesh, self.material)
         except ValueError as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         settings = arm.data.thyllore_spring
-        origin = {"mesh": obj.name, "material": self.material, "role": role}
-        chain_bones = generated_chain_bones(settings, origin)
-        joint_bones = [bone for bones in chain_bones.values() for bone in bones]
+        origin = {"mesh": obj.name, "material": self.material}
+        target = f"{obj.name}/{self.material}"
+        rename_legacy_chains(arm, obj, settings, origin, target)
 
         if self.stage == "weight":
+            chain_bones = generated_chain_bones(settings, origin)
+            joint_bones = [bone for bones in chain_bones.values() for bone in bones]
             _clear_vertex_groups(obj, joint_bones)
             self.report({"INFO"}, f"Cleared the weights of {len(joint_bones)} chain bones")
             return {"FINISHED"}
 
-        remove_chains_generated_on(settings, origin)
-        remove_bones(context, arm, joint_bones)
-        remove_vertex_groups(obj, joint_bones)
-        remove_chain_collections(arm, sorted(chain_bones))
-        note = f"Removed {len(joint_bones)} chain bones"
+        _, joint_count = remove_generated_chains(context, arm, obj, self.material)
+        note = f"Removed {joint_count} chain bones"
         if self.stage == "assign":
-            groups = _membership_groups_of_submesh(obj, role, f"{obj.name}/{self.material}")
+            groups = _membership_groups_of_submesh(obj, target)
             remove_vertex_groups(obj, groups)
             note += f" and {len(groups)} chain assignments"
         self.report({"INFO"}, note)

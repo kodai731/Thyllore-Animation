@@ -1,10 +1,10 @@
-use crate::animation::editable::{
+use crate::ecs::resource::{ClipLibrary, CurveTrackRef, SelectedKeyframe};
+use thyllore_anim_core::editable::{
     clip_add_keyframe, clip_recalculate_duration, curve_add_keyframe,
     curve_insert_keyframe_preserving_shape, curve_remove_keyframe, curve_set_keyframe_time,
     CurveExtrapolation, EditableAnimationClip, KeyframeId, PropertyCurve, PropertyType,
     SourceClipId,
 };
-use crate::ecs::resource::{ClipLibrary, CurveTrackRef, SelectedKeyframe};
 
 #[derive(Clone, Copy, Debug)]
 pub enum ExtrapolationEnd {

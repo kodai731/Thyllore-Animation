@@ -26,12 +26,12 @@ pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>>
         label: "Preset",
         options: |_world, view| {
             preset_options(
-                thyllore_effect_core::FLAME_PRESET_NAMES,
+                thyllore_effect_core::flame::FLAME_PRESET_NAMES,
                 view.preset.as_deref(),
             )
         },
         pick: |view, index| {
-            let names = thyllore_effect_core::FLAME_PRESET_NAMES;
+            let names = thyllore_effect_core::flame::FLAME_PRESET_NAMES;
             if index < names.len() {
                 view.preset = Some(names[index].to_string());
             } else {
@@ -44,6 +44,15 @@ pub(super) fn head_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>>
 
 pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
     let mut rows: Vec<UiRow<FlameSectionView>> = vec![UiRow::Heading("Texture Fit")];
+
+    rows.extend(fit_source_rows());
+    rows.extend(fit_group_rows(view));
+    rows.extend(fit_apply_rows());
+    rows
+}
+
+fn fit_source_rows() -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
 
     rows.push(UiRow::Choice {
         label: "Fit Texture",
@@ -101,6 +110,12 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
         },
     });
 
+    rows
+}
+
+fn fit_group_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
+
     rows.push(UiRow::Slider {
         label: "Fit Blend",
         min: 0.0,
@@ -152,6 +167,12 @@ pub(super) fn fit_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> 
             view.flame_ui.texture_fit_groups[3] = value;
         },
     });
+
+    rows
+}
+
+fn fit_apply_rows() -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = Vec::new();
 
     rows.push(UiRow::Choice {
         label: "Fit Mode",

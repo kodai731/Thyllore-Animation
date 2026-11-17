@@ -3,7 +3,7 @@ use crate::ecs::resource::{
     PhysicalCameraParameters, SceneBrightness, TransformGizmoState, WeightHeatmapState,
 };
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct SceneSettingsView {

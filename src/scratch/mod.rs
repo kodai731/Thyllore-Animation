@@ -1,4 +1,4 @@
 pub mod job;
-pub mod loader;
+mod loader;
 
-pub use loader::step_scratch_jobs;
+pub use loader::{step_scratch_jobs, LoadScratchJob};

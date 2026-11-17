@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::editable::components::curve::PropertyType;
-use crate::editable::components::keyframe_copy::{CopiedKeyframe, KeyframeCopyBuffer};
-use crate::editable::components::mirror::{MirrorAxis, MirrorMapping};
+use crate::editable::PropertyType;
+use crate::editable::{CopiedKeyframe, KeyframeCopyBuffer};
+use crate::editable::{MirrorAxis, MirrorMapping};
 use crate::BoneId;
 
 pub fn build_mirror_mapping(bone_names: &HashMap<BoneId, String>) -> MirrorMapping {

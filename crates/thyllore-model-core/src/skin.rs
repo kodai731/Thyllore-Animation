@@ -1,4 +1,4 @@
-use cgmath::{Vector3, Vector4};
+use glam::{UVec4, Vec3, Vec4};
 
 use crate::SkeletonId;
 
@@ -8,10 +8,10 @@ pub const INFLUENCES_PER_VERTEX: usize = 4;
 #[derive(Clone, Debug)]
 pub struct SkinData {
     pub skeleton_id: SkeletonId,
-    pub bone_indices: Vec<Vector4<u32>>,
-    pub bone_weights: Vec<Vector4<f32>>,
-    pub base_positions: Vec<Vector3<f32>>,
-    pub base_normals: Vec<Vector3<f32>>,
+    pub bone_indices: Vec<UVec4>,
+    pub bone_weights: Vec<Vec4>,
+    pub base_positions: Vec<Vec3>,
+    pub base_normals: Vec<Vec3>,
 }
 
 impl Default for SkinData {

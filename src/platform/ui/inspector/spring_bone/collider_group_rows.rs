@@ -1,6 +1,4 @@
-use thyllore_anim_core::spring_bone::{
-    ColliderGroupOrigin, SpringColliderGroup, SpringColliderGroupId,
-};
+use thyllore_anim_core::spring_bone::{SpringColliderGroup, SpringColliderGroupId};
 
 use crate::ecs::component::{RampScope, SpringChainId};
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{
@@ -14,13 +12,13 @@ use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 use thyllore_anim_core::spring_bone::RampTargets;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GroupChoice {
+pub(super) struct GroupChoice {
     pub id: SpringColliderGroupId,
     pub name: String,
 }
 
 impl GroupChoice {
-    pub fn from_groups(groups: &[SpringColliderGroup]) -> Vec<GroupChoice> {
+    pub(super) fn from_groups(groups: &[SpringColliderGroup]) -> Vec<GroupChoice> {
         groups
             .iter()
             .map(|group| GroupChoice {
@@ -32,7 +30,7 @@ impl GroupChoice {
 }
 
 #[derive(Clone)]
-pub struct ColliderGroupFormView {
+pub(super) struct ColliderGroupFormView {
     pub entity: Entity,
     pub origin: RampOrigin,
     /// The chain Load reads from
@@ -44,14 +42,14 @@ pub struct ColliderGroupFormView {
 }
 
 #[derive(Clone)]
-pub struct GroupAssignView {
+pub(super) struct GroupAssignView {
     pub group_id: SpringColliderGroupId,
     pub assigned: bool,
 }
 
 /// One collider group form per joint of the bone, plus one for the chains hanging under it.
 fn collider_group_items(
-    _: &crate::ecs::World,
+    _: &crate::ecs::world::World,
     view: &BoneSpringView,
 ) -> Vec<(String, ColliderGroupFormView)> {
     let form_for = |origin: RampOrigin, chain_id: SpringChainId, targets: &RampTargets| {
@@ -85,7 +83,7 @@ fn collider_group_items(
     items
 }
 
-pub fn collider_group_list_row() -> UiRow<BoneSpringView> {
+pub(super) fn collider_group_list_row() -> UiRow<BoneSpringView> {
     UiRow::List(Box::new(
         ListRows::<BoneSpringView, ColliderGroupFormView> {
             title: "Collider Groups",
@@ -171,7 +169,7 @@ fn scope_choice_row() -> UiRow<ColliderGroupFormView> {
     }
 }
 
-pub fn collider_group_form_rows(origin: RampOrigin) -> Vec<UiRow<ColliderGroupFormView>> {
+pub(super) fn collider_group_form_rows(origin: RampOrigin) -> Vec<UiRow<ColliderGroupFormView>> {
     let mut rows = vec![group_assign_list_row()];
     if origin == RampOrigin::Joint {
         rows.push(scope_choice_row());
@@ -211,6 +209,7 @@ pub fn collider_group_form_rows(origin: RampOrigin) -> Vec<UiRow<ColliderGroupFo
 mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+    use thyllore_anim_core::spring_bone::ColliderGroupOrigin;
 
     #[test]
     fn form_rows_label_order_and_no_duplicates() {

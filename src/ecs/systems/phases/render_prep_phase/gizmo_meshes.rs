@@ -1,14 +1,13 @@
 use super::bone_gizmo_mesh::{
     any_bone_drawn, bone_selection_snapshot, chains_of_selected_mesh, find_spring_bone_setup,
 };
-use crate::ecs::resource::gizmo::TransformGizmoData;
-use crate::ecs::resource::gizmo::{
+use crate::ecs::resource::TransformGizmoData;
+use crate::ecs::resource::{
     BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData, SpringChainGizmoMode,
 };
+use crate::ecs::systems::{build_constraint_gizmo_mesh, build_spring_bone_gizmo_mesh};
 use crate::ecs::systems::{ColliderGizmo, SpringGizmoSelection};
 use crate::ecs::FrameContext;
-use crate::ecs::{build_constraint_gizmo_mesh, build_spring_bone_gizmo_mesh};
-use crate::render::RenderBackend;
 use anyhow::Result;
 use thyllore_anim_core::spring_bone::{chains_to_draw, chains_with_radius};
 
@@ -46,14 +45,14 @@ pub(super) unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Resu
 
     match mode {
         crate::ecs::resource::TransformGizmoMode::Translate => {
-            crate::ecs::systems::transform_gizmo_systems::build_translate_gizmo_meshes(
+            crate::ecs::systems::build_translate_gizmo_meshes(
                 active_handle,
                 &mut line_mesh_clone,
                 &mut solid_mesh_clone,
             );
         }
         crate::ecs::resource::TransformGizmoMode::Rotate => {
-            crate::ecs::systems::transform_gizmo_systems::build_rotate_gizmo_meshes(
+            crate::ecs::systems::build_rotate_gizmo_meshes(
                 active_handle,
                 camera_dir,
                 &mut line_mesh_clone,
@@ -61,7 +60,7 @@ pub(super) unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Resu
             );
         }
         crate::ecs::resource::TransformGizmoMode::Scale => {
-            crate::ecs::systems::transform_gizmo_systems::build_scale_gizmo_meshes(
+            crate::ecs::systems::build_scale_gizmo_meshes(
                 active_handle,
                 &mut line_mesh_clone,
                 &mut solid_mesh_clone,

@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WHEELS_DIR="blender_addon/wheels"
 SKIP_MATURIN=0
 DEBUG_LOG=0
-CRATE="thyllore-ml-core"
+CRATE=""
 
 usage() {
     cat <<EOF
@@ -18,9 +18,9 @@ pushing.
 
 Options:
   --wheels-dir PATH              Output directory (default: blender_addon/wheels)
-  --skip-maturin                 Skip building thyllore_ml_core wheel via maturin
-  --crate <name>                 Crate to build (default: thyllore-ml-core)
-  --debug-log                    Build the wheel with the debug-log feature
+  --skip-maturin                 Skip building wheels via maturin
+  --crate <name>                 Build only this crate (default: build all crates)
+  --debug-log                    Build with the debug-log feature (crates that declare it)
   -h, --help                     Show this help
 EOF
 }
@@ -36,11 +36,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$CRATE" == "thyllore-effect-core" && "$DEBUG_LOG" -eq 1 ]]; then
-    echo "error: --crate thyllore-effect-core cannot be combined with --debug-log" >&2
-    echo "       The debug-log feature is specific to thyllore-ml-core." >&2
-    exit 1
-fi
+crate_declares_debug_log() {
+    grep -Eq '^debug-log\s*=' "$REPO_ROOT/crates/$1/Cargo.toml"
+}
 
 HOST_PYTHON="${PYTHON:-python3}"
 if ! command -v "$HOST_PYTHON" >/dev/null 2>&1; then
@@ -69,19 +67,32 @@ ABS_WHEELS="$REPO_ROOT/$WHEELS_DIR"
 mkdir -p "$ABS_WHEELS"
 
 if [[ "$SKIP_MATURIN" -eq 0 ]]; then
-    MATURIN_FEATURES="python"
-    if [[ "$DEBUG_LOG" -eq 1 ]]; then
-        MATURIN_FEATURES="python,debug-log"
-        echo "[collect_wheels] Building DEBUG wheel (features: $MATURIN_FEATURES)"
-    else
-        echo "[collect_wheels] Building $CRATE wheel via maturin..."
-    fi
     "$PYTHON_BIN" -m pip install --quiet maturin
-    (
-        cd "$REPO_ROOT/crates/$CRATE"
-        export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$HOME=."
-        maturin build --release --features "$MATURIN_FEATURES" --out "$ABS_WHEELS"
-    )
+
+    if [[ -n "$CRATE" ]]; then
+        CRATES=("$CRATE")
+    else
+        CRATES=("thyllore-ml-core" "thyllore-avatar-api")
+    fi
+
+    for crate in "${CRATES[@]}"; do
+        if [[ "$DEBUG_LOG" -eq 1 ]]; then
+            if ! crate_declares_debug_log "$crate"; then
+                echo "error: --crate $crate cannot be combined with --debug-log (no debug-log feature in its Cargo.toml)" >&2
+                exit 1
+            fi
+            MATURIN_FEATURES="python,debug-log"
+            echo "[collect_wheels] Building $crate DEBUG wheel (features: $MATURIN_FEATURES)"
+        else
+            MATURIN_FEATURES="python"
+            echo "[collect_wheels] Building $crate wheel via maturin..."
+        fi
+        (
+            cd "$REPO_ROOT/crates/$crate"
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$HOME=."
+            maturin build --release --features "$MATURIN_FEATURES" --out "$ABS_WHEELS"
+        )
+    done
 fi
 
 echo "[collect_wheels] Writing local SHA256 manifest (gitignored)..."

@@ -1,7 +1,7 @@
-use crate::editable::components::curve::PropertyCurve;
-use crate::editable::components::keyframe::{EditableKeyframe, InterpolationType};
+use crate::editable::PropertyCurve;
+use crate::editable::{EditableKeyframe, InterpolationType};
 
-pub fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
+pub(super) fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     let has_bezier = curves.iter().any(|c| c.has_bezier_keyframes());
 
     if !has_bezier {

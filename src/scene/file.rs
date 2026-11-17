@@ -7,8 +7,6 @@ use crate::hooks::scene::SceneValue;
 
 pub const SCENE_FORMAT_VERSION: u32 = 8;
 
-pub use thyllore_anim_core::editable::{AnimationClipFile, ANIMATION_FORMAT_VERSION};
-
 /// On-disk scene: the model, the clip files, every registered resource and entity component
 /// keyed by its type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +75,10 @@ impl ModelReference {
 
     pub fn is_generated_mesh(&self) -> bool {
         self.path == Self::GENERATED_MESH
+    }
+
+    pub fn names_file(&self) -> bool {
+        !self.path.is_empty() && !self.is_generated_mesh()
     }
 }
 

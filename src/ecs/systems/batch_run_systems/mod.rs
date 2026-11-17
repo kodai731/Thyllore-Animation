@@ -10,7 +10,6 @@ mod input_actions;
 mod orbit;
 mod sequence_analyze;
 
-pub use crate::ecs::resource::{BatchAnimEdit, BoneAxis};
 pub use anim_dump::*;
 pub use anim_edits::*;
 pub use apply_overrides::*;

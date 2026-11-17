@@ -2,16 +2,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::scalar_clip_systems::{
+use crate::ecs::systems::{
     despawn_entity_with_clip, ensure_scalar_entity_clip, find_entity_clip_id,
 };
 use crate::ecs::world::{Entity, Name, World};
 use crate::hooks::scene::{
     SceneComponentHook, SceneComponentHooks, SceneComponentRole, SceneValue,
 };
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 /// A named entity stored as the persisted form of its components, keyed by type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,13 +158,13 @@ pub(crate) fn world_with_scene_hooks() -> World {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use cgmath::Quaternion;
+    use glam::Quat;
     use serde::{Deserialize, Serialize};
     use thyllore_scene_core::SceneComponent;
 
     /// Test-only owner so scene tests never depend on a concrete effect.
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-    pub struct ProbeOwner {
+    pub(crate) struct ProbeOwner {
         pub position: [f32; 3],
         pub level: f32,
     }
@@ -176,12 +176,12 @@ pub(crate) mod test_support {
 
     crate::scene_owner!(ProbeOwner {
         icon: crate::ecs::component::EntityIcon::Empty,
-        placement: |p| (p.position.into(), Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+        placement: |p| (p.position.into(), Quat::from_xyzw(0.0, 0.0, 0.0, 1.0)),
     });
 
     /// Test-only attachment restored by insertion.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct ProbeLabel {
+    pub(crate) struct ProbeLabel {
         pub label: String,
     }
 
@@ -201,6 +201,7 @@ mod tests {
     use crate::hooks::scene::{
         decode_scene_value, encode_scene_value, entities_with, spawn_scene_owner,
     };
+    use glam::Vec3;
     use thyllore_scene_core::SceneComponent;
 
     fn spawn_probe(world: &mut World, name: &str, level: f32) -> Entity {
@@ -285,7 +286,7 @@ mod tests {
             world
                 .get_component::<Transform>(entity)
                 .map(|t| t.translation),
-            Some(cgmath::Vector3::new(1.0, 2.0, 3.0))
+            Some(Vec3::new(1.0, 2.0, 3.0))
         );
         assert_eq!(
             world

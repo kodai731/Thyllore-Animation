@@ -5,7 +5,7 @@ impl EffectPreset for LightningEffect {
     type Applied = AppliedLightningPreset;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        thyllore_effect_core::apply_lightning_preset(self, name)
+        thyllore_effect_core::lightning::apply_lightning_preset(self, name)
     }
 
     fn applied(name: &str) -> Self::Applied {

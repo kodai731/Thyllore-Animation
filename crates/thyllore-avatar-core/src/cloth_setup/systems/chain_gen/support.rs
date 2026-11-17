@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{centroid, tangent_frame_around, world_y_axis};
 use thyllore_model_core::BoneId;
 
@@ -16,13 +16,13 @@ const SHELF_REACH_RINGS: usize = 2;
 struct RingGrid {
     bottom: f32,
     ring_count: usize,
-    axis_center: Vector3<f32>,
-    reference: Vector3<f32>,
-    side: Vector3<f32>,
+    axis_center: Vec3,
+    reference: Vec3,
+    side: Vec3,
 }
 
 impl RingGrid {
-    fn new(bottom: f32, top: f32, axis_center: Vector3<f32>) -> Self {
+    fn new(bottom: f32, top: f32, axis_center: Vec3) -> Self {
         let (reference, side) = tangent_frame_around(world_y_axis());
         Self {
             bottom,
@@ -41,7 +41,7 @@ impl RingGrid {
         self.bottom + RING_HEIGHT * ring as f32
     }
 
-    fn cell_of(&self, point: Vector3<f32>) -> (usize, usize, f32) {
+    fn cell_of(&self, point: Vec3) -> (usize, usize, f32) {
         let offset = point - self.axis_center;
         let along_reference = offset.dot(self.reference);
         let along_side = offset.dot(self.side);
@@ -94,7 +94,7 @@ impl RadiusTable {
 }
 
 struct BodyPoint {
-    position: Vector3<f32>,
+    position: Vec3,
     bone: BoneId,
 }
 
@@ -196,7 +196,7 @@ pub(super) fn garment_support(
         return Ok(None);
     }
     let up = world_y_axis();
-    let garment_positions: Vec<Vector3<f32>> = vertices
+    let garment_positions: Vec<Vec3> = vertices
         .iter()
         .map(|&vertex| input.positions[vertex as usize])
         .collect();
@@ -241,7 +241,7 @@ pub(super) fn garment_support(
 /// The influences of the body point nearest to `point`.
 pub(super) fn nearest_body_influences(
     surfaces: &[SkinSurface],
-    point: Vector3<f32>,
+    point: Vec3,
 ) -> Option<Vec<(BoneId, f32)>> {
     surfaces
         .iter()
@@ -249,8 +249,8 @@ pub(super) fn nearest_body_influences(
         .filter(|(_, influences)| !influences.is_empty())
         .min_by(|a, b| {
             (a.0 - point)
-                .magnitude2()
-                .total_cmp(&(b.0 - point).magnitude2())
+                .length_squared()
+                .total_cmp(&(b.0 - point).length_squared())
         })
         .map(|(_, influences)| influences.clone())
 }

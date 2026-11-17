@@ -2,9 +2,10 @@ use super::effect::{
     build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes,
     inverse_view_proj_from_column_major, ParameterOwnerName,
 };
-use crate::water::{build_water_model_matrix, build_water_ubo, WaterTorusEffect, WaterUBO};
-use crate::WaterParameterOwner;
-use cgmath::Vector4;
+use crate::water::{
+    build_water_model_matrix, build_water_ubo, WaterParameterOwner, WaterTorusEffect, WaterUBO,
+};
+use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use thyllore_math_core::torus_local_bounds_corners;
@@ -26,7 +27,7 @@ declare_effect_pyfunctions! {
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj, frame_index=0))]
-pub fn pack_water_ubo(
+pub(super) fn pack_water_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -38,12 +39,12 @@ pub fn pack_water_ubo(
 ) -> PyResult<Vec<u8>> {
     let effect: WaterTorusEffect = build_effect_from_params(py, params, time, position, rotation)?;
     let mut ubo = build_water_ubo(&effect, frame_index);
-    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj);
+    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj).into();
     Ok(gpu_block_bytes(&ubo))
 }
 
 #[pyfunction]
-pub fn water_bounds_corners(
+pub(super) fn water_bounds_corners(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     position: [f32; 3],
@@ -56,7 +57,7 @@ pub fn water_bounds_corners(
         torus_local_bounds_corners(effect.major_radius, effect.minor_radius)
             .iter()
             .map(|corner| {
-                let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+                let world = model * Vec4::new(corner.x, corner.y, corner.z, 1.0);
                 [world.x, world.y, world.z]
             })
             .collect(),
@@ -64,6 +65,6 @@ pub fn water_bounds_corners(
 }
 
 #[pyfunction]
-pub fn water_ubo_size() -> usize {
+pub(super) fn water_ubo_size() -> usize {
     std::mem::size_of::<WaterUBO>()
 }

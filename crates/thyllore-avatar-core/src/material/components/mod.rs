@@ -1,1 +1,1 @@
-pub mod texture_remap;
+pub(crate) mod texture_remap;

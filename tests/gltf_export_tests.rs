@@ -1,10 +1,9 @@
+use glam::{Quat, Vec3};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use thyllore_animation::animation::editable::{
-    clip_add_keyframe, EditableAnimationClip, PropertyType,
-};
-use thyllore_animation::animation::{AnimationClip, Skeleton};
+use thyllore_anim_core::editable::{clip_add_keyframe, EditableAnimationClip, PropertyType};
+use thyllore_anim_core::{AnimationClip, Skeleton};
 
 #[test]
 fn test_gltf_export_preserves_structure() {
@@ -33,7 +32,7 @@ fn test_gltf_export_preserves_structure() {
 
     let output_path = std::env::temp_dir().join("test_gltf_export.glb");
 
-    thyllore_animation::exporter::gltf::export_gltf_animation(
+    thyllore_exporter_core::gltf::export_gltf_animation(
         source_path,
         &clip,
         &skeleton,
@@ -99,7 +98,7 @@ fn test_gltf_blender_roundtrip_node_animation() {
     let skeleton = build_skeleton_from_gltf(&original_root);
 
     let clip = build_roundtrip_test_clip(&skeleton);
-    let baked_clip = thyllore_animation::animation::editable::clip_to_animation(&clip);
+    let baked_clip = thyllore_anim_core::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_node_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_node_blender.glb");
@@ -138,7 +137,7 @@ fn test_gltf_blender_roundtrip_skeletal_animation() {
     );
 
     let clip = build_skeletal_roundtrip_test_clip(&skeleton);
-    let baked_clip = thyllore_animation::animation::editable::clip_to_animation(&clip);
+    let baked_clip = thyllore_anim_core::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_blender.glb");
@@ -182,7 +181,7 @@ fn run_roundtrip_and_verify(
         return;
     }
 
-    thyllore_animation::exporter::gltf::export_gltf_animation(
+    thyllore_exporter_core::gltf::export_gltf_animation(
         source_path,
         clip,
         skeleton,
@@ -220,7 +219,7 @@ fn run_roundtrip_and_verify(
     );
 
     let reloaded = unsafe {
-        thyllore_animation::loader::gltf::load_gltf_file(&blender_output_path.to_string_lossy())
+        thyllore_importer_core::gltf::load_gltf_file(&blender_output_path.to_string_lossy())
     }
     .expect("Failed to load exported glTF");
 
@@ -323,10 +322,10 @@ fn verify_animation_channels(
             if let Some(reloaded_kf) =
                 find_nearest_keyframe_quat(&reloaded_channel.rotation, orig_kf.time)
             {
-                let dot = (orig_kf.value.s * reloaded_kf.value.s
-                    + orig_kf.value.v.x * reloaded_kf.value.v.x
-                    + orig_kf.value.v.y * reloaded_kf.value.v.y
-                    + orig_kf.value.v.z * reloaded_kf.value.v.z)
+                let dot = (orig_kf.value.w * reloaded_kf.value.w
+                    + orig_kf.value.x * reloaded_kf.value.x
+                    + orig_kf.value.y * reloaded_kf.value.y
+                    + orig_kf.value.z * reloaded_kf.value.z)
                     .abs();
                 let error = 1.0 - dot.min(1.0);
                 max_rotation_error = max_rotation_error.max(error);
@@ -535,9 +534,9 @@ fn build_skeletal_roundtrip_test_clip(skeleton: &Skeleton) -> EditableAnimationC
 }
 
 fn find_nearest_keyframe_vec3<'a>(
-    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>],
+    keyframes: &'a [thyllore_anim_core::Keyframe<Vec3>],
     target_time: f32,
-) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>> {
+) -> Option<&'a thyllore_anim_core::Keyframe<Vec3>> {
     keyframes
         .iter()
         .min_by(|a, b| {
@@ -549,9 +548,9 @@ fn find_nearest_keyframe_vec3<'a>(
 }
 
 fn find_nearest_keyframe_quat<'a>(
-    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>],
+    keyframes: &'a [thyllore_anim_core::Keyframe<Quat>],
     target_time: f32,
-) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>> {
+) -> Option<&'a thyllore_anim_core::Keyframe<Quat>> {
     keyframes
         .iter()
         .min_by(|a, b| {

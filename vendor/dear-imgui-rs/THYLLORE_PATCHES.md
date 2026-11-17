@@ -11,3 +11,15 @@ Re-apply when updating the vendored crate.
 - `../dear-imgui-sys/build.rs`: the MSVC branch no longer forces `opt_level(0)` in debug; the C++
   optimization level comes from Cargo's `OPT_LEVEL` so `[profile.dev.package.dear-imgui-sys]` in the
   root `Cargo.toml` applies on every platform.
+- `Cargo.toml` and `../dear-imgui-build-support/Cargo.toml`: `[lib]` has `test = false` and
+  `bench = false`. The unit tests `include_str!` / `include_bytes!` files by the upstream monorepo
+  layout (`extensions/*`, `dear-imgui-sys` three levels up), which this tree does not have, so the
+  test target cannot compile here. The integration tests under `tests/` still run.
+- `tests/snapshot_contract.rs`: the `linear` / `nearest` callbacks of
+  `snapshot_preserves_standard_sampler_callbacks` each count into their own static. With the
+  `opt-level = 2` this workspace sets for the crate, two empty functions are merged to one address
+  and both commands are read as `SetSamplerLinear`.
+- `../imgui-winit-support/Cargo.toml`: a target-specific `winit` dependency enables `x11` and
+  `wayland` on Linux / BSD only. Upstream leaves the backend to the application, so the crate built
+  on its own (`cargo test -p imgui-winit-support`) had no backend and winit refused to compile.
+  Windows and macOS need no backend feature and are left as upstream.

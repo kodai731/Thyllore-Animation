@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
-use crate::animation::editable::PropertyType;
-use crate::animation::BoneId;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Debug, Default)]
 pub struct CurveEditorBuffer {
     pub snapshots: HashMap<(BoneId, PropertyType), Vec<(f32, f32)>>,
 }
+
+crate::startup_resource!(CurveEditorBuffer, Editor);
 
 impl CurveEditorBuffer {
     pub fn is_empty(&self) -> bool {

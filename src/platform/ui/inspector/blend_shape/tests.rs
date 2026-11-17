@@ -1,8 +1,6 @@
-use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{BlendShapeInspectorState, ExpressionLibraryState};
 use crate::ecs::world::World;
-use crate::platform::ui::form_window::FormSection;
-use thyllore_avatar_core::expression::components::grouping::ChannelGroup;
+use thyllore_avatar_core::expression::ChannelGroup;
 
 use super::expression_presets::*;
 use super::sections::*;

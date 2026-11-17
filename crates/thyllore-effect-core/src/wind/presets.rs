@@ -65,7 +65,7 @@ fn apply_reference_values(preset: &mut WindTornadoEffect) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{Quaternion, Vector3};
+    use glam::{Quat, Vec3};
 
     #[test]
     fn test_all_presets_apply_and_are_idempotent() {
@@ -82,14 +82,14 @@ mod tests {
     #[test]
     fn test_preset_preserves_runtime_state() {
         let mut effect = WindTornadoEffect::default();
-        effect.position = Vector3::new(1.0, 2.0, 3.0);
-        effect.rotation = Quaternion::new(0.99, 0.1, 0.0, 0.0);
+        effect.position = Vec3::new(1.0, 2.0, 3.0);
+        effect.rotation = Quat::from_xyzw(0.1, 0.0, 0.0, 0.99);
         effect.time = 5.0;
 
         apply_wind_preset(&mut effect, "funnel");
 
-        assert_eq!(effect.position, Vector3::new(1.0, 2.0, 3.0));
-        assert_eq!(effect.rotation, Quaternion::new(0.99, 0.1, 0.0, 0.0));
+        assert_eq!(effect.position, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(effect.rotation, Quat::from_xyzw(0.1, 0.0, 0.0, 0.99));
         assert_eq!(effect.time, 5.0);
         assert_eq!(effect.wall_radius_top, 1.2);
     }

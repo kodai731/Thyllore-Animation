@@ -166,7 +166,7 @@ pub fn preprocess(pixels: &[[f32; 3]], width: usize, height: usize) -> Option<Fl
     // Luminance field
     let mut lum = Vec::with_capacity(width * height);
     for p in pixels {
-        lum.push(super::luminance(*p));
+        lum.push(thyllore_color_core::luminance(*p));
     }
 
     // Max luminance and threshold
@@ -491,7 +491,7 @@ pub fn fit_color(
 ) -> (bool, f32, f32, [[f32; 3]; 3]) {
     let mut luminances = Vec::with_capacity(width * height);
     for p in pixels {
-        luminances.push(super::luminance(*p));
+        luminances.push(thyllore_color_core::luminance(*p));
     }
 
     let mut sorted_luminances = luminances.clone();
@@ -533,8 +533,10 @@ pub fn fit_color(
         }
     }
 
-    let bottom_cct = super::chromaticity_xy(colors[0]).and_then(super::mccamy_cct);
-    let top_cct = super::chromaticity_xy(colors[2]).and_then(super::mccamy_cct);
+    let bottom_cct =
+        thyllore_color_core::chromaticity_xy(colors[0]).and_then(thyllore_color_core::mccamy_cct);
+    let top_cct =
+        thyllore_color_core::chromaticity_xy(colors[2]).and_then(thyllore_color_core::mccamy_cct);
 
     let valid = bottom_cct.is_some()
         && top_cct.is_some()

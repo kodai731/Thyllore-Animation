@@ -1,15 +1,14 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use glam::{Mat4, Vec4};
 
-use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::render::RenderBackend;
-use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
     skeleton: &Skeleton,
-) -> Vec<Matrix4<f32>> {
-    let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
+) -> Vec<Mat4> {
+    let mut transforms = vec![Mat4::IDENTITY; skeleton.bones.len()];
     for bone in &skeleton.bones {
         let matched_node = nodes.iter().find(|n| n.name == bone.name).or_else(|| {
             bone.node_index
@@ -23,10 +22,10 @@ pub(crate) fn build_node_based_bone_transforms(
     transforms
 }
 
-pub fn apply_skinning_to_single_mesh(
+pub(crate) fn apply_skinning_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     skeleton: &Skeleton,
 ) -> bool {
     let Some(mesh) = graphics.meshes.get_mut(mesh_idx) else {
@@ -47,7 +46,7 @@ pub fn apply_skinning_to_single_mesh(
     true
 }
 
-pub fn apply_node_animation_to_single_mesh(
+pub(crate) fn apply_node_animation_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     nodes: &[NodeData],
@@ -77,7 +76,7 @@ pub fn apply_node_animation_to_single_mesh(
     for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
         if i < mesh.base_vertices.len() {
             let base = &mesh.base_vertices[i];
-            let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+            let pos = transform * Vec4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
             v.pos.x = pos.x * scale;
             v.pos.y = pos.y * scale;
             v.pos.z = pos.z * scale;
@@ -112,8 +111,8 @@ pub fn compute_node_global_transforms(
         nodes: &[NodeData],
         node_idx: usize,
         computed: &mut [bool],
-        global_transforms: &mut [Matrix4<f32>],
-    ) -> Matrix4<f32> {
+        global_transforms: &mut [Mat4],
+    ) -> Mat4 {
         if computed[node_idx] {
             return global_transforms[node_idx];
         }
@@ -137,7 +136,7 @@ pub fn compute_node_global_transforms(
     }
 
     let mut computed = vec![false; node_count];
-    let mut global_transforms = vec![Matrix4::identity(); node_count];
+    let mut global_transforms = vec![Mat4::IDENTITY; node_count];
 
     for i in 0..node_count {
         compute_global(nodes, i, &mut computed, &mut global_transforms);
@@ -149,7 +148,7 @@ pub fn compute_node_global_transforms(
 }
 
 pub unsafe fn upload_animations(
-    backend: &mut dyn RenderBackend,
+    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     updated_meshes: &[usize],
     frame_slot: usize,
 ) -> Result<()> {
@@ -160,7 +159,7 @@ pub unsafe fn upload_animations(
     Ok(())
 }
 
-pub fn prepare_node_animation(
+pub(crate) fn prepare_node_animation(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     skeleton: &Skeleton,
@@ -190,7 +189,7 @@ pub fn prepare_node_animation(
         for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
             if i < mesh.base_vertices.len() {
                 let base = &mesh.base_vertices[i];
-                let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                let pos = transform * Vec4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
                 v.pos.x = pos.x * node_animation_scale;
                 v.pos.y = pos.y * node_animation_scale;
                 v.pos.z = pos.z * node_animation_scale;

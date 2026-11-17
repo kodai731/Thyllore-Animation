@@ -1,14 +1,14 @@
-pub mod animation_phase;
+mod animation_phase;
 pub mod event_dispatch;
-pub mod event_dispatch_phase;
-pub mod first_phase;
-pub mod input_phase;
-pub mod last_phase;
-pub mod onion_skin_phase;
-pub mod render_prep_phase;
-pub mod timeline_phase;
-pub mod transform_propagate_phase;
-pub mod view_phase;
+mod event_dispatch_phase;
+mod first_phase;
+mod input_phase;
+mod last_phase;
+mod onion_skin_phase;
+mod render_prep_phase;
+mod timeline_phase;
+mod transform_propagate_phase;
+mod view_phase;
 
 pub use animation_phase::*;
 pub use event_dispatch_phase::*;

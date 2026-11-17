@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
-use crate::ecs::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::ecs::world::World;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub struct ScratchContext<'a> {
     pub world: &'a mut World,

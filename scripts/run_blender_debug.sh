@@ -104,7 +104,7 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 
 if [[ "$REBUILD_WHEEL" -eq 1 ]]; then
-    bash "$REPO_ROOT/scripts/collect_wheels.sh" --debug-log
+    bash "$REPO_ROOT/scripts/collect_wheels.sh" --crate thyllore-ml-core --debug-log
 fi
 
 echo "[run_blender_debug] mode=$MODE (build mode $BUILD_MODE)"

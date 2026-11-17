@@ -104,14 +104,17 @@ Commands:
       UNITY_VERIFY_DIR / BLENDER override the editor binary, the work dir
       (default target/unity_verify) and the Blender launcher (default
       blender/docker/run_background.sh).
-  unity --model PATH.fbx [--fresh] [--setup-only] [--software-gl]
-      Open the Unity Editor GUI (GameCI 2022.3.22f1 image + VRChat SDK) on
-      the NVIDIA GPU with a scene that already holds the model, the sidecar
-      applied and an Animator with every .anim the engine exported next to
-      the model, so the expression presets can be scrubbed in the Animation
-      window (unity/docker/run_gui.sh). The project persists in
-      target/unity_gui; UNITY_GUI_DIR overrides it:
+  unity --model PATH.fbx|PATH.vrm [--fresh] [--setup-only] [--software-gl]
+      Open the Unity Editor GUI (GameCI 2022.3.22f1 image + VRChat SDK +
+      UniVRM) on the NVIDIA GPU with a scene that already holds the model.
+      An .fbx gets the sidecar applied and an Animator with every .anim the
+      engine exported next to it, so the expression presets can be scrubbed
+      in the Animation window. A .vrm is imported by UniVRM; the batch step
+      logs VRMCHECK PASS/FAIL for humanoid, colliders and springs, and the
+      Scene view draws joints and colliders as gizmos (unity/docker/run_gui.sh).
+      The project persists in target/unity_gui; UNITY_GUI_DIR overrides it:
         ./run.sh unity --model assets/models/purchased/Shinano_ver1.02/FBX/Shinano.fbx
+        ./run.sh unity --model log/vrm/woman-1.vrm --setup-only
   live-dump [--tracks] [--pose TIME...] [--set-time T] [--timings [1s]] [--clip NAME] [--out FILE]
       Talk to the engine that is already running (started earlier with
       ./run.sh engine); never launches one. Prints its clips, timeline and

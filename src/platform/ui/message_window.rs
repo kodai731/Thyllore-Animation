@@ -1,7 +1,7 @@
 use crate::ecs::resource::{MessageFilter, MessageLog};
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::world::World;
-use crate::logger::message_buffer::MessageLevel;
+use thyllore_log_core::message_buffer::MessageLevel;
 
 const COLOR_INFO: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
 pub(crate) const COLOR_WARNING: [f32; 4] = [1.0, 0.9, 0.3, 1.0];

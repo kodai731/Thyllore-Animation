@@ -1,13 +1,13 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
-use crate::animation::{
+use crate::asset::AssetStorage;
+use crate::ecs::component::{Constrained, ConstraintSet};
+use crate::ecs::resource::ConstraintGizmoData;
+use crate::ecs::world::{Animator, Entity, World};
+use thyllore_anim_core::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, PositionConstraintData, Skeleton,
     PRIORITY_AIM, PRIORITY_IK, PRIORITY_POSITION,
 };
-use crate::asset::storage::AssetStorage;
-use crate::ecs::component::{Constrained, ConstraintSet};
-use crate::ecs::resource::gizmo::ConstraintGizmoData;
-use crate::ecs::world::{Animator, Entity, World};
 
 pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {
     let entities = world.component_entities::<Animator>();
@@ -170,7 +170,7 @@ fn add_ik_constraints(set: &mut ConstraintSet, skeleton: &Skeleton) {
         chain_length: 2,
         target_bone: target_id,
         effector_bone: effector_id,
-        pole_vector: Some(Vector3::new(0.0, 1.0, 0.0)),
+        pole_vector: Some(Vec3::new(0.0, 1.0, 0.0)),
         enabled: true,
         weight: 1.0,
         ..Default::default()
@@ -207,8 +207,8 @@ fn add_aim_constraint(set: &mut ConstraintSet, skeleton: &Skeleton) {
     let aim = ConstraintType::Aim(AimConstraintData {
         source_bone: source_id,
         target_bone: target_id,
-        aim_axis: Vector3::new(0.0, 0.0, 1.0),
-        up_axis: Vector3::new(0.0, 1.0, 0.0),
+        aim_axis: Vec3::new(0.0, 0.0, 1.0),
+        up_axis: Vec3::new(0.0, 1.0, 0.0),
         enabled: true,
         weight: 1.0,
         ..Default::default()
@@ -267,7 +267,7 @@ fn add_position_constraint(set: &mut ConstraintSet, constrained_id: BoneId, targ
     let pos = ConstraintType::Position(PositionConstraintData {
         constrained_bone: constrained_id,
         target_bone: target_id,
-        offset: Vector3::new(0.0, 0.0, 0.0),
+        offset: Vec3::new(0.0, 0.0, 0.0),
         affect_axes: [true, true, true],
         enabled: true,
         weight: 1.0,

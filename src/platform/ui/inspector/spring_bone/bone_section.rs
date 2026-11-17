@@ -4,13 +4,13 @@ use thyllore_anim_core::spring_bone::{
     ColliderShape, SpringChainId, SpringColliderDef, SpringColliderGroupId, SpringJointParam,
 };
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ChainRamp, RampEnd, RampScope, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::SpringBoneInspectorState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::{SetChainRampEnd, SpringBoneEvent};
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::BoneId;
 
 use super::chain_rows::{joint_param_rows, JointView};
 use super::collider_group_rows::{collider_group_list_row, GroupChoice};
@@ -22,7 +22,7 @@ use crate::platform::ui::ui_rows::{ListRows, UiRow};
 use thyllore_anim_core::spring_bone::RampTargets;
 
 #[derive(Clone, Debug)]
-pub struct BoneJoint {
+pub(super) struct BoneJoint {
     pub chain_id: SpringChainId,
     pub chain_name: String,
     pub joint_index: usize,
@@ -30,7 +30,7 @@ pub struct BoneJoint {
 }
 
 #[derive(Clone)]
-pub struct BoneSpringView {
+pub(super) struct BoneSpringView {
     pub entity: Entity,
     pub bone_id: BoneId,
     pub joints: Vec<BoneJoint>,
@@ -53,13 +53,13 @@ pub struct BoneSpringView {
 
 impl BoneSpringView {
     /// The chains under this bone with the first of them, which the Load buttons read from.
-    pub fn child_chains_with_first_chain(&self) -> Option<(SpringChainId, &RampTargets)> {
+    pub(super) fn child_chains_with_first_chain(&self) -> Option<(SpringChainId, &RampTargets)> {
         let targets = self.child_chains.as_ref()?;
         Some((*targets.chains.first()?, targets))
     }
 }
 
-pub fn bone_spring_section(
+pub(crate) fn bone_spring_section(
     world: &World,
     assets: &AssetStorage,
     bone_id: BoneId,
@@ -124,7 +124,7 @@ pub fn bone_spring_section(
     )
 }
 
-pub fn joints_on_bone(setup: &SpringBoneSetup, bone_id: BoneId) -> Vec<BoneJoint> {
+pub(super) fn joints_on_bone(setup: &SpringBoneSetup, bone_id: BoneId) -> Vec<BoneJoint> {
     setup
         .chains
         .iter()
@@ -153,7 +153,7 @@ fn colliders_on_bone(setup: &SpringBoneSetup, bone_id: BoneId) -> Vec<SpringColl
         .collect()
 }
 
-pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
+pub(super) fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
     let mut rows = Vec::new();
 
     if view.joints.is_empty() {
@@ -172,17 +172,17 @@ pub fn bone_spring_rows(view: &BoneSpringView) -> Vec<UiRow<BoneSpringView>> {
             "Chain length comes from the Add Chain form in the entity's Spring Bones section",
         ));
         rows.push(UiRow::Action {
-            label: "Add Chains Under This Bone",
+            label: "Use Existing Bones as Springs",
             enabled: |_, _| true,
             on_click: |view: &BoneSpringView| {
-                Box::new(AvatarSetupEvent::AddSpringChainsUnder {
+                Box::new(AvatarSetupEvent::UseExistingBonesAsSprings {
                     root: view.bone_id,
                     min_joints: view.min_joints,
                 })
             },
         });
         rows.push(UiRow::Tooltip(
-            "Every run of non-humanoid bones under this bone becomes a chain; Min Joints comes from the Add Chain form",
+            "Registers every run of existing non-humanoid bones under this bone as a spring chain without adding bones; Min Joints comes from the Add Chain form",
         ));
     } else {
         rows.push(joint_list_row());
@@ -389,7 +389,7 @@ mod tests {
             visible_labels(&rows),
             [
                 "Add Chain From This Bone",
-                "Add Chains Under This Bone",
+                "Use Existing Bones as Springs",
                 "Add Collider On This Bone"
             ]
         );
@@ -408,7 +408,7 @@ mod tests {
             visible_labels(&rows),
             [
                 "Add Chain From This Bone",
-                "Add Chains Under This Bone",
+                "Use Existing Bones as Springs",
                 "Ramp",
                 "Add Collider On This Bone"
             ]

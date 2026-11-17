@@ -1,7 +1,6 @@
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_effect_core::{
-    find_scalar_param, find_ui_param, title_case_snake, ScalarParam, UiParam,
-};
+use thyllore_effect_core::{ScalarParam, UiParam};
+use thyllore_scene_core::{find_scalar_param, find_ui_param, title_case_snake};
 
 use crate::ecs::component::{scalar_channel_domains, ScalarChannel, ScalarChannelDomain};
 use crate::ecs::storage::Component;
@@ -123,13 +122,13 @@ mod tests {
     use thyllore_scene_core::SceneFields;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub enum ProbeOwnerTag {
+    pub(super) enum ProbeOwnerTag {
         Frame,
     }
 
     #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
     #[scene(key = "test_probe_params", tag = ProbeOwnerTag, owner = Frame, tags = PROBE_TAGS, snapshot = probe_snapshot, scalars = PROBE_SCALARS, ui = PROBE_UI, overwrite = overwrite_probe)]
-    pub struct ProbeParams {
+    pub(super) struct ProbeParams {
         #[persist(curve, ui(min = 0.0, max = 1.0))]
         pub level: f32,
         #[persist(ui(min = 0.0, max = 1.0))]
@@ -142,7 +141,7 @@ mod tests {
 
     #[derive(Clone, Debug, Default, PartialEq, SceneFields)]
     #[params(tag = ProbeOwnerTag, owner = Frame, group = "wind")]
-    pub struct ProbeWind {
+    pub(super) struct ProbeWind {
         #[persist(curve, scalars, debug_range = (-1.0, 1.0))]
         pub direction: [f32; 2],
         #[persist(curve, ui(label = "Bend", min = 0.0, max = 1.0), renamed_from = ["lean"])]

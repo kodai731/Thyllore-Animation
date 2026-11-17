@@ -21,7 +21,7 @@ pub(crate) fn expand_gpu_resource(input: &DeriveInput) -> Result<TokenStream> {
 
     Ok(quote! {
         impl #impl_generics ::thyllore_vulkan_core::resource::GpuResource for #name #type_generics #where_clause {
-            unsafe fn destroy_gpu(&mut self, rrdevice: &::thyllore_vulkan_core::core::device::RRDevice) {
+            unsafe fn destroy_gpu(&mut self, rrdevice: &::thyllore_vulkan_core::core::RRDevice) {
                 #(#destroy_calls)*
             }
 
@@ -33,7 +33,7 @@ pub(crate) fn expand_gpu_resource(input: &DeriveInput) -> Result<TokenStream> {
         impl #impl_generics ::core::ops::Drop for #name #type_generics #where_clause {
             fn drop(&mut self) {
                 if !::thyllore_vulkan_core::resource::GpuResource::is_destroyed(self) {
-                    ::thyllore_vulkan_core::resource::gpu_resource::warn_dropped_live(
+                    ::thyllore_vulkan_core::resource::warn_dropped_live(
                         ::thyllore_vulkan_core::resource::GpuResource::resource_name(self),
                     );
                 }

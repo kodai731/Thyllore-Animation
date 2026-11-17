@@ -1,3 +1,3 @@
-pub mod chain_gen;
-pub mod hidden_mask;
-pub mod submesh_role;
+pub(crate) mod chain_gen;
+pub(crate) mod hidden_mask;
+pub(crate) mod submesh_role;

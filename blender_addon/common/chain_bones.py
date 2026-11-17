@@ -8,22 +8,17 @@ from __future__ import annotations
 
 from .coordinates import engine_metres_to_blender
 
-COVERED_GROUP = "thyllore_covered"
-MEMBERSHIP_GROUP_PREFIX = "thyllore_chain_"
-
 VertexGroupWeights = list[tuple[int, list[tuple[int, float]]]]
 
 
-def membership_group_name(chain_name: str) -> str:
-    """The vertex group that holds the vertices the user assigned to the chain."""
-    return MEMBERSHIP_GROUP_PREFIX + chain_name
+class VertexGroupNames:
+    """The vertex groups the wheel names: the covered group, the membership group of a chain and the chain a
+    membership group belongs to (``None`` for any other vertex group)."""
 
-
-def chain_of_membership_group(group_name: str) -> str | None:
-    """The chain a membership group belongs to, or ``None`` for any other vertex group."""
-    if not group_name.startswith(MEMBERSHIP_GROUP_PREFIX):
-        return None
-    return group_name[len(MEMBERSHIP_GROUP_PREFIX) :]
+    def __init__(self, avatar_api):
+        self.covered: str = avatar_api.vertex_group_names()["covered"]
+        self.membership = avatar_api.membership_vertex_group
+        self.chain_of = avatar_api.chain_of_vertex_group
 
 
 def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[int]:
@@ -35,11 +30,13 @@ def group_vertices(vertex_groups: VertexGroupWeights, group_index: int) -> list[
     ]
 
 
-def given_chains_from_groups(vertex_groups: VertexGroupWeights, groups: list[tuple[str, int]]) -> list[dict]:
+def given_chains_from_groups(
+    vertex_groups: VertexGroupWeights, groups: list[tuple[str, int]], names: VertexGroupNames
+) -> list[dict]:
     """The ``{name, vertices}`` of every membership group with a weighted vertex; ``groups`` is ``[(name, index), ...]``."""
     given = []
     for group_name, group_index in groups:
-        chain = chain_of_membership_group(group_name)
+        chain = names.chain_of(group_name)
         if chain is None:
             continue
         vertices = group_vertices(vertex_groups, group_index)
@@ -119,10 +116,11 @@ def settings_from_properties(ui_params: list[dict], owner) -> dict[str, float]:
 def bone_specs(
     output: dict, root_bone: str
 ) -> list[tuple[str, str | None, tuple[float, float, float], tuple[float, float, float]]]:
-    """Build (name, parent, head, tail) specs for every joint in every chain.
+    """Build (name, parent, head, tail) specs for every joint in every chain, then its end bone.
 
     Within a chain each joint's tail is the next joint's head; the last joint's
-    tail is the chain's ``tail``.  The first joint's parent is ``root_bone``,
+    tail is the chain's ``tail``, where the chain's ``end_bone`` starts and
+    continues the last segment.  The first joint's parent is ``root_bone``,
     subsequent joints' parent is the preceding joint's name.
     """
     specs: list[tuple[str, str | None, tuple[float, float, float], tuple[float, float, float]]] = []
@@ -138,7 +136,15 @@ def bone_specs(
                 tail = tuple(chain["tail"])
             specs.append((name, prev_name, head, tail))
             prev_name = name
+        if joints:
+            specs.append((chain["end_bone"], prev_name, *_end_bone_segment(joints[-1]["head"], chain["tail"])))
     return specs
+
+
+def _end_bone_segment(last_head, tail) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """The end bone spans the chain tail onward by the last segment, so Blender gives it a length."""
+    head = tuple(tail)
+    return head, tuple(t + (t - h) for h, t in zip(last_head, tail))
 
 
 def _target_bone_name(target, root_bone: str, bone_names: list[str]) -> str:

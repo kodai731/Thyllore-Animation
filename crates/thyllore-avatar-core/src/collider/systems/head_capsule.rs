@@ -1,19 +1,16 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::{
     tangent_frame_around, widest_cross_section, world_y_axis, CROSS_SECTION_SLICE_COUNT,
 };
 
 use crate::collider::components::capsule::HeadCapsule;
 
-pub fn estimate_head_capsule(
-    attachment: &[Vector3<f32>],
-    root_position: Vector3<f32>,
-) -> Option<HeadCapsule> {
+pub fn estimate_head_capsule(attachment: &[Vec3], root_position: Vec3) -> Option<HeadCapsule> {
     let up = world_y_axis();
     let slice = widest_cross_section(attachment, root_position, -up, CROSS_SECTION_SLICE_COUNT)?;
     let (reference, side) = tangent_frame_around(up);
 
-    let extent = |axis: Vector3<f32>| -> (f32, f32) {
+    let extent = |axis: Vec3| -> (f32, f32) {
         let projected = slice.members.iter().map(|p| p.dot(axis));
         let lo = projected.clone().reduce(f32::min).unwrap_or(0.0);
         let hi = projected.reduce(f32::max).unwrap_or(0.0);
@@ -46,16 +43,16 @@ mod tests {
     use super::*;
     use std::f32::consts::TAU;
 
-    fn ring(height: f32, radius: f32, count: usize) -> Vec<Vector3<f32>> {
+    fn ring(height: f32, radius: f32, count: usize) -> Vec<Vec3> {
         (0..count)
             .map(|i| {
                 let angle = i as f32 / count as f32 * TAU;
-                Vector3::new(radius * angle.cos(), height, radius * angle.sin())
+                Vec3::new(radius * angle.cos(), height, radius * angle.sin())
             })
             .collect()
     }
 
-    fn egg_head() -> Vec<Vector3<f32>> {
+    fn egg_head() -> Vec<Vec3> {
         let mut points = Vec::new();
         for (height, radius) in [
             (1.10, 0.05),
@@ -72,8 +69,8 @@ mod tests {
 
     #[test]
     fn capsule_stands_on_the_widest_ring_and_reaches_the_top() {
-        let capsule = estimate_head_capsule(&egg_head(), Vector3::new(0.0, 1.13, 0.0))
-            .expect("head has points");
+        let capsule =
+            estimate_head_capsule(&egg_head(), Vec3::new(0.0, 1.13, 0.0)).expect("head has points");
 
         assert!((capsule.radius - 0.09).abs() < 1e-3);
         assert!((capsule.bottom.y - 1.20).abs() < 0.01);
@@ -85,7 +82,7 @@ mod tests {
     fn a_flat_head_becomes_a_sphere() {
         let points = ring(1.2, 0.1, 32);
         let capsule =
-            estimate_head_capsule(&points, Vector3::new(0.0, 1.13, 0.0)).expect("ring has points");
+            estimate_head_capsule(&points, Vec3::new(0.0, 1.13, 0.0)).expect("ring has points");
 
         assert_eq!(capsule.top, capsule.bottom);
         assert!((capsule.radius - 0.1).abs() < 1e-4);
@@ -93,12 +90,12 @@ mod tests {
 
     #[test]
     fn radius_is_the_larger_half_extent_and_the_axis_is_centred() {
-        let points: Vec<Vector3<f32>> = ring(1.2, 1.0, 64)
+        let points: Vec<Vec3> = ring(1.2, 1.0, 64)
             .into_iter()
-            .map(|p| Vector3::new(p.x * 0.08 + 0.01, p.y, p.z * 0.06 + 0.02))
+            .map(|p| Vec3::new(p.x * 0.08 + 0.01, p.y, p.z * 0.06 + 0.02))
             .collect();
         let capsule =
-            estimate_head_capsule(&points, Vector3::new(0.0, 1.13, 0.0)).expect("ring has points");
+            estimate_head_capsule(&points, Vec3::new(0.0, 1.13, 0.0)).expect("ring has points");
 
         assert!((capsule.radius - 0.08).abs() < 1e-3);
         assert!((capsule.bottom.x - 0.01).abs() < 1e-3);
@@ -107,6 +104,6 @@ mod tests {
 
     #[test]
     fn no_points_gives_no_capsule() {
-        assert!(estimate_head_capsule(&[], Vector3::new(0.0, 1.13, 0.0)).is_none());
+        assert!(estimate_head_capsule(&[], Vec3::new(0.0, 1.13, 0.0)).is_none());
     }
 }

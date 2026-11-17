@@ -1,13 +1,13 @@
 #![cfg(test)]
 #[derive(Clone, Copy, Debug)]
-pub enum BoneAxisRule {
+pub(crate) enum BoneAxisRule {
     Along([f64; 3]),
     WorldAligned,
     Random { seed: u64 },
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum ContainerNode {
+pub(crate) enum ContainerNode {
     None,
     Armature { rotation_x_degrees: f64 },
     BipedRoot { rotation_up_degrees: f64 },
@@ -15,7 +15,7 @@ pub enum ContainerNode {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct RigConvention {
+pub(crate) struct RigConvention {
     pub id: &'static str,
     pub character_to_file: &'static [([f64; 3], f64)],
     pub up_axis: i32,
@@ -29,7 +29,7 @@ pub struct RigConvention {
     pub leaf_end_bones: bool,
 }
 
-pub fn rig_convention(id: &str) -> RigConvention {
+pub(crate) fn rig_convention(id: &str) -> RigConvention {
     match id {
         "blender" => RigConvention {
             id: "blender",

@@ -3,6 +3,7 @@ mod extensions;
 mod force;
 mod humanoid;
 mod meta;
+mod rest_clearance;
 mod spring_bone;
 mod t_pose;
 
@@ -17,5 +18,6 @@ pub use meta::{
     vrm_meta_fields, AvatarPermission, CommercialUsage, CreditNotation, Modification, VrmMeta,
     VrmMetaField, VrmMetaFieldKind, VRM_1_0_LICENSE_URL, VRM_META_DEFAULT_VERSION,
 };
+pub use rest_clearance::{vrm_rest_clearance, VrmColliderShrink, VrmRestClearance};
 pub use spring_bone::{build_vrmc_spring_bone, SpringBoneInput, VRMC_SPRING_BONE};
 pub use t_pose::{t_pose_warnings, T_POSE_TOLERANCE_DEG};

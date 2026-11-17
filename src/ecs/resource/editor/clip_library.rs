@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
-use crate::animation::AnimationSystem;
 use crate::asset::AssetId;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+use thyllore_anim_core::AnimationSystem;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {
@@ -45,6 +45,11 @@ impl ClipLibrary {
         self.dirty_sources.retain(|id| !ids.contains(id));
         self.source_to_asset_id.retain(|id, _| !ids.contains(id));
         self.model_clip_ids.clear();
+    }
+
+    /// A loaded clip the model did not bring stays selected across a model load.
+    pub fn is_user_clip_selected(&self, selected: Option<SourceClipId>) -> bool {
+        selected.is_some_and(|id| self.get(id).is_some() && !self.model_clip_ids.contains(&id))
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {

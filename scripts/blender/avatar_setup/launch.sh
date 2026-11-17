@@ -15,8 +15,9 @@ usage() {
     cat <<USAGE
 Usage: $0 [--skip-build] [--software-gl] [--headless] [--python PATH.py]... [model.fbx]
 
-Builds the debug Avatar Setup addon ZIP of this checkout (wheel with debug-log,
-Avatar Setup panels only: no curve copilot, skin weight transfer or ONNX model),
+Builds the debug Avatar Setup addon ZIP of this checkout (thyllore_avatar_api
+wheel with debug-log; Avatar Setup panels and Skin Weight Transfer only: no
+curve copilot, ONNX model or ONNX Runtime),
 launches the pristine Blender Docker image on the NVIDIA GPU
 (blender/docker/run_gui.sh) with the ZIP installed into a fresh profile, and
 imports the test model (default: woman-1-fix-scale-only.fbx) and bakes
@@ -45,7 +46,7 @@ USAGE
 }
 
 build_addon_zip() {
-    bash "$REPO_ROOT/scripts/collect_wheels.sh" --debug-log
+    bash "$REPO_ROOT/scripts/collect_wheels.sh" --crate thyllore-avatar-api --debug-log
     bash "$REPO_ROOT/scripts/build_blender_addon.sh" \
         --platform "$PLATFORM" --product avatar-setup --debug --build-mode A
 }

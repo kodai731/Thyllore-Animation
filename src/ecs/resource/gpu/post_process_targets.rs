@@ -1,4 +1,4 @@
-use crate::vulkanr::resource::BloomMipTarget;
+use thyllore_vulkan_core::resource::BloomMipTarget;
 
 /// Remembers which image generations a frame slot's descriptor set was last written with,
 /// so a transient that landed on the same pooled image needs no rewrite.
@@ -44,3 +44,5 @@ impl PostProcessFrameTargets {
         self.bloom_bound.forget();
     }
 }
+
+crate::startup_resource!(PostProcessFrameTargets, CoreResources);

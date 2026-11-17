@@ -42,3 +42,5 @@ pub struct InjectedInput {
     pub pending_click: Option<[f32; 2]>,
     pub click_held: bool,
 }
+
+crate::startup_resource!(InjectedInput, Editor);

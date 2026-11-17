@@ -3,9 +3,9 @@ use thyllore_scene_core::{find_ui_param, ScalarParam, UiParam};
 use crate::platform::ui::ui_rows::UiRow;
 
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.
-pub type ParamGroup = (Option<&'static str>, Vec<&'static str>);
+pub(super) type ParamGroup = (Option<&'static str>, Vec<&'static str>);
 
-pub fn determine_primary_order(ui_params: &[UiParam], hidden: &[&str]) -> Vec<&'static str> {
+pub(super) fn determine_primary_order(ui_params: &[UiParam], hidden: &[&str]) -> Vec<&'static str> {
     ui_params
         .iter()
         .filter(|param| param.primary && !hidden.contains(&param.name))
@@ -13,7 +13,7 @@ pub fn determine_primary_order(ui_params: &[UiParam], hidden: &[&str]) -> Vec<&'
         .collect()
 }
 
-pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<ParamGroup> {
+pub(super) fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<ParamGroup> {
     let remaining: Vec<&UiParam> = ui_params
         .iter()
         .filter(|param| !param.primary && !hidden.contains(&param.name))
@@ -42,7 +42,7 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
     groups
 }
 
-pub fn rows_from_params<C>(
+pub(super) fn rows_from_params<C>(
     ui_params: &'static [UiParam],
     scalars: &'static [ScalarParam<C>],
     hidden: &[&str],

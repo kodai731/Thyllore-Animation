@@ -1,6 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix};
-
-use crate::matrix::{array_from_mat4, mat4_from_array, Mat4};
+use glam::Mat4;
 
 /// Column-major 4x4 matrix in the layout GLSL `mat4` expects (std140 / std430).
 /// Uploaded to UBO / SSBO memory as-is; convert through `Mat4` for arithmetic.
@@ -26,17 +24,17 @@ impl GpuMat4 {
 
     pub fn from_mat4(matrix: Mat4) -> Self {
         Self {
-            columns: array_from_mat4(matrix),
+            columns: matrix.to_cols_array_2d(),
         }
     }
 
     pub fn to_mat4(self) -> Mat4 {
-        mat4_from_array(self.columns)
+        Mat4::from_cols_array_2d(&self.columns)
     }
 
     pub fn normal_matrix_of(model: Mat4) -> Self {
-        let inverse = model.invert().unwrap_or_else(Matrix4::identity);
-        Self::from_mat4(cgmath::Matrix::transpose(&inverse))
+        let inverse = model.try_inverse().unwrap_or(Mat4::IDENTITY);
+        Self::from_mat4(inverse.transpose())
     }
 }
 
@@ -76,7 +74,7 @@ impl AffineRows3x4 {
     };
 
     pub fn from_mat4(matrix: Mat4) -> Self {
-        let m = matrix;
+        let m = matrix.to_cols_array_2d();
         Self {
             rows: [
                 [m[0][0], m[1][0], m[2][0], m[3][0]],
@@ -88,10 +86,10 @@ impl AffineRows3x4 {
 
     pub fn to_mat4(self) -> Mat4 {
         let r = self.rows;
-        Mat4::new(
+        Mat4::from_cols_array(&[
             r[0][0], r[1][0], r[2][0], 0.0, r[0][1], r[1][1], r[2][1], 0.0, r[0][2], r[1][2],
             r[2][2], 0.0, r[0][3], r[1][3], r[2][3], 1.0,
-        )
+        ])
     }
 }
 
@@ -110,18 +108,21 @@ impl Default for AffineRows3x4 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::matrix::approx_equal_mat4;
-    use cgmath::{Rad, Vector3};
+    use glam::Vec3;
+
+    fn approx_equal_mat4(a: &Mat4, b: &Mat4) -> bool {
+        a.abs_diff_eq(*b, 1e-3)
+    }
 
     fn sample_transform() -> Mat4 {
-        Mat4::from_translation(Vector3::new(1.0, 2.0, 3.0))
-            * Mat4::from_angle_y(Rad(0.7))
-            * Mat4::from_nonuniform_scale(2.0, 3.0, 4.0)
+        Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0))
+            * Mat4::from_rotation_y(0.7)
+            * Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0))
     }
 
     #[test]
-    fn gpu_mat4_identity_matches_cgmath_identity() {
-        assert_eq!(GpuMat4::IDENTITY, GpuMat4::from_mat4(Mat4::identity()));
+    fn gpu_mat4_identity_matches_glam_identity() {
+        assert_eq!(GpuMat4::IDENTITY, GpuMat4::from_mat4(Mat4::IDENTITY));
         assert_eq!(std::mem::size_of::<GpuMat4>(), 64);
     }
 
@@ -147,17 +148,17 @@ mod tests {
     }
 
     #[test]
-    fn affine_rows_identity_matches_cgmath_identity() {
+    fn affine_rows_identity_matches_glam_identity() {
         assert_eq!(
             AffineRows3x4::IDENTITY,
-            AffineRows3x4::from_mat4(Mat4::identity())
+            AffineRows3x4::from_mat4(Mat4::IDENTITY)
         );
     }
 
     #[test]
     fn normal_matrix_is_inverse_transpose() {
         let model = sample_transform();
-        let expected = cgmath::Matrix::transpose(&model.invert().unwrap());
+        let expected = model.try_inverse().unwrap().transpose();
         assert!(approx_equal_mat4(
             &expected,
             &GpuMat4::normal_matrix_of(model).to_mat4()

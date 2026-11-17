@@ -1,9 +1,9 @@
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
+use thyllore_anim_core::BoneId;
 
 use crate::platform::ui::ui_rows::ChoiceOption;
 
-pub fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
+pub(super) fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => &skel_asset.skeleton,
         None => return Vec::new(),
@@ -16,7 +16,7 @@ pub fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
         .collect()
 }
 
-pub fn bone_options(
+pub(super) fn bone_options(
     bones: &[(BoneId, String)],
     selected_bone: Option<BoneId>,
     current: BoneId,

@@ -1,1 +1,3 @@
-pub mod ubo;
+mod ubo;
+
+pub use ubo::*;

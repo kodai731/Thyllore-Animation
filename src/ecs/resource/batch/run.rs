@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::animation::editable::SourceClipId;
+use thyllore_anim_core::editable::SourceClipId;
 
 /// Where the captures of a batch run go: one PNG, or `frame_XX.png` files under a directory.
 #[derive(Clone, Debug, PartialEq)]

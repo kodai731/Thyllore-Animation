@@ -1,11 +1,11 @@
 use super::*;
 
 fn make_garment_plate(y: f32, x_min: f32, x_max: f32, z_min: f32, z_max: f32) -> TriangleBvh {
-    let positions: Vec<Vector3<f32>> = vec![
-        Vector3::new(x_min, y, z_min),
-        Vector3::new(x_max, y, z_min),
-        Vector3::new(x_max, y, z_max),
-        Vector3::new(x_min, y, z_max),
+    let positions: Vec<Vec3> = vec![
+        Vec3::new(x_min, y, z_min),
+        Vec3::new(x_max, y, z_min),
+        Vec3::new(x_max, y, z_max),
+        Vec3::new(x_min, y, z_max),
     ];
     let triangles: [[u32; 3]; 2] = [[0, 1, 2], [0, 2, 3]];
     TriangleBvh::build(&positions, &triangles)
@@ -13,12 +13,12 @@ fn make_garment_plate(y: f32, x_min: f32, x_max: f32, z_min: f32, z_max: f32) ->
 
 #[test]
 fn test_partial_coverage() {
-    let positions: Vec<Vector3<f32>> = (0..5)
+    let positions: Vec<Vec3> = (0..5)
         .flat_map(|ix| {
-            (0..5).map(move |iz| Vector3::new(-1.0 + ix as f32 * 0.5, 0.0, -1.0 + iz as f32 * 0.5))
+            (0..5).map(move |iz| Vec3::new(-1.0 + ix as f32 * 0.5, 0.0, -1.0 + iz as f32 * 0.5))
         })
         .collect();
-    let normals: Vec<Vector3<f32>> = vec![Vector3::new(0.0, 1.0, 0.0); positions.len()];
+    let normals: Vec<Vec3> = vec![Vec3::new(0.0, 1.0, 0.0); positions.len()];
     let garment = make_garment_plate(0.05, -1.5, 0.0, -1.5, 1.5);
     let params = HiddenMaskParams {
         cover_distance: 0.1,
@@ -39,8 +39,8 @@ fn test_partial_coverage() {
 
 #[test]
 fn test_out_of_range() {
-    let positions: Vec<Vector3<f32>> = vec![Vector3::new(0.0, 0.0, 0.0)];
-    let normals: Vec<Vector3<f32>> = vec![Vector3::new(0.0, 1.0, 0.0)];
+    let positions: Vec<Vec3> = vec![Vec3::new(0.0, 0.0, 0.0)];
+    let normals: Vec<Vec3> = vec![Vec3::new(0.0, 1.0, 0.0)];
     let garment = make_garment_plate(0.5, -1.0, 1.0, -1.0, 1.0);
     let params = HiddenMaskParams {
         cover_distance: 0.1,
@@ -67,12 +67,12 @@ fn test_hidden_triangles_all_three() {
 fn test_find_hidden_triangle_indices_covered_and_not_covered() {
     let body = MaskMesh {
         positions: vec![
-            Vector3::new(-0.5, 0.0, -0.5),
-            Vector3::new(0.5, 0.0, -0.5),
-            Vector3::new(0.5, 0.0, 0.5),
-            Vector3::new(-0.5, 0.0, 0.5),
+            Vec3::new(-0.5, 0.0, -0.5),
+            Vec3::new(0.5, 0.0, -0.5),
+            Vec3::new(0.5, 0.0, 0.5),
+            Vec3::new(-0.5, 0.0, 0.5),
         ],
-        normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+        normals: vec![Vec3::new(0.0, 1.0, 0.0); 4],
         triangles: vec![[0, 1, 2], [0, 2, 3]],
     };
     let params = HiddenMaskParams {
@@ -83,12 +83,12 @@ fn test_find_hidden_triangle_indices_covered_and_not_covered() {
     };
     let garment_covering = MaskMesh {
         positions: vec![
-            Vector3::new(-1.0, 0.05, -1.0),
-            Vector3::new(1.0, 0.05, -1.0),
-            Vector3::new(1.0, 0.05, 1.0),
-            Vector3::new(-1.0, 0.05, 1.0),
+            Vec3::new(-1.0, 0.05, -1.0),
+            Vec3::new(1.0, 0.05, -1.0),
+            Vec3::new(1.0, 0.05, 1.0),
+            Vec3::new(-1.0, 0.05, 1.0),
         ],
-        normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+        normals: vec![Vec3::new(0.0, 1.0, 0.0); 4],
         triangles: vec![[0, 1, 2], [0, 2, 3]],
     };
     let hidden = find_hidden_triangle_indices(&body, &garment_covering, &params);
@@ -96,12 +96,12 @@ fn test_find_hidden_triangle_indices_covered_and_not_covered() {
 
     let garment_far = MaskMesh {
         positions: vec![
-            Vector3::new(-1.0, 1.0, -1.0),
-            Vector3::new(1.0, 1.0, -1.0),
-            Vector3::new(1.0, 1.0, 1.0),
-            Vector3::new(-1.0, 1.0, 1.0),
+            Vec3::new(-1.0, 1.0, -1.0),
+            Vec3::new(1.0, 1.0, -1.0),
+            Vec3::new(1.0, 1.0, 1.0),
+            Vec3::new(-1.0, 1.0, 1.0),
         ],
-        normals: vec![Vector3::new(0.0, 1.0, 0.0); 4],
+        normals: vec![Vec3::new(0.0, 1.0, 0.0); 4],
         triangles: vec![[0, 1, 2], [0, 2, 3]],
     };
     let hidden = find_hidden_triangle_indices(&body, &garment_far, &params);

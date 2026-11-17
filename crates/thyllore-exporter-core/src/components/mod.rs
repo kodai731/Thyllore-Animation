@@ -1,3 +1,3 @@
-pub mod fbx;
-pub mod morph;
-pub mod unity_anim;
+pub(crate) mod fbx;
+pub(crate) mod morph;
+pub(crate) mod unity_anim;

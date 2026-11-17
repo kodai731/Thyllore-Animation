@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use thyllore_avatar_core::material::components::texture_remap::MaterialTextureRemap;
-use thyllore_avatar_core::material::systems::texture_remap_io::{
+use thyllore_avatar_core::material::MaterialTextureRemap;
+use thyllore_avatar_core::material::{
     load_material_texture_remap, make_model_relative_path, material_texture_remap_path,
     save_material_texture_remap,
 };
@@ -12,7 +12,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::find_model_path;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn load_model_texture_remap(model_path: &str) -> MaterialTextureRemap {
     if Path::new(model_path).file_stem().is_none() {

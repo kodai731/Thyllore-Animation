@@ -197,7 +197,7 @@ fn map_type(type_name: &str, nested: &BTreeMap<String, Vec<ReflectedMember>>) ->
         "float32x2" => "[f32; 2]",
         "float32x3" => "[f32; 3]",
         "float32x4" => "[f32; 4]",
-        "float32x4x4" => "Matrix4<f32>",
+        "float32x4x4" => "GpuMat4",
         other if nested.contains_key(other) => other,
         _ => return None,
     };
@@ -278,7 +278,7 @@ mod tests {
     fn generates_nested_structs_before_the_block() {
         let mut config = GpuBlockCodegenConfig {
             header: "Generated from SPIR-V by `cargo run --bin gen`; do not edit.".into(),
-            imports: vec!["cgmath::Matrix4".into()],
+            imports: vec!["thyllore_math_core::GpuMat4".into()],
             extra_derives: BTreeMap::new(),
         };
         config
@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(
             generated,
             "// Generated from SPIR-V by `cargo run --bin gen`; do not edit.\n\
-             use cgmath::Matrix4;\n\
+             use thyllore_math_core::GpuMat4;\n\
              use thyllore_spirv_reflect::declare_gpu_block;\n\
              \n\
              declare_gpu_block! {\n\
@@ -303,7 +303,7 @@ mod tests {
              declare_gpu_block! {\n\
              \x20   #[derive(Clone, Copy, Debug)]\n\
              \x20   pub struct Outer {\n\
-             \x20       pub view: Matrix4<f32>,\n\
+             \x20       pub view: GpuMat4,\n\
              \x20       pub color_base: Color = nested Color,\n\
              \x20       pub modes: [Color; 2] = nested Color,\n\
              \x20       pub warp_y_scale: [f32; 4],\n\

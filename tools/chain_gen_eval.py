@@ -14,7 +14,8 @@ Procedure:
 1. Run strip_secondary_bones.py on the purchased model (the user runs it) to get <name>_humanoid_only.fbx and
     <name>_secondary_reference.json.
 2. Load the copy in the engine with submesh_role=<role>:<mesh>[/<material>] and
-    generate_chain_bones=<mesh>[/<material>],<root_bone>[,<setting>=<value>...], and keep --batch-anim-dump.
+    generate_chain_bones=<mesh>[/<material>],<root_bone>[,attachment=cap|ring][,<setting>=<value>...], and keep
+    --batch-anim-dump.
     Without the material the whole mesh is one generation target.
 3. For the deformation RMS, give both models the same spring values and colliders and the same sway clip,
     and take dump_skinned_vertices=<csv>,30,<mesh>/<material> from each.

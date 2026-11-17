@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::wind::WindUBO;
 
@@ -12,7 +12,7 @@ fn with_context<R>(ubo: &crate::wind::WindUBO, body: impl FnOnce(*const KernelCo
     body(&ctx)
 }
 
-fn v3(v: Vector3<f32>) -> Float3 {
+fn v3(v: Vec3) -> Float3 {
     Float3 {
         x: v.x,
         y: v.y,
@@ -22,8 +22,8 @@ fn v3(v: Vector3<f32>) -> Float3 {
 
 pub fn wind_optical_depth_slang(
     ubo: &WindUBO,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> f32 {
@@ -32,15 +32,11 @@ pub fn wind_optical_depth_slang(
     })
 }
 
-pub fn wind_density_at_slang(ubo: &WindUBO, point: Vector3<f32>) -> f32 {
+pub fn wind_density_at_slang(ubo: &WindUBO, point: Vec3) -> f32 {
     with_context(ubo, |ctx| unsafe { thylloreWindDensityAt(v3(point), ctx) })
 }
 
-pub fn wind_optical_depth_toward_slang(
-    ubo: &WindUBO,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-) -> f32 {
+pub fn wind_optical_depth_toward_slang(ubo: &WindUBO, origin: Vec3, direction: Vec3) -> f32 {
     with_context(ubo, |ctx| unsafe {
         thylloreWindOpticalDepthToward(v3(origin), v3(direction), ctx)
     })
@@ -48,8 +44,8 @@ pub fn wind_optical_depth_toward_slang(
 
 pub fn wind_clamp_ray_to_cone_slang(
     ubo: &WindUBO,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> Option<(f32, f32)> {

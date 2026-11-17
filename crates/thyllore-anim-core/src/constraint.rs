@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::BoneId;
 
@@ -16,7 +16,7 @@ pub struct IkConstraintData {
     pub chain_length: u32,
     pub target_bone: BoneId,
     pub effector_bone: BoneId,
-    pub pole_vector: Option<Vector3<f32>>,
+    pub pole_vector: Option<Vec3>,
     pub pole_target: Option<BoneId>,
     pub twist: f32,
     pub enabled: bool,
@@ -42,8 +42,8 @@ impl Default for IkConstraintData {
 pub struct AimConstraintData {
     pub source_bone: BoneId,
     pub target_bone: BoneId,
-    pub aim_axis: Vector3<f32>,
-    pub up_axis: Vector3<f32>,
+    pub aim_axis: Vec3,
+    pub up_axis: Vec3,
     pub up_target: Option<BoneId>,
     pub enabled: bool,
     pub weight: f32,
@@ -54,8 +54,8 @@ impl Default for AimConstraintData {
         Self {
             source_bone: 0,
             target_bone: 0,
-            aim_axis: Vector3::new(0.0, 0.0, 1.0),
-            up_axis: Vector3::new(0.0, 1.0, 0.0),
+            aim_axis: Vec3::new(0.0, 0.0, 1.0),
+            up_axis: Vec3::new(0.0, 1.0, 0.0),
             up_target: None,
             enabled: true,
             weight: 1.0,
@@ -90,7 +90,7 @@ impl Default for ParentConstraintData {
 pub struct PositionConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Vector3<f32>,
+    pub offset: Vec3,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -101,7 +101,7 @@ impl Default for PositionConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Vector3::new(0.0, 0.0, 0.0),
+            offset: Vec3::new(0.0, 0.0, 0.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,
@@ -113,7 +113,7 @@ impl Default for PositionConstraintData {
 pub struct RotationConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Quaternion<f32>,
+    pub offset: Quat,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -124,7 +124,7 @@ impl Default for RotationConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            offset: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,
@@ -136,7 +136,7 @@ impl Default for RotationConstraintData {
 pub struct ScaleConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Vector3<f32>,
+    pub offset: Vec3,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -147,7 +147,7 @@ impl Default for ScaleConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Vector3::new(1.0, 1.0, 1.0),
+            offset: Vec3::new(1.0, 1.0, 1.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,

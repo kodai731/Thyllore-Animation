@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use thyllore_effect_core::WaterSecondaryRays;
+use thyllore_effect_core::water::WaterSecondaryRays;
 
 use crate::ecs::component::{AppliedWaterPreset, WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
@@ -9,7 +9,7 @@ use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::water::WaterUiCommand;
 use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
-use crate::ecs::{Entity, World};
+use crate::ecs::world::{Entity, World};
 use crate::platform::ui::effect::rows::{effect_instances, instance_options, preset_options};
 use crate::platform::ui::form_window::{FormSection, RowsSection};
 use crate::platform::ui::param_widgets::rows_from_params;
@@ -46,12 +46,12 @@ fn water_head_rows(view: &WaterSectionView) -> Vec<UiRow<WaterSectionView>> {
         label: "Preset",
         options: |_, view: &WaterSectionView| {
             preset_options(
-                thyllore_effect_core::WATER_PRESET_NAMES,
+                thyllore_effect_core::water::WATER_PRESET_NAMES,
                 view.preset.as_deref(),
             )
         },
         pick: |view, index| {
-            view.preset = Some(thyllore_effect_core::WATER_PRESET_NAMES[index].to_string());
+            view.preset = Some(thyllore_effect_core::water::WATER_PRESET_NAMES[index].to_string());
         },
     });
 
@@ -153,8 +153,8 @@ fn water_section(world: &World) -> Option<Box<dyn FormSection>> {
             scope: "effect",
             field: |view: &mut WaterSectionView| &mut view.effect,
             rows: rows_from_params(
-                &thyllore_effect_core::WATER_UI_PARAMS,
-                &thyllore_effect_core::WATER_SCALAR_PARAMS,
+                &thyllore_effect_core::water::WATER_UI_PARAMS,
+                &thyllore_effect_core::water::WATER_SCALAR_PARAMS,
                 &[],
             ),
         })));
@@ -216,7 +216,7 @@ crate::effect_section_hook!(crate::platform::ui::effect::sections::EffectSection
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::events::ui_command::UiCommandQueue;
+    use crate::ecs::events::UiCommandQueue;
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
     fn view_with_instances(count: usize) -> WaterSectionView {
@@ -312,7 +312,7 @@ mod tests {
     fn commit_preset_change_clears_keys_and_applies_preset_without_update() {
         let shown = selected_view();
         let view = WaterSectionView {
-            preset: Some(thyllore_effect_core::WATER_PRESET_NAMES[0].to_string()),
+            preset: Some(thyllore_effect_core::water::WATER_PRESET_NAMES[0].to_string()),
             ..shown.clone()
         };
 

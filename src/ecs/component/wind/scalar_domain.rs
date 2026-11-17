@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, WIND_SCALAR_PARAMS, WIND_UI_PARAMS};
+use thyllore_effect_core::wind::{WIND_SCALAR_PARAMS, WIND_UI_PARAMS};
+use thyllore_effect_core::{ScalarParam, UiParam};
 
 use super::effect::WindTornadoEffect;
 use crate::ecs::component::{

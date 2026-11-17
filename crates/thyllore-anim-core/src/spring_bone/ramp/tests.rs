@@ -1,7 +1,7 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use super::*;
-use crate::spring_bone::{JointForce, VrmJointForce};
+use crate::spring_bone::{JointForce, RestClearance, VrmJointForce};
 
 fn make_chain(bone_ids: &[u32]) -> SpringChain {
     SpringChain {
@@ -11,7 +11,7 @@ fn make_chain(bone_ids: &[u32]) -> SpringChain {
                 bone_id,
                 force: vrm_force(1.0),
                 drag_force: 0.5,
-                gravity_dir: Vector3::new(0.0, -1.0, 0.0),
+                gravity_dir: Vec3::new(0.0, -1.0, 0.0),
                 hit_radius: 0.1,
             })
             .collect(),
@@ -142,12 +142,12 @@ fn gravity_dir_is_root_for_all_joints() {
     let ramp = ChainRamp {
         root: SpringJointParam {
             force: vrm_force(0.8),
-            gravity_dir: Vector3::new(1.0, 0.0, 0.0),
+            gravity_dir: Vec3::new(1.0, 0.0, 0.0),
             ..Default::default()
         },
         tip: SpringJointParam {
             force: vrm_force(0.2),
-            gravity_dir: Vector3::new(0.0, 1.0, 0.0),
+            gravity_dir: Vec3::new(0.0, 1.0, 0.0),
             ..Default::default()
         },
         shape: RampShape::Linear,
@@ -156,7 +156,7 @@ fn gravity_dir_is_root_for_all_joints() {
     let result = apply_ramp(&chain, &ramp).expect("one force model");
 
     for joint in &result.joints {
-        assert_eq!(joint.gravity_dir, Vector3::new(1.0, 0.0, 0.0));
+        assert_eq!(joint.gravity_dir, Vec3::new(1.0, 0.0, 0.0));
     }
 }
 
@@ -445,6 +445,7 @@ fn load_ends_normal_chain() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 1);
@@ -470,6 +471,7 @@ fn load_ends_empty_chain_is_noop() {
         tail_bone_id: None,
         enabled: true,
         origin: Default::default(),
+        rest_clearance: RestClearance::Tolerated,
     };
     ramp.load_ends(&chain);
     assert_eq!(ramp.root.bone_id, 99);

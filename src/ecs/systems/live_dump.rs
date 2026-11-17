@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::animation::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
@@ -17,12 +16,14 @@ use crate::ecs::systems::animation_debug_dump::{
     build_animation_debug_dump, resolve_animation_debug_target,
 };
 use crate::ecs::systems::batch_run_systems::batch_anim_dump_json;
+use crate::ecs::systems::label_stage_timings;
 use crate::ecs::systems::phases::TRANSFORM_PROPAGATE_PHASE;
+use crate::ecs::world::World;
 use crate::ecs::FrameContext;
-use crate::ecs::World;
 use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
-use crate::scratch::loader::LoadScratchJob;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::scratch::LoadScratchJob;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub const LIVE_DUMP_DIRECTORY: &str = "log/live_dump";
 const REPLY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -271,10 +272,10 @@ fn serve_request(
     }
 }
 
-fn stages_json(stages: &[(String, f32)]) -> serde_json::Value {
+fn stages_json<Label: AsRef<str>>(stages: &[(Label, f32)]) -> serde_json::Value {
     stages
         .iter()
-        .map(|(label, ms)| (label.clone(), serde_json::json!(ms)))
+        .map(|(label, ms)| (label.as_ref().to_string(), serde_json::json!(ms)))
         .collect::<serde_json::Map<_, _>>()
         .into()
 }
@@ -332,7 +333,7 @@ pub fn timings_json(world: &World) -> serde_json::Value {
     serde_json::json!({
         "frame": cpu.as_ref().map(|c| c.frame),
         "dt_ms": cpu.as_ref().map(|c| c.dt_ms),
-        "cpu": cpu.as_ref().map(|c| stages_json(&c.stages)),
+        "cpu": cpu.as_ref().map(|c| stages_json(&label_stage_timings(c))),
         "update_phases": update_phases.as_ref().map(|u| stages_json(&u.stages)),
         "render_prep": render_prep,
         "animation": animation,

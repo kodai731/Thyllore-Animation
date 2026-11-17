@@ -8,6 +8,7 @@ use crate::vulkan::*;
 pub enum HostBufferUsage {
     Vertex,
     Index,
+    ShaderAddressed,
 }
 
 impl HostBufferUsage {
@@ -15,12 +16,15 @@ impl HostBufferUsage {
         match self {
             HostBufferUsage::Vertex => vk::BufferUsageFlags::VERTEX_BUFFER,
             HostBufferUsage::Index => vk::BufferUsageFlags::INDEX_BUFFER,
+            HostBufferUsage::ShaderAddressed => {
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+            }
         }
     }
 }
 
 #[must_use]
-#[derive(Debug, Default, GpuResource)]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct HostBuffer {
     pub(crate) buffer: vk::Buffer,
     memory: vk::DeviceMemory,

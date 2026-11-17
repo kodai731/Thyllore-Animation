@@ -19,9 +19,9 @@ use thyllore_vulkan_core::core::{
     FrameSync, PresentOutcome,
 };
 use thyllore_vulkan_core::renderer::{
-    begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed,
-    push_vertex_constants, set_full_viewport_and_scissor, set_scissor, set_viewport_size,
-    IndexWidth,
+    begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh,
+    bind_graphics_mesh_buffer, draw_indexed, push_vertex_constants, set_full_viewport_and_scissor,
+    set_scissor, set_viewport_size, IndexWidth,
 };
 use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
@@ -544,14 +544,7 @@ impl App {
             }
 
             let pipeline = &self.resource::<PipelineState>().model_pipeline;
-            bind_graphics_mesh(
-                &self.rrdevice,
-                command_buffer,
-                pipeline.pipeline(),
-                mesh.vertex_buffer.buffer(),
-                mesh.index_buffer.buffer(),
-                IndexWidth::U32,
-            );
+            bind_graphics_mesh_buffer(&self.rrdevice, command_buffer, pipeline.pipeline(), mesh);
 
             let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
             bind_graphics_descriptor_set(

@@ -11,10 +11,10 @@ use thyllore_math_core::GpuMat4;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct HitShadingRecord {
-    pub vertex_address: u64,
+    pub geometry_address: u64,
     pub index_address: u64,
     pub effect_data_address: u64,
-    pub reserved: u64,
+    pub attribute_address: u64,
     pub model: GpuMat4,
     pub normal_matrix: GpuMat4,
     pub base_color: [f32; 4],
@@ -24,10 +24,10 @@ pub struct HitShadingRecord {
 impl HitShadingRecord {
     pub fn default_record() -> Self {
         Self {
-            vertex_address: 0,
+            geometry_address: 0,
             index_address: 0,
             effect_data_address: 0,
-            reserved: 0,
+            attribute_address: 0,
             model: GpuMat4::ZERO,
             normal_matrix: GpuMat4::ZERO,
             base_color: [1.0, 1.0, 1.0, 1.0],

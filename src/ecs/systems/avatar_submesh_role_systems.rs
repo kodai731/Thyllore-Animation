@@ -350,7 +350,7 @@ pub(crate) fn skin_role_skins<'a>(
 ) -> Vec<&'a SkinData> {
     skin_role_mesh_indices(world, assets, graphics)
         .into_iter()
-        .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data.as_ref())
+        .filter_map(|mesh_index| graphics.meshes[mesh_index].skin_data())
         .filter(|skin| skin.skeleton_id == skeleton_id)
         .collect()
 }
@@ -381,7 +381,7 @@ pub(crate) fn skin_role_surfaces(
     skin_role_mesh_indices(world, assets, graphics)
         .into_iter()
         .map(|mesh_index| &graphics.meshes[mesh_index])
-        .filter_map(|mesh| Some((mesh, mesh.skin_data.as_ref()?)))
+        .filter_map(|mesh| Some((mesh, mesh.skin_data()?)))
         .filter(|(_, skin)| skin.skeleton_id == skeleton_id)
         .map(|(mesh, skin)| SkinSurface {
             positions: skin.base_positions.iter().map(to_model).collect(),

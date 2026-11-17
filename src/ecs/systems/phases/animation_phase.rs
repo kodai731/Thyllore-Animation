@@ -19,6 +19,7 @@ use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId};
 
 pub struct AnimationUpdates {
     pub updated_meshes: Vec<usize>,
+    pub recolored_meshes: Vec<usize>,
     pub bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
@@ -110,7 +111,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     );
 
     let t = Instant::now();
-    let heatmap_updated_meshes = apply_weight_heatmap_update(ctx);
+    let recolored_meshes = apply_weight_heatmap_update(ctx);
     sub.insert(
         "apply_weight_heatmap_update".to_string(),
         t.elapsed().as_secs_f32() * 1000.0,
@@ -118,11 +119,6 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
 
     let mut updated_meshes = eval_result.updated_meshes;
     for mesh_index in morph_updated_meshes {
-        if !updated_meshes.contains(&mesh_index) {
-            updated_meshes.push(mesh_index);
-        }
-    }
-    for mesh_index in heatmap_updated_meshes {
         if !updated_meshes.contains(&mesh_index) {
             updated_meshes.push(mesh_index);
         }
@@ -135,6 +131,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
 
     AnimationUpdates {
         updated_meshes,
+        recolored_meshes,
         bone_transforms: eval_result.bone_transforms,
     }
 }
@@ -157,14 +154,19 @@ pub unsafe fn run_animation_phase_gpu(
     updates: &AnimationUpdates,
 ) -> Result<()> {
     let t = Instant::now();
+    if !updates.recolored_meshes.is_empty() {
+        ctx.create_backend()
+            .upload_mesh_attributes(&updates.recolored_meshes)?;
+    }
     if !updates.updated_meshes.is_empty() {
         let frame_slot = ctx.frame_slot;
         let mut backend = ctx.create_backend();
-        playback_upload_animations(&mut backend, &updates.updated_meshes, frame_slot)?;
+        let uploads =
+            playback_upload_animations(&mut backend, &updates.updated_meshes, frame_slot)?;
         ctx.world
             .resource_mut::<PendingAnimatedMeshUploads>()
-            .mesh_ids
-            .extend(updates.updated_meshes.iter().copied());
+            .uploads
+            .extend(uploads);
     }
     ctx.world
         .resource_mut::<PhaseSubTimings>()

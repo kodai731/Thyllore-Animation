@@ -13,13 +13,28 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::command::RRCommandPool;
 use crate::core::RRDevice;
-use crate::data::{SceneUniformData, UniformBufferObject, Vertex};
+use crate::data::{SceneUniformData, UniformBufferObject, VertexGeometry};
+use crate::pipeline::RRPipeline;
 use crate::raytracing::RRAccelerationStructure;
+use crate::renderer::record_skinning_dispatch;
 use crate::resource::GraphicsResources;
 use crate::resource::RRImage;
 use crate::resource::RayTracingData;
-use crate::resource::{BillboardRenderState, GpuBufferRegistry};
+use crate::resource::{BillboardRenderState, GpuBufferRegistry, SkinStreamsUpload};
 use crate::types::{CommandBuffer, Instance};
+
+/// How the device geometry of an animated mesh is brought up to date in the frame's command buffer.
+#[derive(Clone, Copy, Debug)]
+pub enum GeometryUpload {
+    StagedVertices,
+    Skinning(SkinStreamsUpload),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AnimatedMeshUpload {
+    pub mesh_id: MeshId,
+    pub geometry: GeometryUpload,
+}
 
 pub struct VulkanBackend<'a> {
     pub instance: &'a Instance,
@@ -105,14 +120,37 @@ impl<'a> VulkanBackend<'a> {
         &mut self,
         mesh_ids: &[MeshId],
         frame_slot: usize,
-    ) -> Result<()> {
-        stage_mesh_vertices(
-            self.instance,
-            self.device,
-            self.graphics,
-            mesh_ids,
-            frame_slot,
-        )?;
+    ) -> Result<Vec<AnimatedMeshUpload>> {
+        let mut uploads = Vec::with_capacity(mesh_ids.len());
+        for &mesh_id in mesh_ids {
+            let Some(mesh) = self.graphics.meshes.get_mut(mesh_id) else {
+                continue;
+            };
+
+            let geometry = if mesh.is_skinned_on_device() {
+                GeometryUpload::Skinning(mesh.stage_skinning(
+                    self.instance,
+                    self.device,
+                    frame_slot,
+                )?)
+            } else {
+                mesh.stage_geometry(self.instance, self.device, frame_slot)?;
+                GeometryUpload::StagedVertices
+            };
+            uploads.push(AnimatedMeshUpload { mesh_id, geometry });
+        }
+
+        Ok(uploads)
+    }
+
+    pub unsafe fn upload_mesh_attributes(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
+        for &mesh_id in mesh_ids {
+            let Some(mesh) = self.graphics.meshes.get_mut(mesh_id) else {
+                continue;
+            };
+            mesh.upload_attributes(self.instance, self.device, self.command_pool.as_ref())?;
+        }
+
         Ok(())
     }
 
@@ -319,24 +357,6 @@ fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>
         .collect()
 }
 
-unsafe fn stage_mesh_vertices(
-    instance: &Instance,
-    device: &RRDevice,
-    graphics: &mut GraphicsResources,
-    mesh_ids: &[MeshId],
-    frame_slot: usize,
-) -> Result<Vec<(MeshId, vk::DeviceSize)>> {
-    let mut staged_meshes = Vec::with_capacity(mesh_ids.len());
-    for &mesh_id in mesh_ids {
-        let Some(mesh) = graphics.meshes.get_mut(mesh_id) else {
-            continue;
-        };
-        let size = mesh.stage_vertices(instance, device, frame_slot)?;
-        staged_meshes.push((mesh_id, size));
-    }
-    Ok(staged_meshes)
-}
-
 unsafe fn record_global_memory_barrier(
     device: &RRDevice,
     command_buffer: vk::CommandBuffer,
@@ -383,9 +403,9 @@ unsafe fn record_blas_updates(
             instance,
             device,
             blas,
-            &mesh.vertex_buffer.buffer,
+            &mesh.geometry_buffer.buffer,
             mesh.vertex_data.vertices.len() as u32,
-            size_of::<Vertex>() as u32,
+            size_of::<VertexGeometry>() as u32,
             &mesh.index_buffer.buffer,
             mesh.vertex_data.indices.len() as u32,
             command_buffer,
@@ -393,6 +413,23 @@ unsafe fn record_blas_updates(
     }
 
     Ok(())
+}
+
+type StageAccess = (vk::PipelineStageFlags, vk::AccessFlags);
+
+fn geometry_stream_writes() -> StageAccess {
+    (
+        vk::PipelineStageFlags::TRANSFER | vk::PipelineStageFlags::COMPUTE_SHADER,
+        vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::SHADER_WRITE,
+    )
+}
+
+fn geometry_and_acceleration_writes() -> StageAccess {
+    let (stages, accesses) = geometry_stream_writes();
+    (
+        stages | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+        accesses | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+    )
 }
 
 unsafe fn record_acceleration_structure_updates(
@@ -407,10 +444,7 @@ unsafe fn record_acceleration_structure_updates(
     record_global_memory_barrier(
         device,
         command_buffer,
-        (
-            vk::PipelineStageFlags::TRANSFER,
-            vk::AccessFlags::TRANSFER_WRITE,
-        ),
+        geometry_stream_writes(),
         (
             vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
             vk::AccessFlags::SHADER_READ | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
@@ -454,12 +488,79 @@ unsafe fn record_acceleration_structure_updates(
     )
 }
 
+unsafe fn record_stream_copies(
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    uploads: &[AnimatedMeshUpload],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) {
+    for upload in uploads {
+        let Some(mesh) = graphics.meshes.get(upload.mesh_id) else {
+            continue;
+        };
+        match upload.geometry {
+            GeometryUpload::StagedVertices => {
+                mesh.record_geometry_copy(frame_slot, device.device(), command_buffer)
+            }
+            GeometryUpload::Skinning(SkinStreamsUpload::Staged) => {
+                mesh.record_skin_stream_copies(frame_slot, device.device(), command_buffer)
+            }
+            GeometryUpload::Skinning(SkinStreamsUpload::Unchanged) => {}
+        }
+    }
+}
+
+unsafe fn record_skinning_dispatches(
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    skinning_pipeline: &RRPipeline,
+    uploads: &[AnimatedMeshUpload],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::TRANSFER,
+            vk::AccessFlags::TRANSFER_WRITE,
+        ),
+        (
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::AccessFlags::SHADER_READ,
+        ),
+    );
+
+    for upload in uploads {
+        let GeometryUpload::Skinning(_) = upload.geometry else {
+            continue;
+        };
+        let Some(mesh) = graphics.meshes.get(upload.mesh_id) else {
+            continue;
+        };
+        let Some(streams) = mesh.skin_stream_addresses(device, frame_slot) else {
+            continue;
+        };
+
+        record_skinning_dispatch(
+            device,
+            command_buffer,
+            skinning_pipeline,
+            streams,
+            device.buffer_address(mesh.geometry_buffer.buffer),
+            mesh.vertex_data.vertices.len() as u32,
+        );
+    }
+}
+
 pub unsafe fn record_animated_mesh_uploads(
     instance: &Instance,
     device: &RRDevice,
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
-    mesh_ids: &[MeshId],
+    skinning_pipeline: &RRPipeline,
+    uploads: &[AnimatedMeshUpload],
     frame_slot: usize,
     command_buffer: CommandBuffer,
 ) -> Result<()> {
@@ -472,29 +573,27 @@ pub unsafe fn record_animated_mesh_uploads(
             vk::PipelineStageFlags::ALL_COMMANDS,
             vk::AccessFlags::empty(),
         ),
-        (
-            vk::PipelineStageFlags::TRANSFER
-                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
-            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
-        ),
+        geometry_and_acceleration_writes(),
     );
 
-    for &mesh_id in mesh_ids {
-        let Some(mesh) = graphics.meshes.get(mesh_id) else {
-            continue;
-        };
-        let size = mesh.vertex_data.vertices.len() as vk::DeviceSize
-            * size_of::<Vertex>() as vk::DeviceSize;
-        mesh.record_vertex_copy(frame_slot, device.device(), command_buffer, size);
-    }
+    record_stream_copies(device, graphics, uploads, frame_slot, command_buffer);
+    record_skinning_dispatches(
+        device,
+        graphics,
+        skinning_pipeline,
+        uploads,
+        frame_slot,
+        command_buffer,
+    );
 
     if let Some(accel_struct) = raytracing.acceleration_structure.as_mut() {
+        let mesh_ids: Vec<MeshId> = uploads.iter().map(|upload| upload.mesh_id).collect();
         record_acceleration_structure_updates(
             instance,
             device,
             graphics,
             accel_struct,
-            mesh_ids,
+            &mesh_ids,
             frame_slot,
             command_buffer,
         )?;
@@ -503,11 +602,7 @@ pub unsafe fn record_animated_mesh_uploads(
     record_global_memory_barrier(
         device,
         command_buffer,
-        (
-            vk::PipelineStageFlags::TRANSFER
-                | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
-            vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
-        ),
+        geometry_and_acceleration_writes(),
         (
             vk::PipelineStageFlags::VERTEX_INPUT
                 | vk::PipelineStageFlags::VERTEX_SHADER

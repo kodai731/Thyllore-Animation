@@ -151,7 +151,7 @@ fn generate_chain_bones(
 
     for part in &geometry.parts {
         let part_influences = influences_of_part(part, &influences);
-        if let Some(skin) = graphics.meshes[part.mesh_index].skin_data.as_mut() {
+        if let Some(skin) = graphics.meshes[part.mesh_index].edit_skin_data() {
             write_chain_weights(skin, hang_bone, &bone_ids, &part_influences);
         }
     }

@@ -41,9 +41,26 @@ This project supports three types of animation:
 | `crates/thyllore-importer-core/src/gltf/loader.rs`| Load glTF files, parse node hierarchy and animation channels            |
 | `crates/thyllore-importer-core/src/model_result.rs` | Loader output incl. `node_animation_scale`                            |
 | `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
+| `crates/thyllore-model-core/src/palette_skinning.rs` | `build_skin_palette`, `pack_skin_influences`, `skin_geometry` (the palette model the device skins with, and its CPU evaluation) |
+| `shaders/model/skinningCompute.slang`             | Per-frame skinning of every skinned mesh on the device                  |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
 | `src/ecs/systems/model_load_systems/`           | Load a model into `AssetStorage` and GPU meshes |
+
+## Skeletal Animation Runs on the Device
+
+- The animation phase only poses a skinned mesh: `apply_skinning_to_single_mesh` stores the skin palette
+  (`MeshBuffer::pose_skin`); it never rewrites `vertex_data.vertices`, which stay as imported.
+- `VulkanBackend::stage_animated_meshes` writes the palette of this frame slot and, when the skin changed,
+  stages the rest geometry and influences; `record_animated_mesh_uploads` records the stream copies, one
+  `pass.skinning` dispatch per mesh and the BLAS / TLAS updates at the head of the frame's command buffer.
+- A mesh has two vertex streams: geometry (position, normal; rewritten by skinning, node animation and morphs,
+  read by the BLAS) and attributes (color, tex coord). `VertexGeometry` / `VertexAttributes` in model-core
+  are the one definition of their layout; the hit shaders read them through `hit_shading_record.slang`.
+- `skin_data` is edited only through `MeshBuffer::edit_skin_data` / `set_skin_data`, which mark the device
+  streams stale so the next pose stages them again. Code that needs posed positions on the CPU (bounds,
+  picking, dumps) calls `MeshBuffer::posed_geometry`, the CPU evaluation of the same palette.
+- `apply_skinning` remains for CPU-only consumers: onion skin ghosts, the spring bake and tests.
 
 ## Transform Calculation Basics
 

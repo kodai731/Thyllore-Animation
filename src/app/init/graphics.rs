@@ -30,6 +30,7 @@ pub(super) struct VulkanResources {
     pub(super) rrcommand_pool: Rc<RRCommandPool>,
     pub(super) rrcommand_buffer: RRCommandBuffer,
     pub(super) model_pipeline: RRPipeline,
+    pub(super) skinning_pipeline: RRPipeline,
     pub(super) image_available_semaphores: Vec<Semaphore>,
     pub(super) render_finish_semaphores: Vec<Semaphore>,
     pub(super) in_flight_fences: Vec<Fence>,
@@ -191,8 +192,10 @@ impl App {
             resources.rrcommand_buffer.clone(),
         ));
 
-        data.ecs_world
-            .insert_resource(PipelineState::new(resources.model_pipeline.clone()));
+        data.ecs_world.insert_resource(PipelineState::new(
+            resources.model_pipeline.clone(),
+            resources.skinning_pipeline.clone(),
+        ));
 
         data.ecs_world
             .insert_resource(SurfaceState::new(resources.surface, resources.messenger));

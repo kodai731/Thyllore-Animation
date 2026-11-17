@@ -1,4 +1,6 @@
+use thyllore_vulkan_core::AnimatedMeshUpload;
+
 #[derive(Default)]
 pub struct PendingAnimatedMeshUploads {
-    pub mesh_ids: Vec<usize>,
+    pub uploads: Vec<AnimatedMeshUpload>,
 }

@@ -107,8 +107,7 @@ pub(crate) fn remove_bone_subtree(
 
     for mesh in graphics.meshes.iter_mut() {
         if let Some(skin) = mesh
-            .skin_data
-            .as_mut()
+            .edit_skin_data()
             .filter(|s| s.skeleton_id == skeleton_id)
         {
             merge_removed_bone_weights(skin, &removed.removed, removed.parent, &removed.remap);
@@ -132,10 +131,7 @@ pub(crate) fn capture_skeleton_snapshot(
         .iter()
         .enumerate()
         .filter_map(|(mesh_index, mesh)| {
-            let skin = mesh
-                .skin_data
-                .as_ref()
-                .filter(|s| s.skeleton_id == skeleton_id)?;
+            let skin = mesh.skin_data().filter(|s| s.skeleton_id == skeleton_id)?;
             Some(SkinSnapshot {
                 mesh_index,
                 bone_indices: skin.bone_indices.clone(),
@@ -205,7 +201,7 @@ pub fn restore_skeleton_snapshot(
         let Some(skin) = graphics
             .meshes
             .get_mut(skin_snapshot.mesh_index)
-            .and_then(|mesh| mesh.skin_data.as_mut())
+            .and_then(|mesh| mesh.edit_skin_data())
             .filter(|s| s.skeleton_id == skeleton_id)
         else {
             msg_error!(
@@ -610,11 +606,7 @@ fn sync_fbx_clusters(
     let mut fbx_cache = world.resource_mut::<FbxModelCache>();
 
     for (mesh_index, mesh) in graphics.meshes.iter().enumerate() {
-        let Some(skin) = mesh
-            .skin_data
-            .as_ref()
-            .filter(|s| s.skeleton_id == skeleton_id)
-        else {
+        let Some(skin) = mesh.skin_data().filter(|s| s.skeleton_id == skeleton_id) else {
             continue;
         };
         let Some(fbx_data_index) = fbx_cache.fbx_data_index(mesh_index) else {

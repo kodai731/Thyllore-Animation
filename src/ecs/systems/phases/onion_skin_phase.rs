@@ -74,7 +74,7 @@ fn extract_skin_data(
     Vec<thyllore_vulkan_core::data::Vertex>,
 )> {
     let mesh = &ctx.graphics.meshes[mesh_index];
-    let skin_data = mesh.skin_data.as_ref()?;
+    let skin_data = mesh.skin_data()?;
     let base_vertices = &mesh.base_vertices;
 
     if base_vertices.len() != skin_data.base_positions.len() {

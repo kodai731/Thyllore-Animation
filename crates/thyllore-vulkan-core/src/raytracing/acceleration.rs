@@ -42,6 +42,14 @@ impl RRBLAS {
     }
 }
 
+/// The buffers of one triangle mesh that a hit shader reads through the hit shading table.
+#[derive(Clone, Copy, Debug)]
+pub struct HitMeshBuffers {
+    pub geometry_buffer: crate::types::Buffer,
+    pub attribute_buffer: crate::types::Buffer,
+    pub index_buffer: crate::types::Buffer,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RRTLAS {
     pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
@@ -602,32 +610,6 @@ impl RRAccelerationStructure {
         })
     }
 
-    pub(crate) unsafe fn update_blas(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
-        blas: &mut RRBLAS,
-        vertex_buffer: &vk::Buffer,
-        vertex_count: u32,
-        vertex_stride: u32,
-        index_buffer: &vk::Buffer,
-        index_count: u32,
-    ) -> Result<()> {
-        with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
-            Self::record_blas_update(
-                instance,
-                rrdevice,
-                blas,
-                vertex_buffer,
-                vertex_count,
-                vertex_stride,
-                index_buffer,
-                index_count,
-                cmd,
-            )
-        })
-    }
-
     pub(crate) unsafe fn record_blas_update(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -902,65 +884,22 @@ impl RRAccelerationStructure {
         self.procedural_blas.clear();
     }
 
-    pub unsafe fn update_all(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
-        vertex_buffers: &[(crate::types::Buffer, u32, u32, crate::types::Buffer, u32)],
-    ) -> Result<()> {
-        for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in
-            vertex_buffers.iter().enumerate()
-        {
-            if i < self.blas_list.len() {
-                Self::update_blas(
-                    instance,
-                    rrdevice,
-                    rrcommand_pool,
-                    &mut self.blas_list[i],
-                    &vertex_buffer.raw(),
-                    *vertex_count,
-                    *vertex_stride,
-                    &index_buffer.raw(),
-                    *index_count,
-                )?;
-            }
-        }
-
-        Self::update_tlas(
-            instance,
-            rrdevice,
-            rrcommand_pool,
-            &mut self.tlas,
-            &self.blas_list,
-            &self.procedural_blas,
-            0,
-        )?;
-
-        self.fill_hit_shading_table(instance, rrdevice, vertex_buffers, &[])?;
-
-        Ok(())
-    }
-
     pub unsafe fn fill_hit_shading_table(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        vertex_buffers: &[(crate::types::Buffer, u32, u32, crate::types::Buffer, u32)],
+        meshes: &[HitMeshBuffers],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =
-            Vec::with_capacity(vertex_buffers.len() + procedurals.len());
+            Vec::with_capacity(meshes.len() + procedurals.len());
 
-        for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
-            let vertex_address = rrdevice.buffer_address(vertex_buffer.raw());
-            let index_address = rrdevice.buffer_address(index_buffer.raw());
-
+        for mesh in meshes {
             records.push(HitShadingRecord {
-                vertex_address,
-                index_address,
+                geometry_address: rrdevice.buffer_address(mesh.geometry_buffer.raw()),
+                index_address: rrdevice.buffer_address(mesh.index_buffer.raw()),
                 effect_data_address: 0,
-                reserved: 0,
+                attribute_address: rrdevice.buffer_address(mesh.attribute_buffer.raw()),
                 model: GpuMat4::IDENTITY,
                 normal_matrix: GpuMat4::IDENTITY,
                 base_color: [1.0, 1.0, 1.0, 1.0],
@@ -970,10 +909,10 @@ impl RRAccelerationStructure {
 
         for primitive in procedurals {
             records.push(HitShadingRecord {
-                vertex_address: 0,
+                geometry_address: 0,
                 index_address: 0,
                 effect_data_address: primitive.effect_data_address,
-                reserved: 0,
+                attribute_address: 0,
                 model: GpuMat4::from_mat4(primitive.model),
                 normal_matrix: GpuMat4::normal_matrix_of(primitive.model),
                 base_color: primitive.base_color,

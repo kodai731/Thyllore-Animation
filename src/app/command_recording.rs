@@ -4,6 +4,7 @@ use super::App;
 use crate::app::build_pass_context;
 use crate::ecs::resource::{GpuPassTimings, PendingAnimatedMeshUploads};
 use crate::hooks::pass::{TargetUse, TransientRequest};
+use crate::vulkanr::context::PipelineState;
 use crate::vulkanr::renderer::deferred;
 use thyllore_vulkan_core::record_animated_mesh_uploads;
 use thyllore_vulkan_core::types::CommandBuffer;
@@ -50,20 +51,22 @@ impl App {
         self.gpu_timestamp_profiler
             .begin_frame(&self.rrdevice, command_buffer, image_index);
 
-        let mesh_ids = {
+        let animated_mesh_uploads = {
             let mut pending = self
                 .data
                 .ecs_world
                 .resource_mut::<PendingAnimatedMeshUploads>();
-            std::mem::take(&mut pending.mesh_ids)
+            std::mem::take(&mut pending.uploads)
         };
-        if !mesh_ids.is_empty() {
+        if !animated_mesh_uploads.is_empty() {
+            let skinning_pipeline = self.resource::<PipelineState>().skinning_pipeline.clone();
             record_animated_mesh_uploads(
                 &self.instance,
                 &self.rrdevice,
                 &self.data.graphics_resources,
                 &mut self.data.raytracing,
-                &mesh_ids,
+                &skinning_pipeline,
+                &animated_mesh_uploads,
                 frame_slot,
                 command_buffer,
             )?;

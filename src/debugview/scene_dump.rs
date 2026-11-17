@@ -39,10 +39,10 @@ impl App {
 
         for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
             log!(
-                "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
+                "  mesh[{}]: render_to_gbuffer={}, geometry_buffer={:?}, indices={}",
                 i,
                 mesh.render_to_gbuffer,
-                mesh.vertex_buffer.buffer(),
+                mesh.geometry_buffer.buffer(),
                 mesh.index_buffer.indices
             );
             log!(
@@ -51,16 +51,16 @@ impl App {
             );
             log!("    object_index: {}", mesh.object_index);
 
-            if !mesh.vertex_data.vertices.is_empty() {
-                let v = &mesh.vertex_data.vertices[0];
+            let posed_geometry = mesh.posed_geometry();
+            if let Some(v) = posed_geometry.first() {
                 log!(
-                    "    vertex_data[0].pos: ({:.4}, {:.4}, {:.4})",
+                    "    posed_geometry[0].pos: ({:.4}, {:.4}, {:.4})",
                     v.pos.x,
                     v.pos.y,
                     v.pos.z
                 );
 
-                let positions = mesh.vertex_data.vertices.iter().map(|vertex| vertex.pos);
+                let positions = posed_geometry.iter().map(|vertex| vertex.pos);
                 if let Some(bounds) = Aabb::from_points(positions) {
                     log!(
                         "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",

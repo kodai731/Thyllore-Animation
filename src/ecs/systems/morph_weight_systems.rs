@@ -277,7 +277,7 @@ fn apply_morph_to_mesh(mesh: &mut MeshBuffer, weights: &[f32]) {
         }
     }
 
-    if let Some(ref mut skin_data) = mesh.skin_data {
+    if let Some(skin_data) = mesh.edit_skin_data() {
         for (i, pos) in morphed.iter().enumerate() {
             if i < skin_data.base_positions.len() {
                 skin_data.base_positions[i].x = pos[0];

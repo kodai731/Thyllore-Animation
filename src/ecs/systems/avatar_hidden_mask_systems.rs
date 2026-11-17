@@ -158,7 +158,7 @@ fn model_space_mask_mesh(
     mesh: &MeshBuffer,
     assets: &AssetStorage,
 ) -> Option<MaskMesh> {
-    let Some(skin) = mesh.skin_data.as_ref() else {
+    let Some(skin) = mesh.skin_data() else {
         msg_warn!(
             "{}/{} has no skin data — skipped by the hidden mask",
             key.mesh,

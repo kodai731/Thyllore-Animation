@@ -53,8 +53,7 @@ pub(crate) fn merge_submesh_geometry(
     for (key, mesh_index) in submeshes {
         let mesh = &graphics.meshes[mesh_index];
         let skin = mesh
-            .skin_data
-            .as_ref()
+            .skin_data()
             .ok_or_else(|| anyhow::anyhow!("{}/{} has no skin_data", key.mesh, key.material))?;
         match skeleton_id {
             None => skeleton_id = Some(skin.skeleton_id),

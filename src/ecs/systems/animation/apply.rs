@@ -3,6 +3,7 @@ use glam::{Mat4, Vec4};
 
 use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
 use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
+use thyllore_vulkan_core::AnimatedMeshUpload;
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
@@ -31,17 +32,14 @@ pub(crate) fn apply_skinning_to_single_mesh(
     let Some(mesh) = graphics.meshes.get_mut(mesh_idx) else {
         return false;
     };
-
-    let Some(skin_data) = &mesh.skin_data else {
+    if mesh.skin_data().is_none() {
         return false;
-    };
+    }
 
-    let _ = thyllore_model_core::apply_skinning_to_vertices(
-        skin_data,
-        global_transforms,
+    mesh.pose_skin(thyllore_model_core::build_skin_palette(
         skeleton,
-        &mut mesh.vertex_data.vertices,
-    );
+        global_transforms,
+    ));
 
     true
 }
@@ -57,7 +55,7 @@ pub(crate) fn apply_node_animation_to_single_mesh(
     }
 
     let mesh = &graphics.meshes[mesh_idx];
-    if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+    if mesh.skin_data().is_some() || mesh.base_vertices.is_empty() {
         return false;
     }
 
@@ -151,12 +149,8 @@ pub unsafe fn upload_animations(
     backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
     updated_meshes: &[usize],
     frame_slot: usize,
-) -> Result<()> {
-    if !updated_meshes.is_empty() {
-        backend.stage_animated_meshes(updated_meshes, frame_slot)?;
-    }
-
-    Ok(())
+) -> Result<Vec<AnimatedMeshUpload>> {
+    backend.stage_animated_meshes(updated_meshes, frame_slot)
 }
 
 pub(crate) fn prepare_node_animation(
@@ -171,7 +165,7 @@ pub(crate) fn prepare_node_animation(
     let mut updated_mesh_indices = Vec::new();
 
     for (mesh_idx, mesh) in graphics.meshes.iter_mut().enumerate() {
-        if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+        if mesh.skin_data().is_some() || mesh.base_vertices.is_empty() {
             continue;
         }
 

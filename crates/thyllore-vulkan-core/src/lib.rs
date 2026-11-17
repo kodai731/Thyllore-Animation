@@ -17,6 +17,8 @@ pub mod resource;
 pub mod types;
 pub(crate) mod vulkan;
 
-pub use backend::{record_animated_mesh_uploads, VulkanBackend};
+pub use backend::{
+    record_animated_mesh_uploads, AnimatedMeshUpload, GeometryUpload, VulkanBackend,
+};
 pub use frame_context::FrameRenderContext;
 pub use profiling::GpuTimestampProfiler;

@@ -260,6 +260,32 @@ impl StagingBuffer {
         Ok(())
     }
 
+    pub(crate) unsafe fn fill<T: Copy>(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        element_count: usize,
+        fill_elements: impl FnOnce(&mut [T]),
+    ) -> Result<()> {
+        let size = (size_of::<T>() * element_count) as u64;
+        if self.is_empty() || size > self.capacity {
+            self.free(rrdevice);
+            *self = Self::allocate(instance, rrdevice, size * 2)?;
+        }
+
+        let map_memory =
+            rrdevice
+                .device()
+                .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
+        fill_elements(std::slice::from_raw_parts_mut(
+            map_memory.cast::<T>(),
+            element_count,
+        ));
+        rrdevice.device().unmap_memory(self.memory);
+
+        Ok(())
+    }
+
     pub fn is_empty(&self) -> bool {
         self.buffer == vk::Buffer::null()
     }
@@ -287,13 +313,30 @@ impl RRVertexBuffer {
         data: *const c_void,
         length: usize,
     ) -> Result<Self> {
-        let mut rrvertex_buffer = RRVertexBuffer::default();
+        let mut rrvertex_buffer = Self::allocate(instance, rrdevice, size, length)?;
 
         let initial_staging = &mut rrvertex_buffer.staging[0];
         *initial_staging = StagingBuffer::allocate(instance, rrdevice, size)?;
         initial_staging.write(instance, rrdevice, size, data)?;
 
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+        copy_buffer(
+            rrdevice,
+            rr_command_pool,
+            rrvertex_buffer.staging[0].buffer,
+            rrvertex_buffer.buffer,
+            size,
+        )?;
+
+        Ok(rrvertex_buffer)
+    }
+
+    pub(crate) unsafe fn allocate(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        size: u64,
+        length: usize,
+    ) -> Result<Self> {
+        let (buffer, buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
@@ -305,19 +348,12 @@ impl RRVertexBuffer {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        copy_buffer(
-            rrdevice,
-            rr_command_pool,
-            rrvertex_buffer.staging[0].buffer,
-            vertex_buffer,
-            size,
-        )?;
-
-        rrvertex_buffer.buffer = vertex_buffer;
-        rrvertex_buffer.buffer_memory = vertex_buffer_memory;
-        rrvertex_buffer.vertices = length as u32;
-
-        Ok(rrvertex_buffer)
+        Ok(Self {
+            buffer,
+            buffer_memory,
+            vertices: length as u32,
+            staging: Default::default(),
+        })
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
@@ -350,17 +386,16 @@ impl Drop for RRVertexBuffer {
 }
 
 impl RRVertexBuffer {
-    pub unsafe fn stage(
+    pub(crate) unsafe fn stage<T: Copy>(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
         frame_slot: usize,
-        size: u64,
-        data: *const c_void,
-        length: usize,
+        element_count: usize,
+        fill_elements: impl FnOnce(&mut [T]),
     ) -> Result<()> {
-        self.staging[frame_slot].write(instance, rrdevice, size, data)?;
-        self.vertices = length as u32;
+        self.staging[frame_slot].fill(instance, rrdevice, element_count, fill_elements)?;
+        self.vertices = element_count as u32;
 
         Ok(())
     }

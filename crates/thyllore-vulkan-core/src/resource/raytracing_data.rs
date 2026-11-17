@@ -19,7 +19,7 @@ use crate::pipeline::{
     compute_push_constant_range, DepthTestConfig, FillMode, PipelineBuilder, PushConstantConfig,
     RRPipeline, SampleCount, Topology, VertexInputConfig,
 };
-use crate::raytracing::{GpuPrimitive, RRAccelerationStructure};
+use crate::raytracing::{GpuPrimitive, HitMeshBuffers, RRAccelerationStructure};
 use crate::render::RRRender;
 use crate::renderer::GBufferPushConstants;
 use crate::resource::{create_nearest_sampler, create_texture_sampler};
@@ -160,15 +160,13 @@ impl RayTracingData {
                 continue;
             }
 
-            let vertex_count = mesh.vertex_data.vertices.len() as u32;
-            let vertex_stride = std::mem::size_of::<vulkan_data::Vertex>() as u32;
             let mut blas = RRAccelerationStructure::create_blas(
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &mesh.vertex_buffer.buffer(),
-                vertex_count,
-                vertex_stride,
+                &mesh.geometry_buffer.buffer(),
+                mesh.vertex_data.vertices.len() as u32,
+                std::mem::size_of::<vulkan_data::VertexGeometry>() as u32,
                 &mesh.index_buffer.buffer(),
                 mesh.index_buffer.indices,
             )?;
@@ -182,13 +180,11 @@ impl RayTracingData {
             };
 
             acceleration_structure.blas_list.push(blas);
-            hit_table_meshes.push((
-                mesh.vertex_buffer.buffer(),
-                vertex_count,
-                vertex_stride,
-                mesh.index_buffer.buffer(),
-                mesh.index_buffer.indices,
-            ));
+            hit_table_meshes.push(HitMeshBuffers {
+                geometry_buffer: mesh.geometry_buffer.buffer(),
+                attribute_buffer: mesh.attribute_buffer.buffer(),
+                index_buffer: mesh.index_buffer.buffer(),
+            });
             log!("Created BLAS for mesh");
         }
 
@@ -362,7 +358,7 @@ unsafe fn build_gbuffer_pipeline(
     render_layouts: &[&ReflectedSetLayout],
 ) -> Result<RRPipeline> {
     PipelineBuilder::from_pass(&GBUFFER)
-        .vertex_input(VertexInputConfig::Standard)
+        .vertex_input(VertexInputConfig::MeshStreams)
         .topology(Topology::TriangleList)
         .polygon_mode(FillMode::Fill)
         .custom_render_pass(rrrender.gbuffer_render_pass())

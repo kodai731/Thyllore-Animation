@@ -85,7 +85,7 @@ fn scale_graphics_meshes(graphics: &mut GraphicsResources, factor: f32) {
     for mesh in &mut graphics.meshes {
         scale_vertex_positions(&mut mesh.vertex_data.vertices, factor);
         scale_vertex_positions(&mut mesh.base_vertices, factor);
-        if let Some(skin) = mesh.skin_data.as_mut() {
+        if let Some(skin) = mesh.edit_skin_data() {
             scale_skin(skin, factor);
         }
         scale_morph(&mut mesh.morph, factor);

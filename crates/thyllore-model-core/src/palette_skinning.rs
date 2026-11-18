@@ -82,6 +82,38 @@ pub fn collect_rest_geometry(skin_data: &SkinData) -> Vec<VertexGeometry> {
         .collect()
 }
 
+/// A skin as palette skinning reads it: one rest vertex and one influence per skinned vertex.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PackedSkin {
+    rest: Vec<VertexGeometry>,
+    influences: Vec<SkinInfluence>,
+}
+
+impl PackedSkin {
+    pub fn rest(&self) -> &[VertexGeometry] {
+        &self.rest
+    }
+
+    pub fn influences(&self) -> &[SkinInfluence] {
+        &self.influences
+    }
+
+    pub fn vertex_count(&self) -> usize {
+        self.rest.len()
+    }
+}
+
+pub fn pack_skin(skin_data: &SkinData, bone_count: usize) -> PackedSkin {
+    let mut rest = collect_rest_geometry(skin_data);
+    let mut influences = pack_skin_influences(skin_data, bone_count);
+
+    let vertex_count = rest.len().min(influences.len());
+    rest.truncate(vertex_count);
+    influences.truncate(vertex_count);
+
+    PackedSkin { rest, influences }
+}
+
 /// Linear blend skinning: each vertex is the weighted sum of its rest geometry moved by its palette entries.
 pub fn skin_geometry(
     rest: &[VertexGeometry],
@@ -170,6 +202,17 @@ mod tests {
                 Vec3::new(0.0, 0.0, 0.0),
             ],
         }
+    }
+
+    #[test]
+    fn packed_skin_has_one_influence_per_rest_vertex() {
+        let mut skin_data = skin_with_every_influence_case();
+        skin_data.bone_weights.pop();
+
+        let packed = pack_skin(&skin_data, two_bone_skeleton().bone_count());
+
+        assert_eq!(packed.vertex_count(), skin_data.bone_weights.len());
+        assert_eq!(packed.rest().len(), packed.influences().len());
     }
 
     #[test]

@@ -199,19 +199,18 @@ impl Drop for RRIndexBuffer {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+/// A host-visible transfer source that grows to hold what is written into it.
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct StagingBuffer {
     pub(crate) buffer: vk::Buffer,
-    pub(crate) memory: vk::DeviceMemory,
-    pub(crate) capacity: u64,
+    memory: vk::DeviceMemory,
+    #[gpu_resource(skip)]
+    capacity: u64,
 }
 
 impl StagingBuffer {
-    pub unsafe fn allocate(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        capacity: u64,
-    ) -> Result<Self> {
+    unsafe fn allocate(instance: &Instance, rrdevice: &RRDevice, capacity: u64) -> Result<Self> {
         let (buffer, memory) = create_buffer(
             instance,
             rrdevice,
@@ -226,38 +225,17 @@ impl StagingBuffer {
         })
     }
 
-    pub unsafe fn free(&mut self, rrdevice: &RRDevice) {
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device().destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.memory != vk::DeviceMemory::null() {
-            rrdevice.device().free_memory(self.memory, None);
-            self.memory = vk::DeviceMemory::null();
-        }
-        self.capacity = 0;
-    }
-
-    pub unsafe fn write(
-        &mut self,
+    unsafe fn holding(
         instance: &Instance,
         rrdevice: &RRDevice,
         size: u64,
         data: *const c_void,
-    ) -> Result<()> {
-        if self.is_empty() || size > self.capacity {
-            self.free(rrdevice);
-            *self = Self::allocate(instance, rrdevice, size * 2)?;
-        }
-
-        let map_memory =
-            rrdevice
-                .device()
-                .map_memory(self.memory, 0, size, vk::MemoryMapFlags::empty())?;
-        memcpy(data, map_memory.cast(), size as usize);
-        rrdevice.device().unmap_memory(self.memory);
-
-        Ok(())
+    ) -> Result<Self> {
+        let mut staging = Self::allocate(instance, rrdevice, size)?;
+        staging.fill::<u8>(instance, rrdevice, size as usize, |bytes| {
+            memcpy(data.cast::<u8>(), bytes.as_mut_ptr(), bytes.len())
+        })?;
+        Ok(staging)
     }
 
     pub(crate) unsafe fn fill<T: Copy>(
@@ -268,8 +246,8 @@ impl StagingBuffer {
         fill_elements: impl FnOnce(&mut [T]),
     ) -> Result<()> {
         let size = (size_of::<T>() * element_count) as u64;
-        if self.is_empty() || size > self.capacity {
-            self.free(rrdevice);
+        if self.is_destroyed() || size > self.capacity {
+            self.destroy_gpu(rrdevice);
             *self = Self::allocate(instance, rrdevice, size * 2)?;
         }
 
@@ -285,18 +263,16 @@ impl StagingBuffer {
 
         Ok(())
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.buffer == vk::Buffer::null()
-    }
 }
 
-#[derive(Clone, Debug, Default)]
+#[must_use]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRVertexBuffer {
     pub(crate) buffer: vk::Buffer,
-    pub(crate) buffer_memory: vk::DeviceMemory,
+    buffer_memory: vk::DeviceMemory,
+    #[gpu_resource(skip)]
     pub vertices: u32,
-    pub(crate) staging: [StagingBuffer; FRAMES_IN_FLIGHT],
+    staging: [StagingBuffer; FRAMES_IN_FLIGHT],
 }
 
 impl RRVertexBuffer {
@@ -313,18 +289,14 @@ impl RRVertexBuffer {
         data: *const c_void,
         length: usize,
     ) -> Result<Self> {
-        let mut rrvertex_buffer = Self::allocate(instance, rrdevice, size, length)?;
-
-        let initial_staging = &mut rrvertex_buffer.staging[0];
-        *initial_staging = StagingBuffer::allocate(instance, rrdevice, size)?;
-        initial_staging.write(instance, rrdevice, size, data)?;
-
-        copy_buffer(
+        let rrvertex_buffer = Self::allocate(instance, rrdevice, size, length)?;
+        upload_through_staging(
+            instance,
             rrdevice,
             rr_command_pool,
-            rrvertex_buffer.staging[0].buffer,
-            rrvertex_buffer.buffer,
+            data,
             size,
+            rrvertex_buffer.buffer,
         )?;
 
         Ok(rrvertex_buffer)
@@ -356,36 +328,6 @@ impl RRVertexBuffer {
         })
     }
 
-    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
-        for staging in &mut self.staging {
-            staging.free(rrdevice);
-        }
-        if self.buffer != vk::Buffer::null() {
-            rrdevice.device().destroy_buffer(self.buffer, None);
-            self.buffer = vk::Buffer::null();
-        }
-        if self.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device().free_memory(self.buffer_memory, None);
-            self.buffer_memory = vk::DeviceMemory::null();
-        }
-        self.vertices = 0;
-    }
-}
-
-impl Drop for RRVertexBuffer {
-    fn drop(&mut self) {
-        if self.buffer != vk::Buffer::null() {
-            log_warn!("RRVertexBuffer dropped without calling destroy()");
-        }
-        if self.staging.iter().any(|staging| !staging.is_empty()) {
-            log_warn!(
-                "RRVertexBuffer dropped without calling destroy() (staging buffer not freed)"
-            );
-        }
-    }
-}
-
-impl RRVertexBuffer {
     pub(crate) unsafe fn stage<T: Copy>(
         &mut self,
         instance: &Instance,
@@ -478,25 +420,10 @@ unsafe fn upload_through_staging(
     size: u64,
     destination: vk::Buffer,
 ) -> Result<()> {
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
-        instance,
-        rrdevice,
-        size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    )?;
-    let map_memory = rrdevice.device().map_memory(
-        staging_buffer_memory,
-        0,
-        size,
-        vk::MemoryMapFlags::empty(),
-    )?;
-    memcpy(data, map_memory.cast(), size as usize);
-    rrdevice.device().unmap_memory(staging_buffer_memory);
-    copy_buffer(rrdevice, rr_command_pool, staging_buffer, destination, size)?;
-    rrdevice.device().destroy_buffer(staging_buffer, None);
-    rrdevice.device().free_memory(staging_buffer_memory, None);
-    Ok(())
+    let mut staging = StagingBuffer::holding(instance, rrdevice, size, data)?;
+    let copied = copy_buffer(rrdevice, rr_command_pool, staging.buffer, destination, size);
+    staging.destroy_gpu(rrdevice);
+    copied
 }
 
 pub(crate) unsafe fn copy_buffer(

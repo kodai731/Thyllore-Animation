@@ -1,3 +1,4 @@
+use glam::Mat4;
 use thyllore_math_core::scale_translation;
 
 use crate::mesh::{MeshMorph, Vertex};
@@ -15,6 +16,13 @@ pub fn scale_skeleton(skeleton: &mut Skeleton, factor: f32) {
 pub fn scale_skin(skin: &mut SkinData, factor: f32) {
     for position in &mut skin.base_positions {
         *position *= factor;
+    }
+}
+
+/// Conjugates each skin matrix by the uniform scale, so it poses the scaled rest positions as before.
+pub fn scale_skin_palette(palette: &mut [Mat4], factor: f32) {
+    for skin_matrix in palette {
+        *skin_matrix = scale_translation(skin_matrix, factor);
     }
 }
 
@@ -42,6 +50,20 @@ mod tests {
 
     fn translation(x: f32, y: f32, z: f32) -> Mat4 {
         Mat4::from_translation(Vec3::new(x, y, z))
+    }
+
+    #[test]
+    fn scaled_palette_poses_scaled_rest_at_scaled_positions() {
+        let rest_position = Vec3::new(0.5, 2.0, -1.0);
+        let skin_matrix = Mat4::from_rotation_z(0.7) * translation(1.0, -2.0, 3.0);
+        let factor = 1.5;
+
+        let mut palette = [skin_matrix];
+        scale_skin_palette(&mut palette, factor);
+
+        let posed = palette[0].transform_point3(rest_position * factor);
+        let expected = skin_matrix.transform_point3(rest_position) * factor;
+        assert!((posed - expected).length() < 1e-5);
     }
 
     #[test]

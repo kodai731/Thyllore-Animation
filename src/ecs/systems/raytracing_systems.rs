@@ -6,10 +6,10 @@ use thyllore_vulkan_core::descriptor::{
     create_effect_trace_sets, push_constant_range, EFFECT_TRACE,
 };
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
-use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
+use thyllore_vulkan_core::raytracing::RRBLAS;
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::EffectTraceGpuState;
+use crate::ecs::resource::{EffectTraceGpuState, InstanceTransforms, PendingAnimatedMeshUploads};
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::{FrameContext, GpuSceneContext};
 use thyllore_vulkan_core::types::Instance;
@@ -41,9 +41,9 @@ pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Mat4
     transforms
 }
 
-pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()> {
+pub fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) {
     if !ctx.raytracing.has_valid_tlas() {
-        return Ok(());
+        return;
     }
 
     let mesh_transforms = collect_mesh_transforms(ctx.world, ctx.assets);
@@ -58,13 +58,13 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         .collect();
 
     let Some(acceleration_structure) = ctx.raytracing.acceleration_structure.as_mut() else {
-        return Ok(());
+        return;
     };
 
     if acceleration_structure.blas_list.len() != gbuffer_mesh_indices.len()
         || acceleration_structure.procedural_blas.len() != procedural_primitives.len()
     {
-        return Ok(());
+        return;
     }
 
     let mut needs_update = false;
@@ -87,19 +87,11 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         needs_update |= apply_instance_transform(blas, &primitive.model);
     }
 
-    if !needs_update {
-        return Ok(());
+    if needs_update {
+        ctx.world
+            .resource_mut::<PendingAnimatedMeshUploads>()
+            .instance_transforms = InstanceTransforms::Changed;
     }
-
-    RRAccelerationStructure::update_tlas(
-        ctx.instance,
-        ctx.device,
-        ctx.command_pool.as_ref(),
-        &mut acceleration_structure.tlas,
-        &acceleration_structure.blas_list,
-        &acceleration_structure.procedural_blas,
-        ctx.frame_slot,
-    )
 }
 
 pub unsafe fn rebuild_scene_acceleration(

@@ -1,3 +1,5 @@
+import "include/vertex_streams.slang";
+
 struct SkinningPush {
     uint64_t restAddress;
     uint64_t influenceAddress;
@@ -8,25 +10,12 @@ struct SkinningPush {
 
 [[vk::push_constant]] ConstantBuffer<SkinningPush> skinning;
 
-// Streams are plain 32 bit words (thyllore-model-core): VertexGeometry = position.xyz, normal.xyz;
 // SkinInfluence = 4 palette indices then 4 weights; a palette entry = a column-major 4x4 matrix.
-static const uint GEOMETRY_WORD_COUNT = 6;
-static const uint GEOMETRY_NORMAL_OFFSET = 3;
 static const uint INFLUENCE_WORD_COUNT = 8;
 static const uint INFLUENCE_WEIGHT_OFFSET = 4;
 static const uint INFLUENCES_PER_VERTEX = 4;
 static const uint MATRIX_WORD_COUNT = 16;
 static const float3 FALLBACK_NORMAL = float3(0.0, 1.0, 0.0);
-
-float3 readFloat3(float* words, uint first) {
-    return float3(words[first], words[first + 1], words[first + 2]);
-}
-
-void writeFloat3(float* words, uint first, float3 value) {
-    words[first] = value.x;
-    words[first + 1] = value.y;
-    words[first + 2] = value.z;
-}
 
 float3 transformVector(float* palette, uint entry, float3 v) {
     uint first = entry * MATRIX_WORD_COUNT;
@@ -54,9 +43,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID) {
     float* palette = (float*)skinning.paletteAddress;
     float* skinned = (float*)skinning.skinnedAddress;
 
-    uint geometryFirst = vertex * GEOMETRY_WORD_COUNT;
-    float3 restPosition = readFloat3(rest, geometryFirst);
-    float3 restNormal = readFloat3(rest, geometryFirst + GEOMETRY_NORMAL_OFFSET);
+    float3 restPosition = readStreamFloat3(rest, vertex, 0);
+    float3 restNormal = readStreamFloat3(rest, vertex, GEOMETRY_NORMAL_OFFSET);
 
     float3 position = float3(0.0);
     float3 normal = float3(0.0);
@@ -71,6 +59,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID) {
     float normalLength = length(normal);
     float3 unitNormal = normalLength > 0.0 ? normal / normalLength : FALLBACK_NORMAL;
 
-    writeFloat3(skinned, geometryFirst, position);
-    writeFloat3(skinned, geometryFirst + GEOMETRY_NORMAL_OFFSET, unitNormal);
+    writeStreamFloat3(skinned, vertex, 0, position);
+    writeStreamFloat3(skinned, vertex, GEOMETRY_NORMAL_OFFSET, unitNormal);
 }

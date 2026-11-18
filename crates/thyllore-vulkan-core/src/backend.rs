@@ -549,7 +549,7 @@ unsafe fn record_skinning_dispatches(
             skinning_pipeline,
             streams,
             device.buffer_address(mesh.geometry_buffer.buffer),
-            mesh.vertex_data.vertices.len() as u32,
+            mesh.device_skinned_vertex_count() as u32,
         );
     }
 }
@@ -566,14 +566,15 @@ pub unsafe fn record_animated_mesh_uploads(
 ) -> Result<()> {
     let command_buffer = command_buffer.raw();
 
+    let (write_stages, write_accesses) = geometry_and_acceleration_writes();
     record_global_memory_barrier(
         device,
         command_buffer,
+        (vk::PipelineStageFlags::ALL_COMMANDS, write_accesses),
         (
-            vk::PipelineStageFlags::ALL_COMMANDS,
-            vk::AccessFlags::empty(),
+            write_stages,
+            write_accesses | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
         ),
-        geometry_and_acceleration_writes(),
     );
 
     record_stream_copies(device, graphics, uploads, frame_slot, command_buffer);

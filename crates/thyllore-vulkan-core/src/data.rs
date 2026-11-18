@@ -85,19 +85,7 @@ impl RRData {
             self.sampler = vk::Sampler::null();
         }
 
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device()
-                .destroy_buffer(self.vertex_buffer.buffer, None);
-            self.vertex_buffer.buffer = vk::Buffer::null();
-        }
-
-        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device()
-                .free_memory(self.vertex_buffer.buffer_memory, None);
-            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
+        self.vertex_buffer.destroy_gpu(rrdevice);
 
         if self.index_buffer.buffer != vk::Buffer::null() {
             rrdevice

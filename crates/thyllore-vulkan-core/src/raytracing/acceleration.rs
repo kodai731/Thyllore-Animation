@@ -692,32 +692,6 @@ impl RRAccelerationStructure {
         Ok(())
     }
 
-    pub unsafe fn update_tlas(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
-        tlas: &mut RRTLAS,
-        blas_list: &[RRBLAS],
-        procedural_blas: &[RRBLAS],
-        frame_slot: usize,
-    ) -> Result<()> {
-        if blas_list.is_empty() && procedural_blas.is_empty() {
-            return Ok(());
-        }
-
-        with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
-            Self::record_tlas_update(
-                instance,
-                rrdevice,
-                tlas,
-                blas_list,
-                procedural_blas,
-                frame_slot,
-                cmd,
-            )
-        })
-    }
-
     pub(crate) unsafe fn record_tlas_update(
         instance: &Instance,
         rrdevice: &RRDevice,

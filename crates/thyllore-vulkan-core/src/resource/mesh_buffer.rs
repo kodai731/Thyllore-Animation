@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::ffi::c_void;
 use std::mem::{size_of, size_of_val};
 
@@ -15,8 +16,8 @@ use crate::resource::{
 };
 use crate::types::Instance;
 use thyllore_model_core::{
-    collect_rest_geometry, pack_skin_influences, skin_geometry, write_vertex_attributes,
-    write_vertex_geometry, MeshMorph, SkeletonId, SkinData,
+    pack_skin, skin_geometry, write_vertex_attributes, write_vertex_geometry, MeshMorph,
+    PackedSkin, SkeletonId, SkinData,
 };
 
 /// Whether a skinning dispatch must first copy freshly staged rest geometry and influences.
@@ -42,6 +43,7 @@ pub struct MeshBuffer {
     skin_data: Option<SkinData>,
     skin_revision: u64,
     skin_palette: Vec<Mat4>,
+    packed_skin: OnceCell<PackedSkin>,
     skin_buffers: Option<SkinBuffers>,
     pub skeleton_id: Option<SkeletonId>,
     pub node_index: Option<usize>,
@@ -67,6 +69,7 @@ impl Default for MeshBuffer {
             skin_data: None,
             skin_revision: 0,
             skin_palette: Vec::new(),
+            packed_skin: OnceCell::new(),
             skin_buffers: None,
             skeleton_id: None,
             node_index: None,
@@ -133,16 +136,26 @@ impl MeshBuffer {
 
     pub fn edit_skin_data(&mut self) -> Option<&mut SkinData> {
         self.skin_revision += 1;
+        self.packed_skin.take();
         self.skin_data.as_mut()
     }
 
     pub fn set_skin_data(&mut self, skin_data: Option<SkinData>) {
         self.skin_revision += 1;
+        self.packed_skin.take();
         self.skin_data = skin_data;
     }
 
     pub fn pose_skin(&mut self, skin_palette: Vec<Mat4>) {
+        if skin_palette.len() != self.skin_palette.len() {
+            self.packed_skin.take();
+        }
         self.skin_palette = skin_palette;
+    }
+
+    /// The matrices of the current pose; their count is fixed until the next `pose_skin`.
+    pub fn edit_skin_palette(&mut self) -> &mut [Mat4] {
+        &mut self.skin_palette
     }
 
     pub fn is_skinned_on_device(&self) -> bool {
@@ -167,14 +180,23 @@ impl MeshBuffer {
             return geometry;
         };
 
-        let bone_count = self.skin_palette.len() - 1;
+        let packed_skin = pack_skin_once(&self.packed_skin, skin_data, self.skin_palette.len());
         skin_geometry(
-            &collect_rest_geometry(skin_data),
-            &pack_skin_influences(skin_data, bone_count),
+            packed_skin.rest(),
+            packed_skin.influences(),
             &self.skin_palette,
             &mut geometry,
         );
         geometry
+    }
+
+    /// How many vertices a skinning dispatch may read from the skin streams and write to the geometry.
+    pub(crate) fn device_skinned_vertex_count(&self) -> usize {
+        let staged_vertex_count = self
+            .skin_buffers
+            .as_ref()
+            .map_or(0, SkinBuffers::vertex_count);
+        staged_vertex_count.min(self.vertex_data.vertices.len())
     }
 
     fn skin_streams_version(&self) -> SkinStreamsVersion {
@@ -194,21 +216,23 @@ impl MeshBuffer {
             anyhow::bail!("stage_skinning on a mesh without skin data");
         };
         let version = self.skin_streams_version();
+        let packed_skin = pack_skin_once(&self.packed_skin, skin_data, version.palette_len);
+        let vertex_count = packed_skin.vertex_count();
 
-        if let Some(outgrown) = self
+        if let Some(mismatched) = self
             .skin_buffers
-            .take_if(|buffers| buffers.palette_len() != version.palette_len)
+            .take_if(|buffers| !buffers.fits(vertex_count, version.palette_len))
             .as_mut()
         {
             rrdevice.wait_idle()?;
-            outgrown.destroy_gpu(rrdevice);
+            mismatched.destroy_gpu(rrdevice);
         }
         let buffers = match &mut self.skin_buffers {
             Some(buffers) => buffers,
             vacant => vacant.insert(SkinBuffers::allocate(
                 instance,
                 rrdevice,
-                skin_data.base_positions.len(),
+                vertex_count,
                 version.palette_len,
             )?),
         };
@@ -216,7 +240,7 @@ impl MeshBuffer {
         let streams = if buffers.holds(version) {
             SkinStreamsUpload::Unchanged
         } else {
-            buffers.stage_streams(instance, rrdevice, frame_slot, skin_data, version)?;
+            buffers.stage_streams(instance, rrdevice, frame_slot, packed_skin, version)?;
             SkinStreamsUpload::Staged
         };
         buffers.write_palette(rrdevice, frame_slot, &self.skin_palette)?;
@@ -316,8 +340,8 @@ impl MeshBuffer {
         }
         self.skin_buffers.destroy_gpu(rrdevice);
         self.skin_buffers = None;
-        self.geometry_buffer.destroy(rrdevice);
-        self.attribute_buffer.destroy(rrdevice);
+        self.geometry_buffer.destroy_gpu(rrdevice);
+        self.attribute_buffer.destroy_gpu(rrdevice);
         self.index_buffer.destroy(rrdevice);
         if self.image != vk::Image::null() {
             rrdevice.device().destroy_image(self.image, None);
@@ -336,6 +360,15 @@ impl Drop for MeshBuffer {
             log_warn!("MeshBuffer dropped without calling destroy()");
         }
     }
+}
+
+fn pack_skin_once<'a>(
+    packed_skin: &'a OnceCell<PackedSkin>,
+    skin_data: &SkinData,
+    palette_len: usize,
+) -> &'a PackedSkin {
+    let bone_count = palette_len - 1;
+    packed_skin.get_or_init(|| pack_skin(skin_data, bone_count))
 }
 
 fn collect_geometry(vertices: &[Vertex]) -> Vec<VertexGeometry> {

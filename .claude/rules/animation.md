@@ -41,7 +41,7 @@ This project supports three types of animation:
 | `crates/thyllore-importer-core/src/gltf/loader.rs`| Load glTF files, parse node hierarchy and animation channels            |
 | `crates/thyllore-importer-core/src/model_result.rs` | Loader output incl. `node_animation_scale`                            |
 | `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
-| `crates/thyllore-model-core/src/palette_skinning.rs` | `build_skin_palette`, `pack_skin_influences`, `skin_geometry` (the palette model the device skins with, and its CPU evaluation) |
+| `crates/thyllore-model-core/src/palette_skinning.rs` | `build_skin_palette`, `pack_skin`, `skin_geometry` (the palette model the device skins with, and its CPU evaluation) |
 | `shaders/model/skinningCompute.slang`             | Per-frame skinning of every skinned mesh on the device                  |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
@@ -56,10 +56,15 @@ This project supports three types of animation:
   `pass.skinning` dispatch per mesh and the BLAS / TLAS updates at the head of the frame's command buffer.
 - A mesh has two vertex streams: geometry (position, normal; rewritten by skinning, node animation and morphs,
   read by the BLAS) and attributes (color, tex coord). `VertexGeometry` / `VertexAttributes` in model-core
-  are the one definition of their layout; the hit shaders read them through `hit_shading_record.slang`.
+  are the one definition of their layout; `shaders/include/vertex_streams.slang` is its one shader-side copy,
+  read by the skinning kernel and by the hit shaders (through `hit_shading_record.slang`).
 - `skin_data` is edited only through `MeshBuffer::edit_skin_data` / `set_skin_data`, which mark the device
   streams stale so the next pose stages them again. Code that needs posed positions on the CPU (bounds,
   picking, dumps) calls `MeshBuffer::posed_geometry`, the CPU evaluation of the same palette.
+- The palette is the pose of the rest geometry it was built for: an edit that moves the rest geometry while
+  the mesh may stay unposed (model scale) transforms the palette in the same step (`scale_skin_palette`).
+- A moved instance only marks `PendingAnimatedMeshUploads::instance_transforms`; the TLAS is updated once
+  per frame, in the frame's command buffer, together with the animated meshes.
 - `apply_skinning` remains for CPU-only consumers: onion skin ghosts, the spring bake and tests.
 
 ## Current CPU / Device Boundary

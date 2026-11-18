@@ -148,6 +148,18 @@ impl<T: GpuResource> GpuResource for Vec<T> {
     }
 }
 
+impl<T: GpuResource, const N: usize> GpuResource for [T; N] {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        for resource in self.iter_mut().rev() {
+            resource.destroy_gpu(rrdevice);
+        }
+    }
+
+    fn is_destroyed(&self) -> bool {
+        self.iter().all(GpuResource::is_destroyed)
+    }
+}
+
 pub unsafe fn destroy_all_in_reverse(resources: &mut [&mut dyn GpuResource], rrdevice: &RRDevice) {
     destroy_all_in_reverse_with(resources, |resource| resource.destroy_gpu(rrdevice));
 }

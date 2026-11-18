@@ -62,6 +62,31 @@ This project supports three types of animation:
   picking, dumps) calls `MeshBuffer::posed_geometry`, the CPU evaluation of the same palette.
 - `apply_skinning` remains for CPU-only consumers: onion skin ghosts, the spring bake and tests.
 
+## Current CPU / Device Boundary
+
+This is the boundary as of 2026-11 (decided in #266). It describes where the work runs today and why; it is
+not a permanent rule, so revisit it when one of the conditions below changes.
+
+- Per-vertex work runs on the device: skinning today, and it is the intended place for future per-vertex
+  work such as cloth or hair strands. Morph targets are still accumulated on the CPU when a weight changes
+  and reach the device as new rest geometry.
+- Per-bone work runs on the CPU: clip sampling, the global transform hierarchy, spring bone integration and
+  collision, collider fitting, and the skin palette build. The palette is uploaded once per frame.
+
+Why the boundary sits here today:
+
+- Only skin vertices live on the device; the bone transforms the springs read and write are CPU data.
+- The spring result has CPU consumers in the same frame (the palette build, gizmos, bake, export, the
+  Blender and Unity parity dumps), so a device-side spring would need a readback every frame.
+- The bone count is small (about 10^3 bones, 10^2 chains) next to the vertex count (about 10^5), so the
+  device has little to gain; Unity, UniVRM, Unreal, Bevy and Maya draw the same line.
+
+Conditions that would justify moving it:
+
+- The spring result stops having same-frame CPU consumers, or the palette build itself moves to the device.
+- The simulated element count grows to per-vertex scale (cloth, strand hair), which is then per-vertex work.
+- An optimized-build measurement shows bone-level work dominating the frame.
+
 ## Transform Calculation Basics
 
 ```

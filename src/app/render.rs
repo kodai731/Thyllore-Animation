@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::ecs::resource::BillboardData;
-use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
+use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures, PendingAnimatedMeshUploads};
 use crate::ecs::resource::{GridGizmoData, LightGizmoData};
 use crate::ecs::systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
@@ -442,6 +442,7 @@ impl App {
             image_index,
         );
         let presentation = submit_and_present(&self.rrdevice, frame_submit)?;
+        *self.resource_mut::<PendingAnimatedMeshUploads>() = PendingAnimatedMeshUploads::default();
 
         if matches!(presentation.outcome, PresentOutcome::OutOfDate) || self.resized {
             self.resized = false;

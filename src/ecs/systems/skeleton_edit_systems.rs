@@ -18,7 +18,7 @@ use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use thyllore_exporter_core::fbx::clusters_from_skin_data;
-use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::{GraphicsResources, MeshBuffer};
 
 fn edited_skeleton_mut(assets: &mut AssetStorage) -> anyhow::Result<(SkeletonId, &mut Skeleton)> {
     assets
@@ -94,6 +94,17 @@ pub fn remove_skeleton_bone(
     Ok(())
 }
 
+fn edit_skin_of_skeleton(mesh: &mut MeshBuffer, skeleton_id: SkeletonId) -> Option<&mut SkinData> {
+    let is_skinned_by_skeleton = mesh
+        .skin_data()
+        .is_some_and(|skin| skin.skeleton_id == skeleton_id);
+    if !is_skinned_by_skeleton {
+        return None;
+    }
+
+    mesh.edit_skin_data()
+}
+
 /// Removes a bone with its descendants, folds their skin weights into the parent and renumbers every
 /// bone reference in the world; returns the number of bones removed. The caller refreshes and records.
 pub(crate) fn remove_bone_subtree(
@@ -106,10 +117,7 @@ pub(crate) fn remove_bone_subtree(
     let removed = skeleton.remove_bone(bone_id)?;
 
     for mesh in graphics.meshes.iter_mut() {
-        if let Some(skin) = mesh
-            .edit_skin_data()
-            .filter(|s| s.skeleton_id == skeleton_id)
-        {
+        if let Some(skin) = edit_skin_of_skeleton(mesh, skeleton_id) {
             merge_removed_bone_weights(skin, &removed.removed, removed.parent, &removed.remap);
         }
     }
@@ -201,8 +209,7 @@ pub fn restore_skeleton_snapshot(
         let Some(skin) = graphics
             .meshes
             .get_mut(skin_snapshot.mesh_index)
-            .and_then(|mesh| mesh.edit_skin_data())
-            .filter(|s| s.skeleton_id == skeleton_id)
+            .and_then(|mesh| edit_skin_of_skeleton(mesh, skeleton_id))
         else {
             msg_error!(
                 "Skeleton snapshot names graphics mesh {} which has no skin for this skeleton",

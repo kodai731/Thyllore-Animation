@@ -42,7 +42,7 @@ This project supports three types of animation:
 | `crates/thyllore-importer-core/src/model_result.rs` | Loader output incl. `node_animation_scale`                            |
 | `crates/thyllore-model-core/src/skinning.rs`      | `apply_skinning`, `SkinningDiagnostics` (CPU skinning vertex loop)       |
 | `crates/thyllore-model-core/src/palette_skinning.rs` | `build_skin_palette`, `pack_skin`, `skin_geometry` (the palette model the device skins with, and its CPU evaluation) |
-| `shaders/model/skinningCompute.slang`             | Per-frame skinning of every skinned mesh on the device                  |
+| `shaders/skinning/compute.slang`                  | Per-frame skinning of every skinned mesh on the device                  |
 | `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
 | `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
 | `src/ecs/systems/model_load_systems/`           | Load a model into `AssetStorage` and GPU meshes |

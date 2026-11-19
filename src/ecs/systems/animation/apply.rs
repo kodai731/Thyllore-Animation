@@ -1,9 +1,7 @@
-use anyhow::Result;
 use glam::{Mat4, Vec4};
 
 use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
 use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
-use thyllore_vulkan_core::AnimatedMeshUpload;
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
@@ -143,14 +141,6 @@ pub fn compute_node_global_transforms(
     for (i, node) in nodes.iter_mut().enumerate() {
         node.global_transform = global_transforms[i];
     }
-}
-
-pub unsafe fn upload_animations(
-    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
-    updated_meshes: &[usize],
-    frame_slot: usize,
-) -> Result<Vec<AnimatedMeshUpload>> {
-    backend.stage_animated_meshes(updated_meshes, frame_slot)
 }
 
 pub(crate) fn prepare_node_animation(

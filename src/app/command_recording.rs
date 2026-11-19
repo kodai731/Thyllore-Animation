@@ -51,15 +51,15 @@ impl App {
         self.gpu_timestamp_profiler
             .begin_frame(&self.rrdevice, command_buffer, image_index);
 
-        let (animated_mesh_uploads, instance_transforms) = {
-            let mut pending = self
-                .data
-                .ecs_world
-                .resource_mut::<PendingAnimatedMeshUploads>();
-            let taken = std::mem::take(&mut *pending);
-            (taken.uploads, taken.instance_transforms)
-        };
-        if !animated_mesh_uploads.is_empty() || instance_transforms == InstanceTransforms::Changed {
+        let pending_uploads = self
+            .data
+            .ecs_world
+            .resource::<PendingAnimatedMeshUploads>()
+            .clone();
+        let animated_mesh_uploads = pending_uploads.uploads();
+        if !animated_mesh_uploads.is_empty()
+            || pending_uploads.instance_transforms == InstanceTransforms::Changed
+        {
             let skinning_pipeline = self.resource::<PipelineState>().skinning_pipeline.clone();
             record_animated_mesh_uploads(
                 &self.instance,
@@ -67,7 +67,7 @@ impl App {
                 &self.data.graphics_resources,
                 &mut self.data.raytracing,
                 &skinning_pipeline,
-                &animated_mesh_uploads,
+                animated_mesh_uploads,
                 frame_slot,
                 command_buffer,
             )?;

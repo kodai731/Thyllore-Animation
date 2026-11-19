@@ -10,9 +10,8 @@ use crate::ecs::resource::{
     PhaseSubTimings, PoseApplyCache, WeightHeatmapState,
 };
 use crate::ecs::systems::{
-    apply_morph_weights, evaluate_morph_tracks, playback_upload_animations, run_animation_pipeline,
-    sync_avatar_setup, sync_expression_library, sync_humanoid_rig, sync_material_textures,
-    update_weight_heatmap,
+    apply_morph_weights, evaluate_morph_tracks, run_animation_pipeline, sync_avatar_setup,
+    sync_expression_library, sync_humanoid_rig, sync_material_textures, update_weight_heatmap,
 };
 use crate::ecs::FrameContext;
 use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId};
@@ -160,13 +159,14 @@ pub unsafe fn run_animation_phase_gpu(
     }
     if !updates.updated_meshes.is_empty() {
         let frame_slot = ctx.frame_slot;
-        let mut backend = ctx.create_backend();
-        let uploads =
-            playback_upload_animations(&mut backend, &updates.updated_meshes, frame_slot)?;
-        ctx.world
-            .resource_mut::<PendingAnimatedMeshUploads>()
-            .uploads
-            .extend(uploads);
+        let uploads = ctx
+            .create_backend()
+            .stage_animated_meshes(&updates.updated_meshes, frame_slot)?;
+
+        let mut pending = ctx.world.resource_mut::<PendingAnimatedMeshUploads>();
+        for upload in uploads {
+            pending.queue_upload(upload);
+        }
     }
     ctx.world
         .resource_mut::<PhaseSubTimings>()

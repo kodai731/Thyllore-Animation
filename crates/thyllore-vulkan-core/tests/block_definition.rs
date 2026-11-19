@@ -14,9 +14,9 @@ use thyllore_vulkan_core::descriptor::{
     DescriptorSetTable, LayoutMismatch, PassId, PassShaders, ReflectedLayoutSpec, SelectionUBO,
     ShaderFile, ALL_PASSES,
 };
-use thyllore_vulkan_core::renderer::TracePush;
+use thyllore_vulkan_core::renderer::{SkinningPush, TracePush};
 
-const GENERATED_PUSH_BLOCKS: [&str; 1] = ["TracePush"];
+const GENERATED_PUSH_BLOCKS: [&str; 2] = ["TracePush", "SkinningPush"];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -77,6 +77,7 @@ fn rust_blocks() -> Vec<RustBlock> {
         rust_block::<SelectionUBO>("SelectionData"),
         rust_block::<UniformBufferObject>("UniformBufferObject"),
         rust_block::<TracePush>("TracePush"),
+        rust_block::<SkinningPush>("SkinningPush"),
     ]
 }
 

@@ -3,24 +3,11 @@ use std::mem::size_of;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
-use crate::descriptor::shader_bindings::skinning::PUSH_CONSTANT;
 use crate::pipeline::RRPipeline;
+use crate::renderer::SkinningPush;
 use crate::resource::SkinStreamAddresses;
 
 const SKINNING_GROUP_SIZE: u32 = 64;
-
-/// Mirrors `SkinningPush` of `shaders/model/skinningCompute.slang`.
-#[repr(C, packed(4))]
-#[derive(Clone, Copy)]
-struct SkinningPush {
-    rest_address: u64,
-    influence_address: u64,
-    palette_address: u64,
-    skinned_address: u64,
-    vertex_count: u32,
-}
-
-const _: () = assert!(size_of::<SkinningPush>() == PUSH_CONSTANT.size as usize);
 
 pub(crate) unsafe fn record_skinning_dispatch(
     rrdevice: &RRDevice,
@@ -43,6 +30,7 @@ pub(crate) unsafe fn record_skinning_dispatch(
         palette_address: streams.palette,
         skinned_address,
         vertex_count,
+        _padding: 0.0,
     };
     device.cmd_push_constants(
         command_buffer,

@@ -6,6 +6,7 @@ struct SkinningPush {
     uint64_t paletteAddress;
     uint64_t skinnedAddress;
     uint vertexCount;
+    float _padding;
 };
 
 [[vk::push_constant]] ConstantBuffer<SkinningPush> skinning;

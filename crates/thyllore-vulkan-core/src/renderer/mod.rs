@@ -15,6 +15,7 @@ mod pipeline_dispatch;
 mod push_constants;
 mod rayquery;
 mod skinning;
+mod skinning_push;
 mod storage_image;
 mod tonemap;
 mod trace_push;
@@ -63,6 +64,7 @@ pub use pipeline_dispatch::{
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
 pub(crate) use skinning::record_skinning_dispatch;
+pub use skinning_push::SkinningPush;
 pub use storage_image::{
     copy_color_image, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,

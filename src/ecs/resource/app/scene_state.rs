@@ -1,6 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::scene::SceneMetadata;
+
+const DEFAULT_ASSETS_DIR: &str = "assets";
 
 #[derive(Debug, Clone, Default)]
 pub struct SceneState {
@@ -18,8 +20,13 @@ impl SceneState {
         self.previous_metadata = Some(metadata);
     }
 
-    pub fn clear(&mut self) {
-        self.current_scene_path = None;
-        self.previous_metadata = None;
+    /// The directory the scene's relative asset paths start from: a scene file sits in `<assets>/scenes/`.
+    pub fn assets_dir(&self) -> PathBuf {
+        self.current_scene_path
+            .as_deref()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_ASSETS_DIR))
     }
 }

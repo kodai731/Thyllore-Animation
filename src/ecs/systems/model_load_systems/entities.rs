@@ -4,20 +4,19 @@ use crate::ecs::component::{AnimationMeta, EditorDisplay, EntityIcon, ModelSourc
 use crate::ecs::resource::AnimationType;
 use crate::ecs::systems::attach_morph_channel_catalogs;
 use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
-use crate::hooks::scene::{entities_with, spawn_scene_owner};
+use crate::hooks::scene::entities_with;
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
 use thyllore_importer_core::{LoadedMesh, ModelLoadResult};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub(super) fn replace_model_source_entity(world: &mut World, model_path: &str) -> Entity {
-    despawn_model_source_entities(world);
-
-    spawn_scene_owner(
-        world,
-        &model_display_name(model_path, "model"),
-        ModelSource::new(model_path),
-    )
+/// One scene holds one model: the entity being loaded replaces every other model entity.
+pub(super) fn despawn_other_model_source_entities(world: &mut World, kept_entity: Entity) {
+    for entity in entities_with::<ModelSource>(world) {
+        if entity != kept_entity {
+            world.despawn(entity);
+        }
+    }
 }
 
 pub(super) fn despawn_model_source_entities(world: &mut World) {

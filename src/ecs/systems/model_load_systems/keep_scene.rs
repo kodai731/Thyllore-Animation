@@ -1,39 +1,49 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 
 use super::entities::{
-    despawn_model_source_entities, find_model_source_entity, replace_model_source_entity,
+    despawn_model_source_entities, despawn_other_model_source_entities, find_model_source_entity,
 };
+use super::pending::resolve_model_file;
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
 use crate::asset::AssetStorage;
 use crate::ecs::component::GlbSource;
-use crate::ecs::resource::SceneState;
 use crate::ecs::resource::{ModelState, TimelineState};
 use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 use crate::ecs::GpuSceneContext;
 use crate::scene::{
     apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
 };
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
+use thyllore_file_format_core::fbx::FbxModel;
 use thyllore_importer_core::ModelLoadResult;
 use thyllore_vulkan_core::core::RRSwapchain;
 
 /// Replaces the model while keeping the scene's own entities and scheduled clips.
 pub unsafe fn load_model_keeping_scene(
-    path: &str,
+    model_entity: Entity,
     gpu: &mut GpuSceneContext,
     swapchain: &RRSwapchain,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
+    let Some(model_file) = resolve_model_file(world, model_entity) else {
+        return Ok(());
+    };
+    let model_path = model_file.to_string_lossy().into_owned();
+    let path = model_path.as_str();
+
     log!("Loading new model from: {}", path);
-    let (load_result, fbx_model) = match read_model_file(path) {
+    let (load_result, fbx_model) = match read_model_with_meshes(path) {
         Ok(model_file) => model_file,
-        Err(error) => return report_load_result(world, Err(error)),
+        Err(error) => {
+            world.despawn(model_entity);
+            return report_load_result(world, Err(error));
+        }
     };
 
-    replace_model_source_entity(world, path);
+    despawn_other_model_source_entities(world, model_entity);
     let kept_scene = capture_kept_scene(world);
     let uploaded = upload_scene_model(&load_result, path, gpu, swapchain, world, assets, fbx_model);
     restore_kept_scene(kept_scene, world, assets);
@@ -46,7 +56,23 @@ pub unsafe fn load_model_keeping_scene(
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
-    report_load_result(world, attached.and(rebuilt))
+    let loaded = report_load_result(world, attached.and(rebuilt));
+    if loaded.is_ok() {
+        msg_info!("Model loaded: {}", path);
+    }
+    loaded
+}
+
+/// A model entity without mesh children counts as not loaded, so a file without meshes is refused.
+unsafe fn read_model_with_meshes(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
+    let (load_result, fbx_model) = read_model_file(path)?;
+    ensure!(
+        !load_result.meshes.is_empty(),
+        "The model file has no meshes: {}",
+        path
+    );
+
+    Ok((load_result, fbx_model))
 }
 
 fn attach_file_model(
@@ -154,7 +180,6 @@ fn record_loaded_model(world: &mut World, model_path: &str, load_status: String)
         model_state.load_status = load_status;
     }
     world.resource_mut::<TimelineState>().current_time = 0.0;
-    world.resource_mut::<SceneState>().clear();
 }
 
 fn report_load_result(world: &mut World, loaded: Result<()>) -> Result<()> {

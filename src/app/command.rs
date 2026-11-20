@@ -44,13 +44,12 @@ unsafe fn apply_entity_removal_command(app: &mut App, command: EntityRemovalComm
 
 unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
     match command {
-        SceneLoadCommand::LoadModel { path } => {
+        SceneLoadCommand::LoadModel { entity } => {
             let loaded = app.rebuild_scene(|gpu, swapchain, world, assets| {
-                load_model_keeping_scene(&path, gpu, swapchain, world, assets)
+                load_model_keeping_scene(entity, gpu, swapchain, world, assets)
             });
-            match loaded {
-                Ok(()) => msg_info!("Model loaded: {}", path),
-                Err(e) => msg_error!("Failed to load model: {:?}", e),
+            if let Err(e) = loaded {
+                msg_error!("Failed to load model: {:?}", e);
             }
         }
 

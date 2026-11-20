@@ -69,9 +69,9 @@ fn dispatch_text_to_animation_events(
                         let mut state = world.resource_mut::<TextToAnimationState>();
                         crate::ecs::systems::text_to_animation_mark_error(
                             &mut state,
-                            "No model with GlbSource selected".to_string(),
+                            "No model selected".to_string(),
                         );
-                        log_warn!("TextToAnimation: no selected entity with GlbSource");
+                        log_warn!("TextToAnimation: the selection is not a model");
                         continue;
                     }
                 };
@@ -177,10 +177,7 @@ fn read_glb_bytes(
     world: &crate::ecs::world::World,
     entity: crate::ecs::world::Entity,
 ) -> Option<Vec<u8>> {
-    use crate::ecs::component::GlbSource;
-
-    let source = world.get_component::<GlbSource>(entity)?;
-    match source.read_bytes() {
+    match crate::ecs::systems::model_load_systems::read_model_glb(world, entity)? {
         Ok(data) => Some(data),
         Err(e) => {
             log_error!("Failed to read GLB bytes from entity: {}", e);
@@ -192,12 +189,7 @@ fn read_glb_bytes(
 fn find_first_entity_with_glb_source(
     world: &crate::ecs::world::World,
 ) -> Option<crate::ecs::world::Entity> {
-    use crate::ecs::component::GlbSource;
-
-    world
-        .iter_components::<GlbSource>()
-        .next()
-        .map(|(entity, _)| entity)
+    crate::ecs::systems::model_load_systems::find_loaded_model_entity(world)
 }
 
 fn dispatch_model_loaded_for_animation(
@@ -235,7 +227,7 @@ fn dispatch_model_loaded_for_animation(
                     let mut state = world.resource_mut::<TextToAnimationState>();
                     crate::ecs::systems::text_to_animation_mark_error(
                         &mut state,
-                        "Rigged model has no GlbSource after load".to_string(),
+                        "Rigged model is missing after load".to_string(),
                     );
                     continue;
                 }
@@ -683,8 +675,8 @@ fn poll_rigging_server_status(world: &mut crate::ecs::world::World) {
 }
 
 fn dispatch_auto_rig_events(events: &[AutoRigEvent], world: &mut crate::ecs::world::World) {
-    use crate::ecs::component::GlbSource;
     use crate::ecs::resource::{AutoRigState, AutoRigStatus, HierarchyState};
+    use crate::ecs::systems::model_load_systems::read_model_glb;
     use crate::ecs::systems::{auto_rig_cancel, auto_rig_submit};
     use thyllore_grpc_client::GrpcThreadHandle;
 
@@ -706,20 +698,17 @@ fn dispatch_auto_rig_events(events: &[AutoRigEvent], world: &mut crate::ecs::wor
                 let parent_entity = match parent_entity {
                     Some(e) => e,
                     None => {
-                        log_warn!("AutoRig: selected entity has no GlbSource");
+                        log_warn!("AutoRig: the selection is not a model");
                         continue;
                     }
                 };
 
-                let glb_source = world.get_component::<GlbSource>(parent_entity);
-                let glb_data = match glb_source {
-                    Some(source) => match source.read_bytes() {
-                        Ok(data) => data,
-                        Err(e) => {
-                            log_error!("AutoRig: failed to read GLB: {}", e);
-                            continue;
-                        }
-                    },
+                let glb_data = match read_model_glb(world, parent_entity) {
+                    Some(Ok(data)) => data,
+                    Some(Err(e)) => {
+                        log_error!("AutoRig: failed to read GLB: {}", e);
+                        continue;
+                    }
                     None => continue,
                 };
 
@@ -791,15 +780,15 @@ fn resolve_parent_with_glb_source(
     world: &crate::ecs::world::World,
     entity: crate::ecs::world::Entity,
 ) -> Option<crate::ecs::world::Entity> {
-    use crate::ecs::component::GlbSource;
+    use crate::ecs::systems::model_load_systems::has_model_glb;
     use crate::ecs::world::Parent;
 
-    if world.get_component::<GlbSource>(entity).is_some() {
+    if has_model_glb(world, entity) {
         return Some(entity);
     }
 
     if let Some(Parent(parent)) = world.get_component::<Parent>(entity) {
-        if world.get_component::<GlbSource>(*parent).is_some() {
+        if has_model_glb(world, *parent) {
             return Some(*parent);
         }
     }

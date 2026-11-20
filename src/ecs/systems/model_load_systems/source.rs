@@ -1,15 +1,17 @@
 use std::path::{Path, PathBuf};
 
-use super::entities::model_display_name;
+use anyhow::Result;
+
+use super::entities::{model_display_name, GENERATED_MODEL_NAME};
 use crate::asset::AssetStorage;
-use crate::ecs::component::ModelSource;
+use crate::ecs::component::{GeneratedGlb, ModelSource};
 use crate::ecs::resource::{SceneLoadCommand, SceneLoadQueue, SceneState};
 use crate::ecs::world::{Children, Entity, World};
 use crate::hooks::scene::{entities_with, spawn_scene_owner};
 
 /// Adds the entity of a model file to the scene; its meshes are loaded by the next dispatch.
 pub fn spawn_model_source(world: &mut World, model_file: &str) -> Entity {
-    let assets_dir = world.resource::<SceneState>().assets_dir();
+    let assets_dir = find_scene_assets_dir(world);
     let source_path = express_relative_to_assets(Path::new(model_file), &assets_dir);
 
     spawn_scene_owner(
@@ -20,11 +22,48 @@ pub fn spawn_model_source(world: &mut World, model_file: &str) -> Entity {
 }
 
 /// The file a model entity loads: its path is relative to the scene's assets directory or absolute.
-pub fn resolve_model_file(world: &World, model_entity: Entity) -> Option<PathBuf> {
+pub(super) fn resolve_model_file(world: &World, model_entity: Entity) -> Option<PathBuf> {
     let source = world.get_component::<ModelSource>(model_entity)?;
-    let assets_dir = world.resource::<SceneState>().assets_dir();
+    let assets_dir = find_scene_assets_dir(world);
 
     Some(assets_dir.join(&source.path))
+}
+
+fn find_scene_assets_dir(world: &World) -> PathBuf {
+    world
+        .get_resource::<SceneState>()
+        .map(|scene_state| scene_state.assets_dir())
+        .unwrap_or_else(|| SceneState::new().assets_dir())
+}
+
+/// The model whose meshes are in the scene: a file model that finished loading, or a generated one.
+pub fn find_loaded_model_entity(world: &World) -> Option<Entity> {
+    entities_with::<ModelSource>(world)
+        .into_iter()
+        .find(|entity| world.get_component::<Children>(*entity).is_some())
+        .or_else(|| entities_with::<GeneratedGlb>(world).into_iter().next())
+}
+
+/// The path the loaded model's sidecar files sit beside; a generated model uses its name.
+pub fn find_loaded_model_file(world: &World) -> Option<PathBuf> {
+    let model_entity = find_loaded_model_entity(world)?;
+
+    resolve_model_file(world, model_entity).or_else(|| Some(PathBuf::from(GENERATED_MODEL_NAME)))
+}
+
+pub fn has_model_glb(world: &World, model_entity: Entity) -> bool {
+    world.get_component::<ModelSource>(model_entity).is_some()
+        || world.get_component::<GeneratedGlb>(model_entity).is_some()
+}
+
+/// `None` when the entity is not a model.
+pub fn read_model_glb(world: &World, model_entity: Entity) -> Option<Result<Vec<u8>>> {
+    if let Some(generated) = world.get_component::<GeneratedGlb>(model_entity) {
+        return Some(Ok(generated.bytes.clone()));
+    }
+
+    let model_file = resolve_model_file(world, model_entity)?;
+    Some(std::fs::read(model_file).map_err(Into::into))
 }
 
 fn express_relative_to_assets(model_file: &Path, assets_dir: &Path) -> PathBuf {
@@ -60,6 +99,17 @@ fn request_pending_model_loads(world: &mut World, _: &mut AssetStorage) {
 }
 
 crate::dispatch_prep_hook!("model_load", request_pending_model_loads);
+
+#[cfg(test)]
+pub(crate) fn spawn_loaded_model_for_test(world: &mut World, model_file: &str) -> Entity {
+    let model_entity = spawn_scene_owner(world, "model", ModelSource::new(model_file));
+    world
+        .entity()
+        .with_name("mesh")
+        .with_parent(model_entity)
+        .build();
+    model_entity
+}
 
 #[cfg(test)]
 mod tests {
@@ -100,12 +150,7 @@ mod tests {
     fn model_source_with_mesh_children_requests_nothing() {
         let mut world = world_with_load_queue();
         let mut assets = AssetStorage::new();
-        let model_entity = spawn_model_source(&mut world, "models/avatar/avatar.fbx");
-        world
-            .entity()
-            .with_name("mesh")
-            .with_parent(model_entity)
-            .build();
+        spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
 
         request_pending_model_loads(&mut world, &mut assets);
 

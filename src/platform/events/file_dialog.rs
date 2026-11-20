@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::app::App;
 use crate::ecs::events::{ClipExportFormat, DialogRequest, EventQueue};
 use crate::ecs::resource::{
-    AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, ModelState, OutputCommand,
+    AssetEditCommand, ClipLibrary, CommandQueue, MaterialTextureState, OutputCommand,
     SpringBoneState,
 };
 
@@ -104,12 +104,7 @@ fn open_clip_export_dialog(
 }
 
 fn loaded_model_stem(app: &App) -> String {
-    let model_path = app
-        .data
-        .ecs_world
-        .resource::<ModelState>()
-        .model_path
-        .clone();
+    let model_path = crate::ecs::systems::find_model_path(&app.data.ecs_world).unwrap_or_default();
     std::path::Path::new(&model_path)
         .file_stem()
         .and_then(|s| s.to_str())

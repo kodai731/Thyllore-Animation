@@ -6,6 +6,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
+    find_model_path,
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::{EffectSpawnHook, EffectSpawnHooks};
@@ -18,8 +19,7 @@ pub fn build_scene_json(world: &World) -> Value {
         .map(|p| p.to_string_lossy().to_string());
     let model = world.get_resource::<ModelState>().map(|m| {
         json!({
-            "path": m.model_path,
-            "load_status": m.load_status,
+            "path": find_model_path(world),
             "has_skinned_meshes": m.has_skinned_meshes,
         })
     });

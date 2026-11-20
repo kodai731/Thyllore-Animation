@@ -474,10 +474,8 @@ pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
 
     let mut world = World::new();
     world.insert_resource(HumanoidRigState::default());
-    world.insert_resource(crate::ecs::resource::ModelState {
-        model_path,
-        ..Default::default()
-    });
+    world.insert_resource(crate::ecs::resource::ModelState::default());
+    crate::ecs::systems::model_load_systems::spawn_loaded_model_for_test(&mut world, &model_path);
 
     (world, assets)
 }

@@ -6,7 +6,7 @@ use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
 use super::file::{AnimationClipRef, ModelReference, SceneFile, SCENE_FORMAT_VERSION};
-use crate::ecs::resource::{ClipLibrary, ModelState, SceneState};
+use crate::ecs::resource::{ClipLibrary, SceneState};
 use crate::ecs::world::World;
 use crate::hooks::scene::SceneValue;
 use crate::hooks::scene_resource::SceneResourceHooks;
@@ -36,12 +36,8 @@ fn build_scene_file(animation_clips: Vec<AnimationClipRef>, world: &World) -> Sc
         .as_ref()
         .map(|m| m.name.clone())
         .unwrap_or_else(|| "Untitled Scene".to_string());
-    let model_path = world
-        .get_resource::<ModelState>()
-        .map(|s| s.model_path.clone())
-        .unwrap_or_default();
 
-    let mut scene = SceneFile::new(&scene_name, &model_path);
+    let mut scene = SceneFile::new(&scene_name, "");
     scene.animation_clips = animation_clips;
     scene.resources = capture_scene_resources(world);
     scene.entities = capture_scene_entities(world);

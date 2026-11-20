@@ -10,6 +10,8 @@ use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
 use thyllore_importer_core::{LoadedMesh, ModelLoadResult};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
+pub(super) const GENERATED_MODEL_NAME: &str = "Generated Mesh";
+
 /// One scene holds one model: the entity being loaded replaces every other model entity.
 pub(super) fn despawn_other_model_source_entities(world: &mut World, kept_entity: Entity) {
     for entity in entities_with::<ModelSource>(world) {

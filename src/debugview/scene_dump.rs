@@ -11,7 +11,10 @@ impl App {
         let model_state = self.resource::<ModelState>();
 
         log!("--- Model Info ---");
-        log!("  current_model_path: {}", model_state.model_path);
+        log!(
+            "  current_model_path: {}",
+            crate::ecs::systems::find_model_path(&self.data.ecs_world).unwrap_or_default()
+        );
         log!(
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()

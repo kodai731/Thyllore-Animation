@@ -3,11 +3,10 @@ use anyhow::{anyhow, ensure, Result};
 use super::entities::{
     despawn_model_source_entities, despawn_other_model_source_entities, find_model_source_entity,
 };
-use super::pending::resolve_model_file;
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
+use super::source::resolve_model_file;
 use crate::asset::AssetStorage;
-use crate::ecs::component::GlbSource;
-use crate::ecs::resource::{ModelState, TimelineState};
+use crate::ecs::resource::TimelineState;
 use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
@@ -39,7 +38,7 @@ pub unsafe fn load_model_keeping_scene(
         Ok(model_file) => model_file,
         Err(error) => {
             world.despawn(model_entity);
-            return report_load_result(world, Err(error));
+            return Err(error);
         }
     };
 
@@ -49,14 +48,14 @@ pub unsafe fn load_model_keeping_scene(
     restore_kept_scene(kept_scene, world, assets);
 
     let attached = uploaded.and_then(|first_clip_id| {
-        attach_file_model(path, first_clip_id, &load_result, gpu, world, assets)
+        attach_file_model(first_clip_id, &load_result, gpu, world, assets)
     });
     if attached.is_err() {
         despawn_model_source_entities(world);
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
-    let loaded = report_load_result(world, attached.and(rebuilt));
+    let loaded = attached.and(rebuilt);
     if loaded.is_ok() {
         msg_info!("Model loaded: {}", path);
     }
@@ -76,7 +75,6 @@ unsafe fn read_model_with_meshes(path: &str) -> Result<(ModelLoadResult, Option<
 }
 
 fn attach_file_model(
-    path: &str,
     first_clip_id: Option<SourceClipId>,
     load_result: &ModelLoadResult,
     gpu: &GpuSceneContext,
@@ -94,8 +92,7 @@ fn attach_file_model(
         world,
         assets,
     );
-    world.insert_component(model_entity, GlbSource::FilePath(path.to_string()));
-    record_loaded_model(world, path, format!("Loaded: {}", path));
+    reset_timeline_for_loaded_model(world);
 
     Ok(())
 }
@@ -109,21 +106,21 @@ pub unsafe fn load_generated_mesh(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
-    use super::entities::spawn_model_root_entity;
+    use super::entities::{spawn_model_root_entity, GENERATED_MODEL_NAME};
+    use crate::ecs::component::GeneratedGlb;
     use crate::ecs::resource::GltfModelCache;
-    use crate::scene::ModelReference;
 
     log!("Loading generated mesh from GLB ({} bytes)", glb_data.len());
     let load_result = match thyllore_importer_core::gltf::load_gltf_from_slice(glb_data) {
         Ok(gltf) => ModelLoadResult::from_gltf(gltf),
-        Err(error) => return report_load_result(world, Err(error)),
+        Err(error) => return Err(error),
     };
 
     despawn_model_source_entities(world);
     let kept_scene = capture_kept_scene(world);
     let uploaded = upload_scene_model(
         &load_result,
-        ModelReference::GENERATED_MESH,
+        GENERATED_MODEL_NAME,
         gpu,
         swapchain,
         world,
@@ -133,7 +130,7 @@ pub unsafe fn load_generated_mesh(
     restore_kept_scene(kept_scene, world, assets);
 
     let attached = uploaded.map(|first_clip_id| {
-        let model_entity = spawn_model_root_entity(ModelReference::GENERATED_MESH, world);
+        let model_entity = spawn_model_root_entity(GENERATED_MODEL_NAME, world);
         attach_scene_model(
             model_entity,
             first_clip_id,
@@ -142,17 +139,18 @@ pub unsafe fn load_generated_mesh(
             world,
             assets,
         );
-        record_loaded_model(
-            world,
-            ModelReference::GENERATED_MESH,
-            "Loaded: Generated Mesh".to_string(),
-        );
+        reset_timeline_for_loaded_model(world);
         world.insert_resource(GltfModelCache::from_glb_data(glb_data.to_vec()));
-        world.insert_component(model_entity, GlbSource::InMemory(glb_data.to_vec()));
+        world.insert_component(
+            model_entity,
+            GeneratedGlb {
+                bytes: glb_data.to_vec(),
+            },
+        );
     });
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
-    report_load_result(world, attached.and(rebuilt))
+    attached.and(rebuilt)
 }
 
 struct KeptScene {
@@ -173,18 +171,6 @@ fn restore_kept_scene(kept_scene: KeptScene, world: &mut World, assets: &mut Ass
     apply_scene_entities(world, assets, &kept_scene.entities);
 }
 
-fn record_loaded_model(world: &mut World, model_path: &str, load_status: String) {
-    {
-        let mut model_state = world.resource_mut::<ModelState>();
-        model_state.model_path = model_path.to_string();
-        model_state.load_status = load_status;
-    }
+fn reset_timeline_for_loaded_model(world: &mut World) {
     world.resource_mut::<TimelineState>().current_time = 0.0;
-}
-
-fn report_load_result(world: &mut World, loaded: Result<()>) -> Result<()> {
-    if let Err(error) = &loaded {
-        world.resource_mut::<ModelState>().load_status = format!("Error: {}", error);
-    }
-    loaded
 }

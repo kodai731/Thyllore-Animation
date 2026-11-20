@@ -7,22 +7,17 @@ use thyllore_avatar_core::vrchat::gesture_template_library;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::MorphWeights;
-use crate::ecs::resource::{ExpressionLibraryState, ModelState};
+use crate::ecs::resource::ExpressionLibraryState;
+use crate::ecs::systems::find_model_path;
 use crate::ecs::systems::morph_weight_systems::for_each_morph_sibling;
 use crate::ecs::world::{Entity, World};
 use thyllore_model_core::MeshMorph;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn sync_expression_library(world: &mut World) {
-    let Some(model_path) = world
-        .get_resource::<ModelState>()
-        .map(|model_state| model_state.model_path.clone())
-    else {
+    let Some(model_path) = find_model_path(world) else {
         return;
     };
-    if model_path.is_empty() {
-        return;
-    }
 
     let Some(mut state) = world.get_resource_mut::<ExpressionLibraryState>() else {
         return;
@@ -146,16 +141,10 @@ pub fn remove_expression_preset(world: &mut World, preset_index: usize) {
 }
 
 pub fn save_expression_library(world: &World) {
-    let Some(model_path) = world
-        .get_resource::<ModelState>()
-        .map(|model_state| model_state.model_path.clone())
-    else {
-        return;
-    };
-    if model_path.is_empty() {
+    let Some(model_path) = find_model_path(world) else {
         log_warn!("Cannot save expression library: no model loaded");
         return;
-    }
+    };
     let Some(state) = world.get_resource::<ExpressionLibraryState>() else {
         return;
     };

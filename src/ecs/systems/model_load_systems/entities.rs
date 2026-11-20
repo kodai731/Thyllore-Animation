@@ -1,8 +1,7 @@
-use super::clips::build_initial_clip_schedule;
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{AnimationMeta, EditorDisplay, EntityIcon, ModelSource, MorphWeights};
 use crate::ecs::resource::AnimationType;
-use crate::ecs::systems::attach_morph_channel_catalogs;
+use crate::ecs::systems::{attach_morph_channel_catalogs, build_initial_clip_schedule};
 use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
 use crate::hooks::scene::entities_with;
 use thyllore_anim_core::editable::SourceClipId;

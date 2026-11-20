@@ -1,7 +1,5 @@
 use crate::asset::{AssetStorage, SkeletonAsset};
-use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
-use crate::ecs::systems::clip_schedule_add_instance;
 use crate::ecs::systems::{
     build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
     timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
@@ -214,26 +212,6 @@ pub(super) fn restore_batch_playback(world: &World) {
     if let Some(id) = clip_id {
         timeline.current_clip_id = Some(id);
     }
-}
-
-pub fn build_initial_clip_schedule(
-    first_source_id: Option<SourceClipId>,
-    world: &World,
-) -> ClipSchedule {
-    let mut schedule = ClipSchedule::new();
-
-    let Some(source_id) = first_source_id else {
-        return schedule;
-    };
-
-    let duration = world
-        .resource::<ClipLibrary>()
-        .get(source_id)
-        .map(|c| c.duration)
-        .unwrap_or(1.0);
-
-    clip_schedule_add_instance(&mut schedule, source_id, duration);
-    schedule
 }
 
 pub(super) fn keeps_selected_user_clip(world: &World) -> bool {

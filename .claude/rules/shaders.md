@@ -106,8 +106,8 @@ generated file, no regeneration command and no golden test:
   build when any member offset or size differs from the natural layout, and appends `static_assert`s on
   `sizeof` / `offsetof` of the C++ structs to the generated C++ so the C++ compiler proves the equality too.
 - Blocks with no CPU export are generated from the SPIR-V that declares them through the shared
-  `thyllore-shader-manifest` helpers (`reflect_stage_block`, `generate_spirv_block_rust`): `TracePush` by
-  `crates/thyllore-vulkan-core/build.rs` (`GPU_BLOCKS` there) into `trace_push.rs`, and `LightningUBO` /
+  `thyllore-shader-manifest` helpers (`reflect_stage_block`, `generate_spirv_block_rust`): `TracePush` and `SkinningPush` by
+  `crates/thyllore-vulkan-core/build.rs` (`GPU_BLOCKS` there) into `trace_push.rs` / `skinning_push.rs`, and `LightningUBO` /
   `LightningSegmentsUBO` (lightning builds its segments in Rust, so no Slang CPU module proves a natural layout) by
   the effect-core `build.rs` (`GPU_ONLY_BLOCKS`) into `lightning_gpu_blocks.rs` / `lightning_segments_gpu_blocks.rs`.
 - `volume_exports.slang` has no global block; its exports take `VolumeShell` by pointer, and the Rust struct that the

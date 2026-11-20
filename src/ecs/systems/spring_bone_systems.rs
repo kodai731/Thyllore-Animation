@@ -40,7 +40,7 @@ pub fn chains_skinned_to_entity(
     match graphics
         .meshes
         .get(mesh_index)
-        .and_then(|mesh| mesh.skin_data.as_ref())
+        .and_then(|mesh| mesh.skin_data())
     {
         Some(skin) => chains_skinned_to(setup, skin),
         None => Vec::new(),

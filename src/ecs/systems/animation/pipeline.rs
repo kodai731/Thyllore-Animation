@@ -164,7 +164,11 @@ fn apply_blended_animations(
                 updated
             }
             _ => {
-                if should_skip_skinned(pose_apply_cache, info.mesh_idx, globals) {
+                let device_skin_is_current =
+                    graphics.meshes[info.mesh_idx].device_skin_is_current();
+                if device_skin_is_current
+                    && should_skip_skinned(pose_apply_cache, info.mesh_idx, globals)
+                {
                     continue;
                 }
                 pose_apply_cache

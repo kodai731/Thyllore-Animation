@@ -96,7 +96,7 @@ impl UiCommand for DumpSkinnedVertices {
             return;
         };
 
-        let Some(skin) = graphics.meshes[graphics_mesh_index].skin_data.as_ref() else {
+        let Some(skin) = graphics.meshes[graphics_mesh_index].skin_data() else {
             msg_warn!(
                 "Submesh {}/{} has no skin data",
                 self.submesh.mesh,

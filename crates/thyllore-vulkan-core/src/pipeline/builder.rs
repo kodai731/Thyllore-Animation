@@ -144,6 +144,8 @@ use crate::resource::GpuResource;
 pub enum VertexInputConfig {
     /// Use standard Vertex struct (position, normal, texcoord, etc.)
     Standard,
+    /// Use the two streams of a MeshBuffer (geometry: position, normal; attributes: color, texcoord)
+    MeshStreams,
     /// Use ImGui DrawVert struct (position, uv, color)
     ImGui,
     /// Use ColorVertex struct (position, color)
@@ -630,7 +632,7 @@ impl RRPipeline {
         cull_mode: CullFace,
     ) -> Result<Self> {
         let mut builder = PipelineBuilder::from_pass(pass)
-            .vertex_input(VertexInputConfig::Standard)
+            .vertex_input(VertexInputConfig::MeshStreams)
             .topology(topology)
             .polygon_mode(polygon_mode)
             .cull_mode(cull_mode)
@@ -860,6 +862,11 @@ fn resolve_vertex_input(config: VertexInputConfig) -> VertexInputDescriptions {
         VertexInputConfig::Standard => {
             let bindings = vec![crate::data::vertex_binding_description()];
             let attributes = crate::data::vertex_attribute_descriptions().to_vec();
+            (bindings, attributes)
+        }
+        VertexInputConfig::MeshStreams => {
+            let bindings = crate::data::mesh_stream_binding_descriptions().to_vec();
+            let attributes = crate::data::mesh_stream_attribute_descriptions().to_vec();
             (bindings, attributes)
         }
         VertexInputConfig::ImGui => resolve_imgui_vertex_input(),

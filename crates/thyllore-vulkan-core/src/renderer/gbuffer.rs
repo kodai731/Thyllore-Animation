@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::data::GEOMETRY_STREAM_BINDING;
 use crate::pipeline::{RRPipeline, SampleCount};
 use crate::render::{get_depth_format, RRRender};
 use crate::renderer::push_constants::GBufferPushConstants;
@@ -148,7 +149,12 @@ unsafe fn draw_single_mesh(
     let graphics = ctx.graphics;
     let image_index = ctx.image_index;
 
-    device.cmd_bind_vertex_buffers(cmd, 0, &[mesh.vertex_buffer.buffer], &[0]);
+    device.cmd_bind_vertex_buffers(
+        cmd,
+        GEOMETRY_STREAM_BINDING,
+        &[mesh.geometry_buffer.buffer, mesh.attribute_buffer.buffer],
+        &[0, 0],
+    );
 
     device.cmd_bind_index_buffer(cmd, mesh.index_buffer.buffer, 0, vk::IndexType::UINT32);
 

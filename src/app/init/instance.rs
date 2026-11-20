@@ -73,6 +73,18 @@ impl App {
         data.pipeline_storage.register(model_pipeline.clone());
         pipeline_allocate_id(&mut pipeline_manager);
 
+        let skinning_pipeline = RRPipeline::new_compute_with_push_constants(
+            &rrdevice,
+            &SKINNING,
+            &[],
+            &[push_constant_range(
+                &shader_bindings::skinning::PUSH_CONSTANT,
+            )],
+        )
+        .context("Failed to create skinning pipeline")?;
+        data.pipeline_storage.register(skinning_pipeline.clone());
+        pipeline_allocate_id(&mut pipeline_manager);
+
         let pipeline_ids = Self::build_gizmo_pipelines(
             &rrdevice,
             &rrswapchain,
@@ -162,6 +174,7 @@ impl App {
             rrcommand_pool,
             rrcommand_buffer,
             model_pipeline,
+            skinning_pipeline,
             image_available_semaphores,
             render_finish_semaphores,
             in_flight_fences,
@@ -200,6 +213,8 @@ impl App {
         startup_hooks: &StartupHooks,
     ) -> Result<()> {
         startup_hooks.run_phase(&mut data.ecs_world, StartupPhase::CoreResources);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PendingAnimatedMeshUploads::default());
         data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world

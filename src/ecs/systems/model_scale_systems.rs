@@ -5,7 +5,9 @@ use thyllore_anim_core::{
 };
 use thyllore_file_format_core::fbx::scale_fbx_model;
 use thyllore_math_core::scale_translation;
-use thyllore_model_core::{scale_morph, scale_skeleton, scale_skin, scale_vertex_positions};
+use thyllore_model_core::{
+    scale_morph, scale_skeleton, scale_skin, scale_skin_palette, scale_vertex_positions,
+};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
@@ -85,9 +87,10 @@ fn scale_graphics_meshes(graphics: &mut GraphicsResources, factor: f32) {
     for mesh in &mut graphics.meshes {
         scale_vertex_positions(&mut mesh.vertex_data.vertices, factor);
         scale_vertex_positions(&mut mesh.base_vertices, factor);
-        if let Some(skin) = mesh.skin_data.as_mut() {
+        if let Some(skin) = mesh.edit_skin_data() {
             scale_skin(skin, factor);
         }
+        scale_skin_palette(mesh.edit_skin_palette(), factor);
         scale_morph(&mut mesh.morph, factor);
     }
 }

@@ -51,11 +51,15 @@ impl RenderTargets {
 
 pub struct PipelineState {
     pub model_pipeline: RRPipeline,
+    pub skinning_pipeline: RRPipeline,
 }
 
 impl PipelineState {
-    pub fn new(model_pipeline: RRPipeline) -> Self {
-        Self { model_pipeline }
+    pub fn new(model_pipeline: RRPipeline, skinning_pipeline: RRPipeline) -> Self {
+        Self {
+            model_pipeline,
+            skinning_pipeline,
+        }
     }
 }
 

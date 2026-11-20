@@ -58,16 +58,10 @@ enum MeshUpdateOutcome {
 }
 
 fn update_mesh_colors(mesh: &mut MeshBuffer, desired: &HeatmapApplication) -> MeshUpdateOutcome {
-    let MeshBuffer {
-        vertex_data,
-        base_colors,
-        skin_data,
-        ..
-    } = mesh;
-    let Some(base_colors) = base_colors.as_ref() else {
+    let Some(base_colors) = mesh.base_colors.as_ref() else {
         return MeshUpdateOutcome::SkippedNoBaseColors;
     };
-    if base_colors.len() != vertex_data.vertices.len() {
+    if base_colors.len() != mesh.vertex_data.vertices.len() {
         return MeshUpdateOutcome::SkippedLengthMismatch;
     }
 
@@ -76,14 +70,17 @@ fn update_mesh_colors(mesh: &mut MeshBuffer, desired: &HeatmapApplication) -> Me
         HeatmapApplication::NotApplied => None,
     };
 
-    match (desired, target_bone, skin_data.as_ref()) {
+    let mut vertices = std::mem::take(&mut mesh.vertex_data.vertices);
+    match (desired, target_bone, mesh.skin_data()) {
         (HeatmapApplication::Applied(_), Some(bone_id), Some(skin)) => {
-            apply_heatmap_to_vertices(&mut vertex_data.vertices, skin, base_colors, bone_id);
+            apply_heatmap_to_vertices(&mut vertices, skin, base_colors, bone_id);
         }
         _ => {
-            restore_base_colors(&mut vertex_data.vertices, base_colors);
+            restore_base_colors(&mut vertices, base_colors);
         }
     }
+    mesh.vertex_data.vertices = vertices;
+
     MeshUpdateOutcome::Updated
 }
 
@@ -271,7 +268,7 @@ mod tests {
 
         let vertex_count = 3;
         mesh.vertex_data.vertices = vec![Vertex::default(); vertex_count];
-        mesh.skin_data = Some(make_skin_single_bone(vertex_count, bone_id));
+        mesh.set_skin_data(Some(make_skin_single_bone(vertex_count, bone_id)));
         mesh.base_colors = Some(vec![Vec4::new(0.2, 0.2, 0.2, 1.0); vertex_count]);
 
         graphics.meshes.push(mesh);

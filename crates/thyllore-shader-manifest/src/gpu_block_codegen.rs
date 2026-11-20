@@ -193,6 +193,7 @@ fn map_type(type_name: &str, nested: &BTreeMap<String, Vec<ReflectedMember>>) ->
         "float32" => "f32",
         "int32" => "i32",
         "uint32" => "u32",
+        "uint64" => "u64",
         "bool" => "u32",
         "float32x2" => "[f32; 2]",
         "float32x3" => "[f32; 3]",
@@ -313,6 +314,25 @@ mod tests {
              \x20   }\n\
              }\n"
         );
+    }
+
+    #[test]
+    fn maps_device_addresses_and_the_padding_that_aligns_them() {
+        let addresses = ReflectedBlock {
+            type_name: "Addresses".into(),
+            size: 16,
+            members: vec![
+                member("sourceAddress", 0, 8, "uint64"),
+                member("count", 8, 4, "uint32"),
+                member("_padding", 12, 4, "float32"),
+            ],
+        };
+
+        let generated =
+            generate_gpu_blocks_rust(&addresses, &GpuBlockCodegenConfig::default()).unwrap();
+        assert!(generated.contains("pub source_address: u64,"));
+        assert!(generated.contains("pub count: u32,"));
+        assert!(generated.contains("pub _padding: f32,"));
     }
 
     #[test]

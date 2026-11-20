@@ -8,7 +8,7 @@ use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
 use anyhow::Result;
 use thyllore_math_core::write_npy_u32;
-use thyllore_vulkan_core::data::Vertex;
+use thyllore_vulkan_core::data::VertexGeometry;
 
 use serde_json::{json, Value};
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
@@ -183,7 +183,7 @@ fn build_mesh_vertex_probe_json(ctx: &CaptureContext) -> Value {
         .map(|mesh_index| {
             let mesh = &ctx.graphics.meshes[mesh_index];
             let sample_count = mesh.vertex_data.vertices.len().min(VERTEX_PROBE_COUNT);
-            let cpu_positions: Vec<[f32; 3]> = mesh.vertex_data.vertices[..sample_count]
+            let cpu_positions: Vec<[f32; 3]> = mesh.posed_geometry()[..sample_count]
                 .iter()
                 .map(|vertex| [vertex.pos[0], vertex.pos[1], vertex.pos[2]])
                 .collect();
@@ -219,18 +219,18 @@ unsafe fn read_gpu_vertex_positions(
         return Ok(Vec::new());
     }
 
-    let stride = std::mem::size_of::<Vertex>();
+    let stride = std::mem::size_of::<VertexGeometry>();
     let copy_size = (stride * sample_count) as DeviceSize;
 
     let bytes = read_buffer_bytes(
         &ctx.instance,
         &ctx.device,
         ctx.command_pool,
-        mesh.vertex_buffer.buffer(),
+        mesh.geometry_buffer.buffer(),
         copy_size,
     )?;
 
-    let pos_offset = std::mem::offset_of!(Vertex, pos);
+    let pos_offset = std::mem::offset_of!(VertexGeometry, pos);
     let positions = (0..sample_count)
         .map(|index| read_position(&bytes, index * stride + pos_offset))
         .collect();

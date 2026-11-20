@@ -549,7 +549,7 @@ pub fn select_bone_by_mesh_ray(
     let hit = find_closest_triangle_hit(mesh_assets, ray_origin, ray_direction)?;
 
     let mesh = &mesh_assets.meshes[hit.mesh_index];
-    let skin = mesh.skin_data.as_ref()?;
+    let skin = mesh.skin_data()?;
     let bone_index = pick_dominant_bone_from_triangle(skin, &hit)?;
 
     Some((bone_index, hit.t_world))
@@ -598,10 +598,10 @@ fn find_closest_triangle_hit(
     let mut best: Option<MeshTriangleHit> = None;
 
     for (mesh_index, mesh) in mesh_assets.meshes.iter().enumerate() {
-        if mesh.skin_data.is_none() {
+        if mesh.skin_data().is_none() {
             continue;
         }
-        let vertices = &mesh.vertex_data.vertices;
+        let vertices = mesh.posed_geometry();
         let indices = &mesh.vertex_data.indices;
         if vertices.is_empty() || indices.len() < 3 {
             continue;
@@ -615,9 +615,9 @@ fn find_closest_triangle_hit(
                 continue;
             }
 
-            let p0 = vertex_position(&vertices[i0]);
-            let p1 = vertex_position(&vertices[i1]);
-            let p2 = vertex_position(&vertices[i2]);
+            let p0 = vertices[i0].pos;
+            let p1 = vertices[i1].pos;
+            let p2 = vertices[i2].pos;
 
             let Some((t_local, u, v)) =
                 ray_to_triangle_barycentric(ray_origin_local, ray_direction_local, p0, p1, p2)
@@ -639,10 +639,6 @@ fn find_closest_triangle_hit(
     }
 
     best
-}
-
-fn vertex_position(vertex: &thyllore_vulkan_core::data::Vertex) -> Vec3 {
-    Vec3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)
 }
 
 fn pick_dominant_bone_from_triangle(
@@ -1040,7 +1036,7 @@ mod tests {
             .map(|bw| Vec4::new(bw[0], bw[1], bw[2], bw[3]))
             .collect();
         skin.base_positions = positions.to_vec();
-        mesh.skin_data = Some(skin);
+        mesh.set_skin_data(Some(skin));
 
         mesh
     }

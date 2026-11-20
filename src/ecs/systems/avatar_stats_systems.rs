@@ -42,7 +42,7 @@ pub(crate) fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
         skinned_meshes: graphics
             .meshes
             .iter()
-            .filter(|mesh| mesh.skin_data.is_some())
+            .filter(|mesh| mesh.skin_data().is_some())
             .count() as u32,
         materials: materials.len() as u32,
         morph_meshes: morph_meshes.len() as u32,
@@ -82,7 +82,7 @@ mod tests {
             source_mesh: source_mesh.to_string(),
             channels: Vec::new(),
         };
-        mesh.skin_data = skin;
+        mesh.set_skin_data(skin);
         mesh
     }
 

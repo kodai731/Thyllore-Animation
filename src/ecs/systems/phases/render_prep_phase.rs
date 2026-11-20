@@ -132,7 +132,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         .phases
         .insert("render_prep", sub);
 
-    crate::ecs::systems::refresh_tlas_mesh_transforms(ctx)?;
+    crate::ecs::systems::refresh_tlas_mesh_transforms(ctx);
 
     Ok(())
 }

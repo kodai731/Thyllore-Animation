@@ -7,8 +7,8 @@ use crate::core::RRDevice;
 use crate::data::{Vertex, VertexData};
 use crate::descriptor::ReflectedSetLayout;
 use crate::resource::GpuResource;
+use crate::resource::RRIndexBuffer;
 use crate::resource::{create_image_view, create_texture_image_pixel, create_texture_sampler};
-use crate::resource::{RRIndexBuffer, RRVertexBuffer};
 use crate::types::Instance;
 use crate::vulkan::*;
 use glam::{Mat4, Vec3, Vec4};
@@ -160,7 +160,7 @@ impl GraphicsResources {
 
         mesh.vertex_data = source.vertex_data.clone();
         mesh.morph = source.morph.clone();
-        mesh.skin_data = source.skin_data.cloned();
+        mesh.set_skin_data(source.skin_data.cloned());
         mesh.skeleton_id = source.skeleton_id;
         mesh.node_index = source.node_index;
         mesh.base_vertices = source.base_vertices.to_vec();
@@ -172,14 +172,7 @@ impl GraphicsResources {
                 .collect(),
         );
 
-        mesh.vertex_buffer = RRVertexBuffer::new(
-            instance,
-            rrdevice,
-            command_pool,
-            (size_of::<Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
-            mesh.vertex_data.vertices.as_ptr() as *const c_void,
-            mesh.vertex_data.vertices.len(),
-        )?;
+        mesh.create_vertex_buffers(instance, rrdevice, command_pool)?;
         mesh.index_buffer = RRIndexBuffer::new(
             instance,
             rrdevice,
@@ -269,7 +262,7 @@ impl GraphicsResources {
         let mut has_vertices = false;
 
         for mesh in &self.meshes {
-            for vertex in &mesh.vertex_data.vertices {
+            for vertex in &mesh.posed_geometry() {
                 has_vertices = true;
                 min.x = min.x.min(vertex.pos.x);
                 min.y = min.y.min(vertex.pos.y);

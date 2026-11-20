@@ -1,4 +1,6 @@
 use crate::core::RRDevice;
+use crate::data::GEOMETRY_STREAM_BINDING;
+use crate::resource::MeshBuffer;
 use crate::types::*;
 use crate::vulkan::*;
 
@@ -40,6 +42,34 @@ pub unsafe fn bind_graphics_mesh(
         index_buffer.raw(),
         0,
         index_width.index_type(),
+    );
+}
+
+pub unsafe fn bind_graphics_mesh_buffer(
+    rrdevice: &RRDevice,
+    command_buffer: CommandBuffer,
+    pipeline: Pipeline,
+    mesh: &MeshBuffer,
+) {
+    let command_buffer = command_buffer.raw();
+    rrdevice.device().cmd_bind_pipeline(
+        command_buffer,
+        vk::PipelineBindPoint::GRAPHICS,
+        pipeline.raw(),
+    );
+
+    rrdevice.device().cmd_bind_vertex_buffers(
+        command_buffer,
+        GEOMETRY_STREAM_BINDING,
+        &[mesh.geometry_buffer.buffer, mesh.attribute_buffer.buffer],
+        &[0, 0],
+    );
+
+    rrdevice.device().cmd_bind_index_buffer(
+        command_buffer,
+        mesh.index_buffer.buffer,
+        0,
+        vk::IndexType::UINT32,
     );
 }
 

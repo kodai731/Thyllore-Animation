@@ -9,6 +9,14 @@ pub struct SkinningDiagnostics {
     pub near_origin_count: u32,
 }
 
+pub(crate) fn skin_matrices(skeleton: &Skeleton, global_transforms: &[Mat4]) -> Vec<Mat4> {
+    skeleton
+        .bones
+        .iter()
+        .map(|bone| global_transforms[bone.id as usize] * bone.inverse_bind_pose)
+        .collect()
+}
+
 pub fn apply_skinning(
     skin_data: &SkinData,
     global_transforms: &[Mat4],
@@ -16,13 +24,7 @@ pub fn apply_skinning(
     out_positions: &mut [Vec3],
     out_normals: &mut [Vec3],
 ) -> SkinningDiagnostics {
-    let mut skin_matrices = Vec::with_capacity(skeleton.bone_count());
-
-    for bone in &skeleton.bones {
-        let global = global_transforms[bone.id as usize];
-        let skin_matrix = global * bone.inverse_bind_pose;
-        skin_matrices.push(skin_matrix);
-    }
+    let skin_matrices = skin_matrices(skeleton, global_transforms);
 
     let mut zero_weight_fallback_count: u32 = 0;
     let mut near_origin_count: u32 = 0;

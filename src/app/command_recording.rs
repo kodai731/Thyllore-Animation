@@ -2,9 +2,11 @@ use anyhow::Result;
 
 use super::App;
 use crate::app::build_pass_context;
-use crate::ecs::resource::GpuPassTimings;
+use crate::ecs::resource::{GpuPassTimings, InstanceTransforms, PendingAnimatedMeshUploads};
 use crate::hooks::pass::{TargetUse, TransientRequest};
+use crate::vulkanr::context::PipelineState;
 use crate::vulkanr::renderer::deferred;
+use thyllore_vulkan_core::record_animated_mesh_uploads;
 use thyllore_vulkan_core::types::CommandBuffer;
 
 impl App {
@@ -48,6 +50,28 @@ impl App {
 
         self.gpu_timestamp_profiler
             .begin_frame(&self.rrdevice, command_buffer, image_index);
+
+        let pending_uploads = self
+            .data
+            .ecs_world
+            .resource::<PendingAnimatedMeshUploads>()
+            .clone();
+        let animated_mesh_uploads = pending_uploads.uploads();
+        if !animated_mesh_uploads.is_empty()
+            || pending_uploads.instance_transforms == InstanceTransforms::Changed
+        {
+            let skinning_pipeline = self.resource::<PipelineState>().skinning_pipeline.clone();
+            record_animated_mesh_uploads(
+                &self.instance,
+                &self.rrdevice,
+                &self.data.graphics_resources,
+                &mut self.data.raytracing,
+                &skinning_pipeline,
+                animated_mesh_uploads,
+                frame_slot,
+                command_buffer,
+            )?;
+        }
 
         let use_gbuffer =
             self.data.raytracing.is_available() && self.data.viewport.offscreen.is_some();

@@ -23,6 +23,7 @@ mod raytracing_data;
 mod render_target_storage;
 mod render_target_transient;
 mod sampled_texture;
+mod skin_buffers;
 mod uniform_buffer;
 mod volume_image;
 
@@ -57,5 +58,7 @@ pub use render_target_transient::{
     RenderTargetTransient, TransientDesc, TransientHandle, TransientImage, TransientUsage,
 };
 pub use sampled_texture::{PixelRegion, SampledTexture};
+pub use skin_buffers::SkinBuffers;
+pub(crate) use skin_buffers::{SkinStreamAddresses, SkinStreamsVersion};
 pub use uniform_buffer::{Placement, UniformBuffer};
 pub use volume_image::{VolumeImage, VolumeUsage};

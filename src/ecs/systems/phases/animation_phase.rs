@@ -6,19 +6,19 @@ use glam::Mat4;
 
 use crate::ecs::resource::BoneSelectionState;
 use crate::ecs::resource::{
-    AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PhaseSubTimings, PoseApplyCache,
-    WeightHeatmapState,
+    AnimationType, BonePoseOverride, ClipLibrary, NodeAssets, PendingAnimatedMeshUploads,
+    PhaseSubTimings, PoseApplyCache, WeightHeatmapState,
 };
 use crate::ecs::systems::{
-    apply_morph_weights, evaluate_morph_tracks, playback_upload_animations, run_animation_pipeline,
-    sync_avatar_setup, sync_expression_library, sync_humanoid_rig, sync_material_textures,
-    update_weight_heatmap,
+    apply_morph_weights, evaluate_morph_tracks, run_animation_pipeline, sync_avatar_setup,
+    sync_expression_library, sync_humanoid_rig, sync_material_textures, update_weight_heatmap,
 };
 use crate::ecs::FrameContext;
 use thyllore_anim_core::{BoneId, BoneLocalPose, SkeletonId};
 
 pub struct AnimationUpdates {
     pub updated_meshes: Vec<usize>,
+    pub recolored_meshes: Vec<usize>,
     pub bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
@@ -110,7 +110,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     );
 
     let t = Instant::now();
-    let heatmap_updated_meshes = apply_weight_heatmap_update(ctx);
+    let recolored_meshes = apply_weight_heatmap_update(ctx);
     sub.insert(
         "apply_weight_heatmap_update".to_string(),
         t.elapsed().as_secs_f32() * 1000.0,
@@ -118,11 +118,6 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
 
     let mut updated_meshes = eval_result.updated_meshes;
     for mesh_index in morph_updated_meshes {
-        if !updated_meshes.contains(&mesh_index) {
-            updated_meshes.push(mesh_index);
-        }
-    }
-    for mesh_index in heatmap_updated_meshes {
         if !updated_meshes.contains(&mesh_index) {
             updated_meshes.push(mesh_index);
         }
@@ -135,6 +130,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
 
     AnimationUpdates {
         updated_meshes,
+        recolored_meshes,
         bone_transforms: eval_result.bone_transforms,
     }
 }
@@ -157,9 +153,20 @@ pub unsafe fn run_animation_phase_gpu(
     updates: &AnimationUpdates,
 ) -> Result<()> {
     let t = Instant::now();
+    if !updates.recolored_meshes.is_empty() {
+        ctx.create_backend()
+            .upload_mesh_attributes(&updates.recolored_meshes)?;
+    }
     if !updates.updated_meshes.is_empty() {
-        let mut backend = ctx.create_backend();
-        playback_upload_animations(&mut backend, &updates.updated_meshes)?;
+        let frame_slot = ctx.frame_slot;
+        let uploads = ctx
+            .create_backend()
+            .stage_animated_meshes(&updates.updated_meshes, frame_slot)?;
+
+        let mut pending = ctx.world.resource_mut::<PendingAnimatedMeshUploads>();
+        for upload in uploads {
+            pending.queue_upload(upload);
+        }
     }
     ctx.world
         .resource_mut::<PhaseSubTimings>()

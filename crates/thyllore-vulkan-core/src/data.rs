@@ -7,7 +7,7 @@ use glam::{Mat4, Vec4};
 use std::mem::offset_of;
 use thyllore_spirv_reflect::declare_gpu_block;
 
-pub use thyllore_model_core::{Vertex, VertexData};
+pub use thyllore_model_core::{Vertex, VertexAttributes, VertexData, VertexGeometry};
 
 // TODO: implement iterator
 #[derive(Clone, Debug)]
@@ -85,19 +85,7 @@ impl RRData {
             self.sampler = vk::Sampler::null();
         }
 
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device()
-                .destroy_buffer(self.vertex_buffer.buffer, None);
-            self.vertex_buffer.buffer = vk::Buffer::null();
-        }
-
-        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device()
-                .free_memory(self.vertex_buffer.buffer_memory, None);
-            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
+        self.vertex_buffer.destroy_gpu(rrdevice);
 
         if self.index_buffer.buffer != vk::Buffer::null() {
             rrdevice
@@ -224,6 +212,57 @@ pub(crate) fn vertex_attribute_descriptions() -> [vk::VertexInputAttributeDescri
         .location(3)
         .format(vk::Format::R32G32B32_SFLOAT)
         .offset(offset_of!(Vertex, normal) as u32)
+        .build();
+
+    [pos, color, tex_coord, normal]
+}
+
+pub(crate) const GEOMETRY_STREAM_BINDING: u32 = 0;
+pub(crate) const ATTRIBUTE_STREAM_BINDING: u32 = 1;
+
+pub(crate) fn mesh_stream_binding_descriptions() -> [vk::VertexInputBindingDescription; 2] {
+    let geometry = vk::VertexInputBindingDescription::builder()
+        .binding(GEOMETRY_STREAM_BINDING)
+        .stride(size_of::<VertexGeometry>() as u32)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build();
+
+    let attributes = vk::VertexInputBindingDescription::builder()
+        .binding(ATTRIBUTE_STREAM_BINDING)
+        .stride(size_of::<VertexAttributes>() as u32)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build();
+
+    [geometry, attributes]
+}
+
+pub(crate) fn mesh_stream_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
+    let pos = vk::VertexInputAttributeDescription::builder()
+        .binding(GEOMETRY_STREAM_BINDING)
+        .location(0)
+        .format(vk::Format::R32G32B32_SFLOAT)
+        .offset(offset_of!(VertexGeometry, pos) as u32)
+        .build();
+
+    let color = vk::VertexInputAttributeDescription::builder()
+        .binding(ATTRIBUTE_STREAM_BINDING)
+        .location(1)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset(offset_of!(VertexAttributes, color) as u32)
+        .build();
+
+    let tex_coord = vk::VertexInputAttributeDescription::builder()
+        .binding(ATTRIBUTE_STREAM_BINDING)
+        .location(2)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(offset_of!(VertexAttributes, tex_coord) as u32)
+        .build();
+
+    let normal = vk::VertexInputAttributeDescription::builder()
+        .binding(GEOMETRY_STREAM_BINDING)
+        .location(3)
+        .format(vk::Format::R32G32B32_SFLOAT)
+        .offset(offset_of!(VertexGeometry, normal) as u32)
         .build();
 
     [pos, color, tex_coord, normal]

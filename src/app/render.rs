@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::ecs::resource::BillboardData;
-use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures};
+use crate::ecs::resource::{Camera, GridMeshData, ImguiTextures, PendingAnimatedMeshUploads};
 use crate::ecs::resource::{GridGizmoData, LightGizmoData};
 use crate::ecs::systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
@@ -19,9 +19,9 @@ use thyllore_vulkan_core::core::{
     FrameSync, PresentOutcome,
 };
 use thyllore_vulkan_core::renderer::{
-    begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed,
-    push_vertex_constants, set_full_viewport_and_scissor, set_scissor, set_viewport_size,
-    IndexWidth,
+    begin_render_pass_cleared, bind_graphics_descriptor_set, bind_graphics_mesh,
+    bind_graphics_mesh_buffer, draw_indexed, push_vertex_constants, set_full_viewport_and_scissor,
+    set_scissor, set_viewport_size, IndexWidth,
 };
 use thyllore_vulkan_core::resource::read_picked_texel;
 use thyllore_vulkan_core::types::{
@@ -442,6 +442,7 @@ impl App {
             image_index,
         );
         let presentation = submit_and_present(&self.rrdevice, frame_submit)?;
+        *self.resource_mut::<PendingAnimatedMeshUploads>() = PendingAnimatedMeshUploads::default();
 
         if matches!(presentation.outcome, PresentOutcome::OutOfDate) || self.resized {
             self.resized = false;
@@ -544,14 +545,7 @@ impl App {
             }
 
             let pipeline = &self.resource::<PipelineState>().model_pipeline;
-            bind_graphics_mesh(
-                &self.rrdevice,
-                command_buffer,
-                pipeline.pipeline(),
-                mesh.vertex_buffer.buffer(),
-                mesh.index_buffer.buffer(),
-                IndexWidth::U32,
-            );
+            bind_graphics_mesh_buffer(&self.rrdevice, command_buffer, pipeline.pipeline(), mesh);
 
             let frame_set = self.data.graphics_resources.frame_set.sets()[image_index];
             bind_graphics_descriptor_set(

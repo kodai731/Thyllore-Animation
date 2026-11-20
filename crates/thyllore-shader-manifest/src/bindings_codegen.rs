@@ -63,7 +63,10 @@ fn write_pass_module(
     let bindings = merge_pass_bindings(pass, &reflections)?;
     let push_constant = merge_pass_push_constant(pass, &reflections)?;
 
-    let _ = writeln!(out, "\npub mod {} {{\n    use super::*;\n", pass.name);
+    let _ = writeln!(out, "\npub mod {} {{", pass.name);
+    if !bindings.is_empty() {
+        let _ = writeln!(out, "    use super::*;\n");
+    }
     let mut emitted: Vec<(String, String)> = Vec::new();
     for binding in &bindings {
         let constant = binding_const_name(&binding.name);

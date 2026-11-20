@@ -9,15 +9,32 @@ use thyllore_render_core::{
     MeshId, ObjectUBO, ProjectionData, StaticLineMesh, VertexBufferHandle, FRAMES_IN_FLIGHT,
 };
 
+use vulkanalia::prelude::v1_0::*;
+
 use crate::command::RRCommandPool;
 use crate::core::RRDevice;
-use crate::data::{SceneUniformData, UniformBufferObject, Vertex};
+use crate::data::{SceneUniformData, UniformBufferObject, VertexGeometry};
+use crate::pipeline::RRPipeline;
 use crate::raytracing::RRAccelerationStructure;
+use crate::renderer::record_skinning_dispatch;
 use crate::resource::GraphicsResources;
 use crate::resource::RRImage;
 use crate::resource::RayTracingData;
-use crate::resource::{BillboardRenderState, GpuBufferRegistry};
-use crate::types::Instance;
+use crate::resource::{BillboardRenderState, GpuBufferRegistry, SkinStreamsUpload};
+use crate::types::{CommandBuffer, Instance};
+
+/// How the device geometry of an animated mesh is brought up to date in the frame's command buffer.
+#[derive(Clone, Copy, Debug)]
+pub enum GeometryUpload {
+    StagedVertices,
+    Skinning(SkinStreamsUpload),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AnimatedMeshUpload {
+    pub mesh_id: MeshId,
+    pub geometry: GeometryUpload,
+}
 
 pub struct VulkanBackend<'a> {
     pub instance: &'a Instance,
@@ -99,63 +116,40 @@ impl<'a> VulkanBackend<'a> {
         Ok(())
     }
 
-    pub unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
-        self.graphics.upload_mesh_vertices(
-            self.instance,
-            self.device,
-            self.command_pool.as_ref(),
-            mesh_id,
-        )
-    }
-
-    pub unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
-        let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
-            return Ok(());
-        };
-
-        let blas_index_of_mesh = collect_blas_index_of_mesh(self.graphics);
-
+    pub unsafe fn stage_animated_meshes(
+        &mut self,
+        mesh_ids: &[MeshId],
+        frame_slot: usize,
+    ) -> Result<Vec<AnimatedMeshUpload>> {
+        let mut uploads = Vec::with_capacity(mesh_ids.len());
         for &mesh_id in mesh_ids {
-            let Some(blas_index) = blas_index_of_mesh.get(mesh_id).copied().flatten() else {
+            let Some(mesh) = self.graphics.meshes.get_mut(mesh_id) else {
                 continue;
             };
-            if blas_index >= accel_struct.blas_list.len() {
-                continue;
-            }
 
-            let mesh = &self.graphics.meshes[mesh_id];
-            let blas = &mut accel_struct.blas_list[blas_index];
-
-            RRAccelerationStructure::update_blas(
-                self.instance,
-                self.device,
-                self.command_pool.as_ref(),
-                blas,
-                &mesh.vertex_buffer.buffer,
-                mesh.vertex_data.vertices.len() as u32,
-                size_of::<Vertex>() as u32,
-                &mesh.index_buffer.buffer,
-                mesh.vertex_data.indices.len() as u32,
-            )?;
+            let geometry = if mesh.is_skinned_on_device() {
+                GeometryUpload::Skinning(mesh.stage_skinning(
+                    self.instance,
+                    self.device,
+                    frame_slot,
+                )?)
+            } else {
+                mesh.stage_geometry(self.instance, self.device, frame_slot)?;
+                GeometryUpload::StagedVertices
+            };
+            uploads.push(AnimatedMeshUpload { mesh_id, geometry });
         }
 
-        Ok(())
+        Ok(uploads)
     }
 
-    pub unsafe fn rebuild_tlas(&mut self) -> Result<()> {
-        let Some(ref mut accel_struct) = self.raytracing.acceleration_structure else {
-            return Ok(());
-        };
-
-        let tlas = &mut accel_struct.tlas;
-        RRAccelerationStructure::update_tlas(
-            self.instance,
-            self.device,
-            self.command_pool.as_ref(),
-            tlas,
-            &accel_struct.blas_list,
-            &accel_struct.procedural_blas,
-        )?;
+    pub unsafe fn upload_mesh_attributes(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
+        for &mesh_id in mesh_ids {
+            let Some(mesh) = self.graphics.meshes.get_mut(mesh_id) else {
+                continue;
+            };
+            mesh.upload_attributes(self.instance, self.device, self.command_pool.as_ref())?;
+        }
 
         Ok(())
     }
@@ -361,4 +355,266 @@ fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>
             Some(blas_index)
         })
         .collect()
+}
+
+unsafe fn record_global_memory_barrier(
+    device: &RRDevice,
+    command_buffer: vk::CommandBuffer,
+    (src_stage, src_access): (vk::PipelineStageFlags, vk::AccessFlags),
+    (dst_stage, dst_access): (vk::PipelineStageFlags, vk::AccessFlags),
+) {
+    let barrier = vk::MemoryBarrier::builder()
+        .src_access_mask(src_access)
+        .dst_access_mask(dst_access)
+        .build();
+    device.device().cmd_pipeline_barrier(
+        command_buffer,
+        src_stage,
+        dst_stage,
+        vk::DependencyFlags::empty(),
+        &[barrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &[] as &[vk::ImageMemoryBarrier],
+    );
+}
+
+unsafe fn record_blas_updates(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    accel_struct: &mut RRAccelerationStructure,
+    mesh_ids: &[MeshId],
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let blas_index_of_mesh = collect_blas_index_of_mesh(graphics);
+
+    for &mesh_id in mesh_ids {
+        let Some(blas_index) = blas_index_of_mesh.get(mesh_id).copied().flatten() else {
+            continue;
+        };
+        if blas_index >= accel_struct.blas_list.len() {
+            continue;
+        }
+
+        let mesh = &graphics.meshes[mesh_id];
+        let blas = &mut accel_struct.blas_list[blas_index];
+
+        RRAccelerationStructure::record_blas_update(
+            instance,
+            device,
+            blas,
+            &mesh.geometry_buffer.buffer,
+            mesh.vertex_data.vertices.len() as u32,
+            size_of::<VertexGeometry>() as u32,
+            &mesh.index_buffer.buffer,
+            mesh.vertex_data.indices.len() as u32,
+            command_buffer,
+        )?;
+    }
+
+    Ok(())
+}
+
+type StageAccess = (vk::PipelineStageFlags, vk::AccessFlags);
+
+fn geometry_stream_writes() -> StageAccess {
+    (
+        vk::PipelineStageFlags::TRANSFER | vk::PipelineStageFlags::COMPUTE_SHADER,
+        vk::AccessFlags::TRANSFER_WRITE | vk::AccessFlags::SHADER_WRITE,
+    )
+}
+
+fn geometry_and_acceleration_writes() -> StageAccess {
+    let (stages, accesses) = geometry_stream_writes();
+    (
+        stages | vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+        accesses | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+    )
+}
+
+unsafe fn record_acceleration_structure_updates(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    accel_struct: &mut RRAccelerationStructure,
+    mesh_ids: &[MeshId],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        geometry_stream_writes(),
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::SHADER_READ | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    record_blas_updates(
+        instance,
+        device,
+        graphics,
+        accel_struct,
+        mesh_ids,
+        command_buffer,
+    )?;
+
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR,
+        ),
+        (
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    if accel_struct.blas_list.is_empty() && accel_struct.procedural_blas.is_empty() {
+        return Ok(());
+    }
+
+    RRAccelerationStructure::record_tlas_update(
+        instance,
+        device,
+        &mut accel_struct.tlas,
+        &accel_struct.blas_list,
+        &accel_struct.procedural_blas,
+        frame_slot,
+        command_buffer,
+    )
+}
+
+unsafe fn record_stream_copies(
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    uploads: &[AnimatedMeshUpload],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) {
+    for upload in uploads {
+        let Some(mesh) = graphics.meshes.get(upload.mesh_id) else {
+            continue;
+        };
+        match upload.geometry {
+            GeometryUpload::StagedVertices => {
+                mesh.record_geometry_copy(frame_slot, device.device(), command_buffer)
+            }
+            GeometryUpload::Skinning(SkinStreamsUpload::Staged) => {
+                mesh.record_skin_stream_copies(frame_slot, device.device(), command_buffer)
+            }
+            GeometryUpload::Skinning(SkinStreamsUpload::Unchanged) => {}
+        }
+    }
+}
+
+unsafe fn record_skinning_dispatches(
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    skinning_pipeline: &RRPipeline,
+    uploads: &[AnimatedMeshUpload],
+    frame_slot: usize,
+    command_buffer: vk::CommandBuffer,
+) {
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (
+            vk::PipelineStageFlags::TRANSFER,
+            vk::AccessFlags::TRANSFER_WRITE,
+        ),
+        (
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::AccessFlags::SHADER_READ,
+        ),
+    );
+
+    for upload in uploads {
+        let GeometryUpload::Skinning(_) = upload.geometry else {
+            continue;
+        };
+        let Some(mesh) = graphics.meshes.get(upload.mesh_id) else {
+            continue;
+        };
+        let Some(streams) = mesh.skin_stream_addresses(device, frame_slot) else {
+            continue;
+        };
+
+        record_skinning_dispatch(
+            device,
+            command_buffer,
+            skinning_pipeline,
+            streams,
+            device.buffer_address(mesh.geometry_buffer.buffer),
+            mesh.device_skinned_vertex_count() as u32,
+        );
+    }
+}
+
+pub unsafe fn record_animated_mesh_uploads(
+    instance: &Instance,
+    device: &RRDevice,
+    graphics: &GraphicsResources,
+    raytracing: &mut RayTracingData,
+    skinning_pipeline: &RRPipeline,
+    uploads: &[AnimatedMeshUpload],
+    frame_slot: usize,
+    command_buffer: CommandBuffer,
+) -> Result<()> {
+    let command_buffer = command_buffer.raw();
+
+    let (write_stages, write_accesses) = geometry_and_acceleration_writes();
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        (vk::PipelineStageFlags::ALL_COMMANDS, write_accesses),
+        (
+            write_stages,
+            write_accesses | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    record_stream_copies(device, graphics, uploads, frame_slot, command_buffer);
+    record_skinning_dispatches(
+        device,
+        graphics,
+        skinning_pipeline,
+        uploads,
+        frame_slot,
+        command_buffer,
+    );
+
+    if let Some(accel_struct) = raytracing.acceleration_structure.as_mut() {
+        let mesh_ids: Vec<MeshId> = uploads.iter().map(|upload| upload.mesh_id).collect();
+        record_acceleration_structure_updates(
+            instance,
+            device,
+            graphics,
+            accel_struct,
+            &mesh_ids,
+            frame_slot,
+            command_buffer,
+        )?;
+    }
+
+    record_global_memory_barrier(
+        device,
+        command_buffer,
+        geometry_and_acceleration_writes(),
+        (
+            vk::PipelineStageFlags::VERTEX_INPUT
+                | vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER
+                | vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            vk::AccessFlags::VERTEX_ATTRIBUTE_READ
+                | vk::AccessFlags::SHADER_READ
+                | vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR,
+        ),
+    );
+
+    Ok(())
 }

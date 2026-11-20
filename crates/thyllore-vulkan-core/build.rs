@@ -11,8 +11,25 @@ use thyllore_spirv_reflect::{reflect_shader_bytes, ShaderReflection};
 
 const SPIRV_DIR: &str = "assets/shaders";
 
+struct GpuBlockOutput {
+    block_name: &'static str,
+    file_name: &'static str,
+    imports: &'static [&'static str],
+}
+
 /// Push constant blocks whose Rust struct is generated from the SPIR-V that declares them.
-const GPU_BLOCKS: [(&str, &str); 1] = [("TracePush", "trace_push.rs")];
+const GPU_BLOCKS: [GpuBlockOutput; 2] = [
+    GpuBlockOutput {
+        block_name: "TracePush",
+        file_name: "trace_push.rs",
+        imports: &["thyllore_math_core::GpuMat4"],
+    },
+    GpuBlockOutput {
+        block_name: "SkinningPush",
+        file_name: "skinning_push.rs",
+        imports: &[],
+    },
+];
 
 fn main() {
     let workspace_root = workspace_root();
@@ -45,15 +62,19 @@ fn main() {
                 std::process::exit(1);
             });
     write_generated(&out_dir.join("shader_bindings.rs"), bindings);
-    for (block_name, file_name) in GPU_BLOCKS {
+    for output in &GPU_BLOCKS {
         write_generated(
-            &out_dir.join(file_name),
-            gpu_block_source(&reflections, block_name),
+            &out_dir.join(output.file_name),
+            gpu_block_source(&reflections, output),
         );
     }
 }
 
-fn gpu_block_source(reflections: &BTreeMap<String, ShaderReflection>, block_name: &str) -> String {
+fn gpu_block_source(
+    reflections: &BTreeMap<String, ShaderReflection>,
+    output: &GpuBlockOutput,
+) -> String {
+    let block_name = output.block_name;
     let mut declaring = reflections.iter().filter_map(|(spirv_name, reflection)| {
         find_declared_block(reflection, block_name).map(|block| (spirv_name, block))
     });
@@ -66,12 +87,10 @@ fn gpu_block_source(reflections: &BTreeMap<String, ShaderReflection>, block_name
         std::process::exit(1);
     }
 
-    generate_spirv_block_rust(&block, first_name, &["thyllore_math_core::GpuMat4"]).unwrap_or_else(
-        |error| {
-            eprintln!("generate `{block_name}`: {error}");
-            std::process::exit(1)
-        },
-    )
+    generate_spirv_block_rust(&block, first_name, output.imports).unwrap_or_else(|error| {
+        eprintln!("generate `{block_name}`: {error}");
+        std::process::exit(1)
+    })
 }
 
 fn workspace_root() -> PathBuf {

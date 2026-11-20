@@ -1,5 +1,4 @@
-use anyhow::Result;
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec4};
 
 use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
 use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
@@ -28,42 +27,17 @@ pub(crate) fn apply_skinning_to_single_mesh(
     global_transforms: &[Mat4],
     skeleton: &Skeleton,
 ) -> bool {
-    if mesh_idx >= graphics.meshes.len() {
+    let Some(mesh) = graphics.meshes.get_mut(mesh_idx) else {
+        return false;
+    };
+    if mesh.skin_data().is_none() {
         return false;
     }
 
-    let skin_data = match &graphics.meshes[mesh_idx].skin_data {
-        Some(sd) => sd,
-        None => return false,
-    };
-
-    let vertex_count = skin_data.base_positions.len();
-    let mut skinned_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
-    let mut skinned_normals = vec![Vec3::new(0.0, 1.0, 0.0); vertex_count];
-
-    let _ = thyllore_model_core::apply_skinning(
-        skin_data,
-        global_transforms,
+    mesh.pose_skin(thyllore_model_core::build_skin_palette(
         skeleton,
-        &mut skinned_positions,
-        &mut skinned_normals,
-    );
-
-    let mesh = &mut graphics.meshes[mesh_idx];
-    for (i, pos) in skinned_positions.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].pos.x = pos.x;
-            mesh.vertex_data.vertices[i].pos.y = pos.y;
-            mesh.vertex_data.vertices[i].pos.z = pos.z;
-        }
-    }
-    for (i, normal) in skinned_normals.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].normal.x = normal.x;
-            mesh.vertex_data.vertices[i].normal.y = normal.y;
-            mesh.vertex_data.vertices[i].normal.z = normal.z;
-        }
-    }
+        global_transforms,
+    ));
 
     true
 }
@@ -79,7 +53,7 @@ pub(crate) fn apply_node_animation_to_single_mesh(
     }
 
     let mesh = &graphics.meshes[mesh_idx];
-    if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+    if mesh.skin_data().is_some() || mesh.base_vertices.is_empty() {
         return false;
     }
 
@@ -169,22 +143,6 @@ pub fn compute_node_global_transforms(
     }
 }
 
-pub unsafe fn upload_animations(
-    backend: &mut thyllore_vulkan_core::VulkanBackend<'_>,
-    updated_meshes: &[usize],
-) -> Result<()> {
-    for &mesh_idx in updated_meshes {
-        backend.upload_mesh_vertices(mesh_idx)?;
-    }
-
-    if !updated_meshes.is_empty() {
-        backend.update_acceleration_structure(updated_meshes)?;
-        backend.rebuild_tlas()?;
-    }
-
-    Ok(())
-}
-
 pub(crate) fn prepare_node_animation(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
@@ -197,7 +155,7 @@ pub(crate) fn prepare_node_animation(
     let mut updated_mesh_indices = Vec::new();
 
     for (mesh_idx, mesh) in graphics.meshes.iter_mut().enumerate() {
-        if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+        if mesh.skin_data().is_some() || mesh.base_vertices.is_empty() {
             continue;
         }
 

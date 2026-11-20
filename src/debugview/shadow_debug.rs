@@ -76,8 +76,7 @@ pub fn log_shadow_debug_info(
             mesh.vertex_data.vertices.len(),
             mesh.vertex_data.indices.len()
         );
-        if !mesh.vertex_data.vertices.is_empty() {
-            let v = &mesh.vertex_data.vertices[0];
+        if let Some(v) = mesh.posed_geometry().first() {
             log!(
                 "    vertex[0].pos: ({:.2}, {:.2}, {:.2})",
                 v.pos.x,

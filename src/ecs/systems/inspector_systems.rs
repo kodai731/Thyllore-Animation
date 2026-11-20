@@ -100,7 +100,7 @@ fn collect_mesh_and_material(
             name: mesh_asset.name.clone(),
             vertex_count: mb.vertex_data.vertices.len(),
             triangle_count: mb.vertex_data.indices.len() / 3,
-            has_skin: mb.skin_data.is_some(),
+            has_skin: mb.skin_data().is_some(),
         });
 
     let material_data = mesh_asset

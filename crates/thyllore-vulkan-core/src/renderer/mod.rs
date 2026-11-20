@@ -14,6 +14,8 @@ mod pass_target;
 mod pipeline_dispatch;
 mod push_constants;
 mod rayquery;
+mod skinning;
+mod skinning_push;
 mod storage_image;
 mod tonemap;
 mod trace_push;
@@ -35,8 +37,8 @@ pub use frame_commands::{
 };
 pub use gbuffer::{create_gbuffer_framebuffer, record_gbuffer_pass};
 pub use indexed_draw::{
-    bind_graphics_descriptor_set, bind_graphics_mesh, draw_indexed, push_vertex_constants,
-    set_scissor, set_viewport_size, IndexWidth,
+    bind_graphics_descriptor_set, bind_graphics_mesh, bind_graphics_mesh_buffer, draw_indexed,
+    push_vertex_constants, set_scissor, set_viewport_size, IndexWidth,
 };
 pub use line_mesh_draw::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
@@ -61,6 +63,8 @@ pub use pipeline_dispatch::{
 };
 pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, ShadingPushConstants};
 pub use rayquery::record_ray_query_pass;
+pub(crate) use skinning::record_skinning_dispatch;
+pub use skinning_push::SkinningPush;
 pub use storage_image::{
     copy_color_image, storage_image_read_barrier_for_fragment,
     storage_image_write_barrier_for_fragment,

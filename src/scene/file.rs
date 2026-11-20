@@ -5,16 +5,15 @@ use serde::{Deserialize, Serialize};
 use super::entities::SceneEntity;
 use crate::hooks::scene::SceneValue;
 
-pub const SCENE_FORMAT_VERSION: u32 = 8;
+pub const SCENE_FORMAT_VERSION: u32 = 9;
 
-/// On-disk scene: the model, the clip files, every registered resource and entity component
-/// keyed by its type key.
+/// On-disk scene: the clip files, every registered resource and entity component keyed by its
+/// type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneFile {
     pub version: u32,
     #[serde(default)]
     pub metadata: SceneMetadata,
-    pub model: ModelReference,
     #[serde(default)]
     pub animation_clips: Vec<AnimationClipRef>,
     #[serde(default)]
@@ -24,11 +23,10 @@ pub struct SceneFile {
 }
 
 impl SceneFile {
-    pub fn new(name: &str, model_path: &str) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
             version: SCENE_FORMAT_VERSION,
             metadata: SceneMetadata::new(name),
-            model: ModelReference::new(model_path),
             animation_clips: Vec::new(),
             resources: BTreeMap::new(),
             entities: Vec::new(),
@@ -55,30 +53,6 @@ impl SceneMetadata {
 
     pub fn update_modified(&mut self) {
         self.modified_at = chrono::Utc::now().to_rfc3339();
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelReference {
-    pub path: String,
-}
-
-impl ModelReference {
-    /// Written in place of a file path when the mesh was generated in-app.
-    pub const GENERATED_MESH: &'static str = "Generated Mesh";
-
-    pub fn new(path: &str) -> Self {
-        Self {
-            path: path.to_string(),
-        }
-    }
-
-    pub fn is_generated_mesh(&self) -> bool {
-        self.path == Self::GENERATED_MESH
-    }
-
-    pub fn names_file(&self) -> bool {
-        !self.path.is_empty() && !self.is_generated_mesh()
     }
 }
 

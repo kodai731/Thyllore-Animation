@@ -15,7 +15,7 @@ pub use entities::{
     apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
 };
 pub use error::{SceneError, SceneResult};
-pub use file::{AnimationClipRef, ModelReference, SceneFile, SceneMetadata, SCENE_FORMAT_VERSION};
+pub use file::{AnimationClipRef, SceneFile, SceneMetadata, SCENE_FORMAT_VERSION};
 pub use motion_path_format::{
     motion_path_parameter_snapshot, overwrite_motion_path_persisted_fields,
     MOTION_PATH_SCALAR_PARAMS,

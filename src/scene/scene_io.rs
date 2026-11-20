@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
-use super::file::{AnimationClipRef, ModelReference, SceneFile, SCENE_FORMAT_VERSION};
+use super::file::{AnimationClipRef, SceneFile, SCENE_FORMAT_VERSION};
 use crate::ecs::resource::{ClipLibrary, SceneState};
 use crate::ecs::world::World;
 use crate::hooks::scene::SceneValue;
@@ -37,7 +37,7 @@ fn build_scene_file(animation_clips: Vec<AnimationClipRef>, world: &World) -> Sc
         .map(|m| m.name.clone())
         .unwrap_or_else(|| "Untitled Scene".to_string());
 
-    let mut scene = SceneFile::new(&scene_name, "");
+    let mut scene = SceneFile::new(&scene_name);
     scene.animation_clips = animation_clips;
     scene.resources = capture_scene_resources(world);
     scene.entities = capture_scene_entities(world);
@@ -150,8 +150,6 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
         .parent()
         .unwrap_or(Path::new("."));
 
-    let model_path = resolve_model_path(assets_dir, &scene.model)?;
-
     let mut clips = Vec::new();
     let mut loaded_paths = std::collections::HashSet::new();
     for clip_ref in &scene.animation_clips {
@@ -166,11 +164,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
 
     log!("Loaded scene from: {}", scene_path.display());
 
-    Ok(LoadedScene {
-        scene,
-        model_path,
-        clips,
-    })
+    Ok(LoadedScene { scene, clips })
 }
 
 pub fn find_default_scene() -> Option<PathBuf> {
@@ -184,21 +178,7 @@ pub fn find_default_scene() -> Option<PathBuf> {
 
 pub struct LoadedScene {
     pub scene: SceneFile,
-    /// `None` when the scene has no model or its mesh was generated in-app.
-    pub model_path: Option<PathBuf>,
     pub clips: Vec<thyllore_anim_core::editable::EditableAnimationClip>,
-}
-
-fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<Option<PathBuf>> {
-    if !model.names_file() {
-        return Ok(None);
-    }
-
-    let model_path = assets_dir.join(&model.path);
-    if !model_path.exists() {
-        return Err(SceneError::ModelNotFound(model_path));
-    }
-    Ok(Some(model_path))
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -236,15 +216,6 @@ mod tests {
     use glam::Vec3;
     use thyllore_scene_core::SceneComponent;
 
-    fn write_scene(dir: &Path, model_path: &str) -> PathBuf {
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene = SceneFile::new("test", model_path);
-        let scene_path = scenes_dir.join("test.scene.ron");
-        write_scene_file(&scene_path, &scene).unwrap();
-        scene_path
-    }
-
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("thyllore_scene_{name}"));
         let _ = fs::remove_dir_all(&dir);
@@ -267,45 +238,9 @@ mod tests {
     }
 
     #[test]
-    fn generated_mesh_scene_loads_without_a_model_file() {
-        let dir = temp_dir("generated");
-        let scene_path = write_scene(&dir, ModelReference::GENERATED_MESH);
-
-        let loaded = load_scene(&scene_path).expect("generated mesh is not a file path");
-
-        assert!(loaded.model_path.is_none());
-        assert!(loaded.scene.model.is_generated_mesh());
-    }
-
-    #[test]
-    fn scene_without_a_model_loads_without_a_model_file() {
-        let dir = temp_dir("no_model");
-        let scene_path = write_scene(&dir, "");
-
-        let loaded = load_scene(&scene_path).expect("an empty path names no file");
-
-        assert!(loaded.model_path.is_none());
-    }
-
-    #[test]
-    fn scene_pointing_at_a_missing_model_file_is_rejected() {
-        let dir = temp_dir("missing");
-        let scene_path = write_scene(&dir, "models/does_not_exist.glb");
-
-        assert!(matches!(
-            load_scene(&scene_path),
-            Err(SceneError::ModelNotFound(_))
-        ));
-    }
-
-    #[test]
     fn older_format_versions_are_rejected() {
         let scene_path = scene_path_in("old_version");
-        fs::write(
-            &scene_path,
-            r#"(version: 6, model: (path: "Generated Mesh"))"#,
-        )
-        .unwrap();
+        fs::write(&scene_path, r#"(version: 6)"#).unwrap();
 
         assert!(matches!(
             load_scene(&scene_path),
@@ -314,18 +249,6 @@ mod tests {
                 found: 6
             })
         ));
-    }
-
-    #[test]
-    fn scene_resolves_an_existing_model_file() {
-        let dir = temp_dir("present");
-        fs::create_dir_all(dir.join("models")).unwrap();
-        fs::write(dir.join("models/mesh.glb"), b"stub").unwrap();
-        let scene_path = write_scene(&dir, "models/mesh.glb");
-
-        let loaded = load_scene(&scene_path).expect("model file exists");
-
-        assert_eq!(loaded.model_path, Some(dir.join("models/mesh.glb")));
     }
 
     #[test]

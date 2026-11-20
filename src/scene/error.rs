@@ -6,7 +6,6 @@ pub enum SceneError {
     Parse(ron::error::SpannedError),
     Serialize(ron::Error),
     Export(anyhow::Error),
-    ModelNotFound(PathBuf),
     AnimationNotFound(PathBuf),
     VersionMismatch { expected: u32, found: u32 },
     ClipFile(thyllore_anim_core::editable::ClipFileError),
@@ -19,7 +18,6 @@ impl std::fmt::Display for SceneError {
             SceneError::Parse(e) => write!(f, "Parse error: {}", e),
             SceneError::Serialize(e) => write!(f, "Serialize error: {}", e),
             SceneError::Export(e) => write!(f, "Export error: {:#}", e),
-            SceneError::ModelNotFound(p) => write!(f, "Model not found: {}", p.display()),
             SceneError::AnimationNotFound(p) => {
                 write!(f, "Animation not found: {}", p.display())
             }

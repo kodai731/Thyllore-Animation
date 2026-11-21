@@ -1,7 +1,7 @@
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::timeline::keyframe_edit::{
-    add_keyframe, edit_curve, insert_keyframe_preserving_shape, move_keyframe, remove_keyframe,
-    remove_keyframes, set_extrapolation, shift_keyframes,
+    add_keyframe, edit_clip, edit_curve, insert_keyframe_preserving_shape, move_keyframe,
+    remove_keyframe, remove_keyframes, set_extrapolation, shift_keyframes,
 };
 
 use super::TimelineEvent;
@@ -18,35 +18,38 @@ pub(super) fn apply_keyframe_edits(
 
     let mut clip_modified = false;
     for event in events {
-        let Some(clip) = clip_library.get_mut(clip_id) else {
-            return clip_modified;
-        };
         clip_modified |= match event {
             TimelineEvent::AddKeyframe {
                 track,
                 property_type,
                 time,
                 value,
-            } => add_keyframe(clip, *track, *property_type, *time, *value),
+            } => edit_clip(clip_library, clip_id, |clip| {
+                add_keyframe(clip, *track, *property_type, *time, *value)
+            }),
 
             TimelineEvent::InsertKeyframeOnCurve {
                 track,
                 property_type,
                 time,
-            } => insert_keyframe_preserving_shape(clip, *track, *property_type, *time),
+            } => edit_clip(clip_library, clip_id, |clip| {
+                insert_keyframe_preserving_shape(clip, *track, *property_type, *time)
+            }),
 
             TimelineEvent::MoveSelectedKeyframes { time_delta } => {
-                shift_keyframes(clip, &timeline_state.selected_keyframes, *time_delta);
-                true
+                edit_clip(clip_library, clip_id, |clip| {
+                    shift_keyframes(clip, &timeline_state.selected_keyframes, *time_delta);
+                    true
+                })
             }
 
             TimelineEvent::DeleteSelectedKeyframes => {
-                let had_selection = !timeline_state.selected_keyframes.is_empty();
-                if had_selection {
-                    remove_keyframes(clip, &timeline_state.selected_keyframes);
-                }
-                timeline_state.clear_selection();
-                had_selection
+                let selected_keyframes = std::mem::take(&mut timeline_state.selected_keyframes);
+                !selected_keyframes.is_empty()
+                    && edit_clip(clip_library, clip_id, |clip| {
+                        remove_keyframes(clip, &selected_keyframes);
+                        true
+                    })
             }
 
             TimelineEvent::MoveKeyframe {
@@ -55,7 +58,7 @@ pub(super) fn apply_keyframe_edits(
                 keyframe_id,
                 new_time,
                 new_value,
-            } => {
+            } => edit_clip(clip_library, clip_id, |clip| {
                 move_keyframe(
                     clip,
                     *track,
@@ -65,16 +68,16 @@ pub(super) fn apply_keyframe_edits(
                     *new_value,
                 );
                 true
-            }
+            }),
 
             TimelineEvent::DeleteKeyframe {
                 track,
                 property_type,
                 keyframe_id,
-            } => {
+            } => edit_clip(clip_library, clip_id, |clip| {
                 remove_keyframe(clip, *track, *property_type, *keyframe_id);
                 true
-            }
+            }),
 
             TimelineEvent::SetCurveExtrapolation {
                 track,

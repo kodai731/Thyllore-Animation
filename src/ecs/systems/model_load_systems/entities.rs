@@ -3,7 +3,9 @@ use crate::ecs::component::{
     AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, ModelSource, MorphWeights,
 };
 use crate::ecs::resource::AnimationType;
-use crate::ecs::systems::{attach_morph_channel_catalogs, build_initial_clip_schedule};
+use crate::ecs::systems::{
+    attach_morph_channel_catalogs, build_initial_clip_schedule, despawn_entity_with_clip,
+};
 use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
 use crate::hooks::scene::entities_with;
 use thyllore_anim_core::editable::SourceClipId;
@@ -17,14 +19,14 @@ pub(super) const GENERATED_MODEL_NAME: &str = "Generated Mesh";
 pub(super) fn despawn_other_model_source_entities(world: &mut World, kept_entity: Entity) {
     for entity in entities_with::<ModelSource>(world) {
         if entity != kept_entity {
-            world.despawn(entity);
+            despawn_entity_with_clip(world, entity);
         }
     }
 }
 
 pub(super) fn despawn_model_source_entities(world: &mut World) {
     for entity in entities_with::<ModelSource>(world) {
-        world.despawn(entity);
+        despawn_entity_with_clip(world, entity);
     }
 }
 

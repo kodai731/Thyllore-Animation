@@ -6,7 +6,7 @@ use super::entities::{
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
 use super::source::resolve_model_file;
 use crate::asset::AssetStorage;
-use crate::ecs::resource::TimelineState;
+use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
@@ -167,10 +167,59 @@ fn capture_kept_scene(world: &World) -> KeptScene {
 
 /// Runs whether or not the upload succeeded, so a failed load still leaves the scene's entities.
 fn restore_kept_scene(kept_scene: KeptScene, world: &mut World, assets: &mut AssetStorage) {
-    clip_library_register_loaded(world, assets, kept_scene.scheduled_clips);
+    let removed_clips = select_clips_removed_from_library(world, kept_scene.scheduled_clips);
+    clip_library_register_loaded(world, assets, removed_clips);
     apply_scene_entities(world, assets, &kept_scene.entities);
+}
+
+/// The model reset drops only the clips the old model brought; a clip that is still in the
+/// library must not be registered a second time.
+fn select_clips_removed_from_library(
+    world: &World,
+    clips: Vec<EditableAnimationClip>,
+) -> Vec<EditableAnimationClip> {
+    let library = world.resource::<ClipLibrary>();
+    clips
+        .into_iter()
+        .filter(|clip| library.get(clip.id).is_none())
+        .collect()
 }
 
 fn reset_timeline_for_loaded_model(world: &mut World) {
     world.resource_mut::<TimelineState>().current_time = 0.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::systems::clip_library_register_and_activate;
+
+    #[test]
+    fn restore_registers_only_clips_the_reset_removed() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        let mut library = ClipLibrary::new();
+        let user_clip_id = clip_library_register_and_activate(
+            &mut library,
+            &mut assets,
+            EditableAnimationClip::new(0, "user".to_string()),
+        );
+        let model_clip_id = clip_library_register_and_activate(
+            &mut library,
+            &mut assets,
+            EditableAnimationClip::new(0, "model".to_string()),
+        );
+        library.model_clip_ids.insert(model_clip_id);
+        let scheduled_clips = vec![
+            library.get(user_clip_id).cloned().expect("user clip"),
+            library.get(model_clip_id).cloned().expect("model clip"),
+        ];
+        library.clear_model_clips();
+        world.insert_resource(library);
+
+        let removed_clips = select_clips_removed_from_library(&world, scheduled_clips);
+
+        let removed_names: Vec<&str> = removed_clips.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(removed_names, vec!["model"]);
+    }
 }

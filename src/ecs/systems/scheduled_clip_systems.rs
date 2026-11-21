@@ -38,6 +38,10 @@ const SCHEDULED_CLIP_SCENE_COMPONENT: SceneComponentHook = SceneComponentHook {
 fn capture_scheduled_clip(world: &World, entity: Entity) -> Option<SceneValue> {
     let clip_id = find_entity_clip_id(world, entity)?;
     let library = world.get_resource::<ClipLibrary>()?;
+    if library.is_model_clip(clip_id) {
+        return None;
+    }
+
     let clip = library.get(clip_id)?;
     encode_scene_value(&ScheduledClip {
         clip: clip.name.clone(),

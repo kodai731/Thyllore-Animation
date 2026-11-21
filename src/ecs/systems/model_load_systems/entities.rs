@@ -1,5 +1,7 @@
 use crate::asset::{AssetStorage, MeshAsset};
-use crate::ecs::component::{AnimationMeta, EditorDisplay, EntityIcon, ModelSource, MorphWeights};
+use crate::ecs::component::{
+    AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, ModelSource, MorphWeights,
+};
 use crate::ecs::resource::AnimationType;
 use crate::ecs::systems::{attach_morph_channel_catalogs, build_initial_clip_schedule};
 use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
@@ -66,9 +68,12 @@ pub(super) fn attach_model_entities(
         EditorDisplay::new(EntityIcon::Model).with_expanded(true),
     );
     if first_clip_id.is_some() || animation_type == AnimationType::Skeletal {
-        let initial_schedule = build_initial_clip_schedule(first_clip_id, world);
+        let schedule = world
+            .get_component::<ClipSchedule>(model_entity)
+            .cloned()
+            .unwrap_or_else(|| build_initial_clip_schedule(first_clip_id, world));
         world.insert_component(model_entity, Animator::new());
-        world.insert_component(model_entity, initial_schedule);
+        world.insert_component(model_entity, schedule);
         world.insert_component(
             model_entity,
             AnimationMeta {

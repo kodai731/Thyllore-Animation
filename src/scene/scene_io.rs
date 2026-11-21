@@ -1,6 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
@@ -86,29 +88,58 @@ fn save_animation_clips(
     world: &World,
     animations_dir: &Path,
 ) -> SceneResult<Vec<AnimationClipRef>> {
-    let clip_library = match world.get_resource::<ClipLibrary>() {
-        Some(cm) => cm,
-        None => return Ok(Vec::new()),
+    let Some(mut clip_library) = world.get_resource_mut::<ClipLibrary>() else {
+        return Ok(Vec::new());
     };
 
     let mut animation_clips = Vec::new();
-    let mut saved_paths = std::collections::HashSet::new();
+    let mut claimed_files = HashSet::new();
 
-    for (clip_id, clip_name) in crate::ecs::systems::clip_library_clip_names(&clip_library) {
-        if let Some(clip) = clip_library.get(clip_id) {
-            let clip_filename = sanitize_filename(&clip_name);
-            let relative_path = format!("animations/{}.anim.ron", clip_filename);
+    for clip_id in clip_library.user_clip_ids() {
+        let Some(source) = clip_library.get_source_mut(clip_id) else {
+            continue;
+        };
+        let clip = &mut source.editable_clip;
 
-            let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
-            save_animation_clip(&clip_path, clip)?;
+        let clip_file = choose_clip_file(clip, animations_dir, &claimed_files);
+        save_animation_clip(&clip_file, clip)?;
+        clip.source_path = Some(clip_file.to_string_lossy().into_owned());
 
-            if saved_paths.insert(relative_path.clone()) {
-                animation_clips.push(AnimationClipRef::new(&relative_path));
-            }
-        }
+        let file_name = clip_file.file_name().unwrap_or_default().to_string_lossy();
+        animation_clips.push(AnimationClipRef::new(&format!("animations/{file_name}")));
+        claimed_files.insert(clip_file);
     }
 
     Ok(animation_clips)
+}
+
+/// A clip keeps the file it was loaded from; a clip without one takes the first unused name.
+fn choose_clip_file(
+    clip: &EditableAnimationClip,
+    animations_dir: &Path,
+    claimed_files: &HashSet<PathBuf>,
+) -> PathBuf {
+    let owned_file = find_owned_clip_file(clip, animations_dir);
+    if let Some(owned_file) = owned_file.filter(|file| !claimed_files.contains(file)) {
+        return owned_file;
+    }
+
+    let file_stem = sanitize_filename(&clip.name);
+    let mut candidate = animations_dir.join(format!("{file_stem}.anim.ron"));
+    let mut next_suffix = 2;
+    while claimed_files.contains(&candidate) || candidate.exists() {
+        candidate = animations_dir.join(format!("{file_stem}_{next_suffix}.anim.ron"));
+        next_suffix += 1;
+    }
+    candidate
+}
+
+fn find_owned_clip_file(clip: &EditableAnimationClip, animations_dir: &Path) -> Option<PathBuf> {
+    let source_file = Path::new(clip.source_path.as_deref()?);
+    let file_name = source_file.file_name()?;
+    let source_dir = source_file.parent()?.canonicalize().ok()?;
+
+    (source_dir == animations_dir.canonicalize().ok()?).then(|| animations_dir.join(file_name))
 }
 
 fn write_scene_file(scene_path: &Path, scene: &SceneFile) -> SceneResult<()> {
@@ -151,7 +182,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
         .unwrap_or(Path::new("."));
 
     let mut clips = Vec::new();
-    let mut loaded_paths = std::collections::HashSet::new();
+    let mut loaded_paths = HashSet::new();
     for clip_ref in &scene.animation_clips {
         if !loaded_paths.insert(clip_ref.path.clone()) {
             continue;
@@ -178,7 +209,7 @@ pub fn find_default_scene() -> Option<PathBuf> {
 
 pub struct LoadedScene {
     pub scene: SceneFile,
-    pub clips: Vec<thyllore_anim_core::editable::EditableAnimationClip>,
+    pub clips: Vec<EditableAnimationClip>,
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -380,6 +411,87 @@ mod tests {
             .iter_components::<crate::ecs::component::DebugPrimitiveTag>()
             .next()
             .is_none());
+    }
+
+    fn register_clip(world: &World, assets: &mut crate::asset::AssetStorage, name: &str) -> u64 {
+        crate::ecs::systems::clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            assets,
+            EditableAnimationClip::new(0, name.to_string()),
+        )
+    }
+
+    fn list_clip_files(scene_path: &Path) -> Vec<String> {
+        let animations_dir = scene_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("animations");
+        let mut names: Vec<String> = fs::read_dir(animations_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn unedited_model_clips_are_left_to_the_model_file() {
+        let scene_path = scene_path_in("model_clips");
+        let mut world = world_with_resources();
+        world.insert_resource(ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        register_clip(&world, &mut assets, "Take 001");
+        let model_clip_id = register_clip(&world, &mut assets, "Take 001");
+        let edited_model_clip_id = register_clip(&world, &mut assets, "Walk");
+        {
+            let mut library = world.resource_mut::<ClipLibrary>();
+            library
+                .model_clip_ids
+                .extend([model_clip_id, edited_model_clip_id]);
+            library.get_mut(edited_model_clip_id).unwrap().duration = 2.0;
+        }
+
+        save_scene(&scene_path, &world).unwrap();
+
+        assert_eq!(
+            list_clip_files(&scene_path),
+            vec!["Take_001.anim.ron", "Walk.anim.ron"]
+        );
+        let loaded = load_scene(&scene_path).unwrap();
+        assert_eq!(loaded.clips.len(), 2);
+    }
+
+    #[test]
+    fn saving_never_overwrites_a_file_another_clip_owns() {
+        let scene_path = scene_path_in("clip_ownership");
+        let animations_dir = scene_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("animations");
+        fs::create_dir_all(&animations_dir).unwrap();
+        let foreign_file = animations_dir.join("Wave.anim.ron");
+        fs::write(&foreign_file, "foreign").unwrap();
+
+        let mut world = world_with_resources();
+        world.insert_resource(ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        register_clip(&world, &mut assets, "Wave");
+        register_clip(&world, &mut assets, "Wave");
+
+        save_scene(&scene_path, &world).unwrap();
+        save_scene(&scene_path, &world).unwrap();
+
+        assert_eq!(fs::read_to_string(&foreign_file).unwrap(), "foreign");
+        assert_eq!(
+            list_clip_files(&scene_path),
+            vec!["Wave.anim.ron", "Wave_2.anim.ron", "Wave_3.anim.ron"]
+        );
+        let loaded = load_scene(&scene_path).unwrap();
+        assert_eq!(loaded.scene.animation_clips.len(), 2);
     }
 
     #[test]

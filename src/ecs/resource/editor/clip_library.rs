@@ -49,14 +49,31 @@ impl ClipLibrary {
 
     /// A loaded clip the model did not bring stays selected across a model load.
     pub fn is_user_clip_selected(&self, selected: Option<SourceClipId>) -> bool {
-        selected.is_some_and(|id| self.get(id).is_some() && !self.model_clip_ids.contains(&id))
+        selected.is_some_and(|id| self.get(id).is_some() && !self.is_model_clip(id))
+    }
+
+    /// A model clip is still what the model file brought, so the model file is its only source.
+    pub fn is_model_clip(&self, id: SourceClipId) -> bool {
+        self.model_clip_ids.contains(&id)
+    }
+
+    pub fn user_clip_ids(&self) -> Vec<SourceClipId> {
+        let mut ids: Vec<SourceClipId> = self
+            .all_clip_ids()
+            .copied()
+            .filter(|id| !self.is_model_clip(*id))
+            .collect();
+        ids.sort_unstable();
+        ids
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
         self.source_clips.get(&id).map(|s| &s.editable_clip)
     }
 
+    /// Editing a model clip makes it the user's clip.
     pub fn get_mut(&mut self, id: SourceClipId) -> Option<&mut EditableAnimationClip> {
+        self.model_clip_ids.remove(&id);
         self.dirty_sources.insert(id);
         self.source_clips.get_mut(&id).map(|s| &mut s.editable_clip)
     }

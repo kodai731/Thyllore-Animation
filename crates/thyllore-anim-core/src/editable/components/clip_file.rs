@@ -73,6 +73,7 @@ impl AnimationClipFile {
 
         let mut file_clip = clip.clone();
         file_clip.scalar_curves.clear();
+        file_clip.source_path = None;
         retain_keyed_tracks(&mut file_clip);
 
         Ok(Self {

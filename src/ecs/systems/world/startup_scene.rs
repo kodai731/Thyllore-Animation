@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
 use crate::asset::AssetStorage;
-use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{SceneState, TimelineState};
-use crate::ecs::systems::{build_initial_clip_schedule, clip_library_register_loaded};
+use crate::ecs::resource::SceneState;
+use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::spawn_empty_scene_defaults;
 use crate::scene::{apply_loaded_scene_to_world, LoadedScene};
@@ -34,16 +33,4 @@ pub fn apply_startup_scene(
 fn restore_loaded_scene(world: &mut World, assets: &mut AssetStorage, loaded: &LoadedScene) {
     clip_library_register_loaded(world, assets, loaded.clips.clone());
     apply_loaded_scene_to_world(loaded, world, assets);
-    assign_active_clip_schedule(world);
-}
-
-fn assign_active_clip_schedule(world: &mut World) {
-    let Some(clip_id) = world.resource::<TimelineState>().current_clip_id else {
-        return;
-    };
-
-    let schedule = build_initial_clip_schedule(Some(clip_id), world);
-    for (_, existing) in world.iter_components_mut::<ClipSchedule>() {
-        *existing = schedule.clone();
-    }
 }

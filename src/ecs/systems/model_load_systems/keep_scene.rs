@@ -172,8 +172,7 @@ fn restore_kept_scene(kept_scene: KeptScene, world: &mut World, assets: &mut Ass
     apply_scene_entities(world, assets, &kept_scene.entities);
 }
 
-/// The model reset drops only the clips the old model brought; a clip that is still in the
-/// library must not be registered a second time.
+/// The model reset removes only the clips the old model brought; the others are still registered.
 fn select_clips_removed_from_library(
     world: &World,
     clips: Vec<EditableAnimationClip>,

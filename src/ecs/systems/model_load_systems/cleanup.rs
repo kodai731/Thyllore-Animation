@@ -7,7 +7,7 @@ use crate::ecs::resource::{
     BakedHumanoidClips, BonePoseOverride, ClipLibrary, MeshAssets, NodeAssets, PoseApplyCache,
     TimelineState,
 };
-use crate::ecs::systems::invalidate_humanoid_rig;
+use crate::ecs::systems::{clip_library_rebuild_playable_assets, invalidate_humanoid_rig};
 use crate::ecs::world::World;
 use crate::ecs::GpuSceneContext;
 
@@ -25,6 +25,7 @@ pub(super) unsafe fn reset_scene_model(
     reset_model_world_state(world);
     world.clear();
     assets.clear();
+    clip_library_rebuild_playable_assets(&mut world.resource_mut::<ClipLibrary>(), assets);
 
     log!("Model resources cleaned up");
     Ok(())

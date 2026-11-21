@@ -37,6 +37,23 @@ pub fn clip_library_register_and_activate(
     source_id
 }
 
+/// Gives every library clip its playable asset again once the asset storage was cleared.
+pub fn clip_library_rebuild_playable_assets(lib: &mut ClipLibrary, assets: &mut AssetStorage) {
+    let mut source_ids: Vec<SourceClipId> = lib.all_clip_ids().copied().collect();
+    source_ids.sort_unstable();
+
+    for source_id in source_ids {
+        let Some(playable) = clip_library_to_playable(lib, source_id) else {
+            continue;
+        };
+        let asset_id = assets.add_animation_clip(AnimationClipAsset {
+            id: 0,
+            clip: playable,
+        });
+        lib.source_to_asset_id.insert(source_id, asset_id);
+    }
+}
+
 /// Registers clips read from disk, returning each new id with the clip's name.
 pub fn clip_library_register_loaded(
     world: &mut crate::ecs::world::World,
@@ -335,6 +352,21 @@ mod tests {
 
         assert!(lib.source_clips.contains_key(&source_id));
         assert!(lib.source_to_asset_id.contains_key(&source_id));
+        assert_eq!(assets.animation_clips.len(), 1);
+    }
+
+    #[test]
+    fn rebuild_restores_the_playable_asset_of_every_clip() {
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let clip = EditableAnimationClip::new(0, "kept".to_string());
+        let source_id = clip_library_register_and_activate(&mut lib, &mut assets, clip);
+        assets.clear();
+
+        clip_library_rebuild_playable_assets(&mut lib, &mut assets);
+
+        let asset_id = lib.get_asset_id_for_source(source_id).expect("asset id");
+        assert!(assets.animation_clips.contains_key(&asset_id));
         assert_eq!(assets.animation_clips.len(), 1);
     }
 

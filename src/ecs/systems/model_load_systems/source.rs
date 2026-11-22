@@ -21,6 +21,15 @@ pub fn spawn_model_source(world: &mut World, model_file: &str) -> Entity {
     )
 }
 
+/// Has the next dispatch load the entity's file again; the entity keeps its name and scheduled clip.
+/// A generated model has no file to read again and stays as it is.
+pub fn request_model_reload(world: &mut World, model_entity: Entity) {
+    if world.get_component::<ModelSource>(model_entity).is_none() {
+        return;
+    }
+    world.remove_component::<Children>(model_entity);
+}
+
 /// The file a model entity loads: its path is relative to the scene's assets directory or absolute.
 pub(super) fn resolve_model_file(world: &World, model_entity: Entity) -> Option<PathBuf> {
     let source = world.get_component::<ModelSource>(model_entity)?;
@@ -158,6 +167,19 @@ mod tests {
         request_pending_model_loads(&mut world, &mut assets);
 
         assert_eq!(queued_load_entities(&world), vec![model_entity]);
+    }
+
+    #[test]
+    fn reload_request_makes_a_loaded_model_pending_again() {
+        let mut world = world_with_load_queue();
+        let mut assets = AssetStorage::new();
+        let model_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+
+        request_model_reload(&mut world, model_entity);
+        request_pending_model_loads(&mut world, &mut assets);
+
+        assert_eq!(queued_load_entities(&world), vec![model_entity]);
+        assert_eq!(entities_with::<ModelSource>(&world), vec![model_entity]);
     }
 
     #[test]

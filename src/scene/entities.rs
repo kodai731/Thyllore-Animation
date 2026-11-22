@@ -43,6 +43,7 @@ pub fn capture_scene_entities(world: &World) -> Vec<SceneEntity> {
 }
 
 /// The clips scheduled by owned entities, so they can be re-registered after a library reset.
+/// A model clip is left out: its model file brings it back.
 pub fn capture_scheduled_clips(world: &World) -> Vec<EditableAnimationClip> {
     let Some(hooks) = world.get_resource::<SceneComponentHooks>() else {
         return Vec::new();
@@ -54,6 +55,7 @@ pub fn capture_scheduled_clips(world: &World) -> Vec<EditableAnimationClip> {
     let clip_ids: BTreeSet<_> = owned_entities(world, hooks.owners())
         .into_iter()
         .filter_map(|entity| find_entity_clip_id(world, entity))
+        .filter(|clip_id| !library.is_model_clip(*clip_id))
         .collect();
     clip_ids
         .into_iter()

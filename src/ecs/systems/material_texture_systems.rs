@@ -8,7 +8,7 @@ use thyllore_avatar_core::material::{
 
 use crate::ecs::resource::{MaterialTextureSaveState, MaterialTextureSlot, MaterialTextureState};
 use crate::ecs::systems::find_model_path;
-use crate::ecs::systems::model_load_systems::spawn_model_source;
+use crate::ecs::systems::model_load_systems::{find_loaded_model_entity, request_model_reload};
 use crate::ecs::world::World;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
@@ -125,9 +125,11 @@ pub fn save_material_textures(world: &mut World) {
     msg_info!("Saved material textures to {}", remap_path.display());
 
     state.save_state = MaterialTextureSaveState::Saved;
-    let reloaded_model_file = state.source_model_path.clone();
     drop(state);
-    spawn_model_source(world, &reloaded_model_file);
+
+    if let Some(model_entity) = find_loaded_model_entity(world) {
+        request_model_reload(world, model_entity);
+    }
 }
 
 fn build_texture_remap(slots: &[MaterialTextureSlot]) -> MaterialTextureRemap {

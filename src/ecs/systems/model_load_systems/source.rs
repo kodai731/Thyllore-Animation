@@ -67,16 +67,25 @@ pub fn read_model_glb(world: &World, model_entity: Entity) -> Option<Result<Vec<
 }
 
 fn express_relative_to_assets(model_file: &Path, assets_dir: &Path) -> PathBuf {
-    let (Ok(canonical_file), Ok(canonical_assets_dir)) =
-        (model_file.canonicalize(), assets_dir.canonicalize())
-    else {
+    let Some((located_file, located_assets_dir)) = locate_from_root(model_file, assets_dir) else {
         return model_file.to_path_buf();
     };
 
-    match canonical_file.strip_prefix(&canonical_assets_dir) {
+    match located_file.strip_prefix(&located_assets_dir) {
         Ok(relative) => relative.to_path_buf(),
-        Err(_) => canonical_file,
+        Err(_) => located_file,
     }
+}
+
+/// Both paths from the filesystem root: through the links when the file exists, by name when it is missing.
+fn locate_from_root(model_file: &Path, assets_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    if let (Ok(file), Ok(dir)) = (model_file.canonicalize(), assets_dir.canonicalize()) {
+        return Some((file, dir));
+    }
+
+    let file = std::path::absolute(model_file).ok()?;
+    let dir = std::path::absolute(assets_dir).ok()?;
+    Some((file, dir))
 }
 
 fn find_pending_model_entities(world: &World) -> Vec<Entity> {
@@ -171,6 +180,17 @@ mod tests {
             assets_dir.join(&source_path).canonicalize().unwrap(),
             model_file.canonicalize().unwrap()
         );
+    }
+
+    #[test]
+    fn missing_model_file_inside_the_assets_directory_is_stored_relative_to_it() {
+        let assets_dir = Path::new("thyllore_missing_assets");
+        let model_file = assets_dir.join("models/avatar/missing.fbx");
+
+        let source_path = express_relative_to_assets(&model_file, assets_dir);
+
+        assert_eq!(source_path, PathBuf::from("models/avatar/missing.fbx"));
+        assert_eq!(assets_dir.join(&source_path), model_file);
     }
 
     #[test]

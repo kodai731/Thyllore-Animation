@@ -95,6 +95,11 @@ fn find_pending_model_entities(world: &World) -> Vec<Entity> {
         .collect()
 }
 
+/// True while a model entity still waits for its meshes, so work that needs the model can wait too.
+pub fn is_model_load_pending(world: &World) -> bool {
+    !find_pending_model_entities(world).is_empty()
+}
+
 fn request_pending_model_loads(world: &mut World, _: &mut AssetStorage) {
     let pending = find_pending_model_entities(world);
     if pending.is_empty() {

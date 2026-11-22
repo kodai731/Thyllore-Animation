@@ -6,18 +6,19 @@ use super::flags::DEFAULT_SCREENSHOT_FRAME;
 use super::test_support::{args, drained_command_names, write_test_png};
 use super::*;
 use crate::asset::AssetStorage;
-use crate::ecs::component::MotionPath;
+use crate::ecs::component::{ModelSource, MotionPath};
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{
     BatchAnimEdit, BatchEffectOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule,
-    ClipLibrary, DebugViewMode, DebugViewState, FrameClock, ScheduledBatchAction,
-    ScheduledBatchActions, TimelineState,
+    ClipLibrary, DebugViewMode, DebugViewState, FrameClock, PendingBatchAnimEdits,
+    ScheduledBatchAction, ScheduledBatchActions, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     probe_property, spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::hooks::scene::spawn_scene_owner;
 use crate::scene::test_support::ProbeOwner;
 
 #[test]
@@ -1125,4 +1126,59 @@ fn compose_edit_rejects_an_unknown_motion_at_parse_time() {
     assert!(anim_edit_parse_spec("compose=").is_err());
     assert!(anim_edit_parse_spec("compose=punch,count=0").is_err());
     assert!(anim_edit_parse_spec("compose=punch,count=2").is_ok());
+}
+
+fn world_with_pending_probe_key() -> (World, AssetStorage) {
+    let mut world = World::new();
+    spawn_probe(&mut world, "Probe");
+    world.insert_resource(ClipLibrary::new());
+    world.insert_resource(TimelineState::new());
+    world.insert_resource(crate::ecs::resource::EditHistory::new(10));
+    world.insert_resource(PendingBatchAnimEdits {
+        edits: vec![BatchAnimEdit::Key {
+            property_type: probe_property(&PROBE_LEVEL),
+            time: 1.0,
+            value: 3.5,
+        }],
+    });
+    (world, AssetStorage::new())
+}
+
+fn count_scalar_keys(world: &World) -> usize {
+    let library = world.resource::<ClipLibrary>();
+    library
+        .all_clip_ids()
+        .filter_map(|clip_id| library.get(*clip_id))
+        .map(|clip| clip.total_keyframe_count())
+        .sum()
+}
+
+#[test]
+fn pending_anim_edits_apply_in_a_scene_without_a_model() {
+    let (mut world, mut assets) = world_with_pending_probe_key();
+
+    batch_apply_pending_anim_edits(&mut world, &mut assets);
+
+    assert_eq!(count_scalar_keys(&world), 1);
+    assert!(!world.contains_resource::<PendingBatchAnimEdits>());
+}
+
+#[test]
+fn pending_anim_edits_wait_for_the_model_load() {
+    let (mut world, mut assets) = world_with_pending_probe_key();
+    let model_entity = spawn_scene_owner(&mut world, "model", ModelSource::new("model.fbx"));
+
+    batch_apply_pending_anim_edits(&mut world, &mut assets);
+    assert_eq!(count_scalar_keys(&world), 0);
+    assert!(world.contains_resource::<PendingBatchAnimEdits>());
+
+    world
+        .entity()
+        .with_name("mesh")
+        .with_parent(model_entity)
+        .build();
+    batch_apply_pending_anim_edits(&mut world, &mut assets);
+
+    assert_eq!(count_scalar_keys(&world), 1);
+    assert!(!world.contains_resource::<PendingBatchAnimEdits>());
 }

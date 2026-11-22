@@ -3,6 +3,7 @@ use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{
     BakedHumanoidClips, BatchAnimEdit, BoneAxis, ClipLibrary, PendingBatchAnimEdits, TimelineState,
 };
+use crate::ecs::systems::model_load_systems::is_model_load_pending;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::{
     dispatch_scalar_clip_events, ScalarCurveEvent,
@@ -163,17 +164,16 @@ fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str)
     }
 }
 
+/// The edits wait for the scene's model, whose skeleton and clips they may name.
 pub fn batch_apply_pending_anim_edits(world: &mut World, assets: &mut AssetStorage) {
-    use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
-    let edits = match world.remove_resource::<PendingBatchAnimEdits>() {
-        Some(resource) => resource.edits,
-        None => return,
-    };
-    if find_first_skeleton(assets).is_some() {
-        batch_apply_anim_edits(world, assets, &edits);
-    } else {
-        world.insert_resource(PendingBatchAnimEdits { edits });
+    if is_model_load_pending(world) {
+        return;
     }
+    let Some(pending) = world.remove_resource::<PendingBatchAnimEdits>() else {
+        return;
+    };
+
+    batch_apply_anim_edits(world, assets, &pending.edits);
 }
 
 pub fn batch_apply_anim_edits(

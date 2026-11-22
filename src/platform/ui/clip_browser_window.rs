@@ -6,7 +6,7 @@ use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, Timeli
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
-use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -174,30 +174,71 @@ fn build_clip_list(
                     continue;
                 }
 
-                let is_selected = timeline_state.current_clip_id == Some(*id);
-                let ref_count = count_clip_references(reference_counts, *id);
-
-                let clip = clip_library.get(*id);
-                let duration = clip.map(|c| c.duration).unwrap_or(0.0);
-                let source_filename = extract_source_filename(clip);
-
-                let label = if source_filename.is_empty() {
-                    format!("{} ({:.1}s) [{}]##clip_{}", name, duration, ref_count, id)
-                } else {
-                    format!(
-                        "{} ({:.1}s) [{}] <{}>##clip_{}",
-                        name, duration, ref_count, source_filename, id
-                    )
+                let Some(clip) = clip_library.get(*id) else {
+                    continue;
                 };
-
-                if ui.selectable_config(&label).selected(is_selected).build() {
-                    world.send_command(TimelineEvent::SelectClip(*id));
-                }
-
-                build_clip_drag_source(ui, *id, name);
-                build_clip_row_menu(ui, world, *id, ref_count);
+                let row = ClipRow {
+                    id: *id,
+                    clip,
+                    is_selected: timeline_state.current_clip_id == Some(*id),
+                    reference_count: count_clip_references(reference_counts, *id),
+                };
+                build_clip_row(ui, world, &row);
             }
         });
+}
+
+struct ClipRow<'a> {
+    id: SourceClipId,
+    clip: &'a EditableAnimationClip,
+    is_selected: bool,
+    reference_count: usize,
+}
+
+fn build_clip_row(ui: &imgui::Ui, world: &World, row: &ClipRow) {
+    if ui
+        .selectable_config(format_clip_row_label(row))
+        .selected(row.is_selected)
+        .build()
+    {
+        world.send_command(TimelineEvent::SelectClip(row.id));
+    }
+    if ui.is_item_hovered() {
+        show_unbound_tracks_tooltip(ui, row.clip);
+    }
+
+    build_clip_drag_source(ui, row.id, &row.clip.name);
+    build_clip_row_menu(ui, world, row.id, row.reference_count);
+}
+
+fn format_clip_row_label(row: &ClipRow) -> String {
+    let clip = row.clip;
+    let mut label = format!(
+        "{} ({:.1}s) [{}]",
+        clip.name, clip.duration, row.reference_count
+    );
+
+    let source_filename = extract_source_filename(clip);
+    if !source_filename.is_empty() {
+        label.push_str(&format!(" <{source_filename}>"));
+    }
+    if !clip.unbound_tracks.is_empty() {
+        label.push_str(&format!(" ({} unbound)", clip.unbound_tracks.len()));
+    }
+
+    format!("{label}##clip_{}", row.id)
+}
+
+fn show_unbound_tracks_tooltip(ui: &imgui::Ui, clip: &EditableAnimationClip) {
+    let unbound_track_names = clip.unbound_track_names();
+    if unbound_track_names.is_empty() {
+        return;
+    }
+
+    ui.tooltip_text(format!(
+        "Tracks kept for bones this model lacks (not played):\n{}",
+        unbound_track_names.join("\n")
+    ));
 }
 
 fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
@@ -228,14 +269,12 @@ fn build_clip_row_menu(
     }
 }
 
-fn extract_source_filename(
-    clip: Option<&thyllore_anim_core::editable::EditableAnimationClip>,
-) -> String {
-    clip.and_then(|c| c.source_path.as_ref())
-        .and_then(|p| std::path::Path::new(p).file_name())
-        .and_then(|n| n.to_str())
+fn extract_source_filename(clip: &EditableAnimationClip) -> &str {
+    clip.source_path
+        .as_ref()
+        .and_then(|path| std::path::Path::new(path).file_name())
+        .and_then(|file_name| file_name.to_str())
         .unwrap_or("")
-        .to_string()
 }
 
 fn build_clip_browser_window(

@@ -102,7 +102,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
-use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
+use thyllore_anim_core::editable::SourceClipId;
 
 pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
     let Some(model_path) = find_model_path(world) else {
@@ -156,19 +156,12 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
             log_warn!(
                 "clip '{}' keeps tracks not on this model unbound: {:?}",
                 clip.name,
-                collect_unbound_track_names(clip)
+                clip.unbound_track_names()
             );
         }
 
         library.mark_dirty(id);
     }
-}
-
-fn collect_unbound_track_names(clip: &EditableAnimationClip) -> Vec<&str> {
-    clip.unbound_tracks
-        .iter()
-        .map(|track| track.bone_name.as_str())
-        .collect()
 }
 
 pub fn invalidate_humanoid_rig(world: &mut World) {
@@ -192,6 +185,7 @@ pub fn engine_bone_name_to_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_anim_core::editable::EditableAnimationClip;
     use thyllore_anim_core::editable::SourceClip;
 
     use thyllore_avatar_core::humanoid::save_generic_rig;
@@ -404,10 +398,7 @@ mod tests {
         let library = world.resource::<ClipLibrary>();
         let clip = library.get(source_id).expect("clip should exist");
         assert!(clip.tracks.is_empty());
-        assert_eq!(
-            collect_unbound_track_names(clip),
-            vec!["BoneOfAnotherModel"]
-        );
+        assert_eq!(clip.unbound_track_names(), vec!["BoneOfAnotherModel"]);
         assert_eq!(clip.total_keyframe_count(), 0);
         assert_eq!(clip.unbound_tracks[0].total_keyframe_count(), 1);
     }

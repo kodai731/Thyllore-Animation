@@ -84,6 +84,14 @@ impl EditableAnimationClip {
         self.tracks.len()
     }
 
+    /// Bones the loaded model lacks; their tracks are kept but not played.
+    pub fn unbound_track_names(&self) -> Vec<&str> {
+        self.unbound_tracks
+            .iter()
+            .map(|track| track.bone_name.as_str())
+            .collect()
+    }
+
     pub fn total_keyframe_count(&self) -> usize {
         let bone_keys: usize = self.tracks.values().map(|t| t.total_keyframe_count()).sum();
         let scalar_keys: usize = self.scalar_curves.iter().map(|c| c.keyframe_count()).sum();

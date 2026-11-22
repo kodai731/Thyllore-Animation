@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::clip::EditableAnimationClip;
 use super::curve::{CurveExtrapolation, PropertyCurve, PropertyType};
 use super::keyframe::{CurveId, EditableKeyframe, KeyframeId};
+use super::track::BoneTrack;
 
 pub const ANIMATION_FORMAT_VERSION: u32 = 3;
 
@@ -112,11 +113,14 @@ impl AnimationClipFile {
 }
 
 fn retain_keyed_tracks(clip: &mut EditableAnimationClip) {
-    clip.tracks.retain(|_, track| {
-        track.has_rotation_keyframes()
-            || track.has_translation_keyframes()
-            || track.has_scale_keyframes()
-    });
+    clip.tracks.retain(|_, track| is_keyed(track));
+    clip.unbound_tracks.retain(is_keyed);
+}
+
+fn is_keyed(track: &BoneTrack) -> bool {
+    track.has_rotation_keyframes()
+        || track.has_translation_keyframes()
+        || track.has_scale_keyframes()
 }
 
 #[cfg(test)]
@@ -129,6 +133,29 @@ mod tests {
         let curve = clip.get_or_add_scalar_curve(property_type);
         curve_add_keyframe(curve, 0.5, 2.0);
         clip
+    }
+
+    #[test]
+    fn unbound_tracks_round_trip_and_unkeyed_ones_are_left_out() {
+        let mut clip = EditableAnimationClip::new(1, "clip".to_string());
+        let mut keyed = BoneTrack::new(3, "tail".to_string(), 100);
+        curve_add_keyframe(&mut keyed.rotation_x, 0.5, 2.0);
+        clip.unbound_tracks.push(keyed);
+        clip.unbound_tracks
+            .push(BoneTrack::new(4, "unkeyed".to_string(), 200));
+
+        let file = AnimationClipFile::from_clip(&clip, |_| None).expect("no scalar curves");
+        let text = ron::to_string(&file).expect("encode");
+        let decoded: AnimationClipFile = ron::from_str(&text).expect("decode");
+        let loaded = decoded.into_clip(|_| None).expect("no scalar curves");
+
+        let names: Vec<&str> = loaded
+            .unbound_tracks
+            .iter()
+            .map(|track| track.bone_name.as_str())
+            .collect();
+        assert_eq!(names, vec!["tail"]);
+        assert_eq!(loaded.unbound_tracks[0].total_keyframe_count(), 1);
     }
 
     #[test]

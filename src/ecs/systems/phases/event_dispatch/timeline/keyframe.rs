@@ -153,6 +153,70 @@ mod tests {
         }
     }
 
+    fn model_clip_with_three_keys() -> (TimelineState, ClipLibrary) {
+        let (state, mut library) = clip_with_three_keys();
+        library
+            .model_clip_ids
+            .extend(state.current_clip_id.iter().copied());
+        (state, library)
+    }
+
+    #[test]
+    fn events_that_edit_nothing_leave_a_model_clip_untouched() {
+        let (mut state, mut library) = model_clip_with_three_keys();
+        let clip_id = state.current_clip_id.unwrap();
+        let events = [
+            TimelineEvent::Play,
+            TimelineEvent::SetTime(0.5),
+            TimelineEvent::SelectClip(clip_id),
+        ];
+
+        let modified = apply_keyframe_edits(&events, &mut state, &mut library);
+
+        assert!(!modified);
+        assert!(library.is_model_clip(clip_id));
+        assert!(!library.is_dirty(clip_id));
+    }
+
+    #[test]
+    fn delete_with_empty_selection_leaves_a_model_clip_untouched() {
+        let (mut state, mut library) = model_clip_with_three_keys();
+        let clip_id = state.current_clip_id.unwrap();
+        state.selected_keyframes.clear();
+
+        let modified = apply_keyframe_edits(
+            &[TimelineEvent::DeleteSelectedKeyframes],
+            &mut state,
+            &mut library,
+        );
+
+        assert!(!modified);
+        assert!(library.is_model_clip(clip_id));
+        assert!(!library.is_dirty(clip_id));
+    }
+
+    #[test]
+    fn keyframe_edit_turns_a_model_clip_into_a_user_clip() {
+        let (mut state, mut library) = model_clip_with_three_keys();
+        let clip_id = state.current_clip_id.unwrap();
+        let events = [TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 }];
+
+        let modified = apply_keyframe_edits(&events, &mut state, &mut library);
+
+        assert!(modified);
+        assert!(!library.is_model_clip(clip_id));
+        assert!(library.is_dirty(clip_id));
+    }
+
+    #[test]
+    fn edit_of_a_missing_clip_reports_no_change() {
+        let (mut state, mut library) = clip_with_three_keys();
+        state.current_clip_id = Some(99);
+        let events = [TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 }];
+
+        assert!(!apply_keyframe_edits(&events, &mut state, &mut library));
+    }
+
     #[test]
     fn scalar_add_keyframe_rejects_bone_property_types() {
         let (mut state, mut library) = clip_with_three_keys();

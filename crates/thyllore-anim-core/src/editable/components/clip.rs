@@ -19,6 +19,9 @@ pub struct EditableAnimationClip {
     #[serde(default)]
     pub min_duration: f32,
     pub tracks: HashMap<BoneId, BoneTrack>,
+    /// Tracks whose bone name the bound model lacks; `clip_remap_bone_ids` binds them again by name.
+    #[serde(default)]
+    pub unbound_tracks: Vec<BoneTrack>,
     /// Keyed by process-local `PropertyType::Custom` codes; `AnimationClipFile` persists them by name.
     #[serde(skip)]
     pub scalar_curves: Vec<PropertyCurve>,
@@ -36,6 +39,7 @@ impl EditableAnimationClip {
             duration: 0.0,
             min_duration: 0.0,
             tracks: HashMap::new(),
+            unbound_tracks: Vec::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),
             source_path: None,
@@ -239,6 +243,7 @@ impl Default for EditableAnimationClip {
             duration: 0.0,
             min_duration: 0.0,
             tracks: HashMap::new(),
+            unbound_tracks: Vec::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),
             source_path: None,

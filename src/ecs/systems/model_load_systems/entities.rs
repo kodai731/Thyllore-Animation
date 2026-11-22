@@ -210,3 +210,59 @@ pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {
         .unwrap_or(fallback)
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::resource::ClipLibrary;
+    use crate::ecs::systems::{
+        clip_library_register_and_activate, find_entity_clip_id, schedule_entity_clip,
+    };
+    use crate::hooks::scene::spawn_scene_owner;
+    use thyllore_anim_core::editable::EditableAnimationClip;
+
+    fn spawn_model_with_clip(world: &mut World, assets: &mut AssetStorage, name: &str) -> Entity {
+        let entity = spawn_scene_owner(world, name, ModelSource::new(name));
+        let clip_id = clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            assets,
+            EditableAnimationClip::new(0, name.to_string()),
+        );
+        schedule_entity_clip(world, entity, clip_id);
+        entity
+    }
+
+    fn world_with_two_models() -> (World, Entity, Entity) {
+        let mut world = World::new();
+        let mut assets = AssetStorage::new();
+        world.insert_resource(ClipLibrary::new());
+        let previous = spawn_model_with_clip(&mut world, &mut assets, "previous");
+        let loading = spawn_model_with_clip(&mut world, &mut assets, "loading");
+        (world, previous, loading)
+    }
+
+    #[test]
+    fn replaced_model_entity_leaves_with_its_scheduled_clip() {
+        let (mut world, previous, loading) = world_with_two_models();
+        let previous_clip = find_entity_clip_id(&world, previous).expect("previous clip");
+        let loading_clip = find_entity_clip_id(&world, loading).expect("loading clip");
+
+        despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
+        assert_eq!(find_entity_clip_id(&world, loading), Some(loading_clip));
+        let library = world.resource::<ClipLibrary>();
+        assert!(library.get(previous_clip).is_none());
+        assert!(library.get(loading_clip).is_some());
+    }
+
+    #[test]
+    fn despawning_every_model_entity_removes_their_scheduled_clips() {
+        let (mut world, _, _) = world_with_two_models();
+
+        despawn_model_source_entities(&mut world);
+
+        assert!(entities_with::<ModelSource>(&world).is_empty());
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 0);
+    }
+}

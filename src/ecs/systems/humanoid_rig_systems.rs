@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 use thyllore_anim_core::BoneId;
@@ -151,16 +151,12 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
             continue;
         };
 
-        let names_before = collect_track_names(clip);
         clip_remap_bone_ids(clip, &table);
-        let names_after = collect_track_names(clip);
-
-        let dropped: Vec<&String> = names_before.difference(&names_after).collect();
-        if !dropped.is_empty() {
+        if !clip.unbound_tracks.is_empty() {
             log_warn!(
-                "clip '{}' dropped tracks not on this model: {:?}",
+                "clip '{}' keeps tracks not on this model unbound: {:?}",
                 clip.name,
-                dropped
+                collect_unbound_track_names(clip)
             );
         }
 
@@ -168,10 +164,10 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
     }
 }
 
-fn collect_track_names(clip: &EditableAnimationClip) -> HashSet<String> {
-    clip.tracks
-        .values()
-        .map(|track| track.bone_name.clone())
+fn collect_unbound_track_names(clip: &EditableAnimationClip) -> Vec<&str> {
+    clip.unbound_tracks
+        .iter()
+        .map(|track| track.bone_name.as_str())
         .collect()
 }
 
@@ -375,6 +371,45 @@ mod tests {
             .get_track(expected_bone_id)
             .expect("track should be at remapped bone id");
         assert_eq!(track.bone_id, expected_bone_id);
+    }
+
+    #[test]
+    fn sync_keeps_tracks_of_bones_the_new_model_lacks() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        world.insert_resource(ClipLibrary::new());
+
+        let source_id: SourceClipId = 1;
+        {
+            let mut library = world.resource_mut::<ClipLibrary>();
+            let mut clip = EditableAnimationClip::new(source_id, "other model".to_string());
+            let track = clip.add_track(0, "BoneOfAnotherModel".to_string());
+            let curve = track.get_curve_mut(thyllore_anim_core::editable::PropertyType::RotationX);
+            thyllore_anim_core::editable::curve_add_keyframe(curve, 0.0, 0.5);
+            library
+                .source_clips
+                .insert(source_id, SourceClip::new(source_id, clip));
+        }
+
+        sync_humanoid_rig(&mut world, &assets);
+
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id).expect("clip should exist");
+        assert!(clip.tracks.is_empty());
+        assert_eq!(
+            collect_unbound_track_names(clip),
+            vec!["BoneOfAnotherModel"]
+        );
+        assert_eq!(clip.total_keyframe_count(), 0);
+        assert_eq!(clip.unbound_tracks[0].total_keyframe_count(), 1);
     }
 
     #[test]

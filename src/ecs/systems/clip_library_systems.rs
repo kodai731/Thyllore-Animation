@@ -311,13 +311,21 @@ fn deserialize_clip(content: &str) -> Result<EditableAnimationClip> {
     }
 }
 
-/// The first clip with bone tracks by id, else the first clip, so a batch run never plays an
-/// empty default clip when a model animation exists.
+/// The library's first animated clip by id, see `select_first_animated_clip`.
 pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
     let clip_library = world.get_resource::<ClipLibrary>()?;
     let mut clip_ids: Vec<_> = clip_library.all_clip_ids().copied().collect();
     clip_ids.sort_unstable();
 
+    select_first_animated_clip(&clip_library, &clip_ids)
+}
+
+/// The first clip with bone tracks, else the first clip, so an empty default take never
+/// shadows the animation a model brought.
+pub fn select_first_animated_clip(
+    clip_library: &ClipLibrary,
+    clip_ids: &[SourceClipId],
+) -> Option<SourceClipId> {
     clip_ids
         .iter()
         .copied()

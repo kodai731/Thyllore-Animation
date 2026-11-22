@@ -4,7 +4,9 @@ use crate::ecs::systems::{
     build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
     timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
 };
-use crate::ecs::systems::{clip_library_register_and_activate, find_best_clip};
+use crate::ecs::systems::{
+    clip_library_register_and_activate, find_best_clip, select_first_animated_clip,
+};
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use thyllore_anim_core::AnimationClip;
@@ -148,12 +150,16 @@ fn register_clips_to_library(
         .resource_mut::<TimelineState>()
         .requested_clip_name
         .take();
-    let editable_id = select_start_clip(&model_clips, requested_clip_name.as_deref())?;
-    let clip_duration = world
-        .resource::<ClipLibrary>()
-        .get(editable_id)
-        .map(|c| c.duration)
-        .unwrap_or(0.0);
+    let (editable_id, clip_duration) = {
+        let clip_library = world.resource::<ClipLibrary>();
+        let editable_id =
+            select_start_clip(&clip_library, &model_clips, requested_clip_name.as_deref())?;
+        let clip_duration = clip_library
+            .get(editable_id)
+            .map(|c| c.duration)
+            .unwrap_or(0.0);
+        (editable_id, clip_duration)
+    };
     let keeps_user = keeps_selected_user_clip(world);
     let mut timeline_state = world.resource_mut::<TimelineState>();
     if !keeps_user {
@@ -165,16 +171,22 @@ fn register_clips_to_library(
     Some(editable_id)
 }
 
-/// The clip the scene named when the model brought it, otherwise the model's first clip.
+/// The clip the scene named when the model brought it, otherwise the model's first animated clip.
 fn select_start_clip(
+    clip_library: &ClipLibrary,
     model_clips: &[(SourceClipId, String)],
     requested_clip_name: Option<&str>,
 ) -> Option<SourceClipId> {
     let requested_clip = model_clips
         .iter()
-        .find(|(_, clip_name)| requested_clip_name == Some(clip_name.as_str()));
+        .find(|(_, clip_name)| requested_clip_name == Some(clip_name.as_str()))
+        .map(|(id, _)| *id);
+    if requested_clip.is_some() {
+        return requested_clip;
+    }
 
-    requested_clip.or(model_clips.first()).map(|(id, _)| *id)
+    let model_clip_ids: Vec<SourceClipId> = model_clips.iter().map(|(id, _)| *id).collect();
+    select_first_animated_clip(clip_library, &model_clip_ids)
 }
 
 fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) -> SourceClipId {
@@ -337,6 +349,27 @@ mod tests {
 
         assert_eq!(current_clip_name(&world).as_deref(), Some("walk"));
         assert_eq!(world.resource::<TimelineState>().requested_clip_name, None);
+    }
+
+    #[test]
+    fn model_load_skips_an_empty_take_for_the_first_animated_clip() {
+        use thyllore_anim_core::{Keyframe, TransformChannel};
+
+        let (mut world, mut assets) = world_requesting_clip(None);
+        let mut animated_clip = AnimationClip::new("jog");
+        animated_clip.add_channel(
+            0,
+            TransformChannel {
+                translation: vec![Keyframe::new(0.0, glam::Vec3::X)],
+                rotation: Vec::new(),
+                scale: Vec::new(),
+            },
+        );
+        let loaded_clips = vec![AnimationClip::new("empty take"), animated_clip];
+
+        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+
+        assert_eq!(current_clip_name(&world).as_deref(), Some("jog"));
     }
 
     #[test]

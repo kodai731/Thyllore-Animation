@@ -13,6 +13,22 @@ use thyllore_anim_core::editable::{
 };
 use thyllore_anim_core::{AnimationClip, BoneId};
 
+pub const EMPTY_MODEL_CLIP_DURATION_SECONDS: f32 = 5.0;
+
+/// The clip a model without animation is given, so the model can always be keyed.
+pub fn clip_library_register_empty_model_clip(
+    lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
+) -> SourceClipId {
+    let mut editable = EditableAnimationClip::new(0, "New Animation".to_string());
+    editable.duration = EMPTY_MODEL_CLIP_DURATION_SECONDS;
+    editable.min_duration = EMPTY_MODEL_CLIP_DURATION_SECONDS;
+
+    let source_id = clip_library_register_and_activate(lib, assets, editable);
+    lib.model_clip_ids.insert(source_id);
+    source_id
+}
+
 pub fn clip_library_register_and_activate(
     lib: &mut ClipLibrary,
     assets: &mut AssetStorage,
@@ -320,7 +336,7 @@ pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
     select_first_animated_clip(&clip_library, &clip_ids)
 }
 
-/// The first clip with bone tracks, else the first clip, so an empty default take never
+/// The first clip with bone or morph tracks, else the first clip, so an empty default take never
 /// shadows the animation a model brought.
 pub fn select_first_animated_clip(
     clip_library: &ClipLibrary,
@@ -332,7 +348,7 @@ pub fn select_first_animated_clip(
         .find(|&id| {
             clip_library
                 .get(id)
-                .is_some_and(|clip| !clip.tracks.is_empty())
+                .is_some_and(|clip| clip.has_pose_tracks())
         })
         .or_else(|| clip_ids.first().copied())
 }

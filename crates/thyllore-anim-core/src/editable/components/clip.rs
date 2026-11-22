@@ -92,6 +92,11 @@ impl EditableAnimationClip {
             .collect()
     }
 
+    /// Bone and morph tracks pose a model; a clip with neither is an empty take.
+    pub fn has_pose_tracks(&self) -> bool {
+        !self.tracks.is_empty() || !self.morph_tracks.is_empty()
+    }
+
     pub fn total_keyframe_count(&self) -> usize {
         let bone_keys: usize = self.tracks.values().map(|t| t.total_keyframe_count()).sum();
         let scalar_keys: usize = self.scalar_curves.iter().map(|c| c.keyframe_count()).sum();

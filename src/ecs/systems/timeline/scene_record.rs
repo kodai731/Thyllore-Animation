@@ -7,10 +7,10 @@ use crate::hooks::scene_resource::SceneResourceHook;
 use thyllore_anim_core::editable::SourceClipId;
 
 /// Persisted timeline state; the active clip is named because clip ids are not stable on disk.
+/// Whether the timeline plays is not part of a scene: a scene opens stopped.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TimelineSceneRecord {
     pub current_time: f32,
-    pub playing: bool,
     pub looping: bool,
     pub speed: f32,
     pub current_clip: Option<String>,
@@ -18,13 +18,8 @@ pub struct TimelineSceneRecord {
 
 impl thyllore_scene_core::SceneComponent for TimelineSceneRecord {
     const TYPE_KEY: &'static str = "timeline";
-    const PERSISTED_FIELDS: &'static [&'static str] = &[
-        "current_time",
-        "playing",
-        "looping",
-        "speed",
-        "current_clip",
-    ];
+    const PERSISTED_FIELDS: &'static [&'static str] =
+        &["current_time", "looping", "speed", "current_clip"];
 }
 
 inventory::submit! { TIMELINE_SCENE_RESOURCE }
@@ -44,7 +39,6 @@ fn capture_timeline_scene_record(world: &World) -> Option<SceneValue> {
     });
     encode_scene_value(&TimelineSceneRecord {
         current_time: timeline.current_time,
-        playing: timeline.playing,
         looping: timeline.looping,
         speed: timeline.speed,
         current_clip,
@@ -63,7 +57,6 @@ fn apply_timeline_scene_record(world: &mut World, value: &SceneValue) -> anyhow:
         anyhow::bail!("TimelineState resource missing");
     };
     timeline.current_time = record.current_time;
-    timeline.playing = record.playing;
     timeline.looping = record.looping;
     timeline.speed = record.speed;
 
@@ -112,7 +105,6 @@ mod tests {
     fn record_naming(current_clip: &str) -> SceneValue {
         encode_scene_value(&TimelineSceneRecord {
             current_time: 0.5,
-            playing: false,
             looping: true,
             speed: 1.0,
             current_clip: Some(current_clip.to_string()),
@@ -152,5 +144,43 @@ mod tests {
         let record: TimelineSceneRecord = decode_scene_value(&value).expect("decode");
 
         assert_eq!(record.current_clip.as_deref(), Some("user"));
+    }
+
+    #[derive(serde::Serialize)]
+    struct RecordWithPlayingFlag {
+        current_time: f32,
+        playing: bool,
+        looping: bool,
+        speed: f32,
+        current_clip: Option<String>,
+    }
+
+    #[test]
+    fn scene_saved_while_playing_opens_stopped() {
+        let (mut world, _) = world_with_library_clip("user");
+        let saved_while_playing = encode_scene_value(&RecordWithPlayingFlag {
+            current_time: 0.5,
+            playing: true,
+            looping: true,
+            speed: 1.0,
+            current_clip: None,
+        })
+        .expect("encode");
+
+        apply_timeline_scene_record(&mut world, &saved_while_playing).expect("apply");
+
+        let timeline = world.resource::<TimelineState>();
+        assert!(!timeline.playing);
+        assert_eq!(timeline.current_time, 0.5);
+    }
+
+    #[test]
+    fn applying_a_record_keeps_the_running_playback() {
+        let (mut world, _) = world_with_library_clip("user");
+        world.resource_mut::<TimelineState>().playing = true;
+
+        apply_timeline_scene_record(&mut world, &record_naming("user")).expect("apply");
+
+        assert!(world.resource::<TimelineState>().playing);
     }
 }

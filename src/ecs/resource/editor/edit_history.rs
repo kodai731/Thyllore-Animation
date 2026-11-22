@@ -5,6 +5,14 @@ use crate::ecs::resource::{RemovedClip, SkeletonSnapshot};
 use crate::ecs::world::Entity;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
+/// What deleting a clip changed besides the library, so an undo puts all of it back.
+#[derive(Clone, Debug, Default)]
+pub struct ClipDeletionEffects {
+    pub schedules: Vec<(Entity, ClipSchedule)>,
+    pub selected_clip: Option<SourceClipId>,
+    pub created_clip: Option<SourceClipId>,
+}
+
 #[derive(Clone, Debug)]
 pub enum EditCommand {
     ClipModified {
@@ -24,6 +32,7 @@ pub enum EditCommand {
     ClipRemoved {
         clip_id: SourceClipId,
         removed: RemovedClip,
+        effects: ClipDeletionEffects,
         description: &'static str,
     },
     SkeletonModified {
@@ -138,12 +147,14 @@ impl EditHistory {
         &mut self,
         clip_id: SourceClipId,
         removed: RemovedClip,
+        effects: ClipDeletionEffects,
         description: &'static str,
     ) {
         let entry = EditEntry {
             command: EditCommand::ClipRemoved {
                 clip_id,
                 removed,
+                effects,
                 description,
             },
             after: EditCommandAfter::Empty,
@@ -364,6 +375,7 @@ mod tests {
                     source: SourceClip::new(1, make_dummy_clip("removed")),
                     origin: ClipOrigin::User,
                 },
+                effects: ClipDeletionEffects::default(),
                 description: "Remove clip",
             },
             EditCommand::SkeletonModified {

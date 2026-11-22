@@ -31,7 +31,7 @@ fn draw_clip_browser_window(
         .build(|| {
             let reference_counts = crate::ecs::systems::clip_library_count_references(world);
 
-            build_toolbar(ui, timeline_state, &reference_counts, world);
+            build_toolbar(ui, timeline_state, world);
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
@@ -80,12 +80,7 @@ fn continue_toolbar_row(ui: &imgui::Ui, next_label: &str, toolbar_right_edge: f3
     }
 }
 
-fn build_toolbar(
-    ui: &imgui::Ui,
-    timeline_state: &TimelineState,
-    reference_counts: &[(SourceClipId, usize)],
-    world: &World,
-) {
+fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
     let toolbar_right_edge = ui.cursor_screen_pos()[0] + ui.content_region_avail()[0];
 
     if ui.small_button("+ New") {
@@ -134,9 +129,7 @@ fn build_toolbar(
     }
 
     continue_toolbar_row(ui, "Del", toolbar_right_edge);
-    let deletable_clip =
-        selected_clip.filter(|clip_id| count_clip_references(reference_counts, *clip_id) == 0);
-    if let Some(source_id) = clip_action_button(ui, "Del", deletable_clip) {
+    if let Some(source_id) = clip_action_button(ui, "Del", selected_clip) {
         world.send_command(ClipBrowserEvent::Delete(source_id));
     }
 }
@@ -208,7 +201,7 @@ fn build_clip_row(ui: &imgui::Ui, world: &World, row: &ClipRow) {
     }
 
     build_clip_drag_source(ui, row.id, &row.clip.name);
-    build_clip_row_menu(ui, world, row.id, row.reference_count);
+    build_clip_row_menu(ui, world, row.id);
 }
 
 fn format_clip_row_label(row: &ClipRow) -> String {
@@ -248,13 +241,7 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
         .begin_payload(move || id);
 }
 
-/// A clip some schedule still plays cannot be deleted, so its Delete entry is disabled.
-fn build_clip_row_menu(
-    ui: &imgui::Ui,
-    world: &World,
-    clip_id: SourceClipId,
-    reference_count: usize,
-) {
+fn build_clip_row_menu(ui: &imgui::Ui, world: &World, clip_id: SourceClipId) {
     let Some(_row_menu) = ui.begin_popup_context_item() else {
         return;
     };
@@ -263,8 +250,7 @@ fn build_clip_row_menu(
         world.send_command(ClipBrowserEvent::Duplicate(clip_id));
     }
 
-    let is_unreferenced = reference_count == 0;
-    if ui.menu_item_enabled_selected("Delete", None::<&str>, false, is_unreferenced) {
+    if ui.menu_item("Delete") {
         world.send_command(ClipBrowserEvent::Delete(clip_id));
     }
 }

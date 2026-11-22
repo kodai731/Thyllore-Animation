@@ -8,14 +8,13 @@ use crate::ecs::systems::{
     timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
 };
 use crate::ecs::systems::{
-    clip_library_register_and_activate, find_best_clip, select_first_animated_clip,
+    clip_library_register_and_activate, clip_library_register_empty_model_clip, find_best_clip,
+    select_first_animated_clip, EMPTY_MODEL_CLIP_DURATION_SECONDS,
 };
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use thyllore_anim_core::AnimationClip;
 use thyllore_importer_core::ModelLoadResult;
-
-const EMPTY_CLIP_DEFAULT_DURATION_SECONDS: f32 = 5.0;
 
 pub(super) fn register_imported_animation(
     world: &mut World,
@@ -206,15 +205,8 @@ fn select_start_clip(
 }
 
 fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) -> SourceClipId {
-    let mut editable = EditableAnimationClip::new(0, "New Animation".to_string());
-    editable.duration = EMPTY_CLIP_DEFAULT_DURATION_SECONDS;
-    editable.min_duration = EMPTY_CLIP_DEFAULT_DURATION_SECONDS;
-    let source_id = {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let id = clip_library_register_and_activate(&mut clip_library, assets, editable);
-        clip_library.model_clip_ids.insert(id);
-        id
-    };
+    let source_id =
+        clip_library_register_empty_model_clip(&mut world.resource_mut::<ClipLibrary>(), assets);
 
     if !keeps_selected_user_clip(world) {
         world.resource_mut::<TimelineState>().current_clip_id = Some(source_id);
@@ -223,7 +215,7 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
     log!(
         "Auto-created empty animation clip 'New Animation' (source_id={}, duration={}s) for model with no animations",
         source_id,
-        EMPTY_CLIP_DEFAULT_DURATION_SECONDS
+        EMPTY_MODEL_CLIP_DURATION_SECONDS
     );
 
     source_id
@@ -527,6 +519,29 @@ mod tests {
     }
 
     #[test]
+    fn model_load_skips_an_empty_take_for_a_morph_only_clip() {
+        use thyllore_anim_core::MorphWeightChannel;
+
+        let (mut world, mut assets) = world_requesting_clip(None);
+        let mut expression_clip = AnimationClip::new("smile");
+        expression_clip.add_morph_channel(MorphWeightChannel {
+            source_mesh: "Face".to_string(),
+            channel: "Smile".to_string(),
+            keyframes: vec![Keyframe::new(0.0, 1.0)],
+        });
+        let loaded_clips = vec![AnimationClip::new("empty take"), expression_clip];
+
+        register_clips_to_library(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
+
+        assert_eq!(current_clip_name(&world).as_deref(), Some("smile"));
+    }
+
+    #[test]
     fn model_without_animations_keeps_library_clip_instead_of_creating_an_empty_one() {
         let mut world = World::new();
         let mut assets = AssetStorage::default();
@@ -574,7 +589,7 @@ mod tests {
         clip_add_keyframe(clip, 1, PropertyType::RotationX, 0.5, 10.0);
         clip_recalculate_duration(clip);
 
-        assert!((clip.duration - EMPTY_CLIP_DEFAULT_DURATION_SECONDS).abs() < f32::EPSILON);
+        assert!((clip.duration - EMPTY_MODEL_CLIP_DURATION_SECONDS).abs() < f32::EPSILON);
     }
 
     #[test]

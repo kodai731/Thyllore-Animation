@@ -15,19 +15,44 @@ use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(super) const GENERATED_MODEL_NAME: &str = "Generated Mesh";
 
-/// One scene holds one model: the entity being loaded replaces every other model entity.
-pub(super) fn despawn_other_model_source_entities(world: &mut World, kept_entity: Entity) {
-    for entity in entities_with::<ModelSource>(world) {
-        if entity != kept_entity {
-            despawn_model_entity_with_model_clip(world, entity);
-        }
-    }
+/// Whether a load took the place of a model that was in the scene.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use]
+pub(super) enum ModelReplacement {
+    NothingReplaced,
+    Replaced,
 }
 
-pub(super) fn despawn_model_source_entities(world: &mut World) {
-    for entity in entities_with::<ModelSource>(world) {
+/// One scene holds one model: the entity being loaded replaces every other model entity.
+pub(super) fn despawn_other_model_source_entities(
+    world: &mut World,
+    kept_entity: Entity,
+) -> ModelReplacement {
+    let replaced_entities: Vec<Entity> = entities_with::<ModelSource>(world)
+        .into_iter()
+        .filter(|entity| *entity != kept_entity)
+        .collect();
+
+    despawn_model_entities(world, replaced_entities)
+}
+
+pub(super) fn despawn_model_source_entities(world: &mut World) -> ModelReplacement {
+    let replaced_entities = entities_with::<ModelSource>(world);
+
+    despawn_model_entities(world, replaced_entities)
+}
+
+fn despawn_model_entities(world: &mut World, entities: Vec<Entity>) -> ModelReplacement {
+    let replacement = if entities.is_empty() {
+        ModelReplacement::NothingReplaced
+    } else {
+        ModelReplacement::Replaced
+    };
+    for entity in entities {
         despawn_model_entity_with_model_clip(world, entity);
     }
+
+    replacement
 }
 
 /// A leaving model takes the clip its file brought; a clip the user edited stays in the library.
@@ -260,8 +285,9 @@ mod tests {
         let previous_clip = find_entity_clip_id(&world, previous).expect("previous clip");
         let loading_clip = find_entity_clip_id(&world, loading).expect("loading clip");
 
-        despawn_other_model_source_entities(&mut world, loading);
+        let replacement = despawn_other_model_source_entities(&mut world, loading);
 
+        assert_eq!(replacement, ModelReplacement::Replaced);
         assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
         assert_eq!(find_entity_clip_id(&world, loading), Some(loading_clip));
         let library = world.resource::<ClipLibrary>();
@@ -279,7 +305,7 @@ mod tests {
             .expect("edited clip")
             .name = "edited".to_string();
 
-        despawn_other_model_source_entities(&mut world, loading);
+        let _ = despawn_other_model_source_entities(&mut world, loading);
 
         assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
         let library = world.resource::<ClipLibrary>();
@@ -293,9 +319,21 @@ mod tests {
     fn despawning_every_model_entity_removes_their_model_clips() {
         let (mut world, _, _) = world_with_two_models();
 
-        despawn_model_source_entities(&mut world);
+        let _ = despawn_model_source_entities(&mut world);
 
         assert!(entities_with::<ModelSource>(&world).is_empty());
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 0);
+    }
+
+    #[test]
+    fn the_only_model_entity_replaces_no_model() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::new();
+        world.insert_resource(ClipLibrary::new());
+        let loading = spawn_model_with_clip(&mut world, &mut assets, "loading");
+
+        let replacement = despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(replacement, ModelReplacement::NothingReplaced);
     }
 }

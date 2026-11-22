@@ -1,5 +1,6 @@
 use anyhow::{anyhow, ensure, Result};
 
+use super::clips::release_selection_to_replacing_model;
 use super::entities::{
     despawn_model_source_entities, despawn_other_model_source_entities, find_model_source_entity,
 };
@@ -42,7 +43,8 @@ pub unsafe fn load_model_keeping_scene(
         }
     };
 
-    despawn_other_model_source_entities(world, model_entity);
+    let replacement = despawn_other_model_source_entities(world, model_entity);
+    release_selection_to_replacing_model(world, replacement, &load_result.clips);
     let kept_scene = capture_kept_scene(world);
     let uploaded = upload_scene_model(&load_result, path, gpu, swapchain, world, assets, fbx_model);
     restore_kept_scene(kept_scene, world, assets);
@@ -51,7 +53,7 @@ pub unsafe fn load_model_keeping_scene(
         attach_file_model(first_clip_id, &load_result, gpu, world, assets)
     });
     if attached.is_err() {
-        despawn_model_source_entities(world);
+        let _ = despawn_model_source_entities(world);
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
@@ -115,7 +117,8 @@ pub unsafe fn load_generated_mesh(
         Err(error) => return Err(error),
     };
 
-    despawn_model_source_entities(world);
+    let replacement = despawn_model_source_entities(world);
+    release_selection_to_replacing_model(world, replacement, &load_result.clips);
     let kept_scene = capture_kept_scene(world);
     let uploaded = upload_scene_model(
         &load_result,

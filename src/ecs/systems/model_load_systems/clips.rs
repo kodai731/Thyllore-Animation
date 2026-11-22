@@ -1,3 +1,4 @@
+use super::entities::ModelReplacement;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
 use crate::ecs::systems::{
@@ -38,6 +39,19 @@ pub(super) fn register_imported_animation(
         .vrm_humanoid
         .as_ref()
         .and_then(vrm_humanoid_to_mapping);
+}
+
+/// A model that takes another model's place and brings animation starts on its own clip; the clip
+/// selected before stays in the library.
+pub(super) fn release_selection_to_replacing_model(
+    world: &mut World,
+    replacement: ModelReplacement,
+    loaded_clips: &[AnimationClip],
+) {
+    if replacement == ModelReplacement::NothingReplaced || loaded_clips.is_empty() {
+        return;
+    }
+    world.resource_mut::<TimelineState>().current_clip_id = None;
 }
 
 /// Returns the clip the timeline should start on, or `None` for a model that cannot animate.
@@ -309,6 +323,75 @@ mod tests {
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,
             Some(user_source_id)
+        );
+    }
+
+    fn world_with_selected_user_clip() -> (World, AssetStorage, SourceClipId) {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+        assets.add_skeleton(SkeletonAsset {
+            id: 0,
+            skeleton_id: 0,
+            skeleton: Skeleton::default(),
+        });
+
+        let user_clip_id = clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            &mut assets,
+            EditableAnimationClip::new(0, "user".to_string()),
+        );
+        world.resource_mut::<TimelineState>().current_clip_id = Some(user_clip_id);
+
+        (world, assets, user_clip_id)
+    }
+
+    #[test]
+    fn replacing_model_with_clips_starts_on_its_own_clip() {
+        let (mut world, mut assets, user_clip_id) = world_with_selected_user_clip();
+        let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
+
+        release_selection_to_replacing_model(&mut world, ModelReplacement::Replaced, &loaded_clips);
+        let start_clip_id = register_loaded_clips(&mut world, &mut assets, &loaded_clips);
+
+        assert_ne!(start_clip_id, Some(user_clip_id));
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            start_clip_id
+        );
+        assert!(world.resource::<ClipLibrary>().get(user_clip_id).is_some());
+    }
+
+    #[test]
+    fn replacing_model_without_clips_keeps_the_selected_user_clip() {
+        let (mut world, mut assets, user_clip_id) = world_with_selected_user_clip();
+
+        release_selection_to_replacing_model(&mut world, ModelReplacement::Replaced, &[]);
+        let start_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
+
+        assert_eq!(start_clip_id, Some(user_clip_id));
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(user_clip_id)
+        );
+    }
+
+    #[test]
+    fn model_that_replaces_no_model_keeps_the_selected_user_clip() {
+        let (mut world, mut assets, user_clip_id) = world_with_selected_user_clip();
+        let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
+
+        release_selection_to_replacing_model(
+            &mut world,
+            ModelReplacement::NothingReplaced,
+            &loaded_clips,
+        );
+        register_loaded_clips(&mut world, &mut assets, &loaded_clips);
+
+        assert_eq!(
+            world.resource::<TimelineState>().current_clip_id,
+            Some(user_clip_id)
         );
     }
 

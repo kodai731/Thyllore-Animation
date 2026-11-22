@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::BoneId;
 
@@ -18,6 +18,7 @@ pub struct EditableAnimationClip {
     /// keyframes, so a schedule can loop over an unkeyed clip.
     #[serde(default)]
     pub min_duration: f32,
+    #[serde(serialize_with = "serialize_tracks_by_bone_id")]
     pub tracks: HashMap<BoneId, BoneTrack>,
     /// Tracks whose bone name the bound model lacks; `clip_remap_bone_ids` binds them again by name.
     #[serde(default)]
@@ -29,6 +30,15 @@ pub struct EditableAnimationClip {
     pub morph_tracks: Vec<MorphTrack>,
     pub source_path: Option<String>,
     next_curve_id: u64,
+}
+
+/// Written in bone id order, so the same clip always encodes to the same bytes.
+fn serialize_tracks_by_bone_id<S: Serializer>(
+    tracks: &HashMap<BoneId, BoneTrack>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let ordered_tracks: BTreeMap<&BoneId, &BoneTrack> = tracks.iter().collect();
+    ordered_tracks.serialize(serializer)
 }
 
 impl EditableAnimationClip {
@@ -213,6 +223,24 @@ mod tests {
         let parsed: EditableAnimationClip = ron::from_str(&legacy).expect("legacy deserialize");
         assert!(parsed.morph_tracks.is_empty());
         assert_eq!(parsed.name, "legacy");
+    }
+
+    #[test]
+    fn tracks_encode_in_bone_id_order() {
+        let mut clip = EditableAnimationClip::new(1, "ordered".to_string());
+        for bone_id in [9, 2, 31, 5, 17, 0, 23, 11] {
+            clip.add_track(bone_id, format!("bone{bone_id}"));
+        }
+
+        let encoded = ron::to_string(&clip).expect("serialize");
+
+        let name_offsets: Vec<usize> = [0, 2, 5, 9, 11, 17, 23, 31]
+            .iter()
+            .map(|bone_id| encoded.find(&format!("\"bone{bone_id}\"")).expect("track"))
+            .collect();
+        assert!(name_offsets.is_sorted(), "{name_offsets:?}");
+        let decoded: EditableAnimationClip = ron::from_str(&encoded).expect("deserialize");
+        assert_eq!(decoded.track_count(), 8);
     }
 
     #[test]

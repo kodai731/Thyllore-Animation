@@ -16,7 +16,9 @@ use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
 use crate::ecs::systems::clip_library_sync_dirty;
 use crate::ecs::systems::motion_path_sync;
 use crate::ecs::systems::refresh_baked_humanoid_clips;
-use crate::ecs::systems::timeline::{schedule_extent_seconds, timeline_update};
+use crate::ecs::systems::timeline::{
+    schedule_extent_seconds, timeline_apply_awaited_fit_zoom, timeline_update,
+};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
 
@@ -56,6 +58,7 @@ fn update_timeline(ctx: &mut FrameContext) {
         .resource::<FrameClock>()
         .fixed_delta_seconds()
         .unwrap_or(ctx.delta_time);
+    timeline_apply_awaited_fit_zoom(&mut timeline_state, &clip_library);
     timeline_update(&mut timeline_state, &*clip_library, timeline_delta);
     drop(clip_library);
     drop(timeline_state);

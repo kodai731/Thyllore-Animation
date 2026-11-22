@@ -125,26 +125,30 @@ fn register_clips_to_library(
 
     let editable_clips = import_editable_clips(world, assets, loaded_clips, &bone_names);
 
-    let mut first_editable_clip_id = None;
-    let mut model_ids: Vec<SourceClipId> = Vec::new();
+    let mut model_clips: Vec<(SourceClipId, String)> = Vec::new();
     {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         for editable in editable_clips {
             let clip_name = editable.name.clone();
             let editable_id =
                 clip_library_register_and_activate(&mut clip_library, assets, editable);
-            model_ids.push(editable_id);
-            first_editable_clip_id.get_or_insert(editable_id);
             log!(
                 "Registered clip '{}' (source_id={})",
                 clip_name,
                 editable_id,
             );
+            model_clips.push((editable_id, clip_name));
         }
-        clip_library.model_clip_ids.extend(model_ids.iter());
+        clip_library
+            .model_clip_ids
+            .extend(model_clips.iter().map(|(id, _)| *id));
     }
 
-    let editable_id = first_editable_clip_id?;
+    let requested_clip_name = world
+        .resource_mut::<TimelineState>()
+        .requested_clip_name
+        .take();
+    let editable_id = select_start_clip(&model_clips, requested_clip_name.as_deref())?;
     let clip_duration = world
         .resource::<ClipLibrary>()
         .get(editable_id)
@@ -159,6 +163,18 @@ fn register_clips_to_library(
     log!("Set timeline current_clip_id to {}", editable_id);
 
     Some(editable_id)
+}
+
+/// The clip the scene named when the model brought it, otherwise the model's first clip.
+fn select_start_clip(
+    model_clips: &[(SourceClipId, String)],
+    requested_clip_name: Option<&str>,
+) -> Option<SourceClipId> {
+    let requested_clip = model_clips
+        .iter()
+        .find(|(_, clip_name)| requested_clip_name == Some(clip_name.as_str()));
+
+    requested_clip.or(model_clips.first()).map(|(id, _)| *id)
 }
 
 fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) -> SourceClipId {
@@ -280,6 +296,45 @@ mod tests {
             world.resource::<TimelineState>().current_clip_id,
             Some(user_source_id)
         );
+    }
+
+    fn world_requesting_clip(requested_clip_name: Option<&str>) -> (World, AssetStorage) {
+        let mut world = World::new();
+        world.insert_resource(ClipLibrary::new());
+        world.insert_resource(TimelineState::default());
+        world.resource_mut::<TimelineState>().requested_clip_name =
+            requested_clip_name.map(str::to_string);
+        (world, AssetStorage::default())
+    }
+
+    fn current_clip_name(world: &World) -> Option<String> {
+        let clip_id = world.resource::<TimelineState>().current_clip_id?;
+        let library = world.resource::<ClipLibrary>();
+        library.get(clip_id).map(|clip| clip.name.clone())
+    }
+
+    #[test]
+    fn model_load_selects_the_model_clip_the_scene_named() {
+        let (mut world, mut assets) = world_requesting_clip(Some("run"));
+        let loaded_clips = vec![AnimationClip::new("walk"), AnimationClip::new("run")];
+
+        let start_clip_id = register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+
+        assert_eq!(current_clip_name(&world).as_deref(), Some("run"));
+        let timeline = world.resource::<TimelineState>();
+        assert_eq!(start_clip_id, timeline.current_clip_id);
+        assert_eq!(timeline.requested_clip_name, None);
+    }
+
+    #[test]
+    fn model_load_starts_on_the_first_clip_when_the_named_one_is_absent() {
+        let (mut world, mut assets) = world_requesting_clip(Some("jump"));
+        let loaded_clips = vec![AnimationClip::new("walk"), AnimationClip::new("run")];
+
+        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+
+        assert_eq!(current_clip_name(&world).as_deref(), Some("walk"));
+        assert_eq!(world.resource::<TimelineState>().requested_clip_name, None);
     }
 
     #[test]

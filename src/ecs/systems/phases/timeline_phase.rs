@@ -13,7 +13,7 @@ use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
 use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
-use crate::ecs::systems::clip_library_sync_dirty;
+use crate::ecs::systems::clip_library_sync_playable_assets;
 use crate::ecs::systems::motion_path_sync;
 use crate::ecs::systems::refresh_baked_humanoid_clips;
 use crate::ecs::systems::timeline::{
@@ -96,7 +96,7 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let dirty_source_ids = {
         let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-        clip_library_sync_dirty(&mut clip_library, ctx.assets)
+        clip_library_sync_playable_assets(&mut clip_library, ctx.assets)
     };
     if dirty_source_ids.is_empty() {
         return;

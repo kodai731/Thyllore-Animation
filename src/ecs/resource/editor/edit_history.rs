@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::SkeletonSnapshot;
+use crate::ecs::resource::{RemovedClip, SkeletonSnapshot};
 use crate::ecs::world::Entity;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
@@ -23,7 +23,7 @@ pub enum EditCommand {
     },
     ClipRemoved {
         clip_id: SourceClipId,
-        removed: SourceClip,
+        removed: RemovedClip,
         description: &'static str,
     },
     SkeletonModified {
@@ -137,7 +137,7 @@ impl EditHistory {
     pub fn push_clip_removed(
         &mut self,
         clip_id: SourceClipId,
-        removed: SourceClip,
+        removed: RemovedClip,
         description: &'static str,
     ) {
         let entry = EditEntry {
@@ -241,6 +241,7 @@ impl EditCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::resource::ClipOrigin;
 
     fn make_dummy_clip(name: &str) -> EditableAnimationClip {
         EditableAnimationClip::new(1, name.to_string())
@@ -359,7 +360,10 @@ mod tests {
             },
             EditCommand::ClipRemoved {
                 clip_id: 1,
-                removed: SourceClip::new(1, make_dummy_clip("removed")),
+                removed: RemovedClip {
+                    source: SourceClip::new(1, make_dummy_clip("removed")),
+                    origin: ClipOrigin::User,
+                },
                 description: "Remove clip",
             },
             EditCommand::SkeletonModified {

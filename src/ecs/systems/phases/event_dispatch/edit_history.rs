@@ -2,8 +2,8 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
-    AssetEditCommand, AssetEditQueue, ClipLibrary, EditCommand, EditCommandAfter, EditEntry,
-    EditHistory, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, ClipOrigin, EditCommand, EditCommandAfter,
+    EditEntry, EditHistory, RemovedClip, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
 };
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
@@ -95,10 +95,10 @@ fn dispatch_undo(world: &mut World) {
             clip_id,
             description,
         } => {
-            let removed_source = {
-                let mut clip_library = world.resource_mut::<ClipLibrary>();
-                clip_library.source_clips.remove(clip_id)
-            };
+            let removed_source = world
+                .resource_mut::<ClipLibrary>()
+                .remove(*clip_id)
+                .map(|removed| removed.source);
 
             let redo_entry = EditEntry {
                 command: EditCommand::ClipAdded {
@@ -120,7 +120,9 @@ fn dispatch_undo(world: &mut World) {
             removed,
             description,
         } => {
-            restore_source_clip(world, *clip_id, removed.clone());
+            world
+                .resource_mut::<ClipLibrary>()
+                .restore(*clip_id, removed.clone());
 
             let redo_entry = EditEntry {
                 command: EditCommand::ClipRemoved {
@@ -340,7 +342,13 @@ fn redo_clip_added(
     source: &SourceClip,
     description: &'static str,
 ) {
-    restore_source_clip(world, clip_id, source.clone());
+    world.resource_mut::<ClipLibrary>().restore(
+        clip_id,
+        RemovedClip {
+            source: source.clone(),
+            origin: ClipOrigin::User,
+        },
+    );
 
     let undo_entry = EditEntry {
         command: EditCommand::ClipAdded {
@@ -357,11 +365,10 @@ fn redo_clip_added(
 fn redo_clip_removed(
     world: &mut World,
     clip_id: u64,
-    removed: &SourceClip,
+    removed: &RemovedClip,
     description: &'static str,
 ) {
-    let mut clip_library = world.resource_mut::<ClipLibrary>();
-    clip_library.source_clips.remove(&clip_id);
+    world.resource_mut::<ClipLibrary>().remove(clip_id);
 
     let undo_entry = EditEntry {
         command: EditCommand::ClipRemoved {
@@ -374,12 +381,6 @@ fn redo_clip_removed(
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
     log!("Redo: {}", description);
-}
-
-fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {
-    let mut clip_library = world.resource_mut::<ClipLibrary>();
-    clip_library.source_clips.insert(clip_id, source);
-    clip_library.mark_dirty(clip_id);
 }
 
 #[cfg(test)]

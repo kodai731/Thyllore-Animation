@@ -77,27 +77,46 @@ pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<A
         .map(|s| clip_to_animation(&s.editable_clip))
 }
 
-pub fn clip_library_sync_dirty(
+/// Releases the playable assets of removed clips and rewrites those of edited clips.
+pub fn clip_library_sync_playable_assets(
     lib: &mut ClipLibrary,
     assets: &mut AssetStorage,
 ) -> Vec<SourceClipId> {
-    let mut synced_ids: Vec<SourceClipId> = Vec::new();
-    for source_id in lib.dirty_sources.drain() {
-        let asset_id = match lib.source_to_asset_id.get(&source_id) {
-            Some(&aid) => aid,
-            None => continue,
-        };
+    for asset_id in lib.take_released_asset_ids() {
+        assets.animation_clips.remove(&asset_id);
+    }
 
-        let Some(source) = lib.source_clips.get(&source_id) else {
+    let mut synced_ids: Vec<SourceClipId> = Vec::new();
+    for source_id in std::mem::take(&mut lib.dirty_sources) {
+        let Some(playable) = clip_library_to_playable(lib, source_id) else {
             continue;
         };
-        let playable = clip_to_animation(&source.editable_clip);
-        if let Some(asset) = assets.animation_clips.get_mut(&asset_id) {
-            asset.clip = playable;
-        }
+        write_playable_asset(lib, assets, source_id, playable);
         synced_ids.push(source_id);
     }
     synced_ids
+}
+
+fn write_playable_asset(
+    lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
+    source_id: SourceClipId,
+    playable: AnimationClip,
+) {
+    let existing_asset = lib
+        .get_asset_id_for_source(source_id)
+        .and_then(|asset_id| assets.animation_clips.get_mut(&asset_id));
+
+    if let Some(asset) = existing_asset {
+        asset.clip = playable;
+        return;
+    }
+
+    let asset_id = assets.add_animation_clip(AnimationClipAsset {
+        id: 0,
+        clip: playable,
+    });
+    lib.source_to_asset_id.insert(source_id, asset_id);
 }
 
 pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)> {
@@ -371,6 +390,36 @@ mod tests {
     }
 
     #[test]
+    fn sync_releases_the_playable_asset_of_a_removed_clip() {
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let clip = EditableAnimationClip::new(0, "removed".to_string());
+        let source_id = clip_library_register_and_activate(&mut lib, &mut assets, clip);
+
+        lib.remove(source_id);
+        clip_library_sync_playable_assets(&mut lib, &mut assets);
+
+        assert!(assets.animation_clips.is_empty());
+    }
+
+    #[test]
+    fn sync_gives_a_restored_clip_a_playable_asset() {
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let clip = EditableAnimationClip::new(0, "restored".to_string());
+        let source_id = clip_library_register_and_activate(&mut lib, &mut assets, clip);
+        let removed = lib.remove(source_id).expect("removed clip");
+
+        lib.restore(source_id, removed);
+        let synced_ids = clip_library_sync_playable_assets(&mut lib, &mut assets);
+
+        let asset_id = lib.get_asset_id_for_source(source_id).expect("asset id");
+        assert_eq!(synced_ids, vec![source_id]);
+        assert!(assets.animation_clips.contains_key(&asset_id));
+        assert_eq!(assets.animation_clips.len(), 1);
+    }
+
+    #[test]
     fn sync_dirty_returns_all_synced_ids() {
         let mut lib = ClipLibrary::default();
         let mut assets = AssetStorage::default();
@@ -384,7 +433,7 @@ mod tests {
         lib.dirty_sources.insert(source_id_a);
         lib.dirty_sources.insert(source_id_b);
 
-        let returned = clip_library_sync_dirty(&mut lib, &mut assets);
+        let returned = clip_library_sync_playable_assets(&mut lib, &mut assets);
 
         assert_eq!(returned.len(), 2);
         assert!(returned.contains(&source_id_a));

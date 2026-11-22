@@ -17,10 +17,10 @@ pub(super) fn dispatch_spring_bone_bake_events(
                 handle_spring_bone_bake(world, assets);
             }
             SpringBoneEvent::DiscardBake => {
-                handle_spring_bone_discard(world, assets);
+                handle_spring_bone_discard(world);
             }
             SpringBoneEvent::Rebake => {
-                handle_spring_bone_discard(world, assets);
+                handle_spring_bone_discard(world);
                 handle_spring_bone_bake(world, assets);
             }
             _ => {}
@@ -259,7 +259,7 @@ fn register_baked_clip_and_update_schedules(
     new_id
 }
 
-pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) {
+pub fn handle_spring_bone_discard(world: &mut World) {
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState, TimelineState};
 
     let mut spring_state = world.resource_mut::<SpringBoneState>();
@@ -287,11 +287,7 @@ pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) 
     }
 
     if let Some(baked_id) = baked_id {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        if let Some(asset_id) = clip_library.source_to_asset_id.remove(&baked_id) {
-            assets.animation_clips.remove(&asset_id);
-        }
-        clip_library.remove(baked_id);
+        world.resource_mut::<ClipLibrary>().remove(baked_id);
     }
 
     let mut timeline_state = world.resource_mut::<TimelineState>();

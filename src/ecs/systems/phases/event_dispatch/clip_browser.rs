@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{ClipLibrary, EditHistory};
+use crate::ecs::resource::{ClipLibrary, EditHistory, RemovedClip};
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_vulkan_core::resource::GraphicsResources;
@@ -69,16 +69,9 @@ fn dispatch_clip_browser_events(
             ClipBrowserEvent::Delete(source_id) => {
                 let ref_count = count_source_references(*source_id, world);
                 if ref_count == 0 {
-                    let removed_source = {
-                        let clip_library = world.resource::<ClipLibrary>();
-                        clip_library.source_clips.get(source_id).cloned()
-                    };
+                    let removed_clip = world.resource_mut::<ClipLibrary>().remove(*source_id);
 
-                    let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    clip_library.remove(*source_id);
-                    drop(clip_library);
-
-                    if let Some(removed) = removed_source {
+                    if let Some(removed) = removed_clip {
                         record_clip_removed(world, *source_id, removed);
                     }
                     log!("Deleted clip (id={})", source_id);
@@ -117,11 +110,7 @@ fn record_clip_added(
     }
 }
 
-fn record_clip_removed(
-    world: &mut World,
-    clip_id: SourceClipId,
-    removed: thyllore_anim_core::editable::SourceClip,
-) {
+fn record_clip_removed(world: &mut World, clip_id: SourceClipId, removed: RemovedClip) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();
         edit_history.push_clip_removed(clip_id, removed, "delete clip");

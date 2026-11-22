@@ -101,19 +101,11 @@ fn dispatch_pose_library_events(
             }
 
             PoseLibraryEvent::Delete(pose_id) => {
-                let removed_source = {
-                    let clip_library = world.resource::<ClipLibrary>();
-                    clip_library.source_clips.get(pose_id).cloned()
-                };
+                world.resource_mut::<PoseLibrary>().remove_pose(*pose_id);
 
-                let mut pose_library = world.resource_mut::<PoseLibrary>();
-                pose_library.remove_pose(*pose_id);
+                let removed_clip = world.resource_mut::<ClipLibrary>().remove(*pose_id);
 
-                let mut clip_library = world.resource_mut::<ClipLibrary>();
-                clip_library.remove(*pose_id);
-                drop(clip_library);
-
-                if let Some(removed) = removed_source {
+                if let Some(removed) = removed_clip {
                     if world.contains_resource::<EditHistory>() {
                         let mut edit_history = world.resource_mut::<EditHistory>();
                         edit_history.push_clip_removed(*pose_id, removed, "delete pose");

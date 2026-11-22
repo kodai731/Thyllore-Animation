@@ -9,8 +9,8 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::{send_dialog_request, DialogRequest, UiCommand};
 use crate::ecs::resource::OutputQueue;
 use crate::ecs::systems::{
-    compute_hidden_triangles, export_unity_avatar, fit_body_colliders, invalidate_humanoid_rig,
-    open_avatar_setup, save_humanoid_mapping, save_material_textures, select_submesh_entity,
+    compute_hidden_triangles, export_unity_avatar, fit_body_colliders, open_avatar_setup,
+    rebuild_humanoid_rig, save_humanoid_mapping, save_material_textures, select_submesh_entity,
     set_avatar_rank_platform, set_chain_gen_settings, set_humanoid_role, set_material_texture,
     set_submesh_attachment, set_submesh_role, use_existing_bones_as_springs,
 };
@@ -79,7 +79,7 @@ impl UiCommand for AvatarSetupEvent {
             }
             AvatarSetupEvent::SaveHumanoidMapping => {
                 save_humanoid_mapping(world);
-                invalidate_humanoid_rig(world);
+                rebuild_humanoid_rig(world, assets);
             }
             AvatarSetupEvent::SetAvatarRankPlatform(platform) => {
                 set_avatar_rank_platform(world, platform)

@@ -12,7 +12,7 @@ use crate::ecs::storage::Component;
 use crate::ecs::systems::avatar_setup_systems::{
     refresh_avatar_validation, skeleton_to_bone_inputs,
 };
-use crate::ecs::systems::humanoid_rig_systems::{invalidate_humanoid_rig, sync_humanoid_rig};
+use crate::ecs::systems::humanoid_rig_systems::rebuild_humanoid_rig;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
@@ -579,13 +579,6 @@ pub fn refresh_after_skeleton_edit(
 
     sync_fbx_clusters(world, assets, graphics, skeleton_asset.skeleton_id);
     rebuild_humanoid_rig(world, assets);
-}
-
-/// The humanoid rig caches the retarget context and the track-name table of the skeleton it was built
-/// from, so a structural edit rebuilds it before anything in the same frame reads it.
-fn rebuild_humanoid_rig(world: &mut World, assets: &AssetStorage) {
-    invalidate_humanoid_rig(world);
-    sync_humanoid_rig(world, assets);
 }
 
 /// A skeleton edit must leave a mapped humanoid rig intact; every issue the validation finds is logged.

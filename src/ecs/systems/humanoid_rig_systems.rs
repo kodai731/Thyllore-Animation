@@ -164,10 +164,19 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
     }
 }
 
+/// An invalidated rig is gone until the next sync, so nothing bakes onto a skeleton it was not built from.
 pub fn invalidate_humanoid_rig(world: &mut World) {
     if let Some(mut state) = world.get_resource_mut::<HumanoidRigState>() {
         state.source_model_path.clear();
+        state.rig = None;
     }
+}
+
+/// The humanoid rig caches the retarget context and the track-name table of the skeleton it was built
+/// from, so a change of the skeleton or its mapping rebuilds it before anything in the same frame reads it.
+pub fn rebuild_humanoid_rig(world: &mut World, assets: &AssetStorage) {
+    invalidate_humanoid_rig(world);
+    sync_humanoid_rig(world, assets);
 }
 
 pub fn engine_bone_name_to_id(
@@ -317,6 +326,10 @@ mod tests {
                 .source_model_path
                 .is_empty(),
             "invalidate should clear source_model_path"
+        );
+        assert!(
+            world.resource::<HumanoidRigState>().rig.is_none(),
+            "invalidate should drop the rig built for the previous skeleton"
         );
 
         sync_humanoid_rig(&mut world, &assets);

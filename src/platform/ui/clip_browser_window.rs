@@ -29,11 +29,20 @@ fn draw_clip_browser_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_toolbar(ui, timeline_state, world);
+            let reference_counts = crate::ecs::systems::clip_library_count_references(world);
+
+            build_toolbar(ui, timeline_state, &reference_counts, world);
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
-            build_clip_list(ui, clip_library, browser_state, timeline_state, world);
+            build_clip_list(
+                ui,
+                clip_library,
+                browser_state,
+                timeline_state,
+                &reference_counts,
+                world,
+            );
         });
 }
 
@@ -50,7 +59,22 @@ fn clip_action_button<Action>(
     ui.small_button(label).then_some(action)
 }
 
-fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
+fn count_clip_references(
+    reference_counts: &[(SourceClipId, usize)],
+    clip_id: SourceClipId,
+) -> usize {
+    reference_counts
+        .iter()
+        .find(|(counted_id, _)| *counted_id == clip_id)
+        .map_or(0, |(_, count)| *count)
+}
+
+fn build_toolbar(
+    ui: &imgui::Ui,
+    timeline_state: &TimelineState,
+    reference_counts: &[(SourceClipId, usize)],
+    world: &World,
+) {
     if ui.small_button("+ New") {
         world.send_command(ClipBrowserEvent::CreateEmpty);
     }
@@ -97,7 +121,9 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
     }
 
     ui.same_line();
-    if let Some(source_id) = clip_action_button(ui, "Del", selected_clip) {
+    let deletable_clip =
+        selected_clip.filter(|clip_id| count_clip_references(reference_counts, *clip_id) == 0);
+    if let Some(source_id) = clip_action_button(ui, "Del", deletable_clip) {
         world.send_command(ClipBrowserEvent::Delete(source_id));
     }
 }
@@ -114,6 +140,7 @@ fn build_clip_list(
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     timeline_state: &TimelineState,
+    reference_counts: &[(SourceClipId, usize)],
     world: &World,
 ) {
     let clip_names = crate::ecs::systems::clip_library_clip_names(clip_library);
@@ -122,8 +149,6 @@ fn build_clip_list(
         ui.text_disabled("No clips");
         return;
     }
-
-    let reference_counts = crate::ecs::systems::clip_library_count_references(world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 
@@ -137,11 +162,7 @@ fn build_clip_list(
                 }
 
                 let is_selected = timeline_state.current_clip_id == Some(*id);
-                let ref_count = reference_counts
-                    .iter()
-                    .find(|(sid, _)| *sid == *id)
-                    .map(|(_, c)| *c)
-                    .unwrap_or(0);
+                let ref_count = count_clip_references(reference_counts, *id);
 
                 let clip = clip_library.get(*id);
                 let duration = clip.map(|c| c.duration).unwrap_or(0.0);
@@ -161,6 +182,7 @@ fn build_clip_list(
                 }
 
                 build_clip_drag_source(ui, *id, name);
+                build_clip_row_menu(ui, world, *id, ref_count);
             }
         });
 }
@@ -170,6 +192,27 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
     let _source = ui
         .drag_drop_source_config("CLIP_SOURCE")
         .begin_payload(move || id);
+}
+
+/// A clip some schedule still plays cannot be deleted, so its Delete entry is disabled.
+fn build_clip_row_menu(
+    ui: &imgui::Ui,
+    world: &World,
+    clip_id: SourceClipId,
+    reference_count: usize,
+) {
+    let Some(_row_menu) = ui.begin_popup_context_item() else {
+        return;
+    };
+
+    if ui.menu_item("Duplicate") {
+        world.send_command(ClipBrowserEvent::Duplicate(clip_id));
+    }
+
+    let is_unreferenced = reference_count == 0;
+    if ui.menu_item_enabled_selected("Delete", None::<&str>, false, is_unreferenced) {
+        world.send_command(ClipBrowserEvent::Delete(clip_id));
+    }
 }
 
 fn extract_source_filename(

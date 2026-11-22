@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
-use imgui::Key;
+use imgui::{Key, MouseButton};
 
-use crate::ecs::resource::{InjectedInput, InjectedKeyPress, KeyChordModifiers};
+use crate::ecs::resource::{InjectedClick, InjectedInput, InjectedKeyPress, KeyChordModifiers};
 use crate::ecs::world::World;
 
 use super::batch_action::BatchAction;
@@ -10,6 +10,7 @@ const PRESS_KEY_PREFIX: &str = "press_key=";
 const FOCUS_WINDOW_PREFIX: &str = "focus_window=";
 const MOVE_MOUSE_PREFIX: &str = "move_mouse=";
 const CLICK_PREFIX: &str = "click=";
+const RIGHT_CLICK_PREFIX: &str = "right_click=";
 
 #[derive(Debug)]
 pub struct PressKey(pub InjectedKeyPress);
@@ -44,6 +45,9 @@ pub struct MoveMouse(pub [f32; 2]);
 #[derive(Debug)]
 pub struct Click(pub [f32; 2]);
 
+#[derive(Debug)]
+pub struct RightClick(pub [f32; 2]);
+
 impl BatchAction for MoveMouse {
     fn name(&self) -> &'static str {
         "move_mouse"
@@ -58,8 +62,21 @@ impl BatchAction for Click {
         "click"
     }
     fn apply(&self, world: &mut World) {
-        world.resource_mut::<InjectedInput>().pending_click = Some(self.0);
+        queue_click(world, self.0, MouseButton::Left);
     }
+}
+
+impl BatchAction for RightClick {
+    fn name(&self) -> &'static str {
+        "right_click"
+    }
+    fn apply(&self, world: &mut World) {
+        queue_click(world, self.0, MouseButton::Right);
+    }
+}
+
+fn queue_click(world: &mut World, position: [f32; 2], button: MouseButton) {
+    world.resource_mut::<InjectedInput>().pending_click = Some(InjectedClick { position, button });
 }
 
 /// `640,360`: a window-space pixel position.
@@ -126,10 +143,16 @@ fn click_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
     Some(parse_mouse_position(position).map(|p| Box::new(Click(p)) as Box<dyn BatchAction>))
 }
 
+fn right_click_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let position = text.strip_prefix(RIGHT_CLICK_PREFIX)?;
+    Some(parse_mouse_position(position).map(|p| Box::new(RightClick(p)) as Box<dyn BatchAction>))
+}
+
 crate::batch_action!("press_key", press_key_parse);
 crate::batch_action!("focus_window", focus_window_parse);
 crate::batch_action!("move_mouse", move_mouse_parse);
 crate::batch_action!("click", click_parse);
+crate::batch_action!("right_click", right_click_parse);
 
 #[cfg(test)]
 mod tests {
@@ -199,7 +222,28 @@ mod tests {
 
         let injected = world.resource::<InjectedInput>();
         assert_eq!(injected.pending_mouse_move, Some([10.0, 20.0]));
-        assert_eq!(injected.pending_click, Some([30.5, 40.0]));
+        assert_eq!(
+            injected.pending_click,
+            Some(InjectedClick {
+                position: [30.5, 40.0],
+                button: MouseButton::Left,
+            })
+        );
+        drop(injected);
+
+        right_click_parse("right_click=5,6")
+            .expect("prefix")
+            .expect("valid")
+            .apply(&mut world);
+
+        let injected = world.resource::<InjectedInput>();
+        assert_eq!(
+            injected.pending_click,
+            Some(InjectedClick {
+                position: [5.0, 6.0],
+                button: MouseButton::Right,
+            })
+        );
         assert!(click_parse("click=30").expect("prefix").is_err());
         assert!(click_parse("click=a,b").expect("prefix").is_err());
     }

@@ -119,11 +119,15 @@ fn write_playable_asset(
     lib.source_to_asset_id.insert(source_id, asset_id);
 }
 
+/// Listed in registration order, so the rows keep their place between frames and runs.
 pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)> {
-    lib.source_clips
+    let mut clip_names: Vec<(SourceClipId, String)> = lib
+        .source_clips
         .iter()
         .map(|(&id, s)| (id, s.editable_clip.name.clone()))
-        .collect()
+        .collect();
+    clip_names.sort_unstable_by_key(|(id, _)| *id);
+    clip_names
 }
 
 pub fn clip_library_update_save_metadata(

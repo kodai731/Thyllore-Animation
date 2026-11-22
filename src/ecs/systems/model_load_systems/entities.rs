@@ -2,9 +2,9 @@ use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::component::{
     AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, ModelSource, MorphWeights,
 };
-use crate::ecs::resource::AnimationType;
+use crate::ecs::resource::{AnimationType, ClipLibrary};
 use crate::ecs::systems::{
-    attach_morph_channel_catalogs, build_initial_clip_schedule, despawn_entity_with_clip,
+    attach_morph_channel_catalogs, build_initial_clip_schedule, find_entity_clip_id,
 };
 use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
 use crate::hooks::scene::entities_with;
@@ -19,15 +19,27 @@ pub(super) const GENERATED_MODEL_NAME: &str = "Generated Mesh";
 pub(super) fn despawn_other_model_source_entities(world: &mut World, kept_entity: Entity) {
     for entity in entities_with::<ModelSource>(world) {
         if entity != kept_entity {
-            despawn_entity_with_clip(world, entity);
+            despawn_model_entity_with_model_clip(world, entity);
         }
     }
 }
 
 pub(super) fn despawn_model_source_entities(world: &mut World) {
     for entity in entities_with::<ModelSource>(world) {
-        despawn_entity_with_clip(world, entity);
+        despawn_model_entity_with_model_clip(world, entity);
     }
+}
+
+/// A leaving model takes the clip its file brought; a clip the user edited stays in the library.
+fn despawn_model_entity_with_model_clip(world: &mut World, entity: Entity) {
+    if let Some(clip_id) = find_entity_clip_id(world, entity) {
+        if let Some(mut library) = world.get_resource_mut::<ClipLibrary>() {
+            if library.is_model_clip(clip_id) {
+                library.remove(clip_id);
+            }
+        }
+    }
+    world.despawn(entity);
 }
 
 pub(super) fn find_model_source_entity(world: &World) -> Option<Entity> {
@@ -214,10 +226,7 @@ pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::resource::ClipLibrary;
-    use crate::ecs::systems::{
-        clip_library_register_and_activate, find_entity_clip_id, schedule_entity_clip,
-    };
+    use crate::ecs::systems::{clip_library_register_and_activate, schedule_entity_clip};
     use crate::hooks::scene::spawn_scene_owner;
     use thyllore_anim_core::editable::EditableAnimationClip;
 
@@ -228,6 +237,10 @@ mod tests {
             assets,
             EditableAnimationClip::new(0, name.to_string()),
         );
+        world
+            .resource_mut::<ClipLibrary>()
+            .model_clip_ids
+            .insert(clip_id);
         schedule_entity_clip(world, entity, clip_id);
         entity
     }
@@ -242,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn replaced_model_entity_leaves_with_its_scheduled_clip() {
+    fn replaced_model_entity_leaves_with_its_model_clip() {
         let (mut world, previous, loading) = world_with_two_models();
         let previous_clip = find_entity_clip_id(&world, previous).expect("previous clip");
         let loading_clip = find_entity_clip_id(&world, loading).expect("loading clip");
@@ -257,7 +270,27 @@ mod tests {
     }
 
     #[test]
-    fn despawning_every_model_entity_removes_their_scheduled_clips() {
+    fn replaced_model_entity_leaves_its_edited_clip_in_the_library() {
+        let (mut world, previous, loading) = world_with_two_models();
+        let edited_clip = find_entity_clip_id(&world, previous).expect("previous clip");
+        world
+            .resource_mut::<ClipLibrary>()
+            .get_mut(edited_clip)
+            .expect("edited clip")
+            .name = "edited".to_string();
+
+        despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
+        let library = world.resource::<ClipLibrary>();
+        assert_eq!(
+            library.get(edited_clip).map(|c| c.name.as_str()),
+            Some("edited")
+        );
+    }
+
+    #[test]
+    fn despawning_every_model_entity_removes_their_model_clips() {
         let (mut world, _, _) = world_with_two_models();
 
         despawn_model_source_entities(&mut world);

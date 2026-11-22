@@ -69,17 +69,30 @@ fn count_clip_references(
         .map_or(0, |(_, count)| *count)
 }
 
+/// Keeps the next button on the current row while it fits, otherwise lets it start a new row.
+fn continue_toolbar_row(ui: &imgui::Ui, next_label: &str, toolbar_right_edge: f32) {
+    let style = ui.clone_style();
+    let next_button_width = ui.calc_text_size(next_label)[0] + style.frame_padding()[0] * 2.0;
+    let next_button_right = ui.item_rect_max()[0] + style.item_spacing()[0] + next_button_width;
+
+    if next_button_right <= toolbar_right_edge {
+        ui.same_line();
+    }
+}
+
 fn build_toolbar(
     ui: &imgui::Ui,
     timeline_state: &TimelineState,
     reference_counts: &[(SourceClipId, usize)],
     world: &World,
 ) {
+    let toolbar_right_edge = ui.cursor_screen_pos()[0] + ui.content_region_avail()[0];
+
     if ui.small_button("+ New") {
         world.send_command(ClipBrowserEvent::CreateEmpty);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Load", toolbar_right_edge);
     if ui.small_button("Load") {
         send_dialog_request(world, DialogRequest::LoadClip);
     }
@@ -89,17 +102,17 @@ fn build_toolbar(
         selected_clip.map(|source_id| DialogRequest::ExportClip { source_id, format })
     };
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Save", toolbar_right_edge);
     if let Some(source_id) = clip_action_button(ui, "Save", selected_clip) {
         send_dialog_request(world, DialogRequest::SaveClip(source_id));
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "FBX", toolbar_right_edge);
     if let Some(request) = clip_action_button(ui, "FBX", clip_export(ClipExportFormat::Fbx)) {
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "glTF", toolbar_right_edge);
     let has_model = world
         .get_resource::<GltfModelCache>()
         .map_or(false, |c| c.has_model());
@@ -109,18 +122,18 @@ fn build_toolbar(
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "glTF (anim only)", toolbar_right_edge);
     let animation_only_export = clip_export(ClipExportFormat::GltfAnimationOnly);
     if let Some(request) = clip_action_button(ui, "glTF (anim only)", animation_only_export) {
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Dup", toolbar_right_edge);
     if let Some(source_id) = clip_action_button(ui, "Dup", selected_clip) {
         world.send_command(ClipBrowserEvent::Duplicate(source_id));
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Del", toolbar_right_edge);
     let deletable_clip =
         selected_clip.filter(|clip_id| count_clip_references(reference_counts, *clip_id) == 0);
     if let Some(source_id) = clip_action_button(ui, "Del", deletable_clip) {

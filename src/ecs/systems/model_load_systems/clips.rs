@@ -201,7 +201,8 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
     source_id
 }
 
-pub(super) fn restore_batch_playback(world: &World) {
+/// A batch run plays the loaded model from its start, whatever time the scene was saved at.
+pub(super) fn restart_batch_playback(world: &World) {
     let requested_clip_id = match world
         .get_resource::<BatchRun>()
         .and_then(|batch_run| batch_run.playback.clone())
@@ -225,6 +226,7 @@ pub(super) fn restore_batch_playback(world: &World) {
         return;
     };
     timeline.playing = true;
+    timeline.current_time = 0.0;
     if let Some(id) = clip_id {
         timeline.current_clip_id = Some(id);
     }

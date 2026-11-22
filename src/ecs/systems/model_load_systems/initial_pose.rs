@@ -1,4 +1,4 @@
-use super::clips::restore_batch_playback;
+use super::clips::restart_batch_playback;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{NodeAssets, TimelineState};
 use crate::ecs::systems::animation::apply::{
@@ -20,8 +20,8 @@ pub(super) fn apply_initial_pose(
         return Vec::new();
     }
 
-    log!("Applying initial pose (time=0) for animation...");
-    reset_timeline_to_start(world);
+    log!("Applying initial pose for animation...");
+    stop_timeline_playback(world);
 
     let mut updated_meshes = apply_initial_skinning(world, assets, graphics);
 
@@ -39,13 +39,9 @@ pub(super) fn apply_initial_pose(
     updated_meshes
 }
 
-fn reset_timeline_to_start(world: &mut World) {
-    {
-        let mut timeline = world.resource_mut::<TimelineState>();
-        timeline.playing = false;
-        timeline.current_time = 0.0;
-    }
-    restore_batch_playback(world);
+fn stop_timeline_playback(world: &mut World) {
+    world.resource_mut::<TimelineState>().playing = false;
+    restart_batch_playback(world);
 }
 
 fn apply_initial_skinning(

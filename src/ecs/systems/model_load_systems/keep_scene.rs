@@ -6,7 +6,7 @@ use super::entities::{
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
 use super::source::resolve_model_file;
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
@@ -92,7 +92,6 @@ fn attach_file_model(
         world,
         assets,
     );
-    reset_timeline_for_loaded_model(world);
 
     Ok(())
 }
@@ -139,7 +138,6 @@ pub unsafe fn load_generated_mesh(
             world,
             assets,
         );
-        reset_timeline_for_loaded_model(world);
         world.insert_resource(GltfModelCache::from_glb_data(glb_data.to_vec()));
         world.insert_component(
             model_entity,
@@ -182,10 +180,6 @@ fn select_clips_removed_from_library(
         .into_iter()
         .filter(|clip| library.get(clip.id).is_none())
         .collect()
-}
-
-fn reset_timeline_for_loaded_model(world: &mut World) {
-    world.resource_mut::<TimelineState>().current_time = 0.0;
 }
 
 #[cfg(test)]

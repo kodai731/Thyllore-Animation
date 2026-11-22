@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{anyhow, Result};
 
 use super::{caches, cleanup, clips, entities, gpu, initial_pose, nodes};
@@ -106,6 +108,7 @@ pub(super) unsafe fn upload_scene_model(
     Ok(clips::register_loaded_clips(
         world,
         assets,
+        Path::new(model_name),
         &load_result.clips,
     ))
 }

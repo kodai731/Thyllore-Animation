@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use super::entities::ModelReplacement;
 use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
 use crate::ecs::systems::{
-    build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton, find_model_path,
+    build_humanoid_rig, convert_clip_to_standard_space, find_first_skeleton,
     timeline_apply_fit_zoom, vrm_humanoid_to_mapping,
 };
 use crate::ecs::systems::{
@@ -58,9 +60,11 @@ pub(super) fn release_selection_to_replacing_model(
 pub(super) fn register_loaded_clips(
     world: &mut World,
     assets: &mut AssetStorage,
+    model_file: &Path,
     loaded_clips: &[AnimationClip],
 ) -> Option<SourceClipId> {
-    if let Some(first_clip_id) = register_clips_to_library(world, assets, loaded_clips) {
+    if let Some(first_clip_id) = register_clips_to_library(world, assets, model_file, loaded_clips)
+    {
         return Some(first_clip_id);
     }
     if assets.skeletons.is_empty() {
@@ -95,26 +99,29 @@ fn select_kept_clip(world: &mut World) -> Option<SourceClipId> {
     Some(kept_clip_id)
 }
 
+/// The clips of a humanoid model are stored in the standard space, so they play on any humanoid model.
 fn import_editable_clips(
     world: &World,
     assets: &AssetStorage,
+    model_file: &Path,
     loaded_clips: &[AnimationClip],
-    bone_names: &std::collections::HashMap<u32, String>,
 ) -> Vec<EditableAnimationClip> {
+    let bone_names: std::collections::HashMap<u32, String> = assets
+        .skeletons
+        .values()
+        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
+        .collect();
     let editable_clips = loaded_clips
         .iter()
-        .map(|clip| thyllore_anim_core::editable::clip_from_animation(0, clip, bone_names));
+        .map(|clip| thyllore_anim_core::editable::clip_from_animation(0, clip, &bone_names));
 
-    let (Some(model_path), Some(skeleton)) = (find_model_path(world), find_first_skeleton(assets))
-    else {
+    let Some(skeleton) = find_first_skeleton(assets) else {
         return editable_clips.collect();
     };
-    let imported = world.resource::<ModelState>().imported_humanoid.clone();
-    let Some(rig) = build_humanoid_rig(
-        std::path::Path::new(&model_path),
-        skeleton,
-        imported.as_ref(),
-    ) else {
+    let imported = world
+        .get_resource::<ModelState>()
+        .and_then(|model_state| model_state.imported_humanoid.clone());
+    let Some(rig) = build_humanoid_rig(model_file, skeleton, imported.as_ref()) else {
         return editable_clips.collect();
     };
 
@@ -131,15 +138,10 @@ fn import_editable_clips(
 fn register_clips_to_library(
     world: &mut World,
     assets: &mut AssetStorage,
+    model_file: &Path,
     loaded_clips: &[AnimationClip],
 ) -> Option<SourceClipId> {
-    let bone_names: std::collections::HashMap<u32, String> = assets
-        .skeletons
-        .values()
-        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
-        .collect();
-
-    let editable_clips = import_editable_clips(world, assets, loaded_clips, &bone_names);
+    let editable_clips = import_editable_clips(world, assets, model_file, loaded_clips);
 
     let mut model_clips: Vec<(SourceClipId, String)> = Vec::new();
     {
@@ -271,7 +273,10 @@ pub(super) fn keeps_selected_user_clip(world: &World) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_anim_core::Skeleton;
+    use glam::Quat;
+    use thyllore_anim_core::{Keyframe, Skeleton, TransformChannel};
+
+    const MODEL_FILE: &str = "model.fbx";
 
     #[test]
     fn model_load_keeps_a_selected_user_clip() {
@@ -318,7 +323,12 @@ mod tests {
         world.resource_mut::<TimelineState>().current_clip_id = Some(user_source_id);
 
         let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
-        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+        register_clips_to_library(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,
@@ -353,7 +363,12 @@ mod tests {
         let loaded_clips: Vec<AnimationClip> = vec![AnimationClip::new("fbx")];
 
         release_selection_to_replacing_model(&mut world, ModelReplacement::Replaced, &loaded_clips);
-        let start_clip_id = register_loaded_clips(&mut world, &mut assets, &loaded_clips);
+        let start_clip_id = register_loaded_clips(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_ne!(start_clip_id, Some(user_clip_id));
         assert_eq!(
@@ -368,7 +383,8 @@ mod tests {
         let (mut world, mut assets, user_clip_id) = world_with_selected_user_clip();
 
         release_selection_to_replacing_model(&mut world, ModelReplacement::Replaced, &[]);
-        let start_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
+        let start_clip_id =
+            register_loaded_clips(&mut world, &mut assets, Path::new(MODEL_FILE), &[]);
 
         assert_eq!(start_clip_id, Some(user_clip_id));
         assert_eq!(
@@ -387,12 +403,52 @@ mod tests {
             ModelReplacement::NothingReplaced,
             &loaded_clips,
         );
-        register_loaded_clips(&mut world, &mut assets, &loaded_clips);
+        register_loaded_clips(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_eq!(
             world.resource::<TimelineState>().current_clip_id,
             Some(user_clip_id)
         );
+    }
+
+    #[test]
+    fn humanoid_model_clips_are_stored_by_role_before_the_model_entity_exists() {
+        use crate::ecs::systems::humanoid_rig_systems::{
+            copy_test_humanoid_fixture, test_humanoid_world,
+        };
+
+        let fixture_dir = tempfile::tempdir().expect("temp dir");
+        let (model_file, _) = copy_test_humanoid_fixture(fixture_dir.path());
+        let (_, mut assets) = test_humanoid_world(&model_file);
+        let mut world = World::new();
+        world.insert_resource(ClipLibrary::new());
+        world.insert_resource(TimelineState::default());
+        let mut animated_take = AnimationClip::new("take");
+        animated_take.duration = 0.1;
+        animated_take.add_channel(
+            0,
+            TransformChannel {
+                rotation: vec![Keyframe::new(0.0, Quat::IDENTITY)],
+                ..Default::default()
+            },
+        );
+        let loaded_clips = vec![AnimationClip::new("empty take"), animated_take];
+
+        let clip_id = register_loaded_clips(&mut world, &mut assets, &model_file, &loaded_clips)
+            .expect("start clip");
+
+        let library = world.resource::<ClipLibrary>();
+        let start_clip = library.get(clip_id).expect("registered clip");
+        assert_eq!(start_clip.name, "take");
+        assert!(start_clip
+            .tracks
+            .values()
+            .any(|track| track.bone_name == "Hips"));
     }
 
     fn world_requesting_clip(requested_clip_name: Option<&str>) -> (World, AssetStorage) {
@@ -415,7 +471,12 @@ mod tests {
         let (mut world, mut assets) = world_requesting_clip(Some("run"));
         let loaded_clips = vec![AnimationClip::new("walk"), AnimationClip::new("run")];
 
-        let start_clip_id = register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+        let start_clip_id = register_clips_to_library(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_eq!(current_clip_name(&world).as_deref(), Some("run"));
         let timeline = world.resource::<TimelineState>();
@@ -428,7 +489,12 @@ mod tests {
         let (mut world, mut assets) = world_requesting_clip(Some("jump"));
         let loaded_clips = vec![AnimationClip::new("walk"), AnimationClip::new("run")];
 
-        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+        register_clips_to_library(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_eq!(current_clip_name(&world).as_deref(), Some("walk"));
         assert_eq!(world.resource::<TimelineState>().requested_clip_name, None);
@@ -450,7 +516,12 @@ mod tests {
         );
         let loaded_clips = vec![AnimationClip::new("empty take"), animated_clip];
 
-        register_clips_to_library(&mut world, &mut assets, &loaded_clips);
+        register_clips_to_library(
+            &mut world,
+            &mut assets,
+            Path::new(MODEL_FILE),
+            &loaded_clips,
+        );
 
         assert_eq!(current_clip_name(&world).as_deref(), Some("jog"));
     }
@@ -474,7 +545,8 @@ mod tests {
             clip_library_register_and_activate(&mut clip_library, &mut assets, user_clip)
         };
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
+        let first_clip_id =
+            register_loaded_clips(&mut world, &mut assets, Path::new(MODEL_FILE), &[]);
 
         assert_eq!(first_clip_id, Some(user_source_id));
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
@@ -518,7 +590,8 @@ mod tests {
             skeleton: Skeleton::default(),
         });
 
-        let first_clip_id = register_loaded_clips(&mut world, &mut assets, &[]);
+        let first_clip_id =
+            register_loaded_clips(&mut world, &mut assets, Path::new(MODEL_FILE), &[]);
 
         assert!(first_clip_id.is_some());
         assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);

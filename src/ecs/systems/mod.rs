@@ -42,6 +42,8 @@ mod expression_preset_systems;
 pub(crate) mod flame;
 mod frame_systems;
 mod frame_timing_systems;
+#[cfg(feature = "auto-rig")]
+mod generated_mesh_batch_actions;
 mod gizmo_systems;
 mod grid_systems;
 mod hierarchy_navigation;

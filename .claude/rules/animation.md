@@ -109,8 +109,8 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
 
 1. `sample_clip_to_pose()` fills a `SkeletonPose` from the clip channels
 2. `compute_node_global_transforms()` (`animation/apply.rs`) copies bone poses to nodes and computes global transforms
-3. `prepare_node_animation()` applies each node's global transform to its mesh's `base_vertices`, then multiplies by
-   `node_animation_scale`
+3. `apply_node_animation_to_single_mesh()` applies the node's global transform to its mesh's `base_vertices`, then
+   multiplies by `node_animation_scale`
 
 ## Checklist When Modifying Animation
 

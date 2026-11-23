@@ -3,7 +3,6 @@ mod cleanup;
 mod clips;
 mod entities;
 mod gpu;
-mod initial_pose;
 mod keep_scene;
 mod nodes;
 mod replace;

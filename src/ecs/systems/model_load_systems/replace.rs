@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
-use super::{caches, cleanup, clips, entities, gpu, initial_pose, nodes};
+use super::{caches, cleanup, clips, entities, gpu, nodes};
 use crate::asset::AssetStorage;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
@@ -96,14 +96,6 @@ pub(super) unsafe fn upload_scene_model(
         swapchain,
         gpu.graphics,
     )?;
-    let posed_meshes = initial_pose::apply_initial_pose(world, assets, gpu.graphics, load_result);
-    gpu::upload_posed_meshes(
-        gpu.instance,
-        gpu.device,
-        gpu.command_pool,
-        gpu.graphics,
-        &posed_meshes,
-    );
 
     Ok(clips::register_loaded_clips(
         world,

@@ -66,24 +66,6 @@ pub(super) unsafe fn upload_model_meshes(
     Ok(())
 }
 
-pub(super) unsafe fn upload_posed_meshes(
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
-    graphics: &mut GraphicsResources,
-    mesh_indices: &[usize],
-) {
-    for &mesh_index in mesh_indices {
-        if let Err(e) = graphics.upload_mesh_vertices(instance, device, command_pool, mesh_index) {
-            log!(
-                "Failed to upload initial pose for mesh {}: {}",
-                mesh_index,
-                e
-            );
-        }
-    }
-}
-
 pub(super) unsafe fn release_model_gpu_resources(
     device: &RRDevice,
     graphics: &mut GraphicsResources,

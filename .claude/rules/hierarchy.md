@@ -530,7 +530,7 @@ load touches is inserted once at startup by a `startup_resource!` / `startup_hoo
 resolution, the loaded model lookup and the dispatch prep hook that requests the load of a model entity without
 mesh children, `replace.rs` mesh upload, attachment to the model entity and additive part load, `keep_scene.rs` the two entry points, which keep the scene's own entities
 and scheduled clips across the replacement and rebuild the acceleration structures once, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
-`entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
+`entities.rs` `World` and `AssetStorage` registration; a loaded model is posed by the first frame's animation phase, not by the loader) is
 `src/ecs/systems/model_load_systems/`; texture file resolution is `thyllore-importer-core`
 (`resolve_mesh_texture`); the acceleration structure build is `RayTracingData::build_acceleration_structures`
 in `thyllore-vulkan-core`, called by `raytracing_systems.rs::rebuild_scene_acceleration` for startup and

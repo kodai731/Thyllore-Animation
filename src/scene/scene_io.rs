@@ -105,8 +105,7 @@ fn save_animation_clips(
         save_animation_clip(&clip_file, clip)?;
         clip.source_path = Some(clip_file.to_string_lossy().into_owned());
 
-        let file_name = clip_file.file_name().unwrap_or_default().to_string_lossy();
-        animation_clips.push(AnimationClipRef::new(&format!("animations/{file_name}")));
+        animation_clips.extend(AnimationClipRef::for_clip_file(&clip_file));
         claimed_files.insert(clip_file);
     }
 

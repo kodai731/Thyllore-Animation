@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -66,5 +67,11 @@ impl AnimationClipRef {
         Self {
             path: path.to_string(),
         }
+    }
+
+    /// A scene names a clip file relative to the assets directory.
+    pub fn for_clip_file(clip_file: &Path) -> Option<Self> {
+        let file_name = clip_file.file_name()?.to_string_lossy();
+        Some(Self::new(&format!("animations/{file_name}")))
     }
 }

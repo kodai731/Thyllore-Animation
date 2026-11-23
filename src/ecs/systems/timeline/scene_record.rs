@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::ecs::component::ModelSource;
 use crate::ecs::resource::{ClipLibrary, ClipOrigin, TimelineState};
 use crate::ecs::systems::clip_library_clip_names;
 use crate::ecs::systems::timeline::timeline_apply_fit_zoom;
@@ -71,9 +72,16 @@ fn describe_saved_clip(world: &World, clip_id: SourceClipId) -> Option<SavedClip
     let clip = library.get(clip_id)?;
 
     match library.origin(clip_id) {
-        ClipOrigin::Model => Some(SavedClip::ModelClip(clip.name.clone())),
+        ClipOrigin::Model => {
+            is_model_saved_in_scene(world).then(|| SavedClip::ModelClip(clip.name.clone()))
+        }
         ClipOrigin::User => scene_file_of(clip).map(SavedClip::UserFile),
     }
+}
+
+/// A generated model has no file, so a scene holds neither it nor the clips it brought.
+fn is_model_saved_in_scene(world: &World) -> bool {
+    world.iter_components::<ModelSource>().next().is_some()
 }
 
 fn scene_file_of(clip: &EditableAnimationClip) -> Option<String> {
@@ -265,9 +273,27 @@ mod tests {
         );
     }
 
+    fn spawn_file_model(world: &mut World) {
+        let model_entity = world.entity().with_name("model").build();
+        world.insert_component(model_entity, ModelSource::new("model.fbx"));
+    }
+
+    #[test]
+    fn captured_record_does_not_select_a_clip_of_a_model_the_scene_does_not_hold() {
+        let (mut world, _) = world_with_user_clip("take");
+        let generated_model_clip_id = register_model_clip(&mut world, "take");
+        world.resource_mut::<TimelineState>().current_clip_id = Some(generated_model_clip_id);
+
+        let record = captured_record(&world);
+
+        assert_eq!(record.current_clip, None);
+        assert_eq!(record.current_clip_file, None);
+    }
+
     #[test]
     fn captured_record_names_a_model_clip_by_its_name() {
         let (mut world, _) = world_with_user_clip("take");
+        spawn_file_model(&mut world);
         let model_clip_id = register_model_clip(&mut world, "take");
         world.resource_mut::<TimelineState>().current_clip_id = Some(model_clip_id);
 

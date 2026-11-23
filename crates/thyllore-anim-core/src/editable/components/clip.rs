@@ -11,6 +11,8 @@ use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
+    /// Assigned by the clip library when the clip is registered, so a clip file does not hold it.
+    #[serde(skip)]
     pub id: SourceClipId,
     pub name: String,
     pub duration: f32,

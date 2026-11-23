@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
 use crate::asset::{AnimationClipAsset, AssetStorage};
-use crate::ecs::resource::ClipLibrary;
+use crate::ecs::resource::{AssetEditCommand, AssetEditQueue, ClipLibrary};
 use crate::ecs::world::World;
 use crate::scene::SceneError;
 use thyllore_anim_core::editable::{
@@ -14,6 +14,17 @@ use thyllore_anim_core::editable::{
 use thyllore_anim_core::{AnimationClip, BoneId};
 
 pub const EMPTY_MODEL_CLIP_DURATION_SECONDS: f32 = 5.0;
+
+/// A clip file dropped on the window loads the way the clip browser's Load button does.
+fn load_dropped_clip_file(world: &mut World, path: &str) {
+    world
+        .resource_mut::<AssetEditQueue>()
+        .push(AssetEditCommand::LoadClipFromFile {
+            path: PathBuf::from(path),
+        });
+}
+
+crate::dropped_file_hook!("ron", load_dropped_clip_file);
 
 /// The clip a model without animation is given, so the model can always be keyed.
 pub fn clip_library_register_empty_model_clip(

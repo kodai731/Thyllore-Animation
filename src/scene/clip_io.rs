@@ -79,6 +79,19 @@ mod tests {
     }
 
     #[test]
+    fn test_clip_file_does_not_hold_the_library_clip_id() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let saved_bytes = |library_clip_id| {
+            let clip = EditableAnimationClip::new(library_clip_id, "probe".to_string());
+            let path = dir.path().join(format!("{library_clip_id}.anim.ron"));
+            save_animation_clip(&path, &clip).expect("save");
+            fs::read(&path).expect("read")
+        };
+
+        assert_eq!(saved_bytes(1), saved_bytes(7));
+    }
+
+    #[test]
     fn test_unknown_channel_names_are_rejected() {
         let text = r#"(version: 2, clip: (id: 1, name: "x", duration: 0.0, tracks: {}, source_path: None, next_curve_id: 1), scalar_curves: [(channel: "no_such_channel", id: 1, keyframes: [], next_keyframe_id: 1)])"#;
         assert!(matches!(

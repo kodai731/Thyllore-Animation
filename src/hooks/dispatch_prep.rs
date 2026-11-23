@@ -32,10 +32,15 @@ pub struct DispatchPrepHooks {
 
 impl DispatchPrepHooks {
     pub fn collect() -> anyhow::Result<Self> {
-        let mut entries: Vec<DispatchPrepHook> = inventory::iter::<DispatchPrepHook>
-            .into_iter()
-            .copied()
-            .collect();
+        Self::from_hooks(
+            inventory::iter::<DispatchPrepHook>
+                .into_iter()
+                .copied()
+                .collect(),
+        )
+    }
+
+    pub fn from_hooks(mut entries: Vec<DispatchPrepHook>) -> anyhow::Result<Self> {
         entries.sort_by_key(|hook| hook.name);
         for pair in entries.windows(2) {
             anyhow::ensure!(
@@ -67,31 +72,63 @@ mod tests {
     use super::*;
 
     #[derive(Default)]
-    struct ProbePrepRuns(u32);
+    struct ProbePrepRuns(Vec<&'static str>);
 
-    fn count_probe_run(world: &mut World, _: &mut AssetStorage) {
+    fn record_run(world: &mut World, name: &'static str) {
         if !world.contains_resource::<ProbePrepRuns>() {
             world.insert_resource(ProbePrepRuns::default());
         }
-        world.resource_mut::<ProbePrepRuns>().0 += 1;
+        world.resource_mut::<ProbePrepRuns>().0.push(name);
     }
 
-    crate::dispatch_prep_hook!("probe_prep", count_probe_run);
+    fn record_early_run(world: &mut World, _: &mut AssetStorage) {
+        record_run(world, "early");
+    }
+
+    fn record_late_run(world: &mut World, _: &mut AssetStorage) {
+        record_run(world, "late");
+    }
+
+    const EARLY_PROBE: DispatchPrepHook = DispatchPrepHook {
+        name: "a_probe",
+        run: record_early_run,
+    };
+    const LATE_PROBE: DispatchPrepHook = DispatchPrepHook {
+        name: "b_probe",
+        run: record_late_run,
+    };
+
+    crate::dispatch_prep_hook!("probe_prep", record_early_run);
 
     #[test]
-    fn test_hooks_are_sorted_by_name_and_run_once_per_call() {
+    fn test_registered_hooks_are_collected_sorted_by_name() {
         let hooks = DispatchPrepHooks::collect().expect("dispatch prep hooks collected");
         let names: Vec<&str> = hooks.ordered().iter().map(|hook| hook.name).collect();
         let mut sorted = names.clone();
         sorted.sort();
-        assert_eq!(names, sorted);
 
+        assert_eq!(names, sorted);
+        assert!(names.contains(&"probe_prep"));
+    }
+
+    #[test]
+    fn test_hooks_run_in_name_order_once_per_call() {
+        let hooks = DispatchPrepHooks::from_hooks(vec![LATE_PROBE, EARLY_PROBE]).expect("hooks");
         let mut world = World::new();
         world.insert_resource(hooks);
         let mut assets = AssetStorage::new();
+
         run_dispatch_prep_hooks(&mut world, &mut assets);
         run_dispatch_prep_hooks(&mut world, &mut assets);
 
-        assert_eq!(world.resource::<ProbePrepRuns>().0, 2);
+        assert_eq!(
+            world.resource::<ProbePrepRuns>().0,
+            vec!["early", "late", "early", "late"]
+        );
+    }
+
+    #[test]
+    fn test_hook_registered_twice_is_refused() {
+        assert!(DispatchPrepHooks::from_hooks(vec![EARLY_PROBE, EARLY_PROBE]).is_err());
     }
 }

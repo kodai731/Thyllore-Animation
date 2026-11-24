@@ -75,8 +75,7 @@ pub fn capture_scheduled_clips(world: &World) -> Vec<EditableAnimationClip> {
         .collect()
 }
 
-/// Replaces every owned entity by the scene's entities; loading twice yields the same world.
-/// Returns the entity each record became, `None` for a record that was skipped.
+/// Replaces every owned entity by the scene's and returns what each record became, `None` when skipped.
 pub fn apply_scene_entities(
     world: &mut World,
     assets: &mut AssetStorage,

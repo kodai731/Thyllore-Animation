@@ -135,24 +135,36 @@ fn locate_file_from_root(model_file: &Path) -> PathBuf {
 }
 
 fn express_relative_to_assets(model_file: &Path, assets_dir: &Path) -> PathBuf {
-    let Some((located_file, located_assets_dir)) = locate_from_root(model_file, assets_dir) else {
-        return model_file.to_path_buf();
-    };
+    let named = locate_by_name(model_file, assets_dir);
+    let linked = locate_through_links(model_file, assets_dir);
 
-    match located_file.strip_prefix(&located_assets_dir) {
-        Ok(relative) => relative.to_path_buf(),
-        Err(_) => located_file,
+    let relative_file = [&named, &linked]
+        .into_iter()
+        .flatten()
+        .find_map(|(file, dir)| file.strip_prefix(dir).ok());
+    if let Some(relative_file) = relative_file {
+        return relative_file.to_path_buf();
+    }
+
+    match linked.or(named) {
+        Some((located_file, _)) => located_file,
+        None => model_file.to_path_buf(),
     }
 }
 
-/// Both paths from the filesystem root: through the links when the file exists, by name when it is missing.
-fn locate_from_root(model_file: &Path, assets_dir: &Path) -> Option<(PathBuf, PathBuf)> {
-    if let (Ok(file), Ok(dir)) = (model_file.canonicalize(), assets_dir.canonicalize()) {
-        return Some((file, dir));
-    }
-
+/// Both paths from the filesystem root as they are named, so a link inside the assets tree stays inside it.
+fn locate_by_name(model_file: &Path, assets_dir: &Path) -> Option<(PathBuf, PathBuf)> {
     let file = std::path::absolute(model_file).ok()?;
     let dir = std::path::absolute(assets_dir).ok()?;
+
+    Some((file, dir))
+}
+
+/// Both paths from the filesystem root with every link followed; `None` when either does not exist.
+fn locate_through_links(model_file: &Path, assets_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    let file = model_file.canonicalize().ok()?;
+    let dir = assets_dir.canonicalize().ok()?;
+
     Some((file, dir))
 }
 
@@ -386,6 +398,24 @@ mod tests {
             assets_dir.join(&source_path).canonicalize().unwrap(),
             model_file.canonicalize().unwrap()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn model_file_under_a_linked_assets_subdirectory_is_stored_relative_to_it() {
+        let root = std::env::temp_dir().join("thyllore_model_source_linked");
+        let assets_dir = root.join("assets");
+        let shared_models_dir = root.join("shared/models");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&assets_dir).unwrap();
+        std::fs::create_dir_all(shared_models_dir.join("avatar")).unwrap();
+        std::fs::write(shared_models_dir.join("avatar/avatar.fbx"), b"stub").unwrap();
+        std::os::unix::fs::symlink(&shared_models_dir, assets_dir.join("models")).unwrap();
+
+        let source_path =
+            express_relative_to_assets(&assets_dir.join("models/avatar/avatar.fbx"), &assets_dir);
+
+        assert_eq!(source_path, PathBuf::from("models/avatar/avatar.fbx"));
     }
 
     #[test]

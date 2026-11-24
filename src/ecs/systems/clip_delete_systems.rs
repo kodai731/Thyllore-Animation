@@ -1,6 +1,9 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{scalar_domain_for_entity, ClipSchedule};
-use crate::ecs::resource::{ClipDeletionEffects, ClipLibrary, RemovedClip, TimelineState};
+use crate::ecs::resource::{
+    BakedHumanoidClips, ClipDeletionEffects, ClipLibrary, PoseLibrary, RemovedClip, RemovedPose,
+    TimelineState,
+};
 use crate::ecs::systems::timeline::timeline_select_clip;
 use crate::ecs::systems::{
     clip_library_register_empty_model_clip, clip_schedule_add_instance, select_first_animated_clip,
@@ -16,11 +19,13 @@ pub fn delete_library_clip(
 ) -> Option<(RemovedClip, ClipDeletionEffects)> {
     let selected_clip = world.resource::<TimelineState>().current_clip_id;
     let removed = world.resource_mut::<ClipLibrary>().remove(clip_id)?;
+    release_baked_clips(world, assets, clip_id);
     let schedules = release_clip_from_schedules(world, clip_id);
     let mut effects = ClipDeletionEffects {
         schedules,
         selected_clip,
         created_clip: None,
+        pose: take_pose(world, clip_id),
     };
 
     let was_selected = selected_clip == Some(clip_id);
@@ -81,6 +86,24 @@ pub fn restore_deleted_clip(
     if effects.selected_clip == Some(clip_id) {
         select_successor_clip(world, Some(clip_id));
     }
+    if let (Some(pose), Some(mut poses)) = (&effects.pose, world.get_resource_mut::<PoseLibrary>())
+    {
+        poses.restore_pose(pose.clone());
+    }
+}
+
+fn release_baked_clips(world: &World, assets: &mut AssetStorage, clip_id: SourceClipId) {
+    let Some(mut baked_clips) = world.get_resource_mut::<BakedHumanoidClips>() else {
+        return;
+    };
+
+    for asset_id in baked_clips.invalidate_source(clip_id) {
+        assets.animation_clips.remove(&asset_id);
+    }
+}
+
+fn take_pose(world: &World, clip_id: SourceClipId) -> Option<RemovedPose> {
+    world.get_resource_mut::<PoseLibrary>()?.take_pose(clip_id)
 }
 
 fn release_clip_from_schedules(
@@ -313,6 +336,37 @@ mod tests {
         assert_eq!(find_entity_clip_id(&world, model), effects.created_clip);
         assert!(effects.created_clip.is_some());
         assert_eq!(selected_clip(&world), Some(probe_clip));
+    }
+
+    #[test]
+    fn restoring_a_deleted_pose_puts_it_back_in_the_pose_library() {
+        let (mut world, mut assets, _) = world_with_model();
+        world.insert_resource(PoseLibrary::default());
+        let pose_clip = register_clip(&mut world, &mut assets, "pose");
+        world.resource_mut::<PoseLibrary>().add_pose(pose_clip, 1.5);
+
+        let (removed, effects) =
+            delete_library_clip(&mut world, &mut assets, pose_clip).expect("deleted");
+        assert!(!world.resource::<PoseLibrary>().contains(pose_clip));
+
+        restore_deleted_clip(&mut world, pose_clip, &removed, &effects);
+
+        let poses = world.resource::<PoseLibrary>();
+        assert_eq!(poses.pose_ids(), vec![pose_clip]);
+        assert_eq!(poses.poses[0].captured_time, 1.5);
+    }
+
+    #[test]
+    fn deleting_a_baked_clip_releases_its_bakes() {
+        let (mut world, mut assets, model) = world_with_model();
+        let baked_clip = register_clip(&mut world, &mut assets, "baked");
+        let mut baked_clips = BakedHumanoidClips::default();
+        baked_clips.failed.insert((baked_clip, model));
+        world.insert_resource(baked_clips);
+
+        delete_library_clip(&mut world, &mut assets, baked_clip).expect("deleted");
+
+        assert!(world.resource::<BakedHumanoidClips>().failed.is_empty());
     }
 
     #[test]

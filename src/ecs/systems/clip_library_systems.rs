@@ -195,21 +195,7 @@ pub fn clip_library_load_from_file(
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
     if let Some(name_to_id) = bone_name_to_id {
-        let has_misbound_track = clip.tracks.values().any(|track| {
-            name_to_id
-                .get(&track.bone_name)
-                .map_or(false, |&expected_id| expected_id != track.bone_id)
-        });
-
-        if has_misbound_track || !clip.unbound_tracks.is_empty() {
-            let remapped_count = clip.tracks.len();
-            clip_remap_bone_ids(&mut clip, name_to_id);
-            log!(
-                "Remapped {} bone_ids by bone_name for '{}'",
-                remapped_count,
-                clip.name,
-            );
-        }
+        clip_remap_bone_ids(&mut clip, name_to_id);
     }
 
     clip.source_path = Some(path.to_string_lossy().to_string());
@@ -423,6 +409,30 @@ mod tests {
         let loaded = lib.get(id).unwrap();
         assert!(loaded.unbound_tracks.is_empty());
         assert_eq!(loaded.get_track(model_tail_bone).unwrap().bone_name, "Tail");
+    }
+
+    #[test]
+    fn loading_a_clip_unbinds_the_tracks_of_bones_the_model_lacks() {
+        use thyllore_anim_core::editable::curve_add_keyframe;
+
+        let mut clip = crate::ecs::systems::new_empty_clip("tail wag");
+        let tail_track = clip.add_track(12, "Tail".to_string());
+        curve_add_keyframe(&mut tail_track.rotation_x, 0.0, 10.0);
+        let path =
+            std::env::temp_dir().join(format!("clip_lacking_{}.anim.ron", std::process::id()));
+        crate::scene::save_animation_clip(&path, &clip).unwrap();
+
+        let mut model_bones = HashMap::new();
+        model_bones.insert("LeftHand".to_string(), 12);
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let id =
+            clip_library_load_from_file(&mut lib, &mut assets, &path, Some(&model_bones)).unwrap();
+        fs::remove_file(&path).ok();
+
+        let loaded = lib.get(id).unwrap();
+        assert!(loaded.get_track(12).is_none());
+        assert_eq!(loaded.unbound_track_names(), vec!["Tail".to_string()]);
     }
 
     #[test]

@@ -5,8 +5,8 @@ use crate::ecs::systems::timeline::timeline_apply_fit_zoom;
 use crate::ecs::world::World;
 use crate::hooks::scene::{decode_scene_value, encode_scene_value, SceneValue};
 use crate::hooks::scene_resource::SceneResourceHook;
-use crate::scene::AnimationClipRef;
-use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
+use crate::scene::find_scene_clip_file;
+use thyllore_anim_core::editable::SourceClipId;
 
 /// Persisted timeline state: a user clip is named by its file, a model clip by its name; a scene opens stopped.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -71,17 +71,13 @@ fn describe_saved_clip(world: &World, clip_id: SourceClipId) -> Option<SavedClip
         ClipOrigin::Model(_) => {
             is_model_saved_in_scene(world).then(|| SavedClip::ModelClip(clip.name.clone()))
         }
-        ClipOrigin::User => scene_file_of(clip).map(SavedClip::UserFile),
+        ClipOrigin::User => find_scene_clip_file(world, clip).map(SavedClip::UserFile),
     }
 }
 
 /// A generated model has no file, so a scene holds neither it nor the clips it brought.
 fn is_model_saved_in_scene(world: &World) -> bool {
     world.iter_components::<ModelSource>().next().is_some()
-}
-
-fn scene_file_of(clip: &EditableAnimationClip) -> Option<String> {
-    AnimationClipRef::for_clip(clip).map(|clip_ref| clip_ref.path)
 }
 
 fn apply_timeline_scene_record(world: &mut World, value: &SceneValue) -> anyhow::Result<()> {
@@ -125,19 +121,24 @@ fn find_library_clip(world: &World, saved_clip: &SavedClip) -> Option<(SourceCli
     let clip_id = clip_library_clip_names(&library)
         .into_iter()
         .map(|(clip_id, _)| clip_id)
-        .find(|clip_id| is_saved_clip(&library, *clip_id, saved_clip))?;
+        .find(|clip_id| is_saved_clip(world, &library, *clip_id, saved_clip))?;
 
     library.get(clip_id).map(|clip| (clip_id, clip.duration))
 }
 
-fn is_saved_clip(library: &ClipLibrary, clip_id: SourceClipId, saved_clip: &SavedClip) -> bool {
+fn is_saved_clip(
+    world: &World,
+    library: &ClipLibrary,
+    clip_id: SourceClipId,
+    saved_clip: &SavedClip,
+) -> bool {
     let Some(clip) = library.get(clip_id) else {
         return false;
     };
 
     match (saved_clip, library.origin(clip_id)) {
         (SavedClip::UserFile(scene_file), ClipOrigin::User) => {
-            scene_file_of(clip).as_ref() == Some(scene_file)
+            find_scene_clip_file(world, clip).as_ref() == Some(scene_file)
         }
         (SavedClip::ModelClip(clip_name), ClipOrigin::Model(_)) => &clip.name == clip_name,
         (SavedClip::UserFile(_), ClipOrigin::Model(_))

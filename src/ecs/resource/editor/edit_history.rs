@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use glam::Vec3;
 
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{ClipRevision, RemovedClip, SkeletonSnapshot};
+use crate::ecs::resource::{ClipRevision, RemovedClip, RemovedPose, SkeletonSnapshot};
 use crate::ecs::world::Entity;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
@@ -13,6 +13,7 @@ pub struct ClipDeletionEffects {
     pub schedules: Vec<(Entity, ClipSchedule)>,
     pub selected_clip: Option<SourceClipId>,
     pub created_clip: Option<SourceClipId>,
+    pub pose: Option<RemovedPose>,
 }
 
 #[derive(Clone, Debug)]

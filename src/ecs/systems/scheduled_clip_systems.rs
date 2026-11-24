@@ -12,7 +12,7 @@ use crate::hooks::scene::{
     decode_component, encode_scene_value, entities_with, SceneComponentHook, SceneComponentRole,
     SceneValue,
 };
-use crate::scene::AnimationClipRef;
+use crate::scene::find_scene_clip_file;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 /// The clip an entity schedules: found by its file in `animation_clips`, by name when it was never saved.
@@ -48,7 +48,7 @@ fn capture_scheduled_clip(world: &World, entity: Entity) -> Option<SceneValue> {
     let clip = library.get(clip_id)?;
     encode_scene_value(&ScheduledClip {
         clip: clip.name.clone(),
-        file: AnimationClipRef::for_clip(clip).map(|clip_ref| clip_ref.path),
+        file: find_scene_clip_file(world, clip),
     })
     .ok()
 }
@@ -88,9 +88,7 @@ fn find_unscheduled_clip(world: &World, scheduled: &ScheduledClip) -> Option<Sou
     };
 
     let clip_from_file = scheduled.file.as_ref().and_then(|scene_file| {
-        find_free_clip(&|clip| {
-            AnimationClipRef::for_clip(clip).is_some_and(|clip_ref| &clip_ref.path == scene_file)
-        })
+        find_free_clip(&|clip| find_scene_clip_file(world, clip).as_ref() == Some(scene_file))
     });
     clip_from_file.or_else(|| find_free_clip(&|clip| clip.name == scheduled.clip))
 }
@@ -124,6 +122,26 @@ mod tests {
         let (mut world, mut assets, clip_ids) = world_with_clips_named_take(&[
             "assets/animations/take.anim.ron",
             "assets/animations/take_2.anim.ron",
+        ]);
+        let entity = world.spawn();
+        schedule_entity_clip(&mut world, entity, clip_ids[1]);
+        let saved = capture_scheduled_clip(&world, entity).expect("scheduled clip");
+        let restored_entity = world.spawn();
+
+        world.remove_component::<ClipSchedule>(entity);
+        apply_scheduled_clip(&mut world, &mut assets, restored_entity, &saved).unwrap();
+
+        assert_eq!(
+            find_entity_clip_id(&world, restored_entity),
+            Some(clip_ids[1])
+        );
+    }
+
+    #[test]
+    fn unsaved_clip_files_of_one_name_are_told_apart_by_their_directory() {
+        let (mut world, mut assets, clip_ids) = world_with_clips_named_take(&[
+            "thyllore_walk_clips/take.anim.ron",
+            "thyllore_run_clips/take.anim.ron",
         ]);
         let entity = world.spawn();
         schedule_entity_clip(&mut world, entity, clip_ids[1]);

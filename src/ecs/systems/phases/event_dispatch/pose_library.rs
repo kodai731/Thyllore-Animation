@@ -1,9 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{
-    ClipDeletionEffects, ClipLibrary, EditHistory, PoseLibrary, TimelineState,
-};
-use crate::ecs::systems::{apply_pose_to_clip, capture_current_pose};
+use crate::ecs::resource::{ClipLibrary, EditHistory, PoseLibrary, TimelineState};
+use crate::ecs::systems::{apply_pose_to_clip, capture_current_pose, delete_library_clip};
 use crate::ecs::world::World;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
@@ -103,20 +101,11 @@ fn dispatch_pose_library_events(
             }
 
             PoseLibraryEvent::Delete(pose_id) => {
-                world.resource_mut::<PoseLibrary>().remove_pose(*pose_id);
-
-                let removed_clip = world.resource_mut::<ClipLibrary>().remove(*pose_id);
-
-                if let Some(removed) = removed_clip {
-                    if world.contains_resource::<EditHistory>() {
-                        let mut edit_history = world.resource_mut::<EditHistory>();
-                        edit_history.push_clip_removed(
-                            *pose_id,
-                            removed,
-                            ClipDeletionEffects::default(),
-                            "delete pose",
-                        );
-                    }
+                let Some((removed, effects)) = delete_library_clip(world, assets, *pose_id) else {
+                    continue;
+                };
+                if let Some(mut edit_history) = world.get_resource_mut::<EditHistory>() {
+                    edit_history.push_clip_removed(*pose_id, removed, effects, "delete pose");
                 }
 
                 log!("Deleted pose (id={})", pose_id);

@@ -7,7 +7,9 @@ use thyllore_anim_core::editable::EditableAnimationClip;
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
-use super::file::{AnimationClipRef, SceneFile, SCENE_FORMAT_VERSION};
+use super::file::{
+    is_file_in_directory, AnimationClipRef, SceneFile, ANIMATIONS_DIR_NAME, SCENE_FORMAT_VERSION,
+};
 use crate::ecs::resource::{ClipLibrary, SceneState};
 use crate::ecs::world::World;
 use crate::hooks::scene::SceneValue;
@@ -33,7 +35,7 @@ pub fn is_scene_in_assets_tree(scene_path: &Path) -> bool {
 }
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
-    let animations_dir = scene_assets_dir(scene_path).join("animations");
+    let animations_dir = scene_assets_dir(scene_path).join(ANIMATIONS_DIR_NAME);
     fs::create_dir_all(&animations_dir)?;
     let animation_clips = save_animation_clips(world, &animations_dir)?;
 
@@ -150,9 +152,18 @@ fn choose_clip_file(
 fn find_owned_clip_file(clip: &EditableAnimationClip, animations_dir: &Path) -> Option<PathBuf> {
     let source_file = Path::new(clip.source_path.as_deref()?);
     let file_name = source_file.file_name()?;
-    let source_dir = source_file.parent()?.canonicalize().ok()?;
 
-    (source_dir == animations_dir.canonicalize().ok()?).then(|| animations_dir.join(file_name))
+    is_file_in_directory(source_file, animations_dir).then(|| animations_dir.join(file_name))
+}
+
+/// How the open scene names the file of a clip; two clips never share a name, saved or not.
+pub fn find_scene_clip_file(world: &World, clip: &EditableAnimationClip) -> Option<String> {
+    let assets_dir = match world.get_resource::<SceneState>() {
+        Some(scene_state) => scene_state.assets_dir(),
+        None => SceneState::new().assets_dir(),
+    };
+
+    AnimationClipRef::for_clip(clip, &assets_dir).map(|clip_ref| clip_ref.path)
 }
 
 fn write_scene_file(scene_path: &Path, scene: &SceneFile) -> SceneResult<()> {

@@ -48,7 +48,7 @@ pub unsafe fn load_model_keeping_scene(
 
     request_played_clip_of_reloading_model(world, model_entity);
     let withheld_clip_request = withhold_requested_clip(world, load_origin);
-    let replaced_models = capture_other_model_sources(world, model_entity);
+    let replaced_models = capture_model_sources_beside(world, Some(model_entity));
     let replacement = despawn_other_model_source_entities(world, model_entity);
     release_selection_to_replacing_model(world, replacement, &load_result.clips);
     let kept_scene = capture_kept_scene(world);
@@ -98,11 +98,12 @@ fn withhold_requested_clip(world: &mut World, load_origin: ModelLoadOrigin) -> O
     }
 }
 
-fn capture_other_model_sources(world: &World, kept_entity: Entity) -> Vec<SceneEntity> {
+/// The models a load replaces: every model of the scene but the one being loaded.
+fn capture_model_sources_beside(world: &World, loading_entity: Option<Entity>) -> Vec<SceneEntity> {
     find_scene_owner_entities(world)
         .into_iter()
         .zip(capture_scene_entities(world))
-        .filter(|(entity, _)| *entity != kept_entity)
+        .filter(|(entity, _)| Some(*entity) != loading_entity)
         .filter(|(entity, _)| world.get_component::<ModelSource>(*entity).is_some())
         .map(|(_, scene_entity)| scene_entity)
         .collect()
@@ -174,6 +175,8 @@ pub unsafe fn load_generated_mesh(
         Err(error) => return Err(error),
     };
 
+    let withheld_clip_request = withhold_requested_clip(world, ModelLoadOrigin::Added);
+    let replaced_models = capture_model_sources_beside(world, None);
     let replacement = despawn_model_source_entities(world);
     release_selection_to_replacing_model(world, replacement, &load_result.clips);
     let kept_scene = capture_kept_scene(world);
@@ -207,7 +210,7 @@ pub unsafe fn load_generated_mesh(
         );
     });
     if attached.is_err() {
-        discard_requested_clip(world);
+        bring_back_replaced_models(world, assets, &replaced_models, withheld_clip_request);
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
@@ -336,11 +339,36 @@ mod tests {
         );
         let load_origin = begin_model_load(&mut world, added_entity);
         let withheld = withhold_requested_clip(&mut world, load_origin);
-        let replaced_models = capture_other_model_sources(&world, added_entity);
+        let replaced_models = capture_model_sources_beside(&world, Some(added_entity));
         let _ = despawn_other_model_source_entities(&mut world, added_entity);
         assert!(world.get_component::<ModelSource>(scene_model).is_none());
 
         give_up_model_load(&mut world, added_entity, load_origin);
+        bring_back_replaced_models(&mut world, &mut assets, &replaced_models, withheld);
+
+        let model_paths: Vec<String> = world
+            .iter_components::<ModelSource>()
+            .map(|(_, source)| source.path.clone())
+            .collect();
+        assert_eq!(model_paths, vec!["models/avatar/avatar.fbx".to_string()]);
+        assert_eq!(requested_clip_name(&world).as_deref(), Some("run"));
+    }
+
+    #[test]
+    fn failed_generated_mesh_brings_back_the_scene_model_and_its_clip_request() {
+        let mut world = world_requesting_clip_of_the_scene_model();
+        let mut assets = AssetStorage::default();
+        crate::hooks::scene::spawn_scene_owner(
+            &mut world,
+            "scene model",
+            ModelSource::new("models/avatar/avatar.fbx"),
+        );
+        let withheld = withhold_requested_clip(&mut world, ModelLoadOrigin::Added);
+        let replaced_models = capture_model_sources_beside(&world, None);
+        for entity in crate::hooks::scene::entities_with::<ModelSource>(&world) {
+            world.despawn(entity);
+        }
+
         bring_back_replaced_models(&mut world, &mut assets, &replaced_models, withheld);
 
         let model_paths: Vec<String> = world

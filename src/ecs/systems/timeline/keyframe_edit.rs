@@ -55,14 +55,13 @@ pub fn edit_curve(
     property_type: PropertyType,
     edit: impl FnOnce(&mut PropertyCurve),
 ) -> bool {
-    let Some(clip) = clip_library.get_mut(clip_id) else {
-        return false;
-    };
-    let Some(curve) = resolve_curve_mut(clip, track, property_type) else {
-        return false;
-    };
-    edit(curve);
-    true
+    edit_clip(clip_library, clip_id, |clip| {
+        let Some(curve) = resolve_curve_mut(clip, track, property_type) else {
+            return false;
+        };
+        edit(curve);
+        true
+    })
 }
 
 /// Scalar curves are keyed by Custom codes; a bone property type there would create a curve nothing samples.
@@ -127,7 +126,9 @@ pub fn shift_keyframes<'a>(
             was_shifted = true;
         }
     }
-    clip_recalculate_duration(clip);
+    if was_shifted {
+        clip_recalculate_duration(clip);
+    }
 
     was_shifted
 }
@@ -143,7 +144,9 @@ pub fn remove_keyframes<'a>(
             was_removed |= curve_remove_keyframe(curve, sel.keyframe_id);
         }
     }
-    clip_recalculate_duration(clip);
+    if was_removed {
+        clip_recalculate_duration(clip);
+    }
 
     was_removed
 }

@@ -138,21 +138,35 @@ mod tests {
     fn keyframe_edits_that_find_no_keyframe_leave_a_model_clip_untouched() {
         let (mut state, mut library) = model_clip_with_three_keys();
         let clip_id = state.current_clip_id.unwrap();
+        let imported_duration = 5.0;
+        library
+            .get_source_mut(clip_id)
+            .unwrap()
+            .editable_clip
+            .duration = imported_duration;
         state.selected_keyframes.clear();
         let missing_keyframe = TimelineEvent::DeleteKeyframe {
             track: CurveTrackRef::Bone(0),
             property_type: PropertyType::TranslationX,
             keyframe_id: 9999,
         };
+        let missing_curve = TimelineEvent::SetCurveExtrapolation {
+            track: CurveTrackRef::Scalar,
+            property_type: PropertyType::Custom(99),
+            end: ExtrapolationEnd::Both,
+            mode: CurveExtrapolation::Linear,
+        };
         let events = vec![
             TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 },
             TimelineEvent::DeleteSelectedKeyframes,
             missing_keyframe,
+            missing_curve,
         ];
 
         assert!(!apply_keyframe_edits(&events, &mut state, &mut library));
         assert!(library.is_model_clip(clip_id));
         assert!(!library.is_dirty(clip_id));
+        assert_eq!(library.get(clip_id).unwrap().duration, imported_duration);
     }
 
     #[test]

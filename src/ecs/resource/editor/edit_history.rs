@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::Vec3;
 
 use crate::ecs::component::ClipSchedule;
@@ -59,6 +61,63 @@ pub enum EditCommandAfter {
 pub struct EditEntry {
     pub command: EditCommand,
     pub after: EditCommandAfter,
+}
+
+impl EditEntry {
+    fn follow_respawned_entities(self, respawned: &HashMap<Entity, Entity>) -> Option<Self> {
+        let command = match self.command {
+            EditCommand::ScheduleModified {
+                entity,
+                before,
+                description,
+            } => EditCommand::ScheduleModified {
+                entity: *respawned.get(&entity)?,
+                before,
+                description,
+            },
+            EditCommand::ClipRemoved {
+                clip_id,
+                removed,
+                effects,
+                description,
+            } => EditCommand::ClipRemoved {
+                clip_id,
+                removed,
+                effects: ClipDeletionEffects {
+                    schedules: follow_respawned_owners(effects.schedules, respawned),
+                    ..effects
+                },
+                description,
+            },
+            EditCommand::ModelScaled {
+                factor,
+                root_scales,
+                description,
+            } => EditCommand::ModelScaled {
+                factor,
+                root_scales: follow_respawned_owners(root_scales, respawned),
+                description,
+            },
+            command @ (EditCommand::ClipModified { .. }
+            | EditCommand::ClipAdded { .. }
+            | EditCommand::SkeletonModified { .. }) => command,
+        };
+
+        Some(Self {
+            command,
+            after: self.after,
+        })
+    }
+}
+
+fn follow_respawned_owners<T>(
+    owned: Vec<(Entity, T)>,
+    respawned: &HashMap<Entity, Entity>,
+) -> Vec<(Entity, T)> {
+    owned
+        .into_iter()
+        .filter_map(|(owner, value)| Some((*respawned.get(&owner)?, value)))
+        .collect()
 }
 
 pub const DEFAULT_MAX_HISTORY: usize = 100;
@@ -200,6 +259,16 @@ impl EditHistory {
 
         if self.undo_stack.len() > self.max_history {
             self.undo_stack.remove(0);
+        }
+    }
+
+    /// A scene rebuild respawns its entities: entries follow them and forget the entities that left.
+    pub fn follow_respawned_entities(&mut self, respawned: &HashMap<Entity, Entity>) {
+        for stack in [&mut self.undo_stack, &mut self.redo_stack] {
+            *stack = std::mem::take(stack)
+                .into_iter()
+                .filter_map(|entry| entry.follow_respawned_entities(respawned))
+                .collect();
         }
     }
 

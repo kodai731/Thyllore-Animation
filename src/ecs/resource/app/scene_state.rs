@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::scene::SceneMetadata;
+use crate::scene::{is_scene_in_assets_tree, scene_assets_dir, SceneMetadata};
 
 const DEFAULT_ASSETS_DIR: &str = "assets";
 
@@ -20,13 +20,21 @@ impl SceneState {
         self.previous_metadata = Some(metadata);
     }
 
-    /// The directory the scene's relative asset paths start from: a scene file sits in `<assets>/scenes/`.
+    /// The directory the scene's relative asset paths start from, `assets` without a scene file.
     pub fn assets_dir(&self) -> PathBuf {
         self.current_scene_path
             .as_deref()
-            .and_then(Path::parent)
-            .and_then(Path::parent)
-            .map(Path::to_path_buf)
+            .map(scene_assets_dir)
             .unwrap_or_else(|| PathBuf::from(DEFAULT_ASSETS_DIR))
+    }
+
+    /// The assets tree a new path is stored relative to; a scene file outside one keeps paths absolute.
+    pub fn assets_tree(&self) -> Option<PathBuf> {
+        let is_in_assets_tree = self
+            .current_scene_path
+            .as_deref()
+            .is_none_or(is_scene_in_assets_tree);
+
+        is_in_assets_tree.then(|| self.assets_dir())
     }
 }

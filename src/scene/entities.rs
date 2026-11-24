@@ -30,16 +30,29 @@ pub fn capture_scene_entities(world: &World) -> Vec<SceneEntity> {
 
     owned_entities(world, hooks.owners())
         .into_iter()
-        .map(|entity| SceneEntity {
-            name: entity_name(world, entity),
-            components: hooks
-                .ordered()
-                .filter_map(|hook| {
-                    (hook.capture)(world, entity).map(|value| (hook.type_key.to_string(), value))
-                })
-                .collect(),
-        })
+        .map(|entity| capture_scene_entity(world, &hooks, entity))
         .collect()
+}
+
+/// The entities `capture_scene_entities` records, in the order it records them.
+pub fn find_scene_owner_entities(world: &World) -> Vec<Entity> {
+    let Some(hooks) = world.get_resource::<SceneComponentHooks>() else {
+        return Vec::new();
+    };
+
+    owned_entities(world, hooks.owners()).into_iter().collect()
+}
+
+fn capture_scene_entity(world: &World, hooks: &SceneComponentHooks, entity: Entity) -> SceneEntity {
+    SceneEntity {
+        name: entity_name(world, entity),
+        components: hooks
+            .ordered()
+            .filter_map(|hook| {
+                (hook.capture)(world, entity).map(|value| (hook.type_key.to_string(), value))
+            })
+            .collect(),
+    }
 }
 
 /// The clips owned entities schedule, to re-register after a library reset; the model file brings back a model clip.
@@ -63,17 +76,14 @@ pub fn capture_scheduled_clips(world: &World) -> Vec<EditableAnimationClip> {
 }
 
 /// Replaces every owned entity by the scene's entities; loading twice yields the same world.
+/// Returns the entity each record became, `None` for a record that was skipped.
 pub fn apply_scene_entities(
     world: &mut World,
     assets: &mut AssetStorage,
     entities: &[SceneEntity],
-) {
-    let hooks: Vec<SceneComponentHook> = match world.get_resource::<SceneComponentHooks>() {
-        Some(hooks) => hooks.ordered().copied().collect(),
-        None => {
-            log_warn!("SceneComponentHooks resource missing: scene entities not applied");
-            return;
-        }
+) -> Vec<Option<Entity>> {
+    let Some(hooks) = collect_ordered_hooks(world) else {
+        return vec![None; entities.len()];
     };
 
     let owners = hooks
@@ -83,9 +93,30 @@ pub fn apply_scene_entities(
         despawn_entity_with_clip(world, entity);
     }
 
+    entities
+        .iter()
+        .map(|scene_entity| apply_scene_entity(world, assets, &hooks, scene_entity))
+        .collect()
+}
+
+/// Adds the scene's entities beside the ones the world already holds.
+pub fn add_scene_entities(world: &mut World, assets: &mut AssetStorage, entities: &[SceneEntity]) {
+    let Some(hooks) = collect_ordered_hooks(world) else {
+        return;
+    };
+
     for scene_entity in entities {
         apply_scene_entity(world, assets, &hooks, scene_entity);
     }
+}
+
+fn collect_ordered_hooks(world: &World) -> Option<Vec<SceneComponentHook>> {
+    let Some(hooks) = world.get_resource::<SceneComponentHooks>() else {
+        log_warn!("SceneComponentHooks resource missing: scene entities not applied");
+        return None;
+    };
+
+    Some(hooks.ordered().copied().collect())
 }
 
 fn apply_scene_entity(
@@ -93,7 +124,7 @@ fn apply_scene_entity(
     assets: &mut AssetStorage,
     hooks: &[SceneComponentHook],
     scene_entity: &SceneEntity,
-) {
+) -> Option<Entity> {
     for type_key in scene_entity.components.keys() {
         if hooks.iter().all(|hook| hook.type_key != type_key) {
             log_warn!(
@@ -127,9 +158,11 @@ fn apply_scene_entity(
             scene_entity.name
         );
         world.despawn(entity);
-        return;
+        return None;
     }
     ensure_scalar_entity_clip(world, assets, entity);
+
+    Some(entity)
 }
 
 fn owned_entities<'a>(

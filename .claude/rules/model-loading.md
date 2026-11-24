@@ -17,11 +17,15 @@ paths:
 - A model is a scene entity: `ModelSource { path }` (`src/ecs/component/model/source.rs`, `scene_owner!`, type
   key `model_source`) names the file, and the model's mesh entities are that entity's children. The path is
   relative to the scene's assets directory (`SceneState::assets_dir`: two levels above the scene file, `assets`
-  without a scene) or absolute when the file lies outside it. A generated mesh has no `ModelSource`; its entity
-  carries `GeneratedGlb` (the bytes it was built from) and is not persisted.
+  without a scene) or absolute when the file lies outside it. A scene file outside a `scenes` directory has no
+  assets tree (`SceneState::assets_tree`), so a model added to it is always stored absolute. `scene_assets_dir`
+  (`src/scene/scene_io.rs`) is the one definition of that directory for models and clip files. A generated mesh
+  has no `ModelSource`; its entity carries `GeneratedGlb` (the bytes it was built from) and is not persisted.
 - Whether a model is loaded is computed, never stored: a `ModelSource` entity without `Children` is not loaded.
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
-  `SceneLoadCommand::LoadModel { entity }` for each such entity, so startup and runtime loads share one path.
+  one `SceneLoadCommand::LoadModel { entity }` per dispatch, so startup and runtime loads share one path. One
+  scene holds one model: the model added last is loaded (`select_model_to_load`), otherwise the scene's own, and
+  a model replaced before it loaded is reported in the message log.
   To load a model, spawn the entity with `spawn_model_source`; never push the command or call the loader.
 - `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds what `Children` cannot say:
   `Added` (`spawn_model_source`: the user added the model to the open scene), `ReloadRequested`
@@ -37,8 +41,15 @@ paths:
   names, alone in the scene, keeps its `ModelSource` entity marked `ModelLoadMark::Failed`, so it is not requested
   again and saving the scene still names the model. A model the user added (`Added`: drop, open button, batch
   `load_model=`) and a model that fails beside a loaded one lose their entity. The error goes to the message log.
-  A file without meshes is refused the same way. A failed reload leaves the meshes of the last load in place. The
-  clip the scene asked of the model (`TimelineState::requested_clip_name`) is discarded with the failure.
+  A file without meshes is refused the same way. A failed reload leaves the meshes of the last load in place. A
+  load that fails after it replaced a model (the upload) brings that model's entity back without meshes, so the
+  next dispatch loads it again (`bring_back_replaced_models`).
+- The clip a scene asked of its model (`TimelineState::requested_clip_name`) belongs to that model alone
+  (`ModelLoadOrigin::InScene`): its load consumes the request and its failure discards it. A model the user
+  added (`ModelLoadOrigin::Added`) loads without the request (`withhold_requested_clip`), and its failure leaves
+  the request for the scene's model. Nothing here depends on the order in which entities load.
+- A load respawns the scene's entities, so the edit history follows them to their new ids
+  (`EditHistory::follow_respawned_entities`) and forgets the entries of entities that left.
 - A reload starts on the model clip the model was playing (`request_played_clip_of_reloading_model`).
 - Save scene writes the open scene's own file (`SceneState::current_scene_path`, the default scene without one):
   a `ModelSource` path is relative to that scene's assets directory.

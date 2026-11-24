@@ -13,13 +13,27 @@ use crate::ecs::world::World;
 use crate::hooks::scene::SceneValue;
 use crate::hooks::scene_resource::SceneResourceHooks;
 
+const SCENES_DIR_NAME: &str = "scenes";
+
+/// The directory a scene's relative asset paths start from: a scene file sits in `<assets>/scenes/`.
+pub fn scene_assets_dir(scene_path: &Path) -> PathBuf {
+    scene_path
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
+}
+
+/// A scene file outside a `scenes` directory has no assets tree a path could be relative to.
+pub fn is_scene_in_assets_tree(scene_path: &Path) -> bool {
+    scene_path
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|scenes_dir| scenes_dir == SCENES_DIR_NAME)
+}
+
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
-    let animations_dir = scene_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("animations");
+    let animations_dir = scene_assets_dir(scene_path).join("animations");
     fs::create_dir_all(&animations_dir)?;
     let animation_clips = save_animation_clips(world, &animations_dir)?;
 
@@ -174,11 +188,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
         });
     }
 
-    let assets_dir = scene_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .parent()
-        .unwrap_or(Path::new("."));
+    let assets_dir = scene_assets_dir(scene_path);
 
     let mut clips = Vec::new();
     let mut loaded_paths = HashSet::new();

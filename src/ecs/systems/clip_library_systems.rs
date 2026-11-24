@@ -24,7 +24,7 @@ fn load_dropped_clip_file(world: &mut World, path: &str) {
         });
 }
 
-crate::dropped_file_hook!("ron", load_dropped_clip_file);
+crate::dropped_file_hook!(".anim.ron", load_dropped_clip_file);
 
 /// The clip a model without animation is given, so the model can always be keyed.
 pub fn clip_library_register_empty_model_clip(

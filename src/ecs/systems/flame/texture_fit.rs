@@ -15,7 +15,7 @@ fn handle_dropped_png(world: &mut World, path: &str) {
         .texture_fit_path = path.to_string();
 }
 
-crate::dropped_file_hook!("png", handle_dropped_png);
+crate::dropped_file_hook!(".png", handle_dropped_png);
 
 /// Run a texture fit against the selected flame and write the results into
 /// its parameter and baked components. The heavy fit itself stays in

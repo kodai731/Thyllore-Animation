@@ -6,7 +6,7 @@ use crate::ecs::resource::{AnimationType, ClipLibrary};
 use crate::ecs::systems::{
     attach_morph_channel_catalogs, build_initial_clip_schedule, find_entity_clip_id,
 };
-use crate::ecs::world::{Animator, Entity, Name, Transform, Visibility, Visible, World};
+use crate::ecs::world::{Animator, Children, Entity, Name, Transform, Visibility, Visible, World};
 use crate::hooks::scene::entities_with;
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
@@ -32,8 +32,27 @@ pub(super) fn despawn_other_model_source_entities(
         .into_iter()
         .filter(|entity| *entity != kept_entity)
         .collect();
+    report_models_replaced_before_loading(world, &replaced_entities, kept_entity);
 
     despawn_model_entities(world, replaced_entities)
+}
+
+fn report_models_replaced_before_loading(
+    world: &World,
+    replaced_entities: &[Entity],
+    kept_entity: Entity,
+) {
+    let unloaded_entities = replaced_entities
+        .iter()
+        .filter(|entity| world.get_component::<Children>(**entity).is_none());
+
+    for entity in unloaded_entities {
+        msg_warn!(
+            "Model '{}' was replaced by '{}' before it loaded",
+            find_entity_name(world, *entity),
+            find_entity_name(world, kept_entity)
+        );
+    }
 }
 
 #[cfg(any(test, feature = "auto-rig"))]

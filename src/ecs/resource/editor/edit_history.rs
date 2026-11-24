@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{RemovedClip, SkeletonSnapshot};
+use crate::ecs::resource::{ClipRevision, RemovedClip, SkeletonSnapshot};
 use crate::ecs::world::Entity;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
@@ -17,7 +17,7 @@ pub struct ClipDeletionEffects {
 pub enum EditCommand {
     ClipModified {
         clip_id: SourceClipId,
-        before: EditableAnimationClip,
+        before: ClipRevision,
         description: &'static str,
     },
     ScheduleModified {
@@ -90,7 +90,7 @@ impl EditHistory {
     pub fn push_clip_edit(
         &mut self,
         clip_id: SourceClipId,
-        before: EditableAnimationClip,
+        before: ClipRevision,
         after: EditableAnimationClip,
         description: &'static str,
     ) {
@@ -258,10 +258,17 @@ mod tests {
         EditableAnimationClip::new(1, name.to_string())
     }
 
+    fn make_dummy_revision(name: &str) -> ClipRevision {
+        ClipRevision {
+            clip: make_dummy_clip(name),
+            origin: ClipOrigin::User,
+        }
+    }
+
     #[test]
     fn test_push_and_undo_clip_edit() {
         let mut history = EditHistory::default();
-        let before = make_dummy_clip("before");
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
 
         history.push_clip_edit(1, before, after, "test edit");
@@ -278,7 +285,7 @@ mod tests {
                 description,
             } => {
                 assert_eq!(*clip_id, 1);
-                assert_eq!(before.name, "before");
+                assert_eq!(before.clip.name, "before");
                 assert_eq!(*description, "test edit");
             }
             _ => panic!("unexpected command type"),
@@ -288,7 +295,7 @@ mod tests {
     #[test]
     fn test_push_and_redo() {
         let mut history = EditHistory::default();
-        let before = make_dummy_clip("before");
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
 
         history.push_clip_edit(1, before, after, "edit");
@@ -304,7 +311,7 @@ mod tests {
     #[test]
     fn test_redo_cleared_on_new_edit() {
         let mut history = EditHistory::default();
-        let before = make_dummy_clip("b1");
+        let before = make_dummy_revision("b1");
         let after = make_dummy_clip("a1");
         history.push_clip_edit(1, before, after, "first");
 
@@ -312,7 +319,7 @@ mod tests {
         history.push_to_redo(entry);
         assert!(history.can_redo());
 
-        let before2 = make_dummy_clip("b2");
+        let before2 = make_dummy_revision("b2");
         let after2 = make_dummy_clip("a2");
         history.push_clip_edit(1, before2, after2, "second");
 
@@ -324,7 +331,7 @@ mod tests {
         let mut history = EditHistory::new(3);
 
         for i in 0..5 {
-            let before = make_dummy_clip(&format!("b{}", i));
+            let before = make_dummy_revision(&format!("b{}", i));
             let after = make_dummy_clip(&format!("a{}", i));
             history.push_clip_edit(1, before, after, "edit");
         }
@@ -339,7 +346,7 @@ mod tests {
     #[test]
     fn test_last_undo_mut_returns_entry() {
         let mut history = EditHistory::default();
-        let before = make_dummy_clip("before");
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
         history.push_clip_edit(1, before, after, "edit");
 
@@ -357,7 +364,7 @@ mod tests {
         let commands = [
             EditCommand::ClipModified {
                 clip_id: 1,
-                before: make_dummy_clip("before"),
+                before: make_dummy_revision("before"),
                 description: "Move keyframe",
             },
             EditCommand::ScheduleModified {

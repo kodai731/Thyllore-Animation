@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::entities::SceneEntity;
 use crate::hooks::scene::SceneValue;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 pub const SCENE_FORMAT_VERSION: u32 = 9;
 
@@ -67,6 +68,11 @@ impl AnimationClipRef {
         Self {
             path: path.to_string(),
         }
+    }
+
+    /// `None` for a clip that was never saved to or loaded from a file.
+    pub fn for_clip(clip: &EditableAnimationClip) -> Option<Self> {
+        Self::for_clip_file(Path::new(clip.source_path.as_deref()?))
     }
 
     /// A scene names a clip file relative to the assets directory.

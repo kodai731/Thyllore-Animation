@@ -1,10 +1,10 @@
-use crate::ecs::resource::{EditCommand, EditCommandAfter, EditHistory};
+use crate::ecs::resource::{ClipRevision, EditCommand, EditCommandAfter, EditHistory};
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 pub fn edit_history_push_clip_mergeable(
     history: &mut EditHistory,
     clip_id: SourceClipId,
-    before: EditableAnimationClip,
+    before: ClipRevision,
     after: EditableAnimationClip,
     description: &'static str,
 ) {
@@ -35,28 +35,42 @@ fn matches_clip_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::resource::ClipOrigin;
 
     fn make_dummy_clip(name: &str) -> EditableAnimationClip {
         EditableAnimationClip::new(1, name.to_string())
     }
 
+    fn make_dummy_revision(name: &str) -> ClipRevision {
+        ClipRevision {
+            clip: make_dummy_clip(name),
+            origin: ClipOrigin::User,
+        }
+    }
+
     #[test]
     fn test_mergeable_updates_after_only() {
         let mut history = EditHistory::default();
-        let before = make_dummy_clip("original");
+        let before = make_dummy_revision("original");
         let mid = make_dummy_clip("mid");
         let final_state = make_dummy_clip("final");
 
-        let mid_clone = mid.clone();
+        let mid_revision = make_dummy_revision("mid");
         edit_history_push_clip_mergeable(&mut history, 1, before, mid, "drag keyframe");
-        edit_history_push_clip_mergeable(&mut history, 1, mid_clone, final_state, "drag keyframe");
+        edit_history_push_clip_mergeable(
+            &mut history,
+            1,
+            mid_revision,
+            final_state,
+            "drag keyframe",
+        );
 
         let entry = history.pop_undo().unwrap();
         assert!(history.pop_undo().is_none());
 
         match &entry.command {
             EditCommand::ClipModified { before, .. } => {
-                assert_eq!(before.name, "original");
+                assert_eq!(before.clip.name, "original");
             }
             _ => panic!("unexpected command type"),
         }
@@ -71,9 +85,9 @@ mod tests {
     #[test]
     fn test_mergeable_different_description_creates_new_entry() {
         let mut history = EditHistory::default();
-        let a = make_dummy_clip("a");
+        let a = make_dummy_revision("a");
         let b = make_dummy_clip("b");
-        let c = make_dummy_clip("c");
+        let c = make_dummy_revision("c");
         let d = make_dummy_clip("d");
 
         edit_history_push_clip_mergeable(&mut history, 1, a, b, "drag keyframe");

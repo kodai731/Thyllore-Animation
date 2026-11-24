@@ -36,6 +36,7 @@ pub(super) fn despawn_other_model_source_entities(
     despawn_model_entities(world, replaced_entities)
 }
 
+#[cfg(any(test, feature = "auto-rig"))]
 pub(super) fn despawn_model_source_entities(world: &mut World) -> ModelReplacement {
     let replaced_entities = entities_with::<ModelSource>(world);
 

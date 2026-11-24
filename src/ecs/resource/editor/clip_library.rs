@@ -16,6 +16,13 @@ pub struct RemovedClip {
     pub origin: ClipOrigin,
 }
 
+/// A clip and whose clip it is, as an edit found it.
+#[derive(Clone, Debug)]
+pub struct ClipRevision {
+    pub clip: EditableAnimationClip,
+    pub origin: ClipOrigin,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {
     pub animation: AnimationSystem,
@@ -92,6 +99,12 @@ impl ClipLibrary {
         self.source_clips.get_mut(&id).map(|s| &mut s.editable_clip)
     }
 
+    /// Binding a clip's tracks to a changed skeleton is not an edit: the clip keeps its origin.
+    pub fn rebind_mut(&mut self, id: SourceClipId) -> Option<&mut EditableAnimationClip> {
+        self.dirty_sources.insert(id);
+        self.source_clips.get_mut(&id).map(|s| &mut s.editable_clip)
+    }
+
     pub fn get_source(&self, id: SourceClipId) -> Option<&SourceClip> {
         self.source_clips.get(&id)
     }
@@ -112,6 +125,35 @@ impl ClipLibrary {
         }
     }
 
+    pub fn revision(&self, id: SourceClipId) -> Option<ClipRevision> {
+        let clip = self.get(id)?.clone();
+        let origin = self.origin(id);
+
+        Some(ClipRevision { clip, origin })
+    }
+
+    /// Undoing the edit that made a model clip the user's gives the clip back to the model.
+    pub fn restore_revision(&mut self, id: SourceClipId, revision: ClipRevision) {
+        let Some(source) = self.source_clips.get_mut(&id) else {
+            return;
+        };
+
+        source.editable_clip = revision.clip;
+        self.dirty_sources.insert(id);
+        self.set_origin(id, revision.origin);
+    }
+
+    pub fn set_origin(&mut self, id: SourceClipId, origin: ClipOrigin) {
+        if !self.source_clips.contains_key(&id) {
+            return;
+        }
+
+        match origin {
+            ClipOrigin::Model => self.model_clip_ids.insert(id),
+            ClipOrigin::User => self.model_clip_ids.remove(&id),
+        };
+    }
+
     /// The playable asset of the removed clip is released by the next playable asset sync.
     pub fn remove(&mut self, id: SourceClipId) -> Option<RemovedClip> {
         let origin = self.origin(id);
@@ -130,11 +172,7 @@ impl ClipLibrary {
     pub fn restore(&mut self, id: SourceClipId, removed: RemovedClip) {
         self.source_clips.insert(id, removed.source);
         self.dirty_sources.insert(id);
-
-        match removed.origin {
-            ClipOrigin::Model => self.model_clip_ids.insert(id),
-            ClipOrigin::User => self.model_clip_ids.remove(&id),
-        };
+        self.set_origin(id, removed.origin);
     }
 
     pub fn take_released_asset_ids(&mut self) -> Vec<AssetId> {
@@ -214,6 +252,47 @@ mod tests {
 
         assert!(library.remove(CLIP_ID).is_none());
         assert!(library.take_released_asset_ids().is_empty());
+    }
+
+    #[test]
+    fn editing_a_model_clip_makes_it_a_user_clip() {
+        let mut library = library_with_model_clip();
+
+        library.get_mut(CLIP_ID).expect("clip").duration = 2.0;
+
+        assert_eq!(library.origin(CLIP_ID), ClipOrigin::User);
+    }
+
+    #[test]
+    fn restoring_the_revision_before_an_edit_gives_the_clip_back_to_the_model() {
+        let mut library = library_with_model_clip();
+        let before = library.revision(CLIP_ID).expect("revision");
+        library.get_mut(CLIP_ID).expect("clip").duration = 2.0;
+
+        library.restore_revision(CLIP_ID, before);
+
+        assert_eq!(library.origin(CLIP_ID), ClipOrigin::Model);
+        assert_eq!(library.get(CLIP_ID).expect("clip").duration, 0.0);
+    }
+
+    #[test]
+    fn rebinding_a_model_clip_keeps_its_origin() {
+        let mut library = library_with_model_clip();
+        library.mark_clean(CLIP_ID);
+
+        library.rebind_mut(CLIP_ID).expect("clip").tracks.clear();
+
+        assert_eq!(library.origin(CLIP_ID), ClipOrigin::Model);
+        assert!(library.is_dirty(CLIP_ID));
+    }
+
+    #[test]
+    fn origin_of_an_unknown_clip_is_not_recorded() {
+        let mut library = ClipLibrary::new();
+
+        library.set_origin(CLIP_ID, ClipOrigin::Model);
+
+        assert!(!library.is_model_clip(CLIP_ID));
     }
 
     #[test]

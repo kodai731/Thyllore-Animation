@@ -29,12 +29,19 @@ pub fn resolve_curve_mut(
 }
 
 /// Runs `edit` on the library's clip and returns its result; false when the clip is missing.
+/// An `edit` that changed nothing leaves a model clip the model's.
 pub fn edit_clip(
     clip_library: &mut ClipLibrary,
     clip_id: SourceClipId,
     edit: impl FnOnce(&mut EditableAnimationClip) -> bool,
 ) -> bool {
-    clip_library.get_mut(clip_id).is_some_and(edit)
+    let origin_before = clip_library.origin(clip_id);
+
+    let was_edited = clip_library.get_mut(clip_id).is_some_and(edit);
+    if !was_edited {
+        clip_library.set_origin(clip_id, origin_before);
+    }
+    was_edited
 }
 
 /// Runs `edit` on one curve of the library's clip; false when the clip or curve is missing.

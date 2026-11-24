@@ -197,8 +197,12 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
     Ok(LoadedScene { scene, clips })
 }
 
+pub fn default_scene_path() -> PathBuf {
+    PathBuf::from("assets/scenes/default.scene.ron")
+}
+
 pub fn find_default_scene() -> Option<PathBuf> {
-    let path = PathBuf::from("assets/scenes/default.scene.ron");
+    let path = default_scene_path();
     if path.exists() {
         Some(path)
     } else {

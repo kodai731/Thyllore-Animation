@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::ecs::component::ModelSource;
 use crate::ecs::resource::{ClipLibrary, ClipOrigin, TimelineState};
 use crate::ecs::systems::clip_library_clip_names;
@@ -85,8 +83,7 @@ fn is_model_saved_in_scene(world: &World) -> bool {
 }
 
 fn scene_file_of(clip: &EditableAnimationClip) -> Option<String> {
-    let clip_file = Path::new(clip.source_path.as_deref()?);
-    AnimationClipRef::for_clip_file(clip_file).map(|clip_ref| clip_ref.path)
+    AnimationClipRef::for_clip(clip).map(|clip_ref| clip_ref.path)
 }
 
 fn apply_timeline_scene_record(world: &mut World, value: &SceneValue) -> anyhow::Result<()> {

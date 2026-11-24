@@ -22,7 +22,7 @@ pub use motion_path_format::{
 };
 pub use scene_io::{
     apply_loaded_scene_to_world, apply_scene_resources, capture_scene_resources,
-    find_default_scene, load_scene, save_scene, LoadedScene,
+    default_scene_path, find_default_scene, load_scene, save_scene, LoadedScene,
 };
 pub use transform_format::{
     overwrite_transform_persisted_fields, transform_parameter_snapshot, TRANSFORM_SCALAR_PARAMS,

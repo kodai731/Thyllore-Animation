@@ -82,7 +82,7 @@ fn dispatch_pose_library_events(
 
                 if let (Some(pose), Some(target_id)) = (pose_clip, target_clip_id) {
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    let before = clip_library.get(target_id).cloned();
+                    let before = clip_library.revision(target_id);
 
                     if let Some(target) = clip_library.get_mut(target_id) {
                         apply_pose_to_clip(&pose, target, target_time);

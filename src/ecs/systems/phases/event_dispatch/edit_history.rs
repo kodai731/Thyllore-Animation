@@ -2,8 +2,9 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
-    AssetEditCommand, AssetEditQueue, ClipLibrary, ClipOrigin, EditCommand, EditCommandAfter,
-    EditEntry, EditHistory, RemovedClip, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, ClipOrigin, ClipRevision, EditCommand,
+    EditCommandAfter, EditEntry, EditHistory, RemovedClip, ScaleHistory, SkeletonSnapshot,
+    ToastMessage, UiToast,
 };
 use crate::ecs::systems::{delete_library_clip, restore_deleted_clip};
 use crate::ecs::world::{Entity, World};
@@ -44,12 +45,9 @@ fn dispatch_undo(world: &mut World) {
             let current = {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
                 let current = clip_library
-                    .get(*clip_id)
-                    .cloned()
+                    .revision(*clip_id)
                     .unwrap_or_else(|| before.clone());
-                if let Some(clip) = clip_library.get_mut(*clip_id) {
-                    *clip = before.clone();
-                }
+                clip_library.restore_revision(*clip_id, before.clone());
                 current
             };
 
@@ -278,9 +276,11 @@ fn redo_clip_modified(
     let current = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         let current = clip_library
-            .get(clip_id)
-            .cloned()
-            .unwrap_or_else(|| after_clip.clone());
+            .revision(clip_id)
+            .unwrap_or_else(|| ClipRevision {
+                clip: after_clip.clone(),
+                origin: ClipOrigin::User,
+            });
         if let Some(clip) = clip_library.get_mut(clip_id) {
             *clip = after_clip.clone();
         }
@@ -405,6 +405,37 @@ mod tests {
         };
         assert!((factor - 100.0).abs() < 1e-3);
         assert_eq!(*history, ScaleHistory::Revert { root_scales });
+    }
+
+    #[test]
+    fn undo_of_the_first_edit_gives_a_model_clip_back_to_the_model() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(EditHistory::new(8));
+        world.insert_resource(UiToast::default());
+        let mut library = ClipLibrary::new();
+        let clip_id = crate::ecs::systems::clip_library_register_and_activate(
+            &mut library,
+            &mut assets,
+            EditableAnimationClip::new(0, "walk".to_string()),
+        );
+        library.model_clip_ids.insert(clip_id);
+        let before = library.revision(clip_id).expect("revision");
+        library.get_mut(clip_id).expect("clip").duration = 2.0;
+        let after = library.get(clip_id).cloned().expect("clip");
+        world.insert_resource(library);
+        world
+            .resource_mut::<EditHistory>()
+            .push_clip_edit(clip_id, before, after, "set duration");
+
+        dispatch_undo(&mut world);
+        let origin_after_undo = world.resource::<ClipLibrary>().origin(clip_id);
+        dispatch_redo(&mut world, &mut assets);
+
+        let library = world.resource::<ClipLibrary>();
+        assert_eq!(origin_after_undo, ClipOrigin::Model);
+        assert_eq!(library.origin(clip_id), ClipOrigin::User);
+        assert_eq!(library.get(clip_id).expect("clip").duration, 2.0);
     }
 
     #[test]

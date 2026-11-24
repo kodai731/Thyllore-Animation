@@ -23,14 +23,21 @@ paths:
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
   `SceneLoadCommand::LoadModel { entity }` for each such entity, so startup and runtime loads share one path.
   To load a model, spawn the entity with `spawn_model_source`; never push the command or call the loader.
+- `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds the two things `Children` cannot
+  say: `ReloadRequested` (`request_model_reload`: the file is read again while the entity keeps its meshes) and
+  `Failed`. The loader removes the mark when it starts (`begin_model_load`).
 - `SceneLoadCommand::LoadModel { entity }` (`src/app/command.rs`) runs `load_model_keeping_scene` through
   `App::rebuild_scene` (`src/app/scene_rebuild.rs`). The loader (`keep_scene.rs`) despawns every other
   `ModelSource` entity (one scene holds one model), captures the scene's entities, resets the world and uploads
   the meshes (`replace.rs::upload_scene_model`), restores the entities, attaches the meshes and the animation to
   the restored model entity (`attach_scene_model`), runs `ModelLoadHooks` (`src/hooks/model_load.rs`) without
   naming a domain, and rebuilds the acceleration structures once.
-- A failed load despawns the `ModelSource` entity, otherwise it would be requested again every frame; the error
-  goes to the message log. A file without meshes is refused for the same reason.
+- A failed load keeps the `ModelSource` entity and marks it `ModelLoadMark::Failed`, so it is not requested again
+  and saving the scene still names the model; the error goes to the message log. A file without meshes is
+  refused the same way. A failed reload leaves the meshes of the last load in place. The clip the scene asked of
+  the model (`TimelineState::requested_clip_name`) is discarded with the failure.
+- Save scene writes the open scene's own file (`SceneState::current_scene_path`, the default scene without one):
+  a `ModelSource` path is relative to that scene's assets directory.
 - The current model is found, not remembered: `find_loaded_model_entity` / `find_loaded_model_file`
   (`source.rs`) and `find_model_path` return the loaded model's entity and file. Sidecars, the expression
   library, the texture remap and exports key on that path; `ModelState` holds only what the importer reported

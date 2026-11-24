@@ -224,7 +224,7 @@ pub fn restore_skeleton_snapshot(
     {
         let mut clips = world.resource_mut::<ClipLibrary>();
         for (id, tracks) in snapshot.clip_tracks {
-            if let Some(clip) = clips.get_mut(id) {
+            if let Some(clip) = clips.rebind_mut(id) {
                 clip.tracks = tracks;
             }
         }
@@ -372,7 +372,7 @@ fn remap_bone_references(world: &mut World, remap: &BoneRemap) {
     let mut clips = world.resource_mut::<ClipLibrary>();
     let clip_ids: Vec<SourceClipId> = clips.all_clip_ids().copied().collect();
     for id in clip_ids {
-        let Some(clip) = clips.get_mut(id) else {
+        let Some(clip) = clips.rebind_mut(id) else {
             continue;
         };
         let tracks = std::mem::take(&mut clip.tracks);

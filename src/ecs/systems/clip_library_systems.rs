@@ -195,13 +195,13 @@ pub fn clip_library_load_from_file(
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
     if let Some(name_to_id) = bone_name_to_id {
-        let needs_remap = clip.tracks.values().any(|track| {
+        let has_misbound_track = clip.tracks.values().any(|track| {
             name_to_id
                 .get(&track.bone_name)
                 .map_or(false, |&expected_id| expected_id != track.bone_id)
         });
 
-        if needs_remap {
+        if has_misbound_track || !clip.unbound_tracks.is_empty() {
             let remapped_count = clip.tracks.len();
             clip_remap_bone_ids(&mut clip, name_to_id);
             log!(
@@ -397,6 +397,32 @@ mod tests {
         assert_eq!(head_track.bone_name, "Head");
         assert_eq!(head_track.bone_id, model_head_bone);
         assert_eq!(head_track.rotation_x.keyframes.len(), 1);
+    }
+
+    #[test]
+    fn loading_a_clip_binds_its_unbound_tracks_to_model_bones() {
+        use thyllore_anim_core::editable::{curve_add_keyframe, BoneTrack};
+
+        let mut clip = crate::ecs::systems::new_empty_clip("tail wag");
+        let mut tail_track = BoneTrack::new(7, "Tail".to_string(), 1);
+        curve_add_keyframe(&mut tail_track.rotation_x, 0.0, 10.0);
+        clip.unbound_tracks.push(tail_track);
+        let path =
+            std::env::temp_dir().join(format!("clip_unbound_{}.anim.ron", std::process::id()));
+        crate::scene::save_animation_clip(&path, &clip).unwrap();
+
+        let model_tail_bone: BoneId = 42;
+        let mut model_bones = HashMap::new();
+        model_bones.insert("Tail".to_string(), model_tail_bone);
+        let mut lib = ClipLibrary::default();
+        let mut assets = AssetStorage::default();
+        let id =
+            clip_library_load_from_file(&mut lib, &mut assets, &path, Some(&model_bones)).unwrap();
+        fs::remove_file(&path).ok();
+
+        let loaded = lib.get(id).unwrap();
+        assert!(loaded.unbound_tracks.is_empty());
+        assert_eq!(loaded.get_track(model_tail_bone).unwrap().bone_name, "Tail");
     }
 
     #[test]

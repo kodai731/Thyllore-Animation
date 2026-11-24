@@ -30,8 +30,11 @@ pub fn delete_library_clip(
         return Some((removed, effects));
     }
 
-    let kept_selection = selected_clip.filter(|_| !was_selected);
-    let successor = kept_selection.or_else(|| find_model_clip_candidate(world));
+    let scalar_clip_ids = find_scalar_clip_ids(world);
+    let kept_selection = selected_clip
+        .filter(|_| !was_selected)
+        .filter(|selected| !scalar_clip_ids.contains(selected));
+    let successor = kept_selection.or_else(|| find_model_clip_candidate(world, &scalar_clip_ids));
     let successor = match successor {
         Some(successor) => Some(successor),
         None if models_without_clip.is_empty() => None,
@@ -116,14 +119,20 @@ fn find_models_without_clip(world: &World, released: &[(Entity, ClipSchedule)]) 
         .collect()
 }
 
-/// The first animated clip no scalar-domain entity plays, see `select_first_animated_clip`.
-fn find_model_clip_candidate(world: &World) -> Option<SourceClipId> {
-    let scalar_clip_ids: Vec<SourceClipId> = world
+/// A clip a scalar-domain entity plays holds that entity's curves, so a model never takes it over.
+fn find_scalar_clip_ids(world: &World) -> Vec<SourceClipId> {
+    world
         .iter_components::<ClipSchedule>()
         .filter(|(entity, _)| scalar_domain_for_entity(world, *entity).is_some())
         .flat_map(|(_, schedule)| schedule.instances.iter().map(|i| i.source_id))
-        .collect();
+        .collect()
+}
 
+/// The first animated clip no scalar-domain entity plays, see `select_first_animated_clip`.
+fn find_model_clip_candidate(
+    world: &World,
+    scalar_clip_ids: &[SourceClipId],
+) -> Option<SourceClipId> {
     let library = world.resource::<ClipLibrary>();
     let mut candidate_ids: Vec<SourceClipId> = library
         .all_clip_ids()
@@ -288,6 +297,23 @@ mod tests {
         assert_ne!(selected_clip(&world), Some(probe_clip));
         assert_eq!(selected_clip(&world), effects.created_clip);
         assert_eq!(find_entity_clip_id(&world, probe), Some(probe_clip));
+    }
+
+    #[test]
+    fn model_left_without_a_clip_never_takes_the_selected_scalar_entity_clip() {
+        let (mut world, mut assets, model) = world_with_model();
+        let model_clip = register_clip(&mut world, &mut assets, "model");
+        schedule_entity_clip(&mut world, model, model_clip);
+        let probe = spawn_probe_with_clip(&mut world, &mut assets, "probe");
+        let probe_clip = find_entity_clip_id(&world, probe).expect("probe clip");
+        world.resource_mut::<TimelineState>().current_clip_id = Some(probe_clip);
+
+        let (_, effects) =
+            delete_library_clip(&mut world, &mut assets, model_clip).expect("deleted");
+
+        assert_eq!(find_entity_clip_id(&world, model), effects.created_clip);
+        assert!(effects.created_clip.is_some());
+        assert_eq!(selected_clip(&world), Some(probe_clip));
     }
 
     #[test]

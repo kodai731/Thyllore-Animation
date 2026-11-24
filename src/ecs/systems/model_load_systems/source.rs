@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use super::entities::{model_display_name, GENERATED_MODEL_NAME};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{GeneratedGlb, ModelSource};
+use crate::ecs::component::{GeneratedGlb, ModelLoadMark, ModelSource};
 use crate::ecs::resource::{SceneLoadCommand, SceneLoadQueue, SceneState};
 use crate::ecs::world::{Children, Entity, World};
 use crate::hooks::scene::{entities_with, spawn_scene_owner};
@@ -27,7 +27,21 @@ pub fn request_model_reload(world: &mut World, model_entity: Entity) {
     if world.get_component::<ModelSource>(model_entity).is_none() {
         return;
     }
-    world.remove_component::<Children>(model_entity);
+    world.insert_component(model_entity, ModelLoadMark::ReloadRequested);
+}
+
+/// The loader answers the request it is about to serve, whatever the outcome.
+pub(super) fn begin_model_load(world: &mut World, model_entity: Entity) {
+    world.remove_component::<ModelLoadMark>(model_entity);
+}
+
+/// A model that did not load keeps its entity, so saving the scene keeps the model. A failed reload
+/// leaves the meshes of the last load in place.
+pub(super) fn mark_model_load_failed(world: &mut World, model_entity: Entity) {
+    if world.get_component::<Children>(model_entity).is_some() {
+        return;
+    }
+    world.insert_component(model_entity, ModelLoadMark::Failed);
 }
 
 /// The file a model entity loads: its path is relative to the scene's assets directory or absolute.
@@ -100,8 +114,16 @@ fn locate_from_root(model_file: &Path, assets_dir: &Path) -> Option<(PathBuf, Pa
 fn find_pending_model_entities(world: &World) -> Vec<Entity> {
     entities_with::<ModelSource>(world)
         .into_iter()
-        .filter(|entity| world.get_component::<Children>(*entity).is_none())
+        .filter(|entity| is_model_load_wanted(world, *entity))
         .collect()
+}
+
+fn is_model_load_wanted(world: &World, model_entity: Entity) -> bool {
+    match world.get_component::<ModelLoadMark>(model_entity).copied() {
+        Some(ModelLoadMark::ReloadRequested) => true,
+        Some(ModelLoadMark::Failed) => false,
+        None => world.get_component::<Children>(model_entity).is_none(),
+    }
 }
 
 /// True while a model entity still waits for its meshes, so work that needs the model can wait too.
@@ -180,6 +202,46 @@ mod tests {
 
         assert_eq!(queued_load_entities(&world), vec![model_entity]);
         assert_eq!(entities_with::<ModelSource>(&world), vec![model_entity]);
+    }
+
+    #[test]
+    fn reload_request_keeps_the_meshes_until_the_file_is_read() {
+        let mut world = world_with_load_queue();
+        let model_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+
+        request_model_reload(&mut world, model_entity);
+
+        assert_eq!(find_loaded_model_entity(&world), Some(model_entity));
+    }
+
+    #[test]
+    fn failed_reload_leaves_the_loaded_model_as_it_was() {
+        let mut world = world_with_load_queue();
+        let mut assets = AssetStorage::new();
+        let model_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+        request_model_reload(&mut world, model_entity);
+
+        begin_model_load(&mut world, model_entity);
+        mark_model_load_failed(&mut world, model_entity);
+        request_pending_model_loads(&mut world, &mut assets);
+
+        assert!(queued_load_entities(&world).is_empty());
+        assert_eq!(find_loaded_model_entity(&world), Some(model_entity));
+    }
+
+    #[test]
+    fn failed_load_keeps_the_model_entity_without_requesting_it_again() {
+        let mut world = world_with_load_queue();
+        let mut assets = AssetStorage::new();
+        let model_entity = spawn_model_source(&mut world, "models/avatar/missing.fbx");
+
+        begin_model_load(&mut world, model_entity);
+        mark_model_load_failed(&mut world, model_entity);
+        request_pending_model_loads(&mut world, &mut assets);
+
+        assert!(queued_load_entities(&world).is_empty());
+        assert_eq!(entities_with::<ModelSource>(&world), vec![model_entity]);
+        assert_eq!(find_loaded_model_entity(&world), None);
     }
 
     #[test]

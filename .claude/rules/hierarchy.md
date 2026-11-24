@@ -205,7 +205,7 @@ primitive spawn / delete) it lives in `src/debugview/`.
 | `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and the effect scalar domain registry, spring bone |
 | `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
 | `render/` | camera state, render handles, field-driven look |
-| `model/` | model source (the file a model entity loads), generated GLB, morph weights |
+| `model/` | model source (the file a model entity loads), load mark (reload requested / failed), generated GLB, morph weights |
 | `ml/` | inference actor |
 | `mesh/` | GPU mesh types |
 | `flame/` | Flame effect components |

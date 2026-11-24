@@ -1,13 +1,11 @@
 use anyhow::{anyhow, ensure, Result};
 
 use super::clips::release_selection_to_replacing_model;
-use super::entities::{
-    despawn_model_source_entities, despawn_other_model_source_entities, find_model_source_entity,
-};
+use super::entities::{despawn_other_model_source_entities, find_model_source_entity};
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
-use super::source::resolve_model_file;
+use super::source::{begin_model_load, mark_model_load_failed, resolve_model_file};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::ClipLibrary;
+use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::clip_library_register_loaded;
 use crate::ecs::systems::rebuild_scene_acceleration;
 use crate::ecs::world::{Entity, World};
@@ -35,10 +33,11 @@ pub unsafe fn load_model_keeping_scene(
     let path = model_path.as_str();
 
     log!("Loading new model from: {}", path);
+    begin_model_load(world, model_entity);
     let (load_result, fbx_model) = match read_model_with_meshes(path) {
         Ok(model_file) => model_file,
         Err(error) => {
-            world.despawn(model_entity);
+            give_up_model_load(world, model_entity);
             return Err(error);
         }
     };
@@ -53,7 +52,9 @@ pub unsafe fn load_model_keeping_scene(
         attach_file_model(first_clip_id, &load_result, gpu, world, assets)
     });
     if attached.is_err() {
-        let _ = despawn_model_source_entities(world);
+        if let Some(restored_model_entity) = find_model_source_entity(world) {
+            give_up_model_load(world, restored_model_entity);
+        }
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
@@ -62,6 +63,16 @@ pub unsafe fn load_model_keeping_scene(
         msg_info!("Model loaded: {}", path);
     }
     loaded
+}
+
+fn give_up_model_load(world: &mut World, model_entity: Entity) {
+    mark_model_load_failed(world, model_entity);
+    discard_requested_clip(world);
+}
+
+/// The clip a scene asked of its model is not handed to the next model that loads.
+fn discard_requested_clip(world: &mut World) {
+    world.resource_mut::<TimelineState>().requested_clip_name = None;
 }
 
 /// A model entity without mesh children counts as not loaded, so a file without meshes is refused.
@@ -107,7 +118,9 @@ pub unsafe fn load_generated_mesh(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
-    use super::entities::{spawn_model_root_entity, GENERATED_MODEL_NAME};
+    use super::entities::{
+        despawn_model_source_entities, spawn_model_root_entity, GENERATED_MODEL_NAME,
+    };
     use crate::ecs::component::GeneratedGlb;
     use crate::ecs::resource::GltfModelCache;
 
@@ -149,6 +162,9 @@ pub unsafe fn load_generated_mesh(
             },
         );
     });
+    if attached.is_err() {
+        discard_requested_clip(world);
+    }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
     attached.and(rebuilt)

@@ -50,6 +50,7 @@ fn dispatch_clip_browser_events(
                 if let Some(original) = clip_library.get(*source_id).cloned() {
                     let mut duplicate = original;
                     duplicate.name = format!("{} (copy)", duplicate.name);
+                    duplicate.source_path = None;
                     let new_id = crate::ecs::systems::clip_library_register_and_activate(
                         &mut clip_library,
                         assets,

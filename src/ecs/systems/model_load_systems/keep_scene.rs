@@ -3,7 +3,7 @@ use anyhow::{anyhow, ensure, Result};
 use super::clips::{release_selection_to_replacing_model, request_played_clip_of_reloading_model};
 use super::entities::{despawn_other_model_source_entities, find_model_source_entity};
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
-use super::source::{begin_model_load, fail_model_load, resolve_model_file};
+use super::source::{begin_model_load, fail_model_load, resolve_model_file, FailedModel};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::clip_library_register_loaded;
@@ -33,11 +33,11 @@ pub unsafe fn load_model_keeping_scene(
     let path = model_path.as_str();
 
     log!("Loading new model from: {}", path);
-    begin_model_load(world, model_entity);
+    let failed_model = begin_model_load(world, model_entity);
     let (load_result, fbx_model) = match read_model_with_meshes(path) {
         Ok(model_file) => model_file,
         Err(error) => {
-            give_up_model_load(world, model_entity);
+            give_up_model_load(world, model_entity, failed_model);
             return Err(error);
         }
     };
@@ -54,7 +54,7 @@ pub unsafe fn load_model_keeping_scene(
     });
     if attached.is_err() {
         if let Some(restored_model_entity) = find_model_source_entity(world) {
-            give_up_model_load(world, restored_model_entity);
+            give_up_model_load(world, restored_model_entity, failed_model);
         }
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
@@ -66,8 +66,8 @@ pub unsafe fn load_model_keeping_scene(
     loaded
 }
 
-fn give_up_model_load(world: &mut World, model_entity: Entity) {
-    fail_model_load(world, model_entity);
+fn give_up_model_load(world: &mut World, model_entity: Entity, failed_model: FailedModel) {
+    fail_model_load(world, model_entity, failed_model);
     discard_requested_clip(world);
 }
 

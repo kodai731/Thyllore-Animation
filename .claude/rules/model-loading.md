@@ -23,21 +23,22 @@ paths:
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
   `SceneLoadCommand::LoadModel { entity }` for each such entity, so startup and runtime loads share one path.
   To load a model, spawn the entity with `spawn_model_source`; never push the command or call the loader.
-- `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds the two things `Children` cannot
-  say: `ReloadRequested` (`request_model_reload`: the file is read again while the entity keeps its meshes) and
-  `Failed`. The loader removes the mark when it starts (`begin_model_load`).
+- `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds what `Children` cannot say:
+  `Added` (`spawn_model_source`: the user added the model to the open scene), `ReloadRequested`
+  (`request_model_reload`: the file is read again while the entity keeps its meshes) and `Failed`. The loader
+  removes the mark when it starts (`begin_model_load`).
 - `SceneLoadCommand::LoadModel { entity }` (`src/app/command.rs`) runs `load_model_keeping_scene` through
   `App::rebuild_scene` (`src/app/scene_rebuild.rs`). The loader (`keep_scene.rs`) despawns every other
   `ModelSource` entity (one scene holds one model), captures the scene's entities, resets the world and uploads
   the meshes (`replace.rs::upload_scene_model`), restores the entities, attaches the meshes and the animation to
   the restored model entity (`attach_scene_model`), runs `ModelLoadHooks` (`src/hooks/model_load.rs`) without
   naming a domain, and rebuilds the acceleration structures once.
-- A failed load keeps the `ModelSource` entity and marks it `ModelLoadMark::Failed`, so it is not requested again
-  and saving the scene still names the model; the error goes to the message log. A file without meshes is
-  refused the same way. A failed reload leaves the meshes of the last load in place. A file that fails beside a
-  loaded model (a dropped file that cannot be read) loses its entity instead (`fail_model_load`), so the scene
-  keeps one model. The clip the scene asked of the model (`TimelineState::requested_clip_name`) is discarded
-  with the failure.
+- A failed load leaves no empty model entity, with one exception (`fail_model_load`): the model a scene file
+  names, alone in the scene, keeps its `ModelSource` entity marked `ModelLoadMark::Failed`, so it is not requested
+  again and saving the scene still names the model. A model the user added (`Added`: drop, open button, batch
+  `load_model=`) and a model that fails beside a loaded one lose their entity. The error goes to the message log.
+  A file without meshes is refused the same way. A failed reload leaves the meshes of the last load in place. The
+  clip the scene asked of the model (`TimelineState::requested_clip_name`) is discarded with the failure.
 - A reload starts on the model clip the model was playing (`request_played_clip_of_reloading_model`).
 - Save scene writes the open scene's own file (`SceneState::current_scene_path`, the default scene without one):
   a `ModelSource` path is relative to that scene's assets directory.

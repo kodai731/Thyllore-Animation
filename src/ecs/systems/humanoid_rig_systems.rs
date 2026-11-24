@@ -172,8 +172,7 @@ pub fn invalidate_humanoid_rig(world: &mut World) {
     }
 }
 
-/// The humanoid rig caches the retarget context and the track-name table of the skeleton it was built
-/// from, so a change of the skeleton or its mapping rebuilds it before anything in the same frame reads it.
+/// The rig caches data of the skeleton it was built from; a skeleton or mapping change rebuilds it at once.
 pub fn rebuild_humanoid_rig(world: &mut World, assets: &AssetStorage) {
     invalidate_humanoid_rig(world);
     sync_humanoid_rig(world, assets);

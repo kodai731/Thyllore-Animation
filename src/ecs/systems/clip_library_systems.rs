@@ -285,6 +285,7 @@ pub fn clip_library_resample_selected_model(
             };
             let summary = clip_resample_at_fps(&mut clip, fps);
             clip.name = format!("{} ({}fps)", clip.name, fps as i64);
+            clip.source_path = None;
             let new_id = clip_library_register_and_activate(&mut lib, assets, clip);
 
             log!(
@@ -347,8 +348,7 @@ pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
     select_first_animated_clip(&clip_library, &clip_ids)
 }
 
-/// The first clip with bone or morph tracks, else the first clip, so an empty default take never
-/// shadows the animation a model brought.
+/// The first clip with bone or morph tracks, else the first clip: an empty default take is skipped.
 pub fn select_first_animated_clip(
     clip_library: &ClipLibrary,
     clip_ids: &[SourceClipId],
@@ -437,6 +437,35 @@ mod tests {
         assert!(lib.source_clips.contains_key(&source_id));
         assert!(lib.source_to_asset_id.contains_key(&source_id));
         assert_eq!(assets.animation_clips.len(), 1);
+    }
+
+    #[test]
+    fn resampled_copy_does_not_own_the_file_of_its_source_clip() {
+        use crate::ecs::resource::HierarchyState;
+        use crate::ecs::systems::schedule_entity_clip;
+
+        let mut world = crate::ecs::world::World::new();
+        let mut assets = AssetStorage::default();
+        let mut lib = ClipLibrary::default();
+        let mut saved_clip = EditableAnimationClip::new(0, "saved".to_string());
+        saved_clip.source_path = Some("animations/saved.anim.ron".to_string());
+        let saved_id = clip_library_register_and_activate(&mut lib, &mut assets, saved_clip);
+        world.insert_resource(lib);
+        let owner = world.entity().with_name("owner").build();
+        schedule_entity_clip(&mut world, owner, saved_id);
+        let mut hierarchy = HierarchyState::default();
+        hierarchy.selected_entity = Some(owner);
+        world.insert_resource(hierarchy);
+
+        let resampled_count = clip_library_resample_selected_model(&mut world, &mut assets, 30.0);
+
+        let lib = world.resource::<ClipLibrary>();
+        let resampled_id = lib
+            .find_source_by_name("saved (30fps)")
+            .expect("resampled copy");
+        assert_eq!(resampled_count, Some(1));
+        assert_eq!(lib.get(resampled_id).expect("copy").source_path, None);
+        assert!(lib.get(saved_id).expect("source").source_path.is_some());
     }
 
     #[test]

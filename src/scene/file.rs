@@ -9,8 +9,7 @@ use thyllore_anim_core::editable::EditableAnimationClip;
 
 pub const SCENE_FORMAT_VERSION: u32 = 9;
 
-/// On-disk scene: the clip files, every registered resource and entity component keyed by its
-/// type key.
+/// On-disk scene: the clip files, every registered resource and entity component keyed by its type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneFile {
     pub version: u32,

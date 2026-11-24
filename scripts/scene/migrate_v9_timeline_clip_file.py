@@ -15,7 +15,9 @@ import re
 import shutil
 from pathlib import Path
 
-CLIP_FILE_LIST = re.compile(r"^[ \t]*animation_clips: \[(?P<body>.*?)^[ \t]*\],?[ \t]*\n", re.M | re.S)
+from migrate_v8_to_v9 import find_list_close
+
+CLIP_FILE_LIST_OPEN = re.compile(r"^[ \t]*animation_clips: \[", re.M)
 CLIP_FILE_PATH = re.compile(r'path: "(?P<path>[^"]*)"')
 CLIP_NAME = re.compile(r'^\s*name: "(?P<name>(?:[^"\\]|\\.)*)"', re.M)
 SELECTED_CLIP = re.compile(r'^(?P<indent>[ \t]*)"current_clip": Some\("(?P<name>(?:[^"\\]|\\.)*)"\),[ \t]*\n', re.M)
@@ -23,10 +25,12 @@ SELECTED_CLIP_FILE = '"current_clip_file"'
 
 
 def list_clip_files(scene_text: str) -> list[str]:
-    clip_file_list = CLIP_FILE_LIST.search(scene_text)
-    if clip_file_list is None:
+    list_open = CLIP_FILE_LIST_OPEN.search(scene_text)
+    if list_open is None:
         return []
-    return CLIP_FILE_PATH.findall(clip_file_list.group("body"))
+    list_close = find_list_close(scene_text, list_open.end())
+
+    return CLIP_FILE_PATH.findall(scene_text[list_open.end():list_close])
 
 
 def read_clip_name(clip_file: Path) -> str | None:

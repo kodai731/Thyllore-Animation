@@ -24,8 +24,7 @@ pub(super) fn feed_injected_keys(io: &mut imgui::Io, world: &World) {
     feed_injected_mouse(io, &mut injected);
 }
 
-/// A click presses its button at its position; the release follows on the next frame so
-/// imgui sees a full press, the same way `feed_injected_keys` holds its chords.
+/// A click presses its button at its position and releases it on the next frame, so imgui sees a full press.
 fn feed_injected_mouse(io: &mut imgui::Io, injected: &mut InjectedInput) {
     if let Some(button) = injected.held_click_button.take() {
         io.add_mouse_button_event(button, false);

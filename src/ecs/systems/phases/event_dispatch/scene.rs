@@ -18,8 +18,7 @@ impl UiCommand for SceneEvent {
     }
 }
 
-/// Asset paths in the world are relative to the open scene's assets directory, so the scene is
-/// written back to its own file; without an open scene that is the default scene.
+/// The world's asset paths are relative to the open scene, so it is saved to its own file (default scene without one).
 fn save_open_scene(world: &World) {
     let scene_path = world
         .get_resource::<SceneState>()

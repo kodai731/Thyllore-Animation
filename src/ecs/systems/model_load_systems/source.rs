@@ -21,8 +21,7 @@ pub fn spawn_model_source(world: &mut World, model_file: &str) -> Entity {
     )
 }
 
-/// Has the next dispatch load the entity's file again; the entity keeps its name and scheduled clip.
-/// A generated model has no file to read again and stays as it is.
+/// Has the next dispatch read the entity's file again; a generated model has no file and stays as it is.
 pub fn request_model_reload(world: &mut World, model_entity: Entity) {
     if world.get_component::<ModelSource>(model_entity).is_none() {
         return;
@@ -35,12 +34,16 @@ pub(super) fn begin_model_load(world: &mut World, model_entity: Entity) {
     world.remove_component::<ModelLoadMark>(model_entity);
 }
 
-/// A model that did not load keeps its entity, so saving the scene keeps the model. A failed reload
-/// leaves the meshes of the last load in place.
-pub(super) fn mark_model_load_failed(world: &mut World, model_entity: Entity) {
+/// The scene's only model keeps its entity when its file does not load; beside a loaded model the entity leaves.
+pub(super) fn fail_model_load(world: &mut World, model_entity: Entity) {
     if world.get_component::<Children>(model_entity).is_some() {
         return;
     }
+    if find_loaded_model_entity(world).is_some() {
+        world.despawn(model_entity);
+        return;
+    }
+
     world.insert_component(model_entity, ModelLoadMark::Failed);
 }
 
@@ -222,7 +225,7 @@ mod tests {
         request_model_reload(&mut world, model_entity);
 
         begin_model_load(&mut world, model_entity);
-        mark_model_load_failed(&mut world, model_entity);
+        fail_model_load(&mut world, model_entity);
         request_pending_model_loads(&mut world, &mut assets);
 
         assert!(queued_load_entities(&world).is_empty());
@@ -236,12 +239,25 @@ mod tests {
         let model_entity = spawn_model_source(&mut world, "models/avatar/missing.fbx");
 
         begin_model_load(&mut world, model_entity);
-        mark_model_load_failed(&mut world, model_entity);
+        fail_model_load(&mut world, model_entity);
         request_pending_model_loads(&mut world, &mut assets);
 
         assert!(queued_load_entities(&world).is_empty());
         assert_eq!(entities_with::<ModelSource>(&world), vec![model_entity]);
         assert_eq!(find_loaded_model_entity(&world), None);
+    }
+
+    #[test]
+    fn failed_load_beside_a_loaded_model_removes_the_new_model_entity() {
+        let mut world = world_with_load_queue();
+        let loaded_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+        let dropped_entity = spawn_model_source(&mut world, "models/avatar/missing.fbx");
+
+        begin_model_load(&mut world, dropped_entity);
+        fail_model_load(&mut world, dropped_entity);
+
+        assert_eq!(entities_with::<ModelSource>(&world), vec![loaded_entity]);
+        assert_eq!(find_loaded_model_entity(&world), Some(loaded_entity));
     }
 
     #[test]

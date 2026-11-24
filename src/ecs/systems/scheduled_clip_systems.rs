@@ -15,8 +15,7 @@ use crate::hooks::scene::{
 use crate::scene::AnimationClipRef;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
-/// The clip an entity schedules. Clip names are not unique, so a clip with a file is found by the
-/// file the scene lists in `animation_clips`; the name finds a clip that was never saved.
+/// The clip an entity schedules: found by its file in `animation_clips`, by name when it was never saved.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduledClip {
     pub clip: String,

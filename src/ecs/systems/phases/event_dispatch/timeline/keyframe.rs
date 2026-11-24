@@ -38,18 +38,15 @@ pub(super) fn apply_keyframe_edits(
 
             TimelineEvent::MoveSelectedKeyframes { time_delta } => {
                 edit_clip(clip_library, clip_id, |clip| {
-                    shift_keyframes(clip, &timeline_state.selected_keyframes, *time_delta);
-                    true
+                    shift_keyframes(clip, &timeline_state.selected_keyframes, *time_delta)
                 })
             }
 
             TimelineEvent::DeleteSelectedKeyframes => {
                 let selected_keyframes = std::mem::take(&mut timeline_state.selected_keyframes);
-                !selected_keyframes.is_empty()
-                    && edit_clip(clip_library, clip_id, |clip| {
-                        remove_keyframes(clip, &selected_keyframes);
-                        true
-                    })
+                edit_clip(clip_library, clip_id, |clip| {
+                    remove_keyframes(clip, &selected_keyframes)
+                })
             }
 
             TimelineEvent::MoveKeyframe {
@@ -66,8 +63,7 @@ pub(super) fn apply_keyframe_edits(
                     *keyframe_id,
                     *new_time,
                     *new_value,
-                );
-                true
+                )
             }),
 
             TimelineEvent::DeleteKeyframe {
@@ -75,8 +71,7 @@ pub(super) fn apply_keyframe_edits(
                 property_type,
                 keyframe_id,
             } => edit_clip(clip_library, clip_id, |clip| {
-                remove_keyframe(clip, *track, *property_type, *keyframe_id);
-                true
+                remove_keyframe(clip, *track, *property_type, *keyframe_id)
             }),
 
             TimelineEvent::SetCurveExtrapolation {
@@ -137,6 +132,27 @@ mod tests {
             "Expected 1.05, got {}",
             ty_time
         );
+    }
+
+    #[test]
+    fn keyframe_edits_that_find_no_keyframe_leave_a_model_clip_untouched() {
+        let (mut state, mut library) = model_clip_with_three_keys();
+        let clip_id = state.current_clip_id.unwrap();
+        state.selected_keyframes.clear();
+        let missing_keyframe = TimelineEvent::DeleteKeyframe {
+            track: CurveTrackRef::Bone(0),
+            property_type: PropertyType::TranslationX,
+            keyframe_id: 9999,
+        };
+        let events = vec![
+            TimelineEvent::MoveSelectedKeyframes { time_delta: 0.25 },
+            TimelineEvent::DeleteSelectedKeyframes,
+            missing_keyframe,
+        ];
+
+        assert!(!apply_keyframe_edits(&events, &mut state, &mut library));
+        assert!(library.is_model_clip(clip_id));
+        assert!(!library.is_dirty(clip_id));
     }
 
     #[test]

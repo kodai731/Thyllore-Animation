@@ -4,9 +4,13 @@ use crate::asset::AssetId;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use thyllore_anim_core::AnimationSystem;
 
+/// One replacement of the scene's model; the clips a load brought are the model's only until the next one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ModelLoadSerial(u64);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClipOrigin {
-    Model,
+    Model(ModelLoadSerial),
     User,
 }
 
@@ -32,6 +36,7 @@ pub struct ClipLibrary {
     pub next_source_id: SourceClipId,
     pub source_to_asset_id: HashMap<SourceClipId, AssetId>,
     pub model_clip_ids: HashSet<SourceClipId>,
+    model_load: ModelLoadSerial,
     released_asset_ids: Vec<AssetId>,
 }
 
@@ -44,6 +49,7 @@ impl ClipLibrary {
             next_source_id: 1,
             source_to_asset_id: HashMap::new(),
             model_clip_ids: HashSet::new(),
+            model_load: ModelLoadSerial::default(),
             released_asset_ids: Vec::new(),
         }
     }
@@ -66,6 +72,7 @@ impl ClipLibrary {
         self.dirty_sources.retain(|id| !ids.contains(id));
         self.source_to_asset_id.retain(|id, _| !ids.contains(id));
         self.model_clip_ids.clear();
+        self.model_load.0 += 1;
     }
 
     /// A loaded clip the model did not bring stays selected across a model load.
@@ -119,7 +126,7 @@ impl ClipLibrary {
 
     pub fn origin(&self, id: SourceClipId) -> ClipOrigin {
         if self.is_model_clip(id) {
-            ClipOrigin::Model
+            ClipOrigin::Model(self.model_load)
         } else {
             ClipOrigin::User
         }
@@ -132,7 +139,7 @@ impl ClipLibrary {
         Some(ClipRevision { clip, origin })
     }
 
-    /// Undoing the edit that made a model clip the user's gives the clip back to the model.
+    /// Undoing the edit that made a model clip the user's gives the clip back to the model that brought it.
     pub fn restore_revision(&mut self, id: SourceClipId, revision: ClipRevision) {
         let Some(source) = self.source_clips.get_mut(&id) else {
             return;
@@ -143,15 +150,17 @@ impl ClipLibrary {
         self.set_origin(id, revision.origin);
     }
 
+    /// A clip of a model the scene no longer holds has no model to go back to and stays the user's.
     pub fn set_origin(&mut self, id: SourceClipId, origin: ClipOrigin) {
         if !self.source_clips.contains_key(&id) {
             return;
         }
 
-        match origin {
-            ClipOrigin::Model => self.model_clip_ids.insert(id),
-            ClipOrigin::User => self.model_clip_ids.remove(&id),
-        };
+        if origin == ClipOrigin::Model(self.model_load) {
+            self.model_clip_ids.insert(id);
+        } else {
+            self.model_clip_ids.remove(&id);
+        }
     }
 
     /// The playable asset of the removed clip is released by the next playable asset sync.
@@ -238,7 +247,7 @@ mod tests {
 
         let removed = library.remove(CLIP_ID).expect("removed clip");
 
-        assert_eq!(removed.origin, ClipOrigin::Model);
+        assert_eq!(removed.origin, ClipOrigin::Model(library.model_load));
         assert!(library.get(CLIP_ID).is_none());
         assert!(!library.is_model_clip(CLIP_ID));
         assert!(!library.is_dirty(CLIP_ID));
@@ -271,8 +280,32 @@ mod tests {
 
         library.restore_revision(CLIP_ID, before);
 
-        assert_eq!(library.origin(CLIP_ID), ClipOrigin::Model);
+        assert!(library.is_model_clip(CLIP_ID));
         assert_eq!(library.get(CLIP_ID).expect("clip").duration, 0.0);
+    }
+
+    #[test]
+    fn restoring_a_revision_after_the_model_was_replaced_keeps_the_clip_the_users() {
+        let mut library = library_with_model_clip();
+        let before = library.revision(CLIP_ID).expect("revision");
+        library.get_mut(CLIP_ID).expect("clip").duration = 2.0;
+        library.clear_model_clips();
+
+        library.restore_revision(CLIP_ID, before);
+
+        assert_eq!(library.origin(CLIP_ID), ClipOrigin::User);
+        assert_eq!(library.get(CLIP_ID).expect("clip").duration, 0.0);
+    }
+
+    #[test]
+    fn restoring_a_removed_clip_after_the_model_was_replaced_makes_it_the_users() {
+        let mut library = library_with_model_clip();
+        let removed = library.remove(CLIP_ID).expect("removed clip");
+        library.clear_model_clips();
+
+        library.restore(CLIP_ID, removed);
+
+        assert_eq!(library.origin(CLIP_ID), ClipOrigin::User);
     }
 
     #[test]
@@ -282,7 +315,7 @@ mod tests {
 
         library.rebind_mut(CLIP_ID).expect("clip").tracks.clear();
 
-        assert_eq!(library.origin(CLIP_ID), ClipOrigin::Model);
+        assert!(library.is_model_clip(CLIP_ID));
         assert!(library.is_dirty(CLIP_ID));
     }
 
@@ -290,7 +323,7 @@ mod tests {
     fn origin_of_an_unknown_clip_is_not_recorded() {
         let mut library = ClipLibrary::new();
 
-        library.set_origin(CLIP_ID, ClipOrigin::Model);
+        library.set_origin(CLIP_ID, ClipOrigin::Model(library.model_load));
 
         assert!(!library.is_model_clip(CLIP_ID));
     }

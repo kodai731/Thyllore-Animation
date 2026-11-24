@@ -8,8 +8,7 @@ use crate::ecs::systems::{
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::SourceClipId;
 
-/// Deletes a clip even while schedules play it: its instances leave their schedules, and a model
-/// left without a clip goes on with another one. `None` for a clip the library does not hold.
+/// Deletes a clip even while schedules play it; `None` for a clip the library does not hold.
 pub fn delete_library_clip(
     world: &mut World,
     assets: &mut AssetStorage,

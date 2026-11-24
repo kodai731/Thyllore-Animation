@@ -9,9 +9,9 @@ use crate::ecs::systems::{
 };
 use crate::ecs::systems::{
     clip_library_register_and_activate, clip_library_register_empty_model_clip, find_best_clip,
-    select_first_animated_clip, EMPTY_MODEL_CLIP_DURATION_SECONDS,
+    find_entity_clip_id, select_first_animated_clip, EMPTY_MODEL_CLIP_DURATION_SECONDS,
 };
-use crate::ecs::world::World;
+use crate::ecs::world::{Children, Entity, World};
 use thyllore_anim_core::editable::{select_kept_clip_id, EditableAnimationClip, SourceClipId};
 use thyllore_anim_core::AnimationClip;
 use thyllore_importer_core::ModelLoadResult;
@@ -42,8 +42,26 @@ pub(super) fn register_imported_animation(
         .and_then(vrm_humanoid_to_mapping);
 }
 
-/// A model that takes another model's place and brings animation starts on its own clip; the clip
-/// selected before stays in the library.
+/// A model that reads its own file again starts on the model clip it was playing.
+pub(super) fn request_played_clip_of_reloading_model(world: &mut World, model_entity: Entity) {
+    if world.get_component::<Children>(model_entity).is_none() {
+        return;
+    }
+    let played_model_clip_name = {
+        let library = world.resource::<ClipLibrary>();
+        find_entity_clip_id(world, model_entity)
+            .filter(|clip_id| library.is_model_clip(*clip_id))
+            .and_then(|clip_id| library.get(clip_id))
+            .map(|clip| clip.name.clone())
+    };
+    let Some(clip_name) = played_model_clip_name else {
+        return;
+    };
+
+    world.resource_mut::<TimelineState>().requested_clip_name = Some(clip_name);
+}
+
+/// A model that replaces another and brings animation starts on its own clip; the old selection stays in the library.
 pub(super) fn release_selection_to_replacing_model(
     world: &mut World,
     replacement: ModelReplacement,
@@ -474,6 +492,30 @@ mod tests {
         let timeline = world.resource::<TimelineState>();
         assert_eq!(start_clip_id, timeline.current_clip_id);
         assert_eq!(timeline.requested_clip_name, None);
+    }
+
+    #[test]
+    fn reloading_model_requests_the_model_clip_it_was_playing() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(ClipLibrary::default());
+        world.insert_resource(TimelineState::default());
+        let model_entity = crate::ecs::systems::model_load_systems::spawn_loaded_model_for_test(
+            &mut world, MODEL_FILE,
+        );
+        let played_clip_id = {
+            let mut clip_library = world.resource_mut::<ClipLibrary>();
+            let run_clip = EditableAnimationClip::new(0, "run".to_string());
+            let id = clip_library_register_and_activate(&mut clip_library, &mut assets, run_clip);
+            clip_library.model_clip_ids.insert(id);
+            id
+        };
+        crate::ecs::systems::schedule_entity_clip(&mut world, model_entity, played_clip_id);
+
+        request_played_clip_of_reloading_model(&mut world, model_entity);
+
+        let timeline = world.resource::<TimelineState>();
+        assert_eq!(timeline.requested_clip_name.as_deref(), Some("run"));
     }
 
     #[test]

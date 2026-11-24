@@ -1,9 +1,9 @@
 use anyhow::{anyhow, ensure, Result};
 
-use super::clips::release_selection_to_replacing_model;
+use super::clips::{release_selection_to_replacing_model, request_played_clip_of_reloading_model};
 use super::entities::{despawn_other_model_source_entities, find_model_source_entity};
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
-use super::source::{begin_model_load, mark_model_load_failed, resolve_model_file};
+use super::source::{begin_model_load, fail_model_load, resolve_model_file};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::clip_library_register_loaded;
@@ -42,6 +42,7 @@ pub unsafe fn load_model_keeping_scene(
         }
     };
 
+    request_played_clip_of_reloading_model(world, model_entity);
     let replacement = despawn_other_model_source_entities(world, model_entity);
     release_selection_to_replacing_model(world, replacement, &load_result.clips);
     let kept_scene = capture_kept_scene(world);
@@ -66,7 +67,7 @@ pub unsafe fn load_model_keeping_scene(
 }
 
 fn give_up_model_load(world: &mut World, model_entity: Entity) {
-    mark_model_load_failed(world, model_entity);
+    fail_model_load(world, model_entity);
     discard_requested_clip(world);
 }
 

@@ -8,9 +8,7 @@ use crate::hooks::scene_resource::SceneResourceHook;
 use crate::scene::AnimationClipRef;
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
-/// Persisted timeline state. Clip ids are not stable on disk and clip names are not unique between
-/// the model and the user's files, so a user clip is named by its file and a model clip by its name.
-/// Whether the timeline plays is not part of a scene: a scene opens stopped.
+/// Persisted timeline state: a user clip is named by its file, a model clip by its name; a scene opens stopped.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TimelineSceneRecord {
     pub current_time: f32,
@@ -70,7 +68,7 @@ fn describe_saved_clip(world: &World, clip_id: SourceClipId) -> Option<SavedClip
     let clip = library.get(clip_id)?;
 
     match library.origin(clip_id) {
-        ClipOrigin::Model => {
+        ClipOrigin::Model(_) => {
             is_model_saved_in_scene(world).then(|| SavedClip::ModelClip(clip.name.clone()))
         }
         ClipOrigin::User => scene_file_of(clip).map(SavedClip::UserFile),
@@ -141,8 +139,8 @@ fn is_saved_clip(library: &ClipLibrary, clip_id: SourceClipId, saved_clip: &Save
         (SavedClip::UserFile(scene_file), ClipOrigin::User) => {
             scene_file_of(clip).as_ref() == Some(scene_file)
         }
-        (SavedClip::ModelClip(clip_name), ClipOrigin::Model) => &clip.name == clip_name,
-        (SavedClip::UserFile(_), ClipOrigin::Model)
+        (SavedClip::ModelClip(clip_name), ClipOrigin::Model(_)) => &clip.name == clip_name,
+        (SavedClip::UserFile(_), ClipOrigin::Model(_))
         | (SavedClip::ModelClip(_), ClipOrigin::User) => false,
     }
 }

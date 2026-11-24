@@ -71,8 +71,7 @@ pub(super) unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Opt
     }
 }
 
-/// Leaves the world without entities and the acceleration structures released; the caller restores
-/// the scene, attaches the model to its entity and rebuilds the structures once.
+/// Leaves the world without entities and the acceleration structures released, for the caller to restore.
 pub(super) unsafe fn upload_scene_model(
     load_result: &ModelLoadResult,
     model_name: &str,

@@ -429,11 +429,11 @@ mod tests {
             .push_clip_edit(clip_id, before, after, "set duration");
 
         dispatch_undo(&mut world);
-        let origin_after_undo = world.resource::<ClipLibrary>().origin(clip_id);
+        let is_model_clip_after_undo = world.resource::<ClipLibrary>().is_model_clip(clip_id);
         dispatch_redo(&mut world, &mut assets);
 
         let library = world.resource::<ClipLibrary>();
-        assert_eq!(origin_after_undo, ClipOrigin::Model);
+        assert!(is_model_clip_after_undo);
         assert_eq!(library.origin(clip_id), ClipOrigin::User);
         assert_eq!(library.get(clip_id).expect("clip").duration, 2.0);
     }

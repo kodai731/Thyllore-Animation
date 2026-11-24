@@ -34,8 +34,11 @@ paths:
   naming a domain, and rebuilds the acceleration structures once.
 - A failed load keeps the `ModelSource` entity and marks it `ModelLoadMark::Failed`, so it is not requested again
   and saving the scene still names the model; the error goes to the message log. A file without meshes is
-  refused the same way. A failed reload leaves the meshes of the last load in place. The clip the scene asked of
-  the model (`TimelineState::requested_clip_name`) is discarded with the failure.
+  refused the same way. A failed reload leaves the meshes of the last load in place. A file that fails beside a
+  loaded model (a dropped file that cannot be read) loses its entity instead (`fail_model_load`), so the scene
+  keeps one model. The clip the scene asked of the model (`TimelineState::requested_clip_name`) is discarded
+  with the failure.
+- A reload starts on the model clip the model was playing (`request_played_clip_of_reloading_model`).
 - Save scene writes the open scene's own file (`SceneState::current_scene_path`, the default scene without one):
   a `ModelSource` path is relative to that scene's assets directory.
 - The current model is found, not remembered: `find_loaded_model_entity` / `find_loaded_model_file`

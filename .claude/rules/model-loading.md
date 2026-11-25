@@ -24,10 +24,11 @@ paths:
 - Whether a model is loaded is computed, never stored: a `ModelSource` entity without `Children` is not loaded.
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
   one `SceneLoadCommand::LoadModel { entity }` per dispatch, so startup and runtime loads share one path. One
-  scene holds one model: the model added last is loaded (`select_model_to_load`), otherwise the scene's own, and
-  a model replaced before it loaded is reported in the message log. The loader asks the same question again
-  when it runs (`is_model_load_still_chosen`): a request overtaken by a model added after it was queued, or one
-  whose model already loaded, does nothing, and the next dispatch requests the model that is now chosen.
+  scene holds one model: the model added last is loaded (`select_model_to_load`), otherwise a model asked to
+  reload, otherwise an unloaded one, and a model replaced before it loaded is reported in the message log. `App`
+  asks the same question again before it starts the load (`confirm_model_load_request`,
+  `src/app/command.rs`): a request overtaken by a model added after it was queued, or one whose model already
+  loaded, is logged and does nothing, and the next dispatch requests the model that is now chosen.
   To load a model, spawn the entity with `spawn_model_source`; never push the command or call the loader.
 - `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds what `Children` cannot say:
   `Added` (`spawn_model_source`: the user added the model to the open scene), `ReloadRequested`
@@ -42,10 +43,11 @@ paths:
 - A failed load leaves no empty model entity, with one exception (`fail_model_load`): the model a scene file
   names, alone in the scene, keeps its `ModelSource` entity marked `ModelLoadMark::Failed`, so it is not requested
   again and saving the scene still names the model. A model the user added (`Added`: drop, open button, batch
-  `load_model=`) and a model that fails beside a loaded one lose their entity. The error goes to the message log.
-  A file without meshes is refused the same way. A failed reload leaves the meshes of the last load in place. A
-  load that fails after it replaced a model (the upload) brings that model's entity back without meshes, so the
-  next dispatch loads it again (`bring_back_replaced_models`).
+  `load_model=`) and a model that fails beside another model, loaded or not, lose their entity. The error goes
+  to the message log. A file without meshes is refused the same way. A failed reload leaves the meshes of the
+  last load in place. A load that fails after it replaced a model (the upload) brings that model's entity back
+  without meshes, so the next dispatch loads it again (`bring_back_replaced_models`); the model that failed is
+  then no longer alone and loses its entity.
 - A generated mesh (`SceneLoadCommand::LoadModelFromMemory`, `load_generated_mesh`) replaces every
   `ModelSource` entity and loads like a model the user added: the scene's clip request is withheld. Bytes that
   do not parse change nothing. An upload that fails spawns no generated entity and brings back the models it

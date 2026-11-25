@@ -15,6 +15,6 @@ pub(crate) use replace::append_model_to_scene;
 #[cfg(test)]
 pub(crate) use source::spawn_loaded_model_for_test;
 pub use source::{
-    find_loaded_model_entity, find_loaded_model_file, has_model_glb, is_model_load_pending,
-    read_model_glb, request_model_reload, spawn_model_source,
+    confirm_model_load_request, find_loaded_model_entity, find_loaded_model_file, has_model_glb,
+    is_model_load_pending, read_model_glb, request_model_reload, spawn_model_source,
 };

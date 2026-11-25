@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use super::entities::{model_display_name, GENERATED_MODEL_NAME};
+use super::entities::{find_entity_name, model_display_name, GENERATED_MODEL_NAME};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{GeneratedGlb, ModelLoadMark, ModelSource};
 use crate::ecs::resource::{SceneLoadCommand, SceneLoadQueue, SceneState};
@@ -60,12 +60,21 @@ pub(super) fn fail_model_load(
     if world.get_component::<Children>(model_entity).is_some() {
         return;
     }
-    if load_origin == ModelLoadOrigin::Added || find_loaded_model_entity(world).is_some() {
+    if load_origin == ModelLoadOrigin::Added || has_other_model(world, model_entity) {
         world.despawn(model_entity);
         return;
     }
 
     world.insert_component(model_entity, ModelLoadMark::Failed);
+}
+
+fn has_other_model(world: &World, model_entity: Entity) -> bool {
+    let has_other_model_file = entities_with::<ModelSource>(world)
+        .into_iter()
+        .any(|entity| entity != model_entity);
+    let has_generated_model = !entities_with::<GeneratedGlb>(world).is_empty();
+
+    has_other_model_file || has_generated_model
 }
 
 /// The file a model entity loads: its path is relative to the scene's assets directory or absolute.
@@ -188,23 +197,40 @@ pub fn is_model_load_pending(world: &World) -> bool {
     !find_pending_model_entities(world).is_empty()
 }
 
-/// One scene holds one model, so a dispatch loads one: the model added last, otherwise the scene's own.
+/// One scene holds one model, so a dispatch loads one: the model added last, then a reload, then an unloaded one.
 fn select_model_to_load(world: &World) -> Option<Entity> {
     let pending = find_pending_model_entities(world);
-    let last_added = pending
-        .iter()
-        .copied()
-        .filter(|entity| {
-            world.get_component::<ModelLoadMark>(*entity).copied() == Some(ModelLoadMark::Added)
+    let find_marked = |mark: ModelLoadMark| {
+        pending.iter().copied().filter(move |entity| {
+            world.get_component::<ModelLoadMark>(*entity).copied() == Some(mark)
         })
-        .max();
+    };
 
-    last_added.or_else(|| pending.first().copied())
+    find_marked(ModelLoadMark::Added)
+        .max()
+        .or_else(|| find_marked(ModelLoadMark::ReloadRequested).next())
+        .or_else(|| pending.first().copied())
 }
 
-/// A request names the model chosen when it was queued; a model added since then is the one to load.
-pub(super) fn is_model_load_still_chosen(world: &World, model_entity: Entity) -> bool {
-    select_model_to_load(world) == Some(model_entity)
+/// A request names the model chosen when it was queued; one overtaken since then is logged and not served.
+pub fn confirm_model_load_request(world: &World, model_entity: Entity) -> bool {
+    let chosen_entity = select_model_to_load(world);
+    if chosen_entity == Some(model_entity) {
+        return true;
+    }
+
+    match chosen_entity {
+        Some(chosen_entity) => log!(
+            "Model load request for '{}' skipped: '{}' is the model to load now",
+            find_entity_name(world, model_entity),
+            find_entity_name(world, chosen_entity)
+        ),
+        None => log!(
+            "Model load request for '{}' skipped: no model waits for a load",
+            find_entity_name(world, model_entity)
+        ),
+    }
+    false
 }
 
 fn request_pending_model_loads(world: &mut World, _: &mut AssetStorage) {
@@ -307,8 +333,32 @@ mod tests {
 
         let added_entity = spawn_model_source(&mut world, "models/avatar/added.fbx");
 
-        assert!(!is_model_load_still_chosen(&world, scene_model));
-        assert!(is_model_load_still_chosen(&world, added_entity));
+        assert!(!confirm_model_load_request(&world, scene_model));
+        assert!(confirm_model_load_request(&world, added_entity));
+        assert_eq!(
+            world.get_component::<ModelLoadMark>(added_entity).copied(),
+            Some(ModelLoadMark::Added)
+        );
+        assert_eq!(
+            entities_with::<ModelSource>(&world),
+            vec![scene_model, added_entity]
+        );
+    }
+
+    #[test]
+    fn reload_is_chosen_before_an_unloaded_model_whatever_their_entity_order() {
+        let mut world = world_with_load_queue();
+        let unloaded_entity = spawn_scene_owner(
+            &mut world,
+            "unloaded",
+            ModelSource::new("models/avatar/unloaded.fbx"),
+        );
+        let loaded_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+        assert!(unloaded_entity < loaded_entity);
+
+        request_model_reload(&mut world, loaded_entity);
+
+        assert_eq!(select_model_to_load(&world), Some(loaded_entity));
     }
 
     #[test]
@@ -316,7 +366,7 @@ mod tests {
         let mut world = world_with_load_queue();
         let model_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
 
-        assert!(!is_model_load_still_chosen(&world, model_entity));
+        assert!(!confirm_model_load_request(&world, model_entity));
     }
 
     #[test]
@@ -402,6 +452,26 @@ mod tests {
 
         assert_eq!(entities_with::<ModelSource>(&world), vec![loaded_entity]);
         assert_eq!(find_loaded_model_entity(&world), Some(loaded_entity));
+    }
+
+    #[test]
+    fn failed_load_beside_an_unloaded_model_removes_the_failed_model_entity() {
+        let mut world = world_with_load_queue();
+        let broken_entity = spawn_scene_owner(
+            &mut world,
+            "broken",
+            ModelSource::new("models/avatar/missing.fbx"),
+        );
+        let unloaded_entity = spawn_scene_owner(
+            &mut world,
+            "unloaded",
+            ModelSource::new("models/avatar/avatar.fbx"),
+        );
+
+        let load_origin = begin_model_load(&mut world, broken_entity);
+        fail_model_load(&mut world, broken_entity, load_origin);
+
+        assert_eq!(entities_with::<ModelSource>(&world), vec![unloaded_entity]);
     }
 
     #[test]

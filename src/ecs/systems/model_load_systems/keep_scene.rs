@@ -5,10 +5,7 @@ use anyhow::{anyhow, ensure, Result};
 use super::clips::{release_selection_to_replacing_model, request_played_clip_of_reloading_model};
 use super::entities::{despawn_other_model_source_entities, find_model_source_entity};
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
-use super::source::{
-    begin_model_load, fail_model_load, is_model_load_still_chosen, resolve_model_file,
-    ModelLoadOrigin,
-};
+use super::source::{begin_model_load, fail_model_load, resolve_model_file, ModelLoadOrigin};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ModelSource;
 use crate::ecs::resource::{ClipLibrary, EditHistory, TimelineState};
@@ -33,9 +30,6 @@ pub unsafe fn load_model_keeping_scene(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
-    if !is_model_load_still_chosen(world, model_entity) {
-        return Ok(());
-    }
     let Some(model_file) = resolve_model_file(world, model_entity) else {
         return Ok(());
     };
@@ -65,10 +59,11 @@ pub unsafe fn load_model_keeping_scene(
         attach_file_model(first_clip_id, &load_result, gpu, world, assets)
     });
     if attached.is_err() {
-        if let Some(restored_model_entity) = find_model_source_entity(world) {
-            give_up_model_load(world, restored_model_entity, load_origin);
-        }
+        let failed_model_entity = find_model_source_entity(world);
         bring_back_replaced_models(world, assets, &replaced_models, withheld_clip_request);
+        if let Some(failed_model_entity) = failed_model_entity {
+            give_up_model_load(world, failed_model_entity, load_origin);
+        }
     }
     let rebuilt = rebuild_scene_acceleration(gpu, world, assets);
 
@@ -273,6 +268,7 @@ fn select_clips_removed_from_library(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::component::ModelLoadMark;
     use crate::ecs::systems::clip_library_register_and_activate;
 
     fn world_requesting_clip_of_the_scene_model() -> World {
@@ -358,6 +354,36 @@ mod tests {
             .collect();
         assert_eq!(model_paths, vec!["models/avatar/avatar.fbx".to_string()]);
         assert_eq!(requested_clip_name(&world).as_deref(), Some("run"));
+    }
+
+    #[test]
+    fn failed_upload_of_a_scene_model_leaves_only_the_model_it_replaced() {
+        let mut world = world_requesting_clip_of_the_scene_model();
+        let mut assets = AssetStorage::default();
+        let failing_entity = crate::hooks::scene::spawn_scene_owner(
+            &mut world,
+            "failing model",
+            ModelSource::new("models/avatar/failing.fbx"),
+        );
+        crate::hooks::scene::spawn_scene_owner(
+            &mut world,
+            "replaced model",
+            ModelSource::new("models/avatar/avatar.fbx"),
+        );
+        let load_origin = begin_model_load(&mut world, failing_entity);
+        let withheld = withhold_requested_clip(&mut world, load_origin);
+        let replaced_models = capture_model_sources_beside(&world, Some(failing_entity));
+        let _ = despawn_other_model_source_entities(&mut world, failing_entity);
+
+        bring_back_replaced_models(&mut world, &mut assets, &replaced_models, withheld);
+        give_up_model_load(&mut world, failing_entity, load_origin);
+
+        let model_paths: Vec<String> = world
+            .iter_components::<ModelSource>()
+            .map(|(_, source)| source.path.clone())
+            .collect();
+        assert_eq!(model_paths, vec!["models/avatar/avatar.fbx".to_string()]);
+        assert_eq!(world.iter_components::<ModelLoadMark>().count(), 0);
     }
 
     #[test]

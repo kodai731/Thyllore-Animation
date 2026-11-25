@@ -166,7 +166,7 @@ pub(super) fn attach_model_entities(
     );
 }
 
-fn find_entity_name(world: &World, entity: Entity) -> String {
+pub(super) fn find_entity_name(world: &World, entity: Entity) -> String {
     world
         .get_component::<Name>(entity)
         .map(|name| name.0.clone())

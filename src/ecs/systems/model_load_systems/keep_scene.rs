@@ -5,7 +5,10 @@ use anyhow::{anyhow, ensure, Result};
 use super::clips::{release_selection_to_replacing_model, request_played_clip_of_reloading_model};
 use super::entities::{despawn_other_model_source_entities, find_model_source_entity};
 use super::replace::{attach_scene_model, read_model_file, upload_scene_model};
-use super::source::{begin_model_load, fail_model_load, resolve_model_file, ModelLoadOrigin};
+use super::source::{
+    begin_model_load, fail_model_load, is_model_load_still_chosen, resolve_model_file,
+    ModelLoadOrigin,
+};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ModelSource;
 use crate::ecs::resource::{ClipLibrary, EditHistory, TimelineState};
@@ -30,6 +33,9 @@ pub unsafe fn load_model_keeping_scene(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
+    if !is_model_load_still_chosen(world, model_entity) {
+        return Ok(());
+    }
     let Some(model_file) = resolve_model_file(world, model_entity) else {
         return Ok(());
     };

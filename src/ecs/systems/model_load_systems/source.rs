@@ -202,6 +202,11 @@ fn select_model_to_load(world: &World) -> Option<Entity> {
     last_added.or_else(|| pending.first().copied())
 }
 
+/// A request names the model chosen when it was queued; a model added since then is the one to load.
+pub(super) fn is_model_load_still_chosen(world: &World, model_entity: Entity) -> bool {
+    select_model_to_load(world) == Some(model_entity)
+}
+
 fn request_pending_model_loads(world: &mut World, _: &mut AssetStorage) {
     let Some(entity) = select_model_to_load(world) else {
         return;
@@ -286,6 +291,32 @@ mod tests {
         request_pending_model_loads(&mut world, &mut assets);
 
         assert_eq!(queued_load_entities(&world), vec![added_entity]);
+    }
+
+    #[test]
+    fn model_added_after_a_request_was_queued_takes_the_load_from_it() {
+        let mut world = world_with_load_queue();
+        let mut assets = AssetStorage::new();
+        let scene_model = spawn_scene_owner(
+            &mut world,
+            "model",
+            ModelSource::new("models/avatar/avatar.fbx"),
+        );
+        request_pending_model_loads(&mut world, &mut assets);
+        assert_eq!(queued_load_entities(&world), vec![scene_model]);
+
+        let added_entity = spawn_model_source(&mut world, "models/avatar/added.fbx");
+
+        assert!(!is_model_load_still_chosen(&world, scene_model));
+        assert!(is_model_load_still_chosen(&world, added_entity));
+    }
+
+    #[test]
+    fn request_for_a_model_that_already_loaded_is_no_longer_chosen() {
+        let mut world = world_with_load_queue();
+        let model_entity = spawn_loaded_model_for_test(&mut world, "models/avatar/avatar.fbx");
+
+        assert!(!is_model_load_still_chosen(&world, model_entity));
     }
 
     #[test]

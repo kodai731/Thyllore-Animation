@@ -25,7 +25,9 @@ paths:
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
   one `SceneLoadCommand::LoadModel { entity }` per dispatch, so startup and runtime loads share one path. One
   scene holds one model: the model added last is loaded (`select_model_to_load`), otherwise the scene's own, and
-  a model replaced before it loaded is reported in the message log.
+  a model replaced before it loaded is reported in the message log. The loader asks the same question again
+  when it runs (`is_model_load_still_chosen`): a request overtaken by a model added after it was queued, or one
+  whose model already loaded, does nothing, and the next dispatch requests the model that is now chosen.
   To load a model, spawn the entity with `spawn_model_source`; never push the command or call the loader.
 - `ModelLoadMark` (`src/ecs/component/model/load_mark.rs`, not persisted) holds what `Children` cannot say:
   `Added` (`spawn_model_source`: the user added the model to the open scene), `ReloadRequested`

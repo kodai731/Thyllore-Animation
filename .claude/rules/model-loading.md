@@ -44,6 +44,10 @@ paths:
   A file without meshes is refused the same way. A failed reload leaves the meshes of the last load in place. A
   load that fails after it replaced a model (the upload) brings that model's entity back without meshes, so the
   next dispatch loads it again (`bring_back_replaced_models`).
+- A generated mesh (`SceneLoadCommand::LoadModelFromMemory`, `load_generated_mesh`) replaces every
+  `ModelSource` entity and loads like a model the user added: the scene's clip request is withheld. Bytes that
+  do not parse change nothing. An upload that fails spawns no generated entity and brings back the models it
+  replaced together with the withheld clip request (`bring_back_replaced_models`).
 - The clip a scene asked of its model (`TimelineState::requested_clip_name`) belongs to that model alone
   (`ModelLoadOrigin::InScene`): its load consumes the request and its failure discards it. A model the user
   added (`ModelLoadOrigin::Added`) loads without the request (`withhold_requested_clip`), and its failure leaves

@@ -5,6 +5,7 @@ use crate::ecs::world::World;
 use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
 
 use super::chain_gen::*;
+use super::material_texture::*;
 use super::morph::*;
 use super::spring::*;
 
@@ -306,4 +307,22 @@ fn test_dump_skinned_vertices_rejects_malformed_specs() {
             .expect("prefix matches")
             .is_err()
     );
+}
+
+#[test]
+fn test_assign_material_texture_splits_material_and_file() {
+    let action = assign_material_texture_spec_parse("skin: Textures/skin.png").expect("valid spec");
+
+    assert_eq!(
+        format!("{:?}", action),
+        "AssignMaterialTexture { material: \"skin\", texture_file: \"Textures/skin.png\" }"
+    );
+}
+
+#[test]
+fn test_assign_material_texture_rejects_malformed_specs() {
+    assert!(assign_material_texture_parse("save_material_textures").is_none());
+    for spec in ["skin", ":skin.png", "skin:"] {
+        assert!(assign_material_texture_spec_parse(spec).is_err(), "{spec}");
+    }
 }

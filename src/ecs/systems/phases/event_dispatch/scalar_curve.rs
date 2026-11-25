@@ -222,7 +222,7 @@ fn edit_clip(
 ) {
     let (before, after) = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let Some(before) = clip_library.get(clip_id).cloned() else {
+        let Some(before) = clip_library.revision(clip_id) else {
             return;
         };
         let Some(clip) = clip_library.get_mut(clip_id) else {

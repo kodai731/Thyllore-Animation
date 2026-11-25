@@ -83,6 +83,10 @@ pub fn convert_clip_to_standard_space(
     fps: u32,
 ) -> EditableAnimationClip {
     let mut standard = clip.clone();
+    if clip.tracks.is_empty() {
+        return standard;
+    }
+
     standard
         .tracks
         .retain(|bone_id, _| !is_mapped_bone(rig, *bone_id));

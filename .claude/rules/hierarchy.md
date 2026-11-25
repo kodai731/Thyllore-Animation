@@ -205,7 +205,7 @@ primitive spawn / delete) it lives in `src/debugview/`.
 | `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and the effect scalar domain registry, spring bone |
 | `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
 | `render/` | camera state, render handles, field-driven look |
-| `model/` | GLB source, morph weights |
+| `model/` | model source (the file a model entity loads), load mark (reload requested / failed), generated GLB, morph weights |
 | `ml/` | inference actor |
 | `mesh/` | GPU mesh types |
 | `flame/` | Flame effect components |
@@ -526,10 +526,11 @@ the `CommandQueue` resources, stage by stage), `pass_targets.rs` (transient life
 place that waits idle, fetches the command pool and swapchain, splits `AppData` with `scene_parts` and
 runs a scene rebuild closure such as `src/ecs/systems/model_load_systems/`; every `World` resource the
 load touches is inserted once at startup by a `startup_resource!` / `startup_hook!` registration or by `src/app/init/`, never lazily during a load), `render_context.rs`, `post_process/`,
-`features/` (see below). Model loading itself (`replace.rs` scene model
-replacement and additive part load, `keep_scene.rs` the two entry points, which keep the scene's own entities
+`features/` (see below). Model loading itself (`source.rs` the model entity: spawn, path
+resolution, the loaded model lookup and the dispatch prep hook that requests the load of a model entity without
+mesh children, `replace.rs` mesh upload, attachment to the model entity and additive part load, `keep_scene.rs` the two entry points, which keep the scene's own entities
 and scheduled clips across the replacement and rebuild the acceleration structures once, `gpu.rs` mesh upload, `cleanup.rs` scene model reset, `caches.rs` / `nodes.rs` / `clips.rs` /
-`entities.rs` `World` and `AssetStorage` registration, `initial_pose.rs`) is
+`entities.rs` `World` and `AssetStorage` registration; a loaded model is posed by the first frame's animation phase, not by the loader) is
 `src/ecs/systems/model_load_systems/`; texture file resolution is `thyllore-importer-core`
 (`resolve_mesh_texture`); the acceleration structure build is `RayTracingData::build_acceleration_structures`
 in `thyllore-vulkan-core`, called by `raytracing_systems.rs::rebuild_scene_acceleration` for startup and
@@ -578,7 +579,7 @@ per-feature `AddPass`).
 
 ## Other src/ directories
 
-- `src/scene/` — the scene file schema (`file.rs`: version, metadata, model path, clip files,
+- `src/scene/` — the scene file schema (`file.rs`: version, metadata, clip files,
   `resources{type_key → value}`, `entities[(name, components{type_key → value})]`), load / save
   (`scene_io.rs`), the generic entity capture / apply (`entities.rs`) and clip io. It holds no mirror
   struct of any resource or component: every persisted type registers itself (`scene_resource!`,

@@ -4,6 +4,7 @@ use crate::ecs::resource::{AvatarSetupState, ModelState, NodeAssets};
 use crate::ecs::systems::avatar_sidecar_systems::apply_avatar_sidecar;
 use crate::ecs::systems::avatar_stats_systems::count_avatar_stats;
 use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
+use crate::ecs::systems::model_load_systems::find_loaded_model_file;
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Animator, Entity, World};
@@ -82,10 +83,7 @@ pub(crate) fn find_spring_bone_setup(world: &World) -> Option<&SpringBoneSetup> 
 }
 
 pub fn find_model_path(world: &World) -> Option<String> {
-    world
-        .get_resource::<ModelState>()
-        .map(|model_state| model_state.model_path.clone())
-        .filter(|model_path| !model_path.is_empty())
+    find_loaded_model_file(world).map(|model_file| model_file.to_string_lossy().into_owned())
 }
 
 pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &GraphicsResources) {

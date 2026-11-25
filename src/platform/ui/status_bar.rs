@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
-    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, ModelState, TimelineState,
+    Camera, ClipLibrary, CpuFrameTimings, FrameClock, GpuPassTimings, TimelineState,
     ValidationReport, ViewportInput,
 };
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
@@ -119,7 +119,7 @@ struct StatusBarInputs<'a> {
     delta_time: f32,
     times: FrameTimeValues,
     viewport: &'a ViewportInput,
-    model: &'a ModelState,
+    model_path: Option<&'a str>,
     timeline_state: &'a TimelineState,
     clip_duration: f32,
     errors: usize,
@@ -153,11 +153,7 @@ fn draw_status_bar(
         "||"
     };
 
-    let model_text = format!(
-        "{}  {}",
-        model_file_name(&inputs.model.model_path),
-        inputs.model.load_status
-    );
+    let model_text = format_model_status(inputs.model_path);
     let validation_text = format_validation_status(inputs.errors, inputs.warnings);
     let validation_color = validation_status_color(inputs.errors, inputs.warnings);
 
@@ -205,8 +201,10 @@ fn draw_status_bar(
                 for (index, (&x, (text, color))) in item_x.iter().zip(&items).enumerate() {
                     ui.set_cursor_pos([x, text_y]);
                     ui.text_colored(*color, text);
-                    if index == 0 && ui.is_item_hovered() && !inputs.model.model_path.is_empty() {
-                        ui.tooltip_text(&inputs.model.model_path);
+                    if let (0, true, Some(model_path)) =
+                        (index, ui.is_item_hovered(), inputs.model_path)
+                    {
+                        ui.tooltip_text(model_path);
                     }
                     if index == items.len() - 1 {
                         validation_clicked = ui.is_item_clicked();
@@ -234,11 +232,16 @@ fn validation_status_color(errors: usize, warnings: usize) -> [f32; 4] {
     }
 }
 
-fn model_file_name(model_path: &str) -> String {
-    std::path::Path::new(model_path)
+fn format_model_status(model_path: Option<&str>) -> String {
+    let Some(model_path) = model_path else {
+        return String::from("None  No model loaded");
+    };
+
+    let file_name = std::path::Path::new(model_path)
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| String::from("None"))
+        .unwrap_or_else(|| model_path.to_string());
+    format!("{}  Loaded: {}", file_name, model_path)
 }
 
 fn format_validation_status(errors: usize, warnings: usize) -> String {
@@ -351,9 +354,12 @@ mod tests {
     }
 
     #[test]
-    fn model_file_name_strips_directories() {
-        assert_eq!(model_file_name("assets/models/robot.glb"), "robot.glb");
-        assert_eq!(model_file_name(""), "None");
+    fn model_status_names_the_file_and_its_path() {
+        assert_eq!(
+            format_model_status(Some("assets/models/robot.glb")),
+            "robot.glb  Loaded: assets/models/robot.glb"
+        );
+        assert_eq!(format_model_status(None), "None  No model loaded");
     }
 
     #[test]
@@ -421,7 +427,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
             .and_then(|timings| timings.frame_total_ms),
     };
     let viewport = world.resource::<ViewportInput>();
-    let model = world.resource::<ModelState>();
+    let model_path = crate::ecs::systems::find_model_path(world);
     let timeline_state = world.resource::<TimelineState>();
     let clip_duration = {
         let clip_library = world.resource::<ClipLibrary>();
@@ -440,7 +446,7 @@ fn build_status_bar(ui: &imgui::Ui, world: &World, _: &AssetStorage, _: &Graphic
             delta_time,
             times,
             viewport: &viewport,
-            model: &model,
+            model_path: model_path.as_deref(),
             timeline_state: &timeline_state,
             clip_duration,
             errors,

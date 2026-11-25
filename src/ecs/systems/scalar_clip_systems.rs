@@ -317,8 +317,11 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{probe_property, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
+    use super::test_support::{
+        probe_property, spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
+    };
     use super::*;
+    use crate::scene::test_support::ProbeOwner;
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {
@@ -405,5 +408,57 @@ mod tests {
         assert!(clip
             .get_scalar_curve(probe_property(&PROBE_HEIGHT))
             .is_some());
+    }
+
+    fn world_with_clip_library() -> (World, AssetStorage) {
+        let mut world = World::new();
+        world.insert_resource(ClipLibrary::new());
+        (world, AssetStorage::new())
+    }
+
+    #[test]
+    fn despawn_removes_the_entity_and_only_its_scheduled_clip() {
+        let (mut world, mut assets) = world_with_clip_library();
+        let leaving = spawn_probe_with_clip(&mut world, &mut assets, "Leaving");
+        let staying = spawn_probe_with_clip(&mut world, &mut assets, "Staying");
+        let leaving_clip = find_entity_clip_id(&world, leaving).expect("leaving clip");
+        let staying_clip = find_entity_clip_id(&world, staying).expect("staying clip");
+
+        despawn_entity_with_clip(&mut world, leaving);
+
+        assert_eq!(world.entities_with::<ProbeOwner>(), vec![staying]);
+        let library = world.resource::<ClipLibrary>();
+        assert!(library.get(leaving_clip).is_none());
+        assert!(library.get(staying_clip).is_some());
+        assert!(!library.is_dirty(leaving_clip));
+    }
+
+    #[test]
+    fn despawn_of_an_unscheduled_entity_keeps_every_clip() {
+        let (mut world, mut assets) = world_with_clip_library();
+        let scheduled = spawn_probe_with_clip(&mut world, &mut assets, "Scheduled");
+        let unscheduled = spawn_probe(&mut world, "Unscheduled");
+
+        despawn_entity_with_clip(&mut world, unscheduled);
+
+        assert_eq!(world.entities_with::<ProbeOwner>(), vec![scheduled]);
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
+    }
+
+    #[test]
+    fn despawn_without_a_clip_library_still_removes_the_entity() {
+        let mut world = World::new();
+        let entity = spawn_probe(&mut world, "Probe");
+        let mut schedule = ClipSchedule::new();
+        crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(
+            &mut schedule,
+            1,
+            1.0,
+        );
+        world.insert_component(entity, schedule);
+
+        despawn_entity_with_clip(&mut world, entity);
+
+        assert!(world.entities_with::<ProbeOwner>().is_empty());
     }
 }

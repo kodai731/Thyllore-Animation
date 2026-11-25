@@ -1,5 +1,5 @@
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
-use crate::ecs::resource::{AnimationType, HierarchyState};
+use crate::ecs::resource::{AnimationType, ClipLibrary, HierarchyState};
 use crate::ecs::systems::find_clip_schedule_owner;
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::{
@@ -16,6 +16,26 @@ pub fn clip_schedule_add_instance(
     let instance = ClipInstance::new(id, source_id, duration);
     schedule.instances.push(instance);
     id
+}
+
+pub fn build_initial_clip_schedule(
+    first_source_id: Option<SourceClipId>,
+    world: &World,
+) -> ClipSchedule {
+    let mut schedule = ClipSchedule::new();
+
+    let Some(source_id) = first_source_id else {
+        return schedule;
+    };
+
+    let duration = world
+        .resource::<ClipLibrary>()
+        .get(source_id)
+        .map(|c| c.duration)
+        .unwrap_or(1.0);
+
+    clip_schedule_add_instance(&mut schedule, source_id, duration);
+    schedule
 }
 
 pub fn clip_schedule_remove_instance(

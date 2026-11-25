@@ -1,4 +1,5 @@
 use super::*;
+use crate::ecs::systems::humanoid_rig_systems::sync_humanoid_rig;
 use glam::{Mat4, UVec4};
 
 fn build_skin(influences: &[[(u32, f32); 4]]) -> SkinData {

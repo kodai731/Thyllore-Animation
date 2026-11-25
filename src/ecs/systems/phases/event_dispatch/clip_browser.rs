@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{ClipLibrary, EditHistory};
+use crate::ecs::resource::{ClipDeletionEffects, ClipLibrary, EditHistory, RemovedClip};
+use crate::ecs::systems::delete_library_clip;
 use crate::ecs::world::World;
 use thyllore_anim_core::editable::SourceClipId;
 use thyllore_vulkan_core::resource::GraphicsResources;
@@ -50,6 +50,7 @@ fn dispatch_clip_browser_events(
                 if let Some(original) = clip_library.get(*source_id).cloned() {
                     let mut duplicate = original;
                     duplicate.name = format!("{} (copy)", duplicate.name);
+                    duplicate.source_path = None;
                     let new_id = crate::ecs::systems::clip_library_register_and_activate(
                         &mut clip_library,
                         assets,
@@ -67,28 +68,12 @@ fn dispatch_clip_browser_events(
             }
 
             ClipBrowserEvent::Delete(source_id) => {
-                let ref_count = count_source_references(*source_id, world);
-                if ref_count == 0 {
-                    let removed_source = {
-                        let clip_library = world.resource::<ClipLibrary>();
-                        clip_library.source_clips.get(source_id).cloned()
-                    };
-
-                    let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    clip_library.remove(*source_id);
-                    drop(clip_library);
-
-                    if let Some(removed) = removed_source {
-                        record_clip_removed(world, *source_id, removed);
-                    }
-                    log!("Deleted clip (id={})", source_id);
-                } else {
-                    log!(
-                        "Cannot delete clip {}: {} references remain",
-                        source_id,
-                        ref_count
-                    );
-                }
+                let Some((removed, effects)) = delete_library_clip(world, assets, *source_id)
+                else {
+                    continue;
+                };
+                record_clip_removed(world, *source_id, removed, effects);
+                log!("Deleted clip (id={})", source_id);
             }
 
             ClipBrowserEvent::ResampleSelectedModelAnimations { fps } => {
@@ -120,25 +105,11 @@ fn record_clip_added(
 fn record_clip_removed(
     world: &mut World,
     clip_id: SourceClipId,
-    removed: thyllore_anim_core::editable::SourceClip,
+    removed: RemovedClip,
+    effects: ClipDeletionEffects,
 ) {
     if world.contains_resource::<EditHistory>() {
         let mut edit_history = world.resource_mut::<EditHistory>();
-        edit_history.push_clip_removed(clip_id, removed, "delete clip");
+        edit_history.push_clip_removed(clip_id, removed, effects, "delete clip");
     }
-}
-
-fn count_source_references(source_id: SourceClipId, world: &World) -> usize {
-    let entities = world.component_entities::<ClipSchedule>();
-    let mut count = 0;
-    for entity in entities {
-        if let Some(schedule) = world.get_component::<ClipSchedule>(entity) {
-            count += schedule
-                .instances
-                .iter()
-                .filter(|i| i.source_id == source_id)
-                .count();
-        }
-    }
-    count
 }

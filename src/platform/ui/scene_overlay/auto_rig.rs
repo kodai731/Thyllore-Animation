@@ -1,8 +1,8 @@
 #![cfg(feature = "auto-rig")]
 
 use super::toolbar::TOOLBAR_GROUP_GAP;
-use crate::ecs::component::GlbSource;
 use crate::ecs::resource::{AutoRigState, AutoRigStatus, HierarchyState};
+use crate::ecs::systems::model_load_systems::has_model_glb;
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 use crate::ecs::world::Parent;
 use crate::ecs::world::World;
@@ -59,13 +59,13 @@ fn selection_has_glb_source(ecs_world: &World) -> bool {
     let Some(entity) = ecs_world.resource::<HierarchyState>().selected_entity else {
         return false;
     };
-    if ecs_world.get_component::<GlbSource>(entity).is_some() {
+    if has_model_glb(ecs_world, entity) {
         return true;
     }
 
     ecs_world
         .get_component::<Parent>(entity)
-        .is_some_and(|parent| ecs_world.get_component::<GlbSource>(parent.0).is_some())
+        .is_some_and(|parent| has_model_glb(ecs_world, parent.0))
 }
 
 fn build_cancellable_progress(ui: &imgui::Ui, ecs_world: &World, message: &str) {

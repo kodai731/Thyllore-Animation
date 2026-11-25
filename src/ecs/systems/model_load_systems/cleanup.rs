@@ -1,13 +1,13 @@
 use anyhow::Result;
 
-use super::clips::restore_batch_playback;
+use super::clips::restart_batch_playback;
 use super::gpu::release_model_gpu_resources;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     BakedHumanoidClips, BonePoseOverride, ClipLibrary, MeshAssets, NodeAssets, PoseApplyCache,
     TimelineState,
 };
-use crate::ecs::systems::invalidate_humanoid_rig;
+use crate::ecs::systems::{clip_library_rebuild_playable_assets, invalidate_humanoid_rig};
 use crate::ecs::world::World;
 use crate::ecs::GpuSceneContext;
 
@@ -25,6 +25,7 @@ pub(super) unsafe fn reset_scene_model(
     reset_model_world_state(world);
     world.clear();
     assets.clear();
+    clip_library_rebuild_playable_assets(&mut world.resource_mut::<ClipLibrary>(), assets);
 
     log!("Model resources cleaned up");
     Ok(())
@@ -44,11 +45,10 @@ fn reset_model_world_state(world: &mut World) {
                 timeline_state.current_clip_id = None;
             }
         }
-        timeline_state.current_time = 0.0;
         timeline_state.selected_keyframes.clear();
         timeline_state.expanded_tracks.clear();
     }
-    restore_batch_playback(world);
+    restart_batch_playback(world);
 
     world.resource_mut::<MeshAssets>().meshes.clear();
     world.resource_mut::<NodeAssets>().nodes.clear();
@@ -128,6 +128,16 @@ mod tests {
         assert!(library.get_source(1).is_some());
         let timeline = world.resource::<TimelineState>();
         assert_eq!(timeline.current_clip_id, Some(1));
+    }
+
+    #[test]
+    fn model_reset_keeps_the_timeline_time() {
+        let mut world = make_world_with_model_resources();
+        world.resource_mut::<TimelineState>().current_time = 1.5;
+
+        reset_model_world_state(&mut world);
+
+        assert_eq!(world.resource::<TimelineState>().current_time, 1.5);
     }
 
     #[test]

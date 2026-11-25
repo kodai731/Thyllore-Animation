@@ -6,11 +6,9 @@ use thyllore_avatar_core::material::{
     save_material_texture_remap,
 };
 
-use crate::ecs::resource::{
-    MaterialTextureSaveState, MaterialTextureSlot, MaterialTextureState, SceneLoadCommand,
-    SceneLoadQueue,
-};
+use crate::ecs::resource::{MaterialTextureSaveState, MaterialTextureSlot, MaterialTextureState};
 use crate::ecs::systems::find_model_path;
+use crate::ecs::systems::model_load_systems::{find_loaded_model_entity, request_model_reload};
 use crate::ecs::world::World;
 use thyllore_vulkan_core::resource::GraphicsResources;
 
@@ -127,11 +125,11 @@ pub fn save_material_textures(world: &mut World) {
     msg_info!("Saved material textures to {}", remap_path.display());
 
     state.save_state = MaterialTextureSaveState::Saved;
-    world
-        .resource_mut::<SceneLoadQueue>()
-        .push(SceneLoadCommand::LoadModel {
-            path: state.source_model_path.clone(),
-        });
+    drop(state);
+
+    if let Some(model_entity) = find_loaded_model_entity(world) {
+        request_model_reload(world, model_entity);
+    }
 }
 
 fn build_texture_remap(slots: &[MaterialTextureSlot]) -> MaterialTextureRemap {
@@ -158,7 +156,6 @@ mod tests {
             slots,
             save_state: MaterialTextureSaveState::Saved,
         });
-        world.insert_resource(SceneLoadQueue::default());
         world
     }
 
@@ -221,7 +218,10 @@ mod tests {
 
         save_material_textures(&mut world);
 
-        assert!(world.resource_mut::<SceneLoadQueue>().take().is_empty());
+        assert!(world
+            .iter_components::<crate::ecs::component::ModelSource>()
+            .next()
+            .is_none());
         let state = world.resource::<MaterialTextureState>();
         assert!(matches!(
             state.save_state,

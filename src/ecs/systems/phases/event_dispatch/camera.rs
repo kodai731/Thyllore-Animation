@@ -5,6 +5,7 @@ use crate::ecs::events::{DebugPrimitiveKind, UiCommand};
 use crate::ecs::resource::{
     Camera, OutputCommand, OutputQueue, SceneLoadCommand, SceneLoadQueue, ViewportInput,
 };
+use crate::ecs::systems::model_load_systems::spawn_model_source;
 use crate::ecs::systems::{
     camera_move_to_look_at, camera_move_to_pose, camera_pose_framing, camera_reset,
     selection_bounding_sphere, CameraMotion,
@@ -84,6 +85,9 @@ fn dispatch_camera_events(
         if let CameraEvent::FrameSelection(motion) = event {
             frame_selection(world, assets, graphics, *motion);
         }
+        if let CameraEvent::LoadModel { path } = event {
+            spawn_model_source(world, path);
+        }
     }
 
     let mut camera = world.resource_mut::<Camera>();
@@ -115,9 +119,7 @@ fn dispatch_camera_events(
                 }
             }
 
-            CameraEvent::LoadModel { path } => {
-                scene_loads.push(SceneLoadCommand::LoadModel { path: path.clone() });
-            }
+            CameraEvent::LoadModel { .. } => {}
 
             CameraEvent::SpawnDebugPrimitive { kind } => {
                 scene_loads.push(SceneLoadCommand::SpawnDebugPrimitive { kind: *kind });

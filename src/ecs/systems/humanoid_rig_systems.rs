@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 use thyllore_anim_core::BoneId;
@@ -102,7 +102,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, ModelState};
 use crate::ecs::systems::avatar_setup_systems::{find_first_skeleton, find_model_path};
 use crate::ecs::world::World;
-use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
+use thyllore_anim_core::editable::SourceClipId;
 
 pub fn sync_humanoid_rig(world: &mut World, assets: &AssetStorage) {
     let Some(model_path) = find_model_path(world) else {
@@ -151,16 +151,12 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
             continue;
         };
 
-        let names_before = collect_track_names(clip);
         clip_remap_bone_ids(clip, &table);
-        let names_after = collect_track_names(clip);
-
-        let dropped: Vec<&String> = names_before.difference(&names_after).collect();
-        if !dropped.is_empty() {
+        if !clip.unbound_tracks.is_empty() {
             log_warn!(
-                "clip '{}' dropped tracks not on this model: {:?}",
+                "clip '{}' keeps tracks not on this model unbound: {:?}",
                 clip.name,
-                dropped
+                clip.unbound_track_names()
             );
         }
 
@@ -168,17 +164,18 @@ fn remap_user_clips_to_model(world: &mut World, assets: &AssetStorage) {
     }
 }
 
-fn collect_track_names(clip: &EditableAnimationClip) -> HashSet<String> {
-    clip.tracks
-        .values()
-        .map(|track| track.bone_name.clone())
-        .collect()
-}
-
+/// An invalidated rig is gone until the next sync, so nothing bakes onto a skeleton it was not built from.
 pub fn invalidate_humanoid_rig(world: &mut World) {
     if let Some(mut state) = world.get_resource_mut::<HumanoidRigState>() {
         state.source_model_path.clear();
+        state.rig = None;
     }
+}
+
+/// The rig caches data of the skeleton it was built from; a skeleton or mapping change rebuilds it at once.
+pub fn rebuild_humanoid_rig(world: &mut World, assets: &AssetStorage) {
+    invalidate_humanoid_rig(world);
+    sync_humanoid_rig(world, assets);
 }
 
 pub fn engine_bone_name_to_id(
@@ -196,6 +193,7 @@ pub fn engine_bone_name_to_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_anim_core::editable::EditableAnimationClip;
     use thyllore_anim_core::editable::SourceClip;
 
     use thyllore_avatar_core::humanoid::save_generic_rig;
@@ -328,6 +326,10 @@ mod tests {
                 .is_empty(),
             "invalidate should clear source_model_path"
         );
+        assert!(
+            world.resource::<HumanoidRigState>().rig.is_none(),
+            "invalidate should drop the rig built for the previous skeleton"
+        );
 
         sync_humanoid_rig(&mut world, &assets);
         let revision_after_rebuild = world.resource::<HumanoidRigState>().revision;
@@ -375,6 +377,42 @@ mod tests {
             .get_track(expected_bone_id)
             .expect("track should be at remapped bone id");
         assert_eq!(track.bone_id, expected_bone_id);
+    }
+
+    #[test]
+    fn sync_keeps_tracks_of_bones_the_new_model_lacks() {
+        let temp_dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("test skipped: cannot create temp dir: {}", e);
+                return;
+            }
+        };
+
+        let (fbx_path, _) = copy_test_humanoid_fixture(temp_dir.path());
+        let (mut world, assets) = test_humanoid_world(&fbx_path);
+        world.insert_resource(ClipLibrary::new());
+
+        let source_id: SourceClipId = 1;
+        {
+            let mut library = world.resource_mut::<ClipLibrary>();
+            let mut clip = EditableAnimationClip::new(source_id, "other model".to_string());
+            let track = clip.add_track(0, "BoneOfAnotherModel".to_string());
+            let curve = track.get_curve_mut(thyllore_anim_core::editable::PropertyType::RotationX);
+            thyllore_anim_core::editable::curve_add_keyframe(curve, 0.0, 0.5);
+            library
+                .source_clips
+                .insert(source_id, SourceClip::new(source_id, clip));
+        }
+
+        sync_humanoid_rig(&mut world, &assets);
+
+        let library = world.resource::<ClipLibrary>();
+        let clip = library.get(source_id).expect("clip should exist");
+        assert!(clip.tracks.is_empty());
+        assert_eq!(clip.unbound_track_names(), vec!["BoneOfAnotherModel"]);
+        assert_eq!(clip.total_keyframe_count(), 0);
+        assert_eq!(clip.unbound_tracks[0].total_keyframe_count(), 1);
     }
 
     #[test]
@@ -474,10 +512,8 @@ pub(crate) fn test_humanoid_world(fbx_path: &Path) -> (World, AssetStorage) {
 
     let mut world = World::new();
     world.insert_resource(HumanoidRigState::default());
-    world.insert_resource(crate::ecs::resource::ModelState {
-        model_path,
-        ..Default::default()
-    });
+    world.insert_resource(crate::ecs::resource::ModelState::default());
+    crate::ecs::systems::model_load_systems::spawn_loaded_model_for_test(&mut world, &model_path);
 
     (world, assets)
 }

@@ -1,21 +1,115 @@
-use super::clips::{build_initial_clip_schedule, register_loaded_clips};
 use crate::asset::{AssetStorage, MeshAsset};
-use crate::ecs::component::{AnimationMeta, EntityIcon, MorphWeights};
-use crate::ecs::resource::AnimationType;
-use crate::ecs::systems::attach_morph_channel_catalogs;
-use crate::ecs::world::{Animator, Entity, Transform, World};
+use crate::ecs::component::{
+    AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, ModelSource, MorphWeights,
+};
+use crate::ecs::resource::{AnimationType, ClipLibrary};
+use crate::ecs::systems::{
+    attach_morph_channel_catalogs, build_initial_clip_schedule, find_entity_clip_id,
+};
+use crate::ecs::world::{Animator, Children, Entity, Name, Transform, Visibility, Visible, World};
+use crate::hooks::scene::entities_with;
+use thyllore_anim_core::editable::SourceClipId;
 use thyllore_anim_core::{classify_imported_animation, ImportedAnimationTraits};
 use thyllore_importer_core::{LoadedMesh, ModelLoadResult};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub(super) fn spawn_model_entities(
-    model_name: &str,
+pub(super) const GENERATED_MODEL_NAME: &str = "Generated Mesh";
+
+/// Whether a load took the place of a model that was in the scene.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[must_use]
+pub(super) enum ModelReplacement {
+    NothingReplaced,
+    Replaced,
+}
+
+/// One scene holds one model: the entity being loaded replaces every other model entity.
+pub(super) fn despawn_other_model_source_entities(
+    world: &mut World,
+    kept_entity: Entity,
+) -> ModelReplacement {
+    let replaced_entities: Vec<Entity> = entities_with::<ModelSource>(world)
+        .into_iter()
+        .filter(|entity| *entity != kept_entity)
+        .collect();
+    report_models_replaced_before_loading(world, &replaced_entities, kept_entity);
+
+    despawn_model_entities(world, replaced_entities)
+}
+
+fn report_models_replaced_before_loading(
+    world: &World,
+    replaced_entities: &[Entity],
+    kept_entity: Entity,
+) {
+    let unloaded_entities = replaced_entities
+        .iter()
+        .filter(|entity| world.get_component::<Children>(**entity).is_none());
+
+    for entity in unloaded_entities {
+        msg_warn!(
+            "Model '{}' was replaced by '{}' before it loaded",
+            find_entity_name(world, *entity),
+            find_entity_name(world, kept_entity)
+        );
+    }
+}
+
+#[cfg(any(test, feature = "auto-rig"))]
+pub(super) fn despawn_model_source_entities(world: &mut World) -> ModelReplacement {
+    let replaced_entities = entities_with::<ModelSource>(world);
+
+    despawn_model_entities(world, replaced_entities)
+}
+
+fn despawn_model_entities(world: &mut World, entities: Vec<Entity>) -> ModelReplacement {
+    let replacement = if entities.is_empty() {
+        ModelReplacement::NothingReplaced
+    } else {
+        ModelReplacement::Replaced
+    };
+    for entity in entities {
+        despawn_model_entity_with_model_clip(world, entity);
+    }
+
+    replacement
+}
+
+/// A leaving model takes the clip its file brought; a clip the user edited stays in the library.
+fn despawn_model_entity_with_model_clip(world: &mut World, entity: Entity) {
+    if let Some(clip_id) = find_entity_clip_id(world, entity) {
+        if let Some(mut library) = world.get_resource_mut::<ClipLibrary>() {
+            if library.is_model_clip(clip_id) {
+                library.remove(clip_id);
+            }
+        }
+    }
+    world.despawn(entity);
+}
+
+pub(super) fn find_model_source_entity(world: &World) -> Option<Entity> {
+    entities_with::<ModelSource>(world).into_iter().next()
+}
+
+#[cfg(feature = "auto-rig")]
+pub(super) fn spawn_model_root_entity(name: &str, world: &mut World) -> Entity {
+    world
+        .entity()
+        .with_name(name)
+        .with_transform(Transform::default())
+        .build()
+}
+
+/// Turns `model_entity` into the parent of the uploaded meshes and gives it the model's animation.
+pub(super) fn attach_model_entities(
+    model_entity: Entity,
+    first_clip_id: Option<SourceClipId>,
     graphics: &GraphicsResources,
     world: &mut World,
     assets: &mut AssetStorage,
     load_result: &ModelLoadResult,
-) -> Entity {
-    let name = model_display_name(model_name, "model");
+) {
+    let name = find_entity_name(world, model_entity);
     let animation_type = classify_imported_animation(ImportedAnimationTraits {
         has_skinned_meshes: load_result.has_skinned_meshes,
         has_clips: !load_result.clips.is_empty(),
@@ -27,29 +121,30 @@ pub(super) fn spawn_model_entities(
         load_result.node_animation_scale
     );
 
-    let first_clip_id = register_loaded_clips(world, assets, &load_result.clips);
-    let initial_schedule = build_initial_clip_schedule(first_clip_id, world);
-
-    let mut parent_builder = world
-        .entity()
-        .with_name(&name)
-        .with_transform(Transform::default())
-        .with_visible(true)
-        .with_editor_display(EntityIcon::Model, true);
+    world.insert_component(model_entity, Visible(Visibility::from(true)));
+    world.insert_component(
+        model_entity,
+        EditorDisplay::new(EntityIcon::Model).with_expanded(true),
+    );
     if first_clip_id.is_some() || animation_type == AnimationType::Skeletal {
-        parent_builder = parent_builder
-            .with_animator(Animator::new())
-            .with_clip_schedule(initial_schedule)
-            .with_animation_meta(AnimationMeta {
+        let schedule = world
+            .get_component::<ClipSchedule>(model_entity)
+            .cloned()
+            .unwrap_or_else(|| build_initial_clip_schedule(first_clip_id, world));
+        world.insert_component(model_entity, Animator::new());
+        world.insert_component(model_entity, schedule);
+        world.insert_component(
+            model_entity,
+            AnimationMeta {
                 animation_type,
                 node_animation_scale: load_result.node_animation_scale,
-            });
+            },
+        );
     }
-    let parent_entity = parent_builder.build();
     log!(
-        "Created parent entity '{}': entity_id={}",
+        "Attached model to entity '{}': entity_id={}",
         name,
-        parent_entity
+        model_entity
     );
 
     spawn_mesh_entities(
@@ -57,7 +152,7 @@ pub(super) fn spawn_model_entities(
         graphics,
         world,
         assets,
-        parent_entity,
+        model_entity,
         0..graphics.meshes.len(),
     );
 
@@ -69,8 +164,13 @@ pub(super) fn spawn_model_entities(
         assets.animation_clips.len(),
         assets.nodes.len()
     );
+}
 
-    parent_entity
+pub(super) fn find_entity_name(world: &World, entity: Entity) -> String {
+    world
+        .get_component::<Name>(entity)
+        .map(|name| name.0.clone())
+        .unwrap_or_default()
 }
 
 pub(super) fn spawn_model_part_entity(part_name: &str, world: &mut World) -> Entity {
@@ -166,4 +266,94 @@ pub(super) fn model_display_name(model_path: &str, fallback: &str) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or(fallback)
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::systems::{clip_library_register_and_activate, schedule_entity_clip};
+    use crate::hooks::scene::spawn_scene_owner;
+    use thyllore_anim_core::editable::EditableAnimationClip;
+
+    fn spawn_model_with_clip(world: &mut World, assets: &mut AssetStorage, name: &str) -> Entity {
+        let entity = spawn_scene_owner(world, name, ModelSource::new(name));
+        let clip_id = clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            assets,
+            EditableAnimationClip::new(0, name.to_string()),
+        );
+        world
+            .resource_mut::<ClipLibrary>()
+            .model_clip_ids
+            .insert(clip_id);
+        schedule_entity_clip(world, entity, clip_id);
+        entity
+    }
+
+    fn world_with_two_models() -> (World, Entity, Entity) {
+        let mut world = World::new();
+        let mut assets = AssetStorage::new();
+        world.insert_resource(ClipLibrary::new());
+        let previous = spawn_model_with_clip(&mut world, &mut assets, "previous");
+        let loading = spawn_model_with_clip(&mut world, &mut assets, "loading");
+        (world, previous, loading)
+    }
+
+    #[test]
+    fn replaced_model_entity_leaves_with_its_model_clip() {
+        let (mut world, previous, loading) = world_with_two_models();
+        let previous_clip = find_entity_clip_id(&world, previous).expect("previous clip");
+        let loading_clip = find_entity_clip_id(&world, loading).expect("loading clip");
+
+        let replacement = despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(replacement, ModelReplacement::Replaced);
+        assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
+        assert_eq!(find_entity_clip_id(&world, loading), Some(loading_clip));
+        let library = world.resource::<ClipLibrary>();
+        assert!(library.get(previous_clip).is_none());
+        assert!(library.get(loading_clip).is_some());
+    }
+
+    #[test]
+    fn replaced_model_entity_leaves_its_edited_clip_in_the_library() {
+        let (mut world, previous, loading) = world_with_two_models();
+        let edited_clip = find_entity_clip_id(&world, previous).expect("previous clip");
+        world
+            .resource_mut::<ClipLibrary>()
+            .get_mut(edited_clip)
+            .expect("edited clip")
+            .name = "edited".to_string();
+
+        let _ = despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(entities_with::<ModelSource>(&world), vec![loading]);
+        let library = world.resource::<ClipLibrary>();
+        assert_eq!(
+            library.get(edited_clip).map(|c| c.name.as_str()),
+            Some("edited")
+        );
+    }
+
+    #[test]
+    fn despawning_every_model_entity_removes_their_model_clips() {
+        let (mut world, _, _) = world_with_two_models();
+
+        let _ = despawn_model_source_entities(&mut world);
+
+        assert!(entities_with::<ModelSource>(&world).is_empty());
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 0);
+    }
+
+    #[test]
+    fn the_only_model_entity_replaces_no_model() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::new();
+        world.insert_resource(ClipLibrary::new());
+        let loading = spawn_model_with_clip(&mut world, &mut assets, "loading");
+
+        let replacement = despawn_other_model_source_entities(&mut world, loading);
+
+        assert_eq!(replacement, ModelReplacement::NothingReplaced);
+    }
 }

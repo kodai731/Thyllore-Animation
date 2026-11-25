@@ -4,7 +4,7 @@ use thyllore_avatar_core::humanoid::humanoid_mapping_path;
 
 use crate::app::App;
 use crate::ecs::resource::{
-    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
+    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, TimelineState,
 };
 use crate::ecs::systems::{bake_to_bone_clip, vrm_humanoid_bones};
 use thyllore_anim_core::editable::EditableAnimationClip;
@@ -46,12 +46,9 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
 }
 
 fn copy_humanoid_sidecar(app: &App, output_path: &Path) {
-    let model_path = app
-        .data
-        .ecs_world
-        .resource::<ModelState>()
-        .model_path
-        .clone();
+    let Some(model_path) = crate::ecs::systems::find_model_path(&app.data.ecs_world) else {
+        return;
+    };
     let sidecar_path = humanoid_mapping_path(Path::new(&model_path));
     if !sidecar_path.exists() {
         return;

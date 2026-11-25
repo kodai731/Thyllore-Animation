@@ -6,7 +6,7 @@ use crate::ecs::resource::{ClipBrowserState, ClipLibrary, GltfModelCache, Timeli
 use crate::ecs::systems::phases::event_dispatch::clip_browser::ClipBrowserEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
-use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
@@ -29,11 +29,20 @@ fn draw_clip_browser_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
+            let reference_counts = crate::ecs::systems::clip_library_count_references(world);
+
             build_toolbar(ui, timeline_state, world);
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
-            build_clip_list(ui, clip_library, browser_state, timeline_state, world);
+            build_clip_list(
+                ui,
+                clip_library,
+                browser_state,
+                timeline_state,
+                &reference_counts,
+                world,
+            );
         });
 }
 
@@ -50,12 +59,35 @@ fn clip_action_button<Action>(
     ui.small_button(label).then_some(action)
 }
 
+fn count_clip_references(
+    reference_counts: &[(SourceClipId, usize)],
+    clip_id: SourceClipId,
+) -> usize {
+    reference_counts
+        .iter()
+        .find(|(counted_id, _)| *counted_id == clip_id)
+        .map_or(0, |(_, count)| *count)
+}
+
+/// Keeps the next button on the current row while it fits, otherwise lets it start a new row.
+fn continue_toolbar_row(ui: &imgui::Ui, next_label: &str, toolbar_right_edge: f32) {
+    let style = ui.clone_style();
+    let next_button_width = ui.calc_text_size(next_label)[0] + style.frame_padding()[0] * 2.0;
+    let next_button_right = ui.item_rect_max()[0] + style.item_spacing()[0] + next_button_width;
+
+    if next_button_right <= toolbar_right_edge {
+        ui.same_line();
+    }
+}
+
 fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) {
+    let toolbar_right_edge = ui.cursor_screen_pos()[0] + ui.content_region_avail()[0];
+
     if ui.small_button("+ New") {
         world.send_command(ClipBrowserEvent::CreateEmpty);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Load", toolbar_right_edge);
     if ui.small_button("Load") {
         send_dialog_request(world, DialogRequest::LoadClip);
     }
@@ -65,17 +97,17 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
         selected_clip.map(|source_id| DialogRequest::ExportClip { source_id, format })
     };
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Save", toolbar_right_edge);
     if let Some(source_id) = clip_action_button(ui, "Save", selected_clip) {
         send_dialog_request(world, DialogRequest::SaveClip(source_id));
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "FBX", toolbar_right_edge);
     if let Some(request) = clip_action_button(ui, "FBX", clip_export(ClipExportFormat::Fbx)) {
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "glTF", toolbar_right_edge);
     let has_model = world
         .get_resource::<GltfModelCache>()
         .map_or(false, |c| c.has_model());
@@ -85,18 +117,18 @@ fn build_toolbar(ui: &imgui::Ui, timeline_state: &TimelineState, world: &World) 
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "glTF (anim only)", toolbar_right_edge);
     let animation_only_export = clip_export(ClipExportFormat::GltfAnimationOnly);
     if let Some(request) = clip_action_button(ui, "glTF (anim only)", animation_only_export) {
         send_dialog_request(world, request);
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Dup", toolbar_right_edge);
     if let Some(source_id) = clip_action_button(ui, "Dup", selected_clip) {
         world.send_command(ClipBrowserEvent::Duplicate(source_id));
     }
 
-    ui.same_line();
+    continue_toolbar_row(ui, "Del", toolbar_right_edge);
     if let Some(source_id) = clip_action_button(ui, "Del", selected_clip) {
         world.send_command(ClipBrowserEvent::Delete(source_id));
     }
@@ -114,6 +146,7 @@ fn build_clip_list(
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     timeline_state: &TimelineState,
+    reference_counts: &[(SourceClipId, usize)],
     world: &World,
 ) {
     let clip_names = crate::ecs::systems::clip_library_clip_names(clip_library);
@@ -122,8 +155,6 @@ fn build_clip_list(
         ui.text_disabled("No clips");
         return;
     }
-
-    let reference_counts = crate::ecs::systems::clip_library_count_references(world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 
@@ -136,33 +167,71 @@ fn build_clip_list(
                     continue;
                 }
 
-                let is_selected = timeline_state.current_clip_id == Some(*id);
-                let ref_count = reference_counts
-                    .iter()
-                    .find(|(sid, _)| *sid == *id)
-                    .map(|(_, c)| *c)
-                    .unwrap_or(0);
-
-                let clip = clip_library.get(*id);
-                let duration = clip.map(|c| c.duration).unwrap_or(0.0);
-                let source_filename = extract_source_filename(clip);
-
-                let label = if source_filename.is_empty() {
-                    format!("{} ({:.1}s) [{}]##clip_{}", name, duration, ref_count, id)
-                } else {
-                    format!(
-                        "{} ({:.1}s) [{}] <{}>##clip_{}",
-                        name, duration, ref_count, source_filename, id
-                    )
+                let Some(clip) = clip_library.get(*id) else {
+                    continue;
                 };
-
-                if ui.selectable_config(&label).selected(is_selected).build() {
-                    world.send_command(TimelineEvent::SelectClip(*id));
-                }
-
-                build_clip_drag_source(ui, *id, name);
+                let row = ClipRow {
+                    id: *id,
+                    clip,
+                    is_selected: timeline_state.current_clip_id == Some(*id),
+                    reference_count: count_clip_references(reference_counts, *id),
+                };
+                build_clip_row(ui, world, &row);
             }
         });
+}
+
+struct ClipRow<'a> {
+    id: SourceClipId,
+    clip: &'a EditableAnimationClip,
+    is_selected: bool,
+    reference_count: usize,
+}
+
+fn build_clip_row(ui: &imgui::Ui, world: &World, row: &ClipRow) {
+    if ui
+        .selectable_config(format_clip_row_label(row))
+        .selected(row.is_selected)
+        .build()
+    {
+        world.send_command(TimelineEvent::SelectClip(row.id));
+    }
+    if ui.is_item_hovered() {
+        show_unbound_tracks_tooltip(ui, row.clip);
+    }
+
+    build_clip_drag_source(ui, row.id, &row.clip.name);
+    build_clip_row_menu(ui, world, row.id);
+}
+
+fn format_clip_row_label(row: &ClipRow) -> String {
+    let clip = row.clip;
+    let mut label = format!(
+        "{} ({:.1}s) [{}]",
+        clip.name, clip.duration, row.reference_count
+    );
+
+    let source_filename = extract_source_filename(clip);
+    if !source_filename.is_empty() {
+        label.push_str(&format!(" <{source_filename}>"));
+    }
+    if !clip.unbound_tracks.is_empty() {
+        label.push_str(&format!(" ({} unbound)", clip.unbound_tracks.len()));
+    }
+
+    format!("{label}##clip_{}", row.id)
+}
+
+fn show_unbound_tracks_tooltip(ui: &imgui::Ui, clip: &EditableAnimationClip) {
+    let unbound_track_names = clip.unbound_track_names();
+    if unbound_track_names.is_empty() {
+        return;
+    }
+
+    ui.tooltip_text(format!(
+        "Tracks kept for bones this model lacks (not played):\n{}",
+        unbound_track_names.join("\n")
+    ));
 }
 
 fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
@@ -172,14 +241,26 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
         .begin_payload(move || id);
 }
 
-fn extract_source_filename(
-    clip: Option<&thyllore_anim_core::editable::EditableAnimationClip>,
-) -> String {
-    clip.and_then(|c| c.source_path.as_ref())
-        .and_then(|p| std::path::Path::new(p).file_name())
-        .and_then(|n| n.to_str())
+fn build_clip_row_menu(ui: &imgui::Ui, world: &World, clip_id: SourceClipId) {
+    let Some(_row_menu) = ui.begin_popup_context_item() else {
+        return;
+    };
+
+    if ui.menu_item("Duplicate") {
+        world.send_command(ClipBrowserEvent::Duplicate(clip_id));
+    }
+
+    if ui.menu_item("Delete") {
+        world.send_command(ClipBrowserEvent::Delete(clip_id));
+    }
+}
+
+fn extract_source_filename(clip: &EditableAnimationClip) -> &str {
+    clip.source_path
+        .as_ref()
+        .and_then(|path| std::path::Path::new(path).file_name())
+        .and_then(|file_name| file_name.to_str())
         .unwrap_or("")
-        .to_string()
 }
 
 fn build_clip_browser_window(

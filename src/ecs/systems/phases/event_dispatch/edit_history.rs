@@ -2,9 +2,11 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{
-    AssetEditCommand, AssetEditQueue, ClipLibrary, EditCommand, EditCommandAfter, EditEntry,
-    EditHistory, ScaleHistory, SkeletonSnapshot, ToastMessage, UiToast,
+    AssetEditCommand, AssetEditQueue, ClipLibrary, ClipOrigin, ClipRevision, EditCommand,
+    EditCommandAfter, EditEntry, EditHistory, RemovedClip, ScaleHistory, SkeletonSnapshot,
+    ToastMessage, UiToast,
 };
+use crate::ecs::systems::{delete_library_clip, restore_deleted_clip};
 use crate::ecs::world::{Entity, World};
 use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
 use thyllore_vulkan_core::resource::GraphicsResources;
@@ -16,10 +18,10 @@ pub enum EditHistoryEvent {
 }
 
 impl UiCommand for EditHistoryEvent {
-    fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
+    fn apply(self: Box<Self>, world: &mut World, assets: &mut AssetStorage, _: &GraphicsResources) {
         match *self {
             EditHistoryEvent::Undo => dispatch_undo(world),
-            EditHistoryEvent::Redo => dispatch_redo(world),
+            EditHistoryEvent::Redo => dispatch_redo(world, assets),
         }
     }
 }
@@ -43,12 +45,9 @@ fn dispatch_undo(world: &mut World) {
             let current = {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
                 let current = clip_library
-                    .get(*clip_id)
-                    .cloned()
+                    .revision(*clip_id)
                     .unwrap_or_else(|| before.clone());
-                if let Some(clip) = clip_library.get_mut(*clip_id) {
-                    *clip = before.clone();
-                }
+                clip_library.restore_revision(*clip_id, before.clone());
                 current
             };
 
@@ -95,10 +94,10 @@ fn dispatch_undo(world: &mut World) {
             clip_id,
             description,
         } => {
-            let removed_source = {
-                let mut clip_library = world.resource_mut::<ClipLibrary>();
-                clip_library.source_clips.remove(clip_id)
-            };
+            let removed_source = world
+                .resource_mut::<ClipLibrary>()
+                .remove(*clip_id)
+                .map(|removed| removed.source);
 
             let redo_entry = EditEntry {
                 command: EditCommand::ClipAdded {
@@ -118,20 +117,13 @@ fn dispatch_undo(world: &mut World) {
         EditCommand::ClipRemoved {
             clip_id,
             removed,
+            effects,
             description,
         } => {
-            restore_source_clip(world, *clip_id, removed.clone());
-
-            let redo_entry = EditEntry {
-                command: EditCommand::ClipRemoved {
-                    clip_id: *clip_id,
-                    removed: removed.clone(),
-                    description,
-                },
-                after: EditCommandAfter::Empty,
-            };
-
-            world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
+            restore_deleted_clip(world, *clip_id, removed, effects);
+            world
+                .resource_mut::<EditHistory>()
+                .push_to_redo(entry.clone());
             log!("Undo: {}", description);
         }
 
@@ -171,7 +163,7 @@ fn dispatch_undo(world: &mut World) {
     show_history_toast(world, "Undo", entry.command.description());
 }
 
-fn dispatch_redo(world: &mut World) {
+fn dispatch_redo(world: &mut World, assets: &mut AssetStorage) {
     let entry = {
         let mut edit_history = world.resource_mut::<EditHistory>();
         if !edit_history.can_redo() {
@@ -217,12 +209,12 @@ fn dispatch_redo(world: &mut World) {
         (
             EditCommand::ClipRemoved {
                 clip_id,
-                removed,
                 description,
+                ..
             },
             EditCommandAfter::Empty,
         ) => {
-            redo_clip_removed(world, *clip_id, removed, description);
+            redo_clip_removed(world, assets, *clip_id, description);
         }
 
         (EditCommand::SkeletonModified { description, .. }, EditCommandAfter::Skeleton(after)) => {
@@ -284,9 +276,11 @@ fn redo_clip_modified(
     let current = {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         let current = clip_library
-            .get(clip_id)
-            .cloned()
-            .unwrap_or_else(|| after_clip.clone());
+            .revision(clip_id)
+            .unwrap_or_else(|| ClipRevision {
+                clip: after_clip.clone(),
+                origin: ClipOrigin::User,
+            });
         if let Some(clip) = clip_library.get_mut(clip_id) {
             *clip = after_clip.clone();
         }
@@ -340,7 +334,13 @@ fn redo_clip_added(
     source: &SourceClip,
     description: &'static str,
 ) {
-    restore_source_clip(world, clip_id, source.clone());
+    world.resource_mut::<ClipLibrary>().restore(
+        clip_id,
+        RemovedClip {
+            source: source.clone(),
+            origin: ClipOrigin::User,
+        },
+    );
 
     let undo_entry = EditEntry {
         command: EditCommand::ClipAdded {
@@ -356,17 +356,19 @@ fn redo_clip_added(
 
 fn redo_clip_removed(
     world: &mut World,
+    assets: &mut AssetStorage,
     clip_id: u64,
-    removed: &SourceClip,
     description: &'static str,
 ) {
-    let mut clip_library = world.resource_mut::<ClipLibrary>();
-    clip_library.source_clips.remove(&clip_id);
+    let Some((removed, effects)) = delete_library_clip(world, assets, clip_id) else {
+        return;
+    };
 
     let undo_entry = EditEntry {
         command: EditCommand::ClipRemoved {
             clip_id,
-            removed: removed.clone(),
+            removed,
+            effects,
             description,
         },
         after: EditCommandAfter::Empty,
@@ -374,12 +376,6 @@ fn redo_clip_removed(
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
     log!("Redo: {}", description);
-}
-
-fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {
-    let mut clip_library = world.resource_mut::<ClipLibrary>();
-    clip_library.source_clips.insert(clip_id, source);
-    clip_library.mark_dirty(clip_id);
 }
 
 #[cfg(test)]
@@ -412,6 +408,37 @@ mod tests {
     }
 
     #[test]
+    fn undo_of_the_first_edit_gives_a_model_clip_back_to_the_model() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        world.insert_resource(EditHistory::new(8));
+        world.insert_resource(UiToast::default());
+        let mut library = ClipLibrary::new();
+        let clip_id = crate::ecs::systems::clip_library_register_and_activate(
+            &mut library,
+            &mut assets,
+            EditableAnimationClip::new(0, "walk".to_string()),
+        );
+        library.model_clip_ids.insert(clip_id);
+        let before = library.revision(clip_id).expect("revision");
+        library.get_mut(clip_id).expect("clip").duration = 2.0;
+        let after = library.get(clip_id).cloned().expect("clip");
+        world.insert_resource(library);
+        world
+            .resource_mut::<EditHistory>()
+            .push_clip_edit(clip_id, before, after, "set duration");
+
+        dispatch_undo(&mut world);
+        let is_model_clip_after_undo = world.resource::<ClipLibrary>().is_model_clip(clip_id);
+        dispatch_redo(&mut world, &mut assets);
+
+        let library = world.resource::<ClipLibrary>();
+        assert!(is_model_clip_after_undo);
+        assert_eq!(library.origin(clip_id), ClipOrigin::User);
+        assert_eq!(library.get(clip_id).expect("clip").duration, 2.0);
+    }
+
+    #[test]
     fn redo_of_a_model_scale_replays_the_bake() {
         let mut world = World::new();
         world.insert_resource(EditHistory::new(8));
@@ -423,7 +450,7 @@ mod tests {
         dispatch_undo(&mut world);
         world.resource_mut::<AssetEditQueue>().take();
 
-        dispatch_redo(&mut world);
+        dispatch_redo(&mut world, &mut AssetStorage::default());
 
         let queued = world.resource_mut::<AssetEditQueue>().take();
         let [AssetEditCommand::ApplyModelScale { factor, history }] = queued.as_slice() else {

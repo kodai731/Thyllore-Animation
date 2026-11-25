@@ -6,7 +6,9 @@ use crate::ecs::resource::{
 use crate::ecs::systems::generate_and_apply_chain_bones;
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::model_load_systems::load_generated_mesh;
-use crate::ecs::systems::model_load_systems::load_model_keeping_scene;
+use crate::ecs::systems::model_load_systems::{
+    confirm_model_load_request, load_model_keeping_scene,
+};
 #[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
 
@@ -44,13 +46,16 @@ unsafe fn apply_entity_removal_command(app: &mut App, command: EntityRemovalComm
 
 unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
     match command {
-        SceneLoadCommand::LoadModel { path } => {
+        SceneLoadCommand::LoadModel { entity } => {
+            if !confirm_model_load_request(&app.data.ecs_world, entity) {
+                return;
+            }
+
             let loaded = app.rebuild_scene(|gpu, swapchain, world, assets| {
-                load_model_keeping_scene(&path, gpu, swapchain, world, assets)
+                load_model_keeping_scene(entity, gpu, swapchain, world, assets)
             });
-            match loaded {
-                Ok(()) => msg_info!("Model loaded: {}", path),
-                Err(e) => msg_error!("Failed to load model: {:?}", e),
+            if let Err(e) = loaded {
+                msg_error!("Failed to load model: {:?}", e);
             }
         }
 

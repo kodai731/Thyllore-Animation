@@ -51,7 +51,7 @@ pub enum EntityRemovalCommand {
 #[derive(Clone, Debug)]
 pub enum SceneLoadCommand {
     LoadModel {
-        path: String,
+        entity: crate::ecs::world::Entity,
     },
     #[cfg(feature = "auto-rig")]
     LoadModelFromMemory {

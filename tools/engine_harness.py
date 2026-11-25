@@ -84,3 +84,21 @@ def dood_wrap(command: list[str]) -> list[str]:
         "--device", "/dev/dri", "--group-add", "992", "-w", root,
         DOOD_IMAGE, "-c", inner,
     ]
+
+
+def render_model_scene(model_file: Path) -> str:
+    """A scene file holding one model entity that loads `model_file`."""
+    return f"""(
+    version: 9,
+    entities: [
+        (
+            name: "{Path(model_file).stem}",
+            components: {{
+                "model_source": (
+                    path: "{model_file}",
+                ),
+            }},
+        ),
+    ],
+)
+"""

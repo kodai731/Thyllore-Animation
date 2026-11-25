@@ -95,23 +95,15 @@ fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
         &thyllore_effect_core::flame::FLAME_SCALAR_PARAMS,
         &[],
     );
-
-    let advanced_rows = rows.iter_mut().find_map(|row| match row {
-        UiRow::Group { title, rows, .. } if *title == "Advanced" => Some(rows),
-        _ => None,
+    rows.push(UiRow::Group {
+        title: "Macros".into(),
+        initially_open: false,
+        rows: macro_rows(),
     });
-    match advanced_rows {
-        Some(advanced_rows) => advanced_rows.extend(manual_param_rows()),
-        None => rows.push(UiRow::Group {
-            title: "Advanced".into(),
-            initially_open: false,
-            rows: manual_param_rows(),
-        }),
-    }
     rows
 }
 
-fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
+fn macro_rows() -> Vec<UiRow<FlameEffect>> {
     vec![
         UiRow::Slider {
             label: "Noise Sharpness",
@@ -135,20 +127,6 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
              perceptual sweet spot). Stateless — noise_shaping_scale stays \
              the source of truth (0 = built-in 0.6)",
         ),
-        UiRow::IntSlider {
-            label: "Noise Segments",
-            min: thyllore_effect_core::flame::WAVE_SEGMENTS_MIN as i32,
-            max: thyllore_effect_core::flame::WAVE_SEGMENTS_MAX as i32,
-            get: |effect| effect.wave_segments as i32,
-            set: |effect, segments| {
-                effect.wave_segments = segments as u32;
-            },
-        },
-        UiRow::Tooltip(
-            "Closed-form segments per ray: the noise grid aliases into a \
-             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-             frequency ~4 at twice the cost",
-        ),
         UiRow::Slider {
             label: "Vortex",
             min: 0.0,
@@ -169,13 +147,6 @@ fn manual_param_rows() -> Vec<UiRow<FlameEffect>> {
              faster-and-deeper curve (stateless; the fine sliders \
              stay the source of truth)",
         ),
-        UiRow::IntInput {
-            label: "Branch Seed",
-            get: |effect| effect.branch.seed as i32,
-            set: |effect, seed| {
-                effect.branch.seed = seed.max(0) as u32;
-            },
-        },
     ]
 }
 
@@ -406,13 +377,21 @@ mod tests {
     }
 
     #[test]
-    fn advanced_group_ends_with_manual_params() {
+    fn macros_follow_the_declared_params_in_their_own_group() {
+        let rows = flame_param_rows();
+        let UiRow::Group { title, rows, .. } = rows.last().unwrap() else {
+            panic!("last row is not the macro group");
+        };
+        assert_eq!(&**title, "Macros");
+        assert_eq!(visible_labels(rows), ["Noise Sharpness", "Vortex"]);
+    }
+
+    #[test]
+    fn whole_number_params_come_from_the_declaration() {
         let rows = flame_param_rows();
         let advanced = visible_labels(group_rows(&rows, "Advanced"));
-        assert_eq!(
-            advanced[advanced.len() - 4..],
-            ["Noise Sharpness", "Noise Segments", "Vortex", "Branch Seed"]
-        );
+        assert!(advanced.contains(&"branch_seed"), "{advanced:?}");
+        assert_eq!(advanced.last(), Some(&"wave_segments"));
         assert_unique(&advanced);
     }
 

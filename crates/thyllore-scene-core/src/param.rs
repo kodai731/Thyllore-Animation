@@ -24,10 +24,11 @@ pub fn find_scalar_param<'a, C>(
 /// Widget family a parameter is edited with; `Color` and `Absorption` are `[f32; 3]` parameters
 /// whose components are reachable through the `<name>_r/_g/_b` scalar aliases. `Offset` is a
 /// `[f32; 3]` spatial offset whose components are reachable through the `<name>_x/_y/_z` scalar
-/// aliases.
+/// aliases. `Int` is a whole-number parameter edited in steps of one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiKind {
     Scalar,
+    Int,
     Color,
     /// Beer-Lambert coefficients per meter, edited as the colour transmitted over a reference distance.
     Absorption,
@@ -39,6 +40,7 @@ impl UiKind {
     pub fn name(self) -> &'static str {
         match self {
             UiKind::Scalar => "scalar",
+            UiKind::Int => "int",
             UiKind::Color => "color",
             UiKind::Absorption => "absorption",
             UiKind::Offset => "offset",
@@ -102,7 +104,7 @@ impl UiParam {
     /// Every `ScalarParam` name this parameter's widget reads and writes.
     pub fn scalar_accessor_names(&self) -> Vec<String> {
         match self.kind {
-            UiKind::Scalar => vec![self.name.to_string()],
+            UiKind::Scalar | UiKind::Int => vec![self.name.to_string()],
             UiKind::Color | UiKind::Absorption => self.color_component_names().to_vec(),
             UiKind::Offset => self.offset_component_names().to_vec(),
         }

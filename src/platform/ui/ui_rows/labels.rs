@@ -47,7 +47,6 @@ fn row_label<C>(row: &UiRow<C>) -> Option<&str> {
         | UiRow::Apply { label, .. }
         | UiRow::Slider { label, .. }
         | UiRow::IntSlider { label, .. }
-        | UiRow::IntInput { label, .. }
         | UiRow::FloatInput { label, .. }
         | UiRow::Vector3 { label, .. }
         | UiRow::Switch { label, .. }

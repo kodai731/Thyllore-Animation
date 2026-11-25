@@ -111,7 +111,7 @@ pub struct FlameBranch {
     /// Full width of the spawn height band; 1.0 with center 0.5 spawns elements over the whole trunk
     #[persist(ui(min = 0.0, max = 1.0))]
     pub spawn_range: f32,
-    #[persist(owner = Frame)]
+    #[persist(owner = Frame, ui(kind = Int, min = 0.0, max = 9999.0))]
     pub seed: u32,
 }
 

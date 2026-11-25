@@ -42,7 +42,6 @@ fn displayed_labels<C>(rows: &[UiRow<C>]) -> Vec<Cow<'_, str>> {
             | UiRow::Text { label, .. }
             | UiRow::Slider { label, .. }
             | UiRow::IntSlider { label, .. }
-            | UiRow::IntInput { label, .. }
             | UiRow::FloatInput { label, .. }
             | UiRow::Vector3 { label, .. }
             | UiRow::Switch { label, .. }
@@ -168,15 +167,6 @@ fn draw_row<C>(
                 .build(&mut v);
             open_text_entry_on_double_click(ui);
             if changed {
-                (*set)(value, v);
-                return true;
-            }
-            false
-        }
-        UiRow::IntInput { label, get, set } => {
-            let mut v = (*get)(value);
-            property_label_in_column(ui, label, label_column);
-            if ui.input_int(format!("##{}", label), &mut v) {
                 (*set)(value, v);
                 return true;
             }
@@ -412,6 +402,7 @@ fn draw_scalar_row<C>(
 ) -> bool {
     match meta.kind {
         UiKind::Scalar => draw_scalar(ui, world, meta, scalars, component, keys, label_column),
+        UiKind::Int => draw_int(ui, world, meta, scalars, component, keys, label_column),
         UiKind::Color => draw_color(
             ui,
             world,
@@ -507,6 +498,39 @@ fn draw_scalar<C>(
     }
     show_tooltip(ui, meta.tooltip);
     draw_key_button(ui, world, meta.name, &targets, &[value]);
+    changed
+}
+
+fn draw_int<C>(
+    ui: &imgui::Ui,
+    world: &World,
+    meta: &UiParam,
+    scalars: &[ScalarParam<C>],
+    component: &mut C,
+    keys: KeyDomain,
+    label_column: f32,
+) -> bool {
+    let Some(scalar) = find_scalar_param(scalars, meta.name) else {
+        return false;
+    };
+    let targets = key_targets(keys, &[scalar]);
+
+    let mut value = (scalar.get)(component).round() as i32;
+    property_label_in_column(ui, &meta.display_label(), label_column);
+    reserve_key_button_width(ui, &targets);
+    let changed = ui
+        .slider_config(
+            format!("##{}", meta.name),
+            meta.min.round() as i32,
+            meta.max.round() as i32,
+        )
+        .build(&mut value);
+    open_text_entry_on_double_click(ui);
+    if changed {
+        (scalar.set)(component, value as f32);
+    }
+    show_tooltip(ui, meta.tooltip);
+    draw_key_button(ui, world, meta.name, &targets, &[value as f32]);
     changed
 }
 

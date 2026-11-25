@@ -60,9 +60,14 @@ pub struct FlameEffect {
     pub mix: FlameMix,
     #[nested]
     pub thermal: FlameThermal,
-    /// Closed-form segments per ray of the wave walk: finer noise needs more
-    /// (the segment grid aliases at noise frequency > ~2 with 64); 64 = default.
-    #[persist]
+    /// Closed-form segments per ray: the noise grid aliases into a pixel hatch above
+    /// Noise Frequency ~2 at 64; 128 resolves frequency ~4 at twice the cost
+    #[persist(ui(
+        kind = Int,
+        min = crate::flame::WAVE_SEGMENTS_MIN as f32,
+        max = crate::flame::WAVE_SEGMENTS_MAX as f32,
+        label = "Noise Segments"
+    ))]
     pub wave_segments: u32,
     #[nested]
     pub twist: FlameTwist,

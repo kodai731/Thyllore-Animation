@@ -333,6 +333,10 @@ pub(crate) fn parse_param_field(
                 "Color / Absorption need a [f32; 3] value",
             ));
         }
+        let int_kind = ui.kind.as_ref().is_some_and(|k| k == "Int");
+        if int_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Int needs a u32 value"));
+        }
     }
     if scalars && !matches!(kind, ValueKind::Array(_)) {
         return Err(Error::new_spanned(
@@ -1163,6 +1167,19 @@ mod tests {
         assert!(expanded.contains("group : \"noise\""), "{expanded}");
         assert!(expanded.contains("< Owner > :: Style"), "{expanded}");
         assert!(!expanded.contains("LazyLock"), "{expanded}");
+    }
+
+    #[test]
+    fn int_kind_needs_a_u32_value() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Int"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: f32 }}"
+        ));
+        assert!(message.contains("Int needs a u32 value"), "{message}");
     }
 
     #[test]

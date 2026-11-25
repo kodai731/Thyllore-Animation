@@ -8,6 +8,8 @@ pub struct FlameEffect {
     pub position: Vec3,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quat,
+    #[nested(runtime)]
+    pub emitter: FlameEmitter,
     #[persist(curve, debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
     #[persist(curve, debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
@@ -36,8 +38,6 @@ pub struct FlameEffect {
     pub self_shadow_strength: f32,
     #[nested]
     pub envelope: FlameEnvelope,
-    #[nested(runtime)]
-    pub emitter: FlameEmitter,
     #[nested(runtime)]
     pub boundary: FlameBoundary,
     #[persist(owner = Shape)]

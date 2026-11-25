@@ -1,6 +1,7 @@
 use glam::{Quat, Vec2, Vec3};
 use thyllore_effect_core::flame::{
-    refresh_flame_coefficients, FlameBaked, FlameCoefficients, FlameEffect, FlameTemporalAccum,
+    refresh_flame_coefficients, FlameBaked, FlameCoefficients, FlameEffect, FlameEmitterKind,
+    FlameTemporalAccum,
 };
 
 /// Camera description reconstructed from a flame dump JSON.
@@ -131,9 +132,12 @@ pub fn flame_from_dump(
         }
     }
 
-    // emitter_kind from integer
-    if let Some(v) = flame_json.get("emitter_kind").and_then(|f| f.as_i64()) {
-        effect.emitter.kind = v as u32;
+    let dumped_emitter_kind = flame_json
+        .get("emitter_kind")
+        .and_then(|f| f.as_u64())
+        .and_then(|value| FlameEmitterKind::from_shader_value(value as u32));
+    if let Some(kind) = dumped_emitter_kind {
+        effect.emitter.kind = kind;
     }
 
     // use_blackbody from boolean

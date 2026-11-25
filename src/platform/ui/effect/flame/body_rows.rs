@@ -1,4 +1,4 @@
-use thyllore_effect_core::flame::FlameEffect;
+use thyllore_effect_core::flame::{emitter_ui_conditions, FlameEffect, FlameEmitterKind};
 
 use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
 use crate::ecs::systems::flame::FlameUiCommand;
@@ -7,9 +7,6 @@ use crate::ecs::world::World;
 
 use crate::platform::ui::param_widgets::rows_from_params;
 use crate::platform::ui::ui_rows::{ChoiceOption, FieldRows, UiRow};
-
-const EMITTER_LABELS: [&str; 3] = ["Cylinder", "Ring", "Mesh SDF"];
-const RING_EMITTER_KIND: u32 = 1;
 
 #[derive(Clone, Default)]
 pub(super) struct FlameBodyView {
@@ -24,19 +21,19 @@ pub(super) struct FlameBodyView {
 }
 
 pub(super) fn body_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
-    let mut rows = emitter_rows(view);
+    let mut rows = emitter_rows();
     rows.push(UiRow::Field(Box::new(FieldRows {
         scope: "effect",
         field: |view: &mut FlameBodyView| &mut view.effect,
-        rows: flame_param_rows(),
+        rows: flame_param_rows(&view.effect),
     })));
     rows.extend(body_action_rows());
     rows.extend(debug_rows(view));
     rows
 }
 
-fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
-    let mut rows: Vec<UiRow<FlameBodyView>> = vec![
+fn emitter_rows() -> Vec<UiRow<FlameBodyView>> {
+    vec![
         UiRow::Vector3 {
             label: "Position",
             speed: 0.1,
@@ -49,51 +46,28 @@ fn emitter_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
         UiRow::Choice {
             label: "Emitter",
             options: |_world, view| {
-                EMITTER_LABELS
+                FlameEmitterKind::ALL
                     .iter()
-                    .enumerate()
-                    .map(|(kind, label)| ChoiceOption {
-                        label: label.to_string(),
-                        selected: view.effect.emitter.kind as usize == kind,
+                    .map(|&kind| ChoiceOption {
+                        label: kind.label().to_string(),
+                        selected: kind == view.effect.emitter.kind,
                     })
                     .collect()
             },
             pick: |view, index| {
-                view.effect.emitter.kind = index as u32;
+                if let Some(&kind) = FlameEmitterKind::ALL.get(index) {
+                    view.effect.emitter.kind = kind;
+                }
             },
         },
-    ];
-
-    if view.effect.emitter.kind == RING_EMITTER_KIND {
-        rows.push(UiRow::Slider {
-            label: "Ring Radius",
-            min: 0.2,
-            max: 5.0,
-            format: "%.2f",
-            get: |view| view.effect.emitter.ring_major_radius,
-            set: |view, value| {
-                view.effect.emitter.ring_major_radius = value;
-            },
-        });
-        rows.push(UiRow::Slider {
-            label: "Ring Speed",
-            min: 0.0,
-            max: std::f32::consts::TAU,
-            format: "%.2f",
-            get: |view| view.effect.emitter.ring_angular_speed,
-            set: |view, value| {
-                view.effect.emitter.ring_angular_speed = value;
-            },
-        });
-    }
-    rows
+    ]
 }
 
-fn flame_param_rows() -> Vec<UiRow<FlameEffect>> {
+fn flame_param_rows(effect: &FlameEffect) -> Vec<UiRow<FlameEffect>> {
     let mut rows = rows_from_params(
         &thyllore_effect_core::flame::FLAME_UI_PARAMS,
         &thyllore_effect_core::flame::FLAME_SCALAR_PARAMS,
-        &[],
+        &emitter_ui_conditions(&effect.emitter),
     );
     rows.push(UiRow::Group {
         title: "Macros".into(),
@@ -317,7 +291,7 @@ mod tests {
     use super::*;
     use crate::platform::ui::ui_rows::visible_labels;
 
-    fn body_view(kind: u32, shading_mode: FlameShadingMode) -> FlameBodyView {
+    fn body_view(kind: FlameEmitterKind, shading_mode: FlameShadingMode) -> FlameBodyView {
         let mut effect = FlameEffect::default();
         effect.emitter.kind = kind;
         FlameBodyView {
@@ -351,7 +325,10 @@ mod tests {
 
     #[test]
     fn body_rows_run_emitter_params_actions_then_debug() {
-        let rows = body_rows(&body_view(0, FlameShadingMode::Analytic));
+        let rows = body_rows(&body_view(
+            FlameEmitterKind::Cylinder,
+            FlameShadingMode::Analytic,
+        ));
         let labels = visible_labels(&rows);
         assert_eq!(&labels[..2], ["Position", "Emitter"]);
         assert_eq!(labels[labels.len() - 1], "Trail Fade");
@@ -362,23 +339,37 @@ mod tests {
         assert_eq!(&**title, "Flame Debug");
     }
 
-    #[test]
-    fn cylinder_emitter_has_no_ring_rows() {
-        let rows = emitter_rows(&body_view(0, FlameShadingMode::Analytic));
-        assert_eq!(visible_labels(&rows), ["Position", "Emitter"]);
+    const RING_PARAM_NAMES: [&str; 2] = ["emitter_ring_major_radius", "emitter_ring_angular_speed"];
+
+    fn effect_with_emitter(kind: FlameEmitterKind) -> FlameEffect {
+        let mut effect = FlameEffect::default();
+        effect.emitter.kind = kind;
+        effect
     }
 
     #[test]
-    fn ring_emitter_adds_radius_and_speed() {
-        let rows = emitter_rows(&body_view(RING_EMITTER_KIND, FlameShadingMode::Analytic));
-        let labels = visible_labels(&rows);
-        assert_eq!(labels, ["Position", "Emitter", "Ring Radius", "Ring Speed"]);
-        assert_unique(&labels);
+    fn emitter_rows_show_position_then_emitter_choice() {
+        assert_eq!(visible_labels(&emitter_rows()), ["Position", "Emitter"]);
+    }
+
+    #[test]
+    fn ring_params_lead_the_params_only_for_a_ring_emitter() {
+        let ring_rows = flame_param_rows(&effect_with_emitter(FlameEmitterKind::Ring));
+        assert_eq!(visible_labels(&ring_rows)[..2], RING_PARAM_NAMES);
+
+        for kind in [FlameEmitterKind::Cylinder, FlameEmitterKind::MeshSdf] {
+            let rows = flame_param_rows(&effect_with_emitter(kind));
+            let labels = visible_labels(&rows);
+            assert!(
+                RING_PARAM_NAMES.iter().all(|name| !labels.contains(name)),
+                "{kind:?}: {labels:?}"
+            );
+        }
     }
 
     #[test]
     fn macros_follow_the_declared_params_in_their_own_group() {
-        let rows = flame_param_rows();
+        let rows = flame_param_rows(&FlameEffect::default());
         let UiRow::Group { title, rows, .. } = rows.last().unwrap() else {
             panic!("last row is not the macro group");
         };
@@ -388,7 +379,7 @@ mod tests {
 
     #[test]
     fn whole_number_params_come_from_the_declaration() {
-        let rows = flame_param_rows();
+        let rows = flame_param_rows(&FlameEffect::default());
         let advanced = visible_labels(group_rows(&rows, "Advanced"));
         assert!(advanced.contains(&"branch_seed"), "{advanced:?}");
         assert_eq!(advanced.last(), Some(&"wave_segments"));
@@ -420,7 +411,7 @@ mod tests {
             (FlameShadingMode::NoiseRaymarch, Some("Noise Steps")),
         ];
         for (shading_mode, step_label) in cases {
-            let rows = debug_rows(&body_view(0, shading_mode));
+            let rows = debug_rows(&body_view(FlameEmitterKind::Cylinder, shading_mode));
             assert_eq!(rows.len(), 1);
 
             let mut expected = vec!["Shading Mode", "Debug View", "Jitter Depth", "Jitter Freq"];

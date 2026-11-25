@@ -201,7 +201,7 @@ fn main() {
 
     // Ring support parameters
     let taper = FlameRadialTaper::from_effect(&effect, &baked);
-    let ring_major = if effect.emitter.kind == 1 {
+    let ring_major = if effect.emitter.kind == FlameEmitterKind::Ring {
         effect.emitter.ring_major_radius / flame_bounding_radius(&effect).max(1e-3)
     } else {
         0.0

@@ -55,6 +55,7 @@ struct WaterPanel;
 impl EffectPanel for WaterPanel {
     type Component = WaterTorusEffect;
     type RenderSettings = WaterRenderSettings;
+    type Extra = ();
 
     const NAME: &'static str = "Water";
     const ADD_LABEL: &'static str = "Add Water";
@@ -104,6 +105,7 @@ mod tests {
             selected: None,
             effect: WaterTorusEffect::default(),
             render: WaterRenderSettings::default(),
+            extra: (),
         }
     }
 

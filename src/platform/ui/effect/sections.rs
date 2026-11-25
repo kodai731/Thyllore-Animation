@@ -47,6 +47,7 @@ pub(crate) fn collect_effect_sections() -> &'static [&'static EffectSectionHook]
 pub(super) trait EffectPanel: 'static {
     type Component: EffectPreset + Clone + PartialEq + Default + std::fmt::Debug + 'static;
     type RenderSettings: Clone + PartialEq + Default + std::fmt::Debug + 'static;
+    type Extra: Clone + Default + 'static;
 
     const NAME: &'static str;
     const ADD_LABEL: &'static str;
@@ -60,40 +61,48 @@ pub(super) trait EffectPanel: 'static {
     fn applied_preset_name(applied: &<Self::Component as EffectPreset>::Applied) -> String;
 
     fn debug_rows() -> Vec<UiRow<PanelView<Self>>>;
+
+    fn read_extra(_world: &World, _selected: Option<Entity>) -> Self::Extra {
+        Self::Extra::default()
+    }
+
+    fn extra_head_rows(_view: &PanelView<Self>) -> Vec<UiRow<PanelView<Self>>> {
+        Vec::new()
+    }
+
+    fn hidden_params(_view: &PanelView<Self>) -> Vec<&'static str> {
+        Vec::new()
+    }
+
+    fn commit_extra(_world: &World, _shown: &PanelView<Self>, _view: &PanelView<Self>) {}
 }
 
 #[derive(Clone)]
-pub(super) struct EffectSectionView<E, R> {
+pub(super) struct EffectSectionView<E, R, X = ()> {
     pub instances: Vec<String>,
     pub instance_index: usize,
     pub preset: Option<String>,
     pub selected: Option<Entity>,
     pub effect: E,
     pub render: R,
+    pub extra: X,
 }
 
-pub(super) type PanelView<P> =
-    EffectSectionView<<P as EffectPanel>::Component, <P as EffectPanel>::RenderSettings>;
+pub(super) type PanelView<P> = EffectSectionView<
+    <P as EffectPanel>::Component,
+    <P as EffectPanel>::RenderSettings,
+    <P as EffectPanel>::Extra,
+>;
 
 type PanelEdit<P> = EffectEdit<<P as EffectPanel>::Component, <P as EffectPanel>::RenderSettings>;
 
 pub(super) fn build_effect_section<P: EffectPanel>(world: &World) -> Option<Box<dyn FormSection>> {
     let view = read_effect_section_view::<P>(world);
 
-    let mut rows = effect_head_rows::<P>(&view);
-    if view.selected.is_some() {
-        rows.push(UiRow::Field(Box::new(FieldRows {
-            scope: "effect",
-            field: |view: &mut PanelView<P>| &mut view.effect,
-            rows: rows_from_params(P::ui_params(), P::scalar_params(), &[]),
-        })));
-        rows.extend(effect_tail_rows::<P>());
-    }
-
     let group = UiRow::Group {
         title: P::NAME.into(),
         initially_open: false,
-        rows,
+        rows: effect_section_rows::<P>(&view),
     };
 
     Some(Box::new(RowsSection {
@@ -102,6 +111,26 @@ pub(super) fn build_effect_section<P: EffectPanel>(world: &World) -> Option<Box<
         commit: commit_effect_view::<P>,
         keys: Some(P::domain()),
     }))
+}
+
+fn effect_section_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<PanelView<P>>> {
+    let mut rows = effect_head_rows::<P>(view);
+    rows.extend(P::extra_head_rows(view));
+
+    if view.selected.is_some() {
+        rows.push(UiRow::Field(Box::new(FieldRows {
+            scope: "effect",
+            field: |view: &mut PanelView<P>| &mut view.effect,
+            rows: effect_param_rows::<P>(view),
+        })));
+        rows.extend(effect_tail_rows::<P>());
+    }
+
+    rows
+}
+
+fn effect_param_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<P::Component>> {
+    rows_from_params(P::ui_params(), P::scalar_params(), &P::hidden_params(view))
 }
 
 fn read_effect_section_view<P: EffectPanel>(world: &World) -> PanelView<P> {
@@ -133,6 +162,7 @@ fn read_effect_section_view<P: EffectPanel>(world: &World) -> PanelView<P> {
         selected,
         effect,
         render,
+        extra: P::read_extra(world, selected),
     }
 }
 
@@ -198,17 +228,152 @@ pub(super) fn commit_effect_view<P: EffectPanel>(
         }
     }
 
-    let Some(entity) = view.selected else {
-        return;
-    };
-    if !effect_applied_this_frame && view.effect != shown.effect {
-        world.send_command(PanelEdit::<P>::UpdateEffect {
-            entity,
-            effect: Box::new(view.effect.clone()),
-        });
+    if let Some(entity) = view.selected {
+        if !effect_applied_this_frame && view.effect != shown.effect {
+            world.send_command(PanelEdit::<P>::UpdateEffect {
+                entity,
+                effect: Box::new(view.effect.clone()),
+            });
+        }
+
+        if view.render != shown.render {
+            world.send_command(PanelEdit::<P>::UpdateRenderSettings(view.render.clone()));
+        }
     }
 
-    if view.render != shown.render {
-        world.send_command(PanelEdit::<P>::UpdateRenderSettings(view.render.clone()));
+    P::commit_extra(world, shown, view);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::component::{AppliedWaterPreset, WaterTorusEffect, WATER_DOMAIN};
+    use crate::ecs::events::UiCommandQueue;
+    use crate::ecs::resource::WaterRenderSettings;
+    use crate::ecs::systems::WATER_SPAWN_HOOK;
+    use crate::platform::ui::ui_rows::visible_labels;
+
+    struct ExtendedPanel;
+
+    impl EffectPanel for ExtendedPanel {
+        type Component = WaterTorusEffect;
+        type RenderSettings = WaterRenderSettings;
+        type Extra = Option<String>;
+
+        const NAME: &'static str = "Extended";
+        const ADD_LABEL: &'static str = "Add Extended";
+        const SPAWN_HOOK_KEY: &'static str = WATER_SPAWN_HOOK.key;
+        const PRESET_NAMES: &'static [&'static str] =
+            thyllore_effect_core::water::WATER_PRESET_NAMES;
+
+        fn ui_params() -> &'static [UiParam] {
+            &thyllore_effect_core::water::WATER_UI_PARAMS
+        }
+
+        fn scalar_params() -> &'static [ScalarParam<WaterTorusEffect>] {
+            &thyllore_effect_core::water::WATER_SCALAR_PARAMS
+        }
+
+        fn domain() -> &'static ScalarChannelDomain {
+            &WATER_DOMAIN
+        }
+
+        fn applied_preset_name(applied: &AppliedWaterPreset) -> String {
+            applied.name.clone()
+        }
+
+        fn debug_rows() -> Vec<UiRow<PanelView<Self>>> {
+            Vec::new()
+        }
+
+        fn extra_head_rows(_view: &PanelView<Self>) -> Vec<UiRow<PanelView<Self>>> {
+            vec![UiRow::Action {
+                label: "Clear Target",
+                enabled: |_, _| true,
+                on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
+            }]
+        }
+
+        fn hidden_params(view: &PanelView<Self>) -> Vec<&'static str> {
+            match view.extra {
+                Some(_) => vec![first_param_name()],
+                None => Vec::new(),
+            }
+        }
+
+        fn commit_extra(world: &World, shown: &PanelView<Self>, view: &PanelView<Self>) {
+            if view.extra != shown.extra {
+                world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
+            }
+        }
+    }
+
+    fn first_param_name() -> &'static str {
+        thyllore_effect_core::water::WATER_UI_PARAMS[0].name
+    }
+
+    fn unselected_view(extra: Option<String>) -> PanelView<ExtendedPanel> {
+        EffectSectionView {
+            instances: vec!["Extended 1".to_string()],
+            instance_index: 0,
+            preset: None,
+            selected: None,
+            effect: WaterTorusEffect::default(),
+            render: WaterRenderSettings::default(),
+            extra,
+        }
+    }
+
+    fn collect_scalar_names<C>(rows: &[UiRow<C>]) -> Vec<&'static str> {
+        rows.iter()
+            .flat_map(|row| match row {
+                UiRow::Scalar { param, .. } => vec![param.name],
+                UiRow::Group { rows, .. } => collect_scalar_names(rows),
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    fn committed_command_count(
+        shown: &PanelView<ExtendedPanel>,
+        view: &PanelView<ExtendedPanel>,
+    ) -> usize {
+        let mut world = World::new();
+        world.insert_resource(UiCommandQueue::default());
+        commit_effect_view::<ExtendedPanel>(&world, shown, view);
+
+        let count = world.resource_mut::<UiCommandQueue>().drain().count();
+        count
+    }
+
+    #[test]
+    fn extra_head_rows_follow_the_shared_head_rows() {
+        let rows = effect_section_rows::<ExtendedPanel>(&unselected_view(None));
+        assert_eq!(
+            visible_labels(&rows),
+            ["Add Extended", "Preset", "Clear Target"]
+        );
+    }
+
+    #[test]
+    fn hidden_params_remove_the_named_parameter_rows() {
+        let all_names =
+            collect_scalar_names(&effect_param_rows::<ExtendedPanel>(&unselected_view(None)));
+        let shown_names = collect_scalar_names(&effect_param_rows::<ExtendedPanel>(
+            &unselected_view(Some("target".to_string())),
+        ));
+
+        assert!(all_names.contains(&first_param_name()));
+        assert!(!shown_names.contains(&first_param_name()));
+        assert_eq!(shown_names.len() + 1, all_names.len());
+    }
+
+    #[test]
+    fn commit_extra_runs_without_a_selected_effect() {
+        let shown = unselected_view(None);
+        let view = unselected_view(Some("target".to_string()));
+
+        assert_eq!(committed_command_count(&shown, &shown.clone()), 0);
+        assert_eq!(committed_command_count(&shown, &view), 1);
     }
 }

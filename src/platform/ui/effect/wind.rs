@@ -96,6 +96,7 @@ struct WindPanel;
 impl EffectPanel for WindPanel {
     type Component = WindTornadoEffect;
     type RenderSettings = WindRenderSettings;
+    type Extra = ();
 
     const NAME: &'static str = "Wind";
     const ADD_LABEL: &'static str = "Add Wind";
@@ -145,6 +146,7 @@ mod tests {
             selected: None,
             effect: WindTornadoEffect::default(),
             render: WindRenderSettings::default(),
+            extra: (),
         }
     }
 

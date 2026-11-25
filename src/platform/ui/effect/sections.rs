@@ -356,6 +356,17 @@ mod tests {
     }
 
     #[test]
+    fn tail_rows_show_curves_before_the_debug_group() {
+        let rows = effect_tail_rows::<ExtendedPanel>();
+        assert_eq!(visible_labels(&rows), ["Curves"]);
+
+        let Some(UiRow::Group { title, .. }) = rows.last() else {
+            panic!("last row is not a Group");
+        };
+        assert_eq!(&**title, "Extended Debug");
+    }
+
+    #[test]
     fn hidden_params_remove_the_named_parameter_rows() {
         let all_names =
             collect_scalar_names(&effect_param_rows::<ExtendedPanel>(&unselected_view(None)));

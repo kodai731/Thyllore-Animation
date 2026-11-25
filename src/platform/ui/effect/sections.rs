@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use thyllore_scene_core::{ScalarParam, UiParam};
+use thyllore_scene_core::{ScalarParam, UiCondition, UiParam};
 
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
@@ -70,7 +70,7 @@ pub(super) trait EffectPanel: 'static {
         Vec::new()
     }
 
-    fn hidden_params(_view: &PanelView<Self>) -> Vec<&'static str> {
+    fn active_conditions(_view: &PanelView<Self>) -> Vec<&'static UiCondition> {
         Vec::new()
     }
 
@@ -130,7 +130,11 @@ fn effect_section_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<PanelVi
 }
 
 fn effect_param_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<P::Component>> {
-    rows_from_params(P::ui_params(), P::scalar_params(), &P::hidden_params(view))
+    rows_from_params(
+        P::ui_params(),
+        P::scalar_params(),
+        &P::active_conditions(view),
+    )
 }
 
 fn read_effect_section_view<P: EffectPanel>(world: &World) -> PanelView<P> {
@@ -294,22 +298,11 @@ mod tests {
             }]
         }
 
-        fn hidden_params(view: &PanelView<Self>) -> Vec<&'static str> {
-            match view.extra {
-                Some(_) => vec![first_param_name()],
-                None => Vec::new(),
-            }
-        }
-
         fn commit_extra(world: &World, shown: &PanelView<Self>, view: &PanelView<Self>) {
             if view.extra != shown.extra {
                 world.send_command(ScalarCurveEvent::OpenScalarCurveEditor);
             }
         }
-    }
-
-    fn first_param_name() -> &'static str {
-        thyllore_effect_core::water::WATER_UI_PARAMS[0].name
     }
 
     fn unselected_view(extra: Option<String>) -> PanelView<ExtendedPanel> {
@@ -322,16 +315,6 @@ mod tests {
             render: WaterRenderSettings::default(),
             extra,
         }
-    }
-
-    fn collect_scalar_names<C>(rows: &[UiRow<C>]) -> Vec<&'static str> {
-        rows.iter()
-            .flat_map(|row| match row {
-                UiRow::Scalar { param, .. } => vec![param.name],
-                UiRow::Group { rows, .. } => collect_scalar_names(rows),
-                _ => Vec::new(),
-            })
-            .collect()
     }
 
     fn committed_command_count(
@@ -364,19 +347,6 @@ mod tests {
             panic!("last row is not a Group");
         };
         assert_eq!(&**title, "Extended Debug");
-    }
-
-    #[test]
-    fn hidden_params_remove_the_named_parameter_rows() {
-        let all_names =
-            collect_scalar_names(&effect_param_rows::<ExtendedPanel>(&unselected_view(None)));
-        let shown_names = collect_scalar_names(&effect_param_rows::<ExtendedPanel>(
-            &unselected_view(Some("target".to_string())),
-        ));
-
-        assert!(all_names.contains(&first_param_name()));
-        assert!(!shown_names.contains(&first_param_name()));
-        assert_eq!(shown_names.len() + 1, all_names.len());
     }
 
     #[test]

@@ -179,6 +179,7 @@ pub(crate) struct UiAttributes {
     pub format: Option<LitStr>,
     pub group: Option<LitStr>,
     pub label: Option<LitStr>,
+    pub hidden_when: Option<syn::Path>,
 }
 
 pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
@@ -396,6 +397,8 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
             ui.group = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("label") {
             ui.label = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("hidden_when") {
+            ui.hidden_when = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("primary") {
             ui.primary = true;
         } else {
@@ -831,6 +834,10 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     };
     let tooltip = &param.doc;
     let primary = ui.primary;
+    let hidden_when = match &ui.hidden_when {
+        Some(condition) => quote!(Some(&#condition)),
+        None => quote!(None),
+    };
 
     Some(quote! {
         out.push(::thyllore_scene_core::UiParam {
@@ -845,6 +852,7 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
             tooltip: #tooltip,
             persisted: #persisted,
             primary: #primary,
+            hidden_when: #hidden_when,
         });
     })
 }
@@ -1155,6 +1163,18 @@ mod tests {
         assert!(expanded.contains("group : \"noise\""), "{expanded}");
         assert!(expanded.contains("< Owner > :: Style"), "{expanded}");
         assert!(!expanded.contains("LazyLock"), "{expanded}");
+    }
+
+    #[test]
+    fn hidden_when_references_the_declared_condition() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(min = 0.0, max = 1.0, hidden_when = FOLLOWS_TARGET))] pub end: f32, #[persist(ui(min = 0.0, max = 1.0))] pub start: f32 }}"
+        ));
+        assert!(
+            expanded.contains("hidden_when : Some (& FOLLOWS_TARGET)"),
+            "{expanded}"
+        );
+        assert!(expanded.contains("hidden_when : None"), "{expanded}");
     }
 
     #[test]

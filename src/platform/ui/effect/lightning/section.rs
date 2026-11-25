@@ -1,4 +1,5 @@
-use thyllore_scene_core::{ScalarParam, UiParam};
+use thyllore_effect_core::lightning::END_FOLLOWS_TARGET;
+use thyllore_scene_core::{ScalarParam, UiCondition, UiParam};
 
 use crate::ecs::component::{
     AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, ScalarChannelDomain,
@@ -71,9 +72,9 @@ impl EffectPanel for LightningPanel {
         lightning_extra_head_rows(view)
     }
 
-    fn hidden_params(view: &LightningSectionView) -> Vec<&'static str> {
+    fn active_conditions(view: &LightningSectionView) -> Vec<&'static UiCondition> {
         match view.extra.target_name {
-            Some(_) => vec!["shape_end_offset"],
+            Some(_) => vec![&END_FOLLOWS_TARGET],
             None => Vec::new(),
         }
     }
@@ -144,12 +145,14 @@ mod tests {
     }
 
     #[test]
-    fn end_offset_is_hidden_only_while_a_target_aims_the_bolt() {
+    fn end_follows_target_only_while_a_target_is_linked() {
         let mut view = selected_view();
-        assert!(LightningPanel::hidden_params(&view).is_empty());
+        assert!(LightningPanel::active_conditions(&view).is_empty());
 
         view.extra.target_name = Some("Target Locator".to_string());
-        assert_eq!(LightningPanel::hidden_params(&view), ["shape_end_offset"]);
+        let active = LightningPanel::active_conditions(&view);
+        assert_eq!(active.len(), 1);
+        assert!(std::ptr::eq(active[0], &END_FOLLOWS_TARGET));
     }
 
     #[test]

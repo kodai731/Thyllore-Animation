@@ -1,6 +1,6 @@
 use crate::lightning::LightningParameterOwner;
 use serde::{Deserialize, Serialize};
-use thyllore_scene_core::SnapshotValues;
+use thyllore_scene_core::{SnapshotValues, UiCondition};
 
 pub const LIGHTNING_MAX_WAYPOINTS: usize = 8;
 
@@ -23,12 +23,16 @@ impl SnapshotValues for LightningSource {
     }
 }
 
+pub static END_FOLLOWS_TARGET: UiCondition = UiCondition {
+    description: "a target locator drives the end point of the strike",
+};
+
 /// Geometry of the main channel: where it starts and ends, and how it is subdivided.
 #[derive(Clone, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = LightningParameterOwner, owner = Frame, group = "shape")]
 pub struct LightningShape {
     /// End point of the main strike relative to the effect origin
-    #[persist(curve, debug_range = (-20.0, 20.0), ui(kind = Offset, min = -50.0, max = 50.0))]
+    #[persist(curve, debug_range = (-20.0, 20.0), ui(kind = Offset, min = -50.0, max = 50.0, hidden_when = END_FOLLOWS_TARGET))]
     pub end_offset: [f32; 3],
     #[persist]
     pub source: LightningSource,

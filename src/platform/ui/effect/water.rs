@@ -78,7 +78,7 @@ impl EffectPanel for WaterPanel {
         applied.name.clone()
     }
 
-    fn debug_rows() -> Vec<UiRow<WaterSectionView>> {
+    fn debug_rows(_view: &WaterSectionView) -> Vec<UiRow<WaterSectionView>> {
         water_debug_rows()
     }
 }

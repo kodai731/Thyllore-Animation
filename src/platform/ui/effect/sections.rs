@@ -44,7 +44,7 @@ pub(crate) fn collect_effect_sections() -> &'static [&'static EffectSectionHook]
     })
 }
 
-pub(super) trait EffectPanel: 'static {
+pub(super) trait EffectPanel: Sized + 'static {
     type Component: EffectPreset + Clone + PartialEq + Default + std::fmt::Debug + 'static;
     type RenderSettings: Clone + PartialEq + Default + std::fmt::Debug + 'static;
     type Extra: Clone + Default + 'static;
@@ -60,7 +60,7 @@ pub(super) trait EffectPanel: 'static {
 
     fn applied_preset_name(applied: &<Self::Component as EffectPreset>::Applied) -> String;
 
-    fn debug_rows() -> Vec<UiRow<PanelView<Self>>>;
+    fn debug_rows(view: &PanelView<Self>) -> Vec<UiRow<PanelView<Self>>>;
 
     fn read_extra(_world: &World, _selected: Option<Entity>) -> Self::Extra {
         Self::Extra::default()
@@ -72,6 +72,14 @@ pub(super) trait EffectPanel: 'static {
 
     fn active_conditions(_view: &PanelView<Self>) -> Vec<&'static UiCondition> {
         Vec::new()
+    }
+
+    fn param_rows(view: &PanelView<Self>) -> Vec<UiRow<Self::Component>> {
+        declared_param_rows::<Self>(view)
+    }
+
+    fn edited_effect(shown: &PanelView<Self>, view: &PanelView<Self>) -> Option<Self::Component> {
+        (view.effect != shown.effect).then(|| view.effect.clone())
     }
 
     fn commit_extra(_world: &World, _shown: &PanelView<Self>, _view: &PanelView<Self>) {}
@@ -121,15 +129,15 @@ fn effect_section_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<PanelVi
         rows.push(UiRow::Field(Box::new(FieldRows {
             scope: "effect",
             field: |view: &mut PanelView<P>| &mut view.effect,
-            rows: effect_param_rows::<P>(view),
+            rows: P::param_rows(view),
         })));
-        rows.extend(effect_tail_rows::<P>());
+        rows.extend(effect_tail_rows::<P>(view));
     }
 
     rows
 }
 
-fn effect_param_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<P::Component>> {
+pub(super) fn declared_param_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<P::Component>> {
     rows_from_params(
         P::ui_params(),
         P::scalar_params(),
@@ -196,7 +204,7 @@ pub(super) fn effect_head_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow
     rows
 }
 
-fn effect_tail_rows<P: EffectPanel>() -> Vec<UiRow<PanelView<P>>> {
+fn effect_tail_rows<P: EffectPanel>(view: &PanelView<P>) -> Vec<UiRow<PanelView<P>>> {
     vec![
         UiRow::Action {
             label: "Curves",
@@ -206,7 +214,7 @@ fn effect_tail_rows<P: EffectPanel>() -> Vec<UiRow<PanelView<P>>> {
         UiRow::Group {
             title: format!("{} Debug", P::NAME).into(),
             initially_open: false,
-            rows: P::debug_rows(),
+            rows: P::debug_rows(view),
         },
     ]
 }
@@ -233,10 +241,14 @@ pub(super) fn commit_effect_view<P: EffectPanel>(
     }
 
     if let Some(entity) = view.selected {
-        if !effect_applied_this_frame && view.effect != shown.effect {
+        let edited_effect = match effect_applied_this_frame {
+            true => None,
+            false => P::edited_effect(shown, view),
+        };
+        if let Some(effect) = edited_effect {
             world.send_command(PanelEdit::<P>::UpdateEffect {
                 entity,
-                effect: Box::new(view.effect.clone()),
+                effect: Box::new(effect),
             });
         }
 
@@ -286,7 +298,7 @@ mod tests {
             applied.name.clone()
         }
 
-        fn debug_rows() -> Vec<UiRow<PanelView<Self>>> {
+        fn debug_rows(_view: &PanelView<Self>) -> Vec<UiRow<PanelView<Self>>> {
             Vec::new()
         }
 
@@ -340,7 +352,7 @@ mod tests {
 
     #[test]
     fn tail_rows_show_curves_before_the_debug_group() {
-        let rows = effect_tail_rows::<ExtendedPanel>();
+        let rows = effect_tail_rows::<ExtendedPanel>(&unselected_view(None));
         assert_eq!(visible_labels(&rows), ["Curves"]);
 
         let Some(UiRow::Group { title, .. }) = rows.last() else {

@@ -44,7 +44,7 @@ impl EffectPanel for LightningPanel {
         applied.name.clone()
     }
 
-    fn debug_rows() -> Vec<UiRow<LightningSectionView>> {
+    fn debug_rows(_view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
         lightning_debug_rows()
     }
 

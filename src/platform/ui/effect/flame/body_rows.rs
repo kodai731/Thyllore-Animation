@@ -1,74 +1,47 @@
-use thyllore_effect_core::flame::{emitter_ui_conditions, FlameEffect, FlameEmitterKind};
+use thyllore_effect_core::flame::{FlameEffect, FlameEmitterKind};
 
-use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
+use crate::ecs::resource::{FlameDebugView, FlameShadingMode};
 use crate::ecs::systems::flame::FlameUiCommand;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
 
-use crate::platform::ui::param_widgets::rows_from_params;
-use crate::platform::ui::ui_rows::{ChoiceOption, FieldRows, UiRow};
+use super::section_view::FlameSectionView;
+use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
 
-#[derive(Clone, Default)]
-pub(super) struct FlameBodyView {
-    pub effect: FlameEffect,
-    pub trail_enabled: bool,
-    pub trail_fade: f32,
-    pub render: FlameRenderSettings,
-    pub jitter: f32,
-    pub jitter_freq: f32,
-    pub viewport_size: [f32; 2],
-    pub gpu_timings: Vec<(String, f32)>,
-}
-
-pub(super) fn body_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
-    let mut rows = emitter_rows();
-    rows.push(UiRow::Field(Box::new(FieldRows {
-        scope: "effect",
-        field: |view: &mut FlameBodyView| &mut view.effect,
-        rows: flame_param_rows(&view.effect),
-    })));
-    rows.extend(body_action_rows());
-    rows.extend(debug_rows(view));
-    rows
-}
-
-fn emitter_rows() -> Vec<UiRow<FlameBodyView>> {
+fn emitter_rows() -> Vec<UiRow<FlameEffect>> {
     vec![
         UiRow::Vector3 {
             label: "Position",
             speed: 0.1,
             format: "%.2f",
-            get: |view| view.effect.position.into(),
-            set: |view, position| {
-                view.effect.position = position.into();
+            get: |effect| effect.position.into(),
+            set: |effect, position| {
+                effect.position = position.into();
             },
         },
         UiRow::Choice {
             label: "Emitter",
-            options: |_world, view| {
+            options: |_world, effect| {
                 FlameEmitterKind::ALL
                     .iter()
                     .map(|&kind| ChoiceOption {
                         label: kind.label().to_string(),
-                        selected: kind == view.effect.emitter.kind,
+                        selected: kind == effect.emitter.kind,
                     })
                     .collect()
             },
-            pick: |view, index| {
+            pick: |effect, index| {
                 if let Some(&kind) = FlameEmitterKind::ALL.get(index) {
-                    view.effect.emitter.kind = kind;
+                    effect.emitter.kind = kind;
                 }
             },
         },
     ]
 }
 
-fn flame_param_rows(effect: &FlameEffect) -> Vec<UiRow<FlameEffect>> {
-    let mut rows = rows_from_params(
-        &thyllore_effect_core::flame::FLAME_UI_PARAMS,
-        &thyllore_effect_core::flame::FLAME_SCALAR_PARAMS,
-        &emitter_ui_conditions(&effect.emitter),
-    );
+pub(super) fn flame_param_rows(declared_rows: Vec<UiRow<FlameEffect>>) -> Vec<UiRow<FlameEffect>> {
+    let mut rows = emitter_rows();
+    rows.extend(declared_rows);
     rows.push(UiRow::Group {
         title: "Macros".into(),
         initially_open: false,
@@ -124,7 +97,7 @@ fn macro_rows() -> Vec<UiRow<FlameEffect>> {
     ]
 }
 
-fn body_action_rows() -> Vec<UiRow<FlameBodyView>> {
+fn key_rows() -> Vec<UiRow<FlameSectionView>> {
     vec![
         UiRow::Action {
             label: "Clear Flame Keys",
@@ -142,16 +115,16 @@ fn body_action_rows() -> Vec<UiRow<FlameBodyView>> {
                 Box::new(ScalarCurveEvent::InsertScalarDebugKeys { seed })
             },
         },
-        UiRow::Action {
-            label: "Curves",
-            enabled: |_world, _view| true,
-            on_click: |_view| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
-        },
+    ]
+}
+
+fn trail_rows() -> Vec<UiRow<FlameSectionView>> {
+    vec![
         UiRow::Toggle {
             label: "Trail",
-            get: |view| view.trail_enabled,
+            get: |view| view.extra.trail_enabled,
             set: |view, enabled| {
-                view.trail_enabled = enabled;
+                view.extra.trail_enabled = enabled;
             },
         },
         UiRow::Slider {
@@ -159,28 +132,16 @@ fn body_action_rows() -> Vec<UiRow<FlameBodyView>> {
             min: 0.1,
             max: 5.0,
             format: "%.2f",
-            get: |view| view.trail_fade,
+            get: |view| view.extra.trail_fade,
             set: |view, fade| {
-                view.trail_fade = fade;
+                view.extra.trail_fade = fade;
             },
         },
-        UiRow::Canvas(draw_gpu_timings),
     ]
 }
 
-fn draw_gpu_timings(ui: &imgui::Ui, _world: &World, view: &FlameBodyView) {
-    if view.gpu_timings.is_empty() {
-        return;
-    }
-    ui.separator();
-    ui.text("GPU Timings");
-    for (label, ms) in &view.gpu_timings {
-        ui.text(format!("  {} {:.3} ms", label, ms));
-    }
-}
-
-fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
-    let mut rows: Vec<UiRow<FlameBodyView>> = vec![
+fn shading_rows(shading_mode: FlameShadingMode) -> Vec<UiRow<FlameSectionView>> {
+    let mut rows: Vec<UiRow<FlameSectionView>> = vec![
         UiRow::Choice {
             label: "Shading Mode",
             options: |_world, view| {
@@ -220,9 +181,9 @@ fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
             min: 0.0,
             max: 2.0,
             format: "%.3f",
-            get: |view| view.jitter,
+            get: |view| view.extra.jitter,
             set: |view, jitter| {
-                view.jitter = jitter;
+                view.extra.jitter = jitter;
             },
         },
         UiRow::Slider {
@@ -230,35 +191,52 @@ fn debug_rows(view: &FlameBodyView) -> Vec<UiRow<FlameBodyView>> {
             min: 0.25,
             max: 6.0,
             format: "%.3f",
-            get: |view| view.jitter_freq,
+            get: |view| view.extra.jitter_freq,
             set: |view, jitter_freq| {
-                view.jitter_freq = jitter_freq;
+                view.extra.jitter_freq = jitter_freq;
             },
         },
     ];
-
-    rows.extend(step_count_row(view.render.shading_mode));
-    rows.push(UiRow::Action {
-        label: "Dump Probe",
-        enabled: |_world, _view| true,
-        on_click: |view| {
-            Box::new(FlameUiCommand::DumpWallProbe {
-                viewport_size: view.viewport_size,
-            })
-        },
-    });
-    rows.push(UiRow::Tooltip(
-        "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-    ));
-
-    vec![UiRow::Group {
-        title: "Flame Debug".into(),
-        initially_open: false,
-        rows,
-    }]
+    rows.extend(step_count_row(shading_mode));
+    rows
 }
 
-fn step_count_row(shading_mode: FlameShadingMode) -> Option<UiRow<FlameBodyView>> {
+fn dump_rows() -> Vec<UiRow<FlameSectionView>> {
+    vec![
+        UiRow::Action {
+            label: "Dump Probe",
+            enabled: |_world, _view| true,
+            on_click: |view| {
+                Box::new(FlameUiCommand::DumpWallProbe {
+                    viewport_size: view.extra.viewport_size,
+                })
+            },
+        },
+        UiRow::Tooltip("Dump camera pose + wall-regime ray diagnostics to log/flame/"),
+        UiRow::Canvas(draw_gpu_timings),
+    ]
+}
+
+fn draw_gpu_timings(ui: &imgui::Ui, _world: &World, view: &FlameSectionView) {
+    if view.extra.gpu_timings.is_empty() {
+        return;
+    }
+    ui.separator();
+    ui.text("GPU Timings");
+    for (label, ms) in &view.extra.gpu_timings {
+        ui.text(format!("  {} {:.3} ms", label, ms));
+    }
+}
+
+pub(super) fn flame_debug_rows(view: &FlameSectionView) -> Vec<UiRow<FlameSectionView>> {
+    let mut rows = key_rows();
+    rows.extend(trail_rows());
+    rows.extend(shading_rows(view.render.shading_mode));
+    rows.extend(dump_rows());
+    rows
+}
+
+fn step_count_row(shading_mode: FlameShadingMode) -> Option<UiRow<FlameSectionView>> {
     match shading_mode {
         FlameShadingMode::ReferenceRaymarch => Some(UiRow::IntSlider {
             label: "Reference Steps",
@@ -286,121 +264,38 @@ fn step_count_row(shading_mode: FlameShadingMode) -> Option<UiRow<FlameBodyView>
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
+    use super::super::section_view::FlameExtra;
     use super::*;
-    use crate::platform::ui::ui_rows::visible_labels;
+    use crate::ecs::resource::FlameRenderSettings;
+    use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
-    fn body_view(kind: FlameEmitterKind, shading_mode: FlameShadingMode) -> FlameBodyView {
-        let mut effect = FlameEffect::default();
-        effect.emitter.kind = kind;
-        FlameBodyView {
-            effect,
-            trail_enabled: false,
-            trail_fade: 0.8,
+    fn view_with_shading(shading_mode: FlameShadingMode) -> FlameSectionView {
+        FlameSectionView {
+            instances: vec!["Flame 1".to_string()],
+            instance_index: 0,
+            preset: None,
+            selected: Some(0),
+            effect: FlameEffect::default(),
             render: FlameRenderSettings {
                 shading_mode,
                 ..FlameRenderSettings::default()
             },
-            jitter: 1.0,
-            jitter_freq: 3.0,
-            viewport_size: [800.0, 600.0],
-            gpu_timings: Vec::new(),
-        }
-    }
-
-    fn assert_unique(labels: &[&str]) {
-        let unique: HashSet<&&str> = labels.iter().collect();
-        assert_eq!(unique.len(), labels.len(), "duplicate labels in {labels:?}");
-    }
-
-    fn group_rows<'a, C>(rows: &'a [UiRow<C>], group_title: &str) -> &'a [UiRow<C>] {
-        rows.iter()
-            .find_map(|row| match row {
-                UiRow::Group { title, rows, .. } if *title == group_title => Some(rows.as_slice()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("missing group {group_title}"))
-    }
-
-    #[test]
-    fn body_rows_run_emitter_params_actions_then_debug() {
-        let rows = body_rows(&body_view(
-            FlameEmitterKind::Cylinder,
-            FlameShadingMode::Analytic,
-        ));
-        let labels = visible_labels(&rows);
-        assert_eq!(&labels[..2], ["Position", "Emitter"]);
-        assert_eq!(labels[labels.len() - 1], "Trail Fade");
-        assert!(matches!(rows[2], UiRow::Field(_)));
-        let UiRow::Group { title, .. } = rows.last().unwrap() else {
-            panic!("last row is not the debug group");
-        };
-        assert_eq!(&**title, "Flame Debug");
-    }
-
-    const RING_PARAM_NAMES: [&str; 2] = ["emitter_ring_major_radius", "emitter_ring_angular_speed"];
-
-    fn effect_with_emitter(kind: FlameEmitterKind) -> FlameEffect {
-        let mut effect = FlameEffect::default();
-        effect.emitter.kind = kind;
-        effect
-    }
-
-    #[test]
-    fn emitter_rows_show_position_then_emitter_choice() {
-        assert_eq!(visible_labels(&emitter_rows()), ["Position", "Emitter"]);
-    }
-
-    #[test]
-    fn ring_params_lead_the_params_only_for_a_ring_emitter() {
-        let ring_rows = flame_param_rows(&effect_with_emitter(FlameEmitterKind::Ring));
-        assert_eq!(visible_labels(&ring_rows)[..2], RING_PARAM_NAMES);
-
-        for kind in [FlameEmitterKind::Cylinder, FlameEmitterKind::MeshSdf] {
-            let rows = flame_param_rows(&effect_with_emitter(kind));
-            let labels = visible_labels(&rows);
-            assert!(
-                RING_PARAM_NAMES.iter().all(|name| !labels.contains(name)),
-                "{kind:?}: {labels:?}"
-            );
+            extra: FlameExtra::default(),
         }
     }
 
     #[test]
-    fn macros_follow_the_declared_params_in_their_own_group() {
-        let rows = flame_param_rows(&FlameEffect::default());
-        let UiRow::Group { title, rows, .. } = rows.last().unwrap() else {
+    fn param_rows_wrap_the_declared_rows_between_emitter_and_macros() {
+        let declared_rows = vec![UiRow::Heading("declared")];
+        let rows = flame_param_rows(declared_rows);
+
+        assert_eq!(visible_labels(&rows), ["Position", "Emitter"]);
+        assert!(matches!(rows[2], UiRow::Heading("declared")));
+        let Some(UiRow::Group { title, rows, .. }) = rows.last() else {
             panic!("last row is not the macro group");
         };
         assert_eq!(&**title, "Macros");
         assert_eq!(visible_labels(rows), ["Noise Sharpness", "Vortex"]);
-    }
-
-    #[test]
-    fn whole_number_params_come_from_the_declaration() {
-        let rows = flame_param_rows(&FlameEffect::default());
-        let advanced = visible_labels(group_rows(&rows, "Advanced"));
-        assert!(advanced.contains(&"branch_seed"), "{advanced:?}");
-        assert_eq!(advanced.last(), Some(&"wave_segments"));
-        assert_unique(&advanced);
-    }
-
-    #[test]
-    fn action_rows_keep_their_order() {
-        let rows = body_action_rows();
-        let labels = visible_labels(&rows);
-        assert_eq!(
-            labels,
-            [
-                "Clear Flame Keys",
-                "Random Keys (Debug)",
-                "Curves",
-                "Trail",
-                "Trail Fade"
-            ]
-        );
-        assert_unique(&labels);
     }
 
     #[test]
@@ -411,15 +306,22 @@ mod tests {
             (FlameShadingMode::NoiseRaymarch, Some("Noise Steps")),
         ];
         for (shading_mode, step_label) in cases {
-            let rows = debug_rows(&body_view(FlameEmitterKind::Cylinder, shading_mode));
-            assert_eq!(rows.len(), 1);
+            let rows = flame_debug_rows(&view_with_shading(shading_mode));
 
-            let mut expected = vec!["Shading Mode", "Debug View", "Jitter Depth", "Jitter Freq"];
+            let mut expected = vec![
+                "Clear Flame Keys",
+                "Random Keys (Debug)",
+                "Trail",
+                "Trail Fade",
+                "Shading Mode",
+                "Debug View",
+                "Jitter Depth",
+                "Jitter Freq",
+            ];
             expected.extend(step_label);
             expected.push("Dump Probe");
-            let debug_labels = visible_labels(group_rows(&rows, "Flame Debug"));
-            assert_eq!(debug_labels, expected);
-            assert_unique(&debug_labels);
+            assert_eq!(visible_labels(&rows), expected);
+            assert!(find_duplicate_labels(&rows).is_empty());
         }
     }
 }

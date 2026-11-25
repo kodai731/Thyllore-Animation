@@ -119,7 +119,7 @@ impl EffectPanel for WindPanel {
         applied.name.clone()
     }
 
-    fn debug_rows() -> Vec<UiRow<WindSectionView>> {
+    fn debug_rows(_view: &WindSectionView) -> Vec<UiRow<WindSectionView>> {
         wind_debug_rows()
     }
 }

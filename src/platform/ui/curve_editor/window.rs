@@ -1,3 +1,4 @@
+use crate::ecs::component::Icon;
 use crate::ecs::component::ScalarChannelDomain;
 use crate::ecs::resource::{
     AxisLock, ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState,
@@ -8,7 +9,6 @@ use crate::ecs::systems::phases::event_dispatch::pose_library::PoseLibraryEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::pointer::read_ui_pointer;
-use crate::platform::ui::theme::Icon;
 use crate::platform::ui::theme::{icon_button, ButtonState};
 use thyllore_anim_core::editable::{curve_sample, EditableAnimationClip, PropertyType};
 use thyllore_anim_core::BoneId;

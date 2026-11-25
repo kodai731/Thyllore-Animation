@@ -1,3 +1,5 @@
+use super::icon::Icon;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum EntityIcon {
     #[default]
@@ -9,7 +11,7 @@ pub enum EntityIcon {
     Grid,
     Gizmo,
     Billboard,
-    Effect(char),
+    Effect(Icon),
 }
 
 #[derive(Clone, Debug, Default)]

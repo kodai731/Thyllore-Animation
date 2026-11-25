@@ -1,5 +1,5 @@
 use super::*;
-use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect};
+use crate::ecs::component::{EditorDisplay, EntityIcon, Icon, WindTornadoEffect};
 use crate::ecs::resource::{HierarchyState, PickRay, WindRenderSettings};
 use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
@@ -19,7 +19,7 @@ fn spawned_wind_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<WindTornadoEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Effect('T'));
+    assert_eq!(display.icon, EntityIcon::Effect(Icon::Wind));
 }
 
 #[test]

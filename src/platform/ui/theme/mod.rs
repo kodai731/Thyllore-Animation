@@ -9,7 +9,7 @@ mod widgets;
 
 pub(crate) use elevation::{draw_raised_window_frame, push_raised_window_style};
 pub use fonts::UiFonts;
-pub(crate) use icons::{entity_icon, Icon};
+pub(crate) use icons::entity_icon;
 pub(crate) use style::{apply_thyllore_style, apply_ui_settings};
 pub(crate) use widgets::icon_button;
 pub(crate) use widgets::search_field;

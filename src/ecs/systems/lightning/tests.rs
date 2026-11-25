@@ -2,7 +2,7 @@ use super::passes::compute_lightning_scissor;
 use super::test_support::{lightning_inside_first_burst, orthographic_projection};
 use super::*;
 use crate::ecs::component::{
-    EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
+    EditorDisplay, EntityIcon, Icon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
 use crate::ecs::systems::effect_edit::{apply_effect_preset, resolve_selected_effect};
@@ -32,7 +32,7 @@ fn spawned_lightning_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<LightningEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Effect('Z'));
+    assert_eq!(display.icon, EntityIcon::Effect(Icon::Zap));
 }
 
 #[test]

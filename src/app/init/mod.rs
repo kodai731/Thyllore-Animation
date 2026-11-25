@@ -1,5 +1,7 @@
-pub mod instance;
+mod gizmo;
+mod graphics;
+mod imgui;
+mod instance;
 mod onion_skin;
 pub mod raytracing;
-
-pub use instance::*;
+mod startup_scene;

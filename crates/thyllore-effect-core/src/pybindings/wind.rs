@@ -3,11 +3,10 @@ use super::effect::{
     inverse_view_proj_from_column_major, ParameterOwnerName,
 };
 use crate::wind::{
-    build_wind_model_matrix, build_wind_ubo, wind_local_bounds_corners, WindRenderSettings,
-    WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
+    build_wind_model_matrix, build_wind_ubo, wind_local_bounds_corners, WindParameterOwner,
+    WindRenderSettings, WindShadowSlot, WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET,
 };
-use crate::WindParameterOwner;
-use cgmath::Vector4;
+use glam::Vec4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -33,13 +32,13 @@ declare_effect_pyfunctions! {
 }
 
 #[pyfunction]
-pub fn wind_default_preset() -> &'static str {
+pub(super) fn wind_default_preset() -> &'static str {
     WIND_DEFAULT_PRESET
 }
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj))]
-pub fn pack_wind_ubo(
+pub(super) fn pack_wind_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -50,14 +49,14 @@ pub fn pack_wind_ubo(
 ) -> PyResult<Vec<u8>> {
     let effect: WindTornadoEffect = build_effect_from_params(py, params, time, position, rotation)?;
     let mut ubo = build_wind_ubo(&effect, WindShadowSlot(0));
-    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj);
+    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj).into();
     Ok(gpu_block_bytes(&ubo))
 }
 
 /// World-space corners of the envelope box the engine picks and scissors the wind pass against.
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation))]
-pub fn wind_bounds_corners(
+pub(super) fn wind_bounds_corners(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -72,19 +71,19 @@ pub fn wind_bounds_corners(
     Ok(wind_local_bounds_corners(&ubo)
         .iter()
         .map(|corner| {
-            let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+            let world = model * Vec4::new(corner.x, corner.y, corner.z, 1.0);
             [world.x, world.y, world.z]
         })
         .collect())
 }
 
 #[pyfunction]
-pub fn wind_ubo_size() -> usize {
+pub(super) fn wind_ubo_size() -> usize {
     std::mem::size_of::<WindUBO>()
 }
 
 /// Resolution divisor of the engine's default wind resolve scale (1 = full, 2 = half).
 #[pyfunction]
-pub fn wind_resolve_divisor() -> u32 {
+pub(super) fn wind_resolve_divisor() -> u32 {
     WindRenderSettings::default().resolve_scale.divisor()
 }

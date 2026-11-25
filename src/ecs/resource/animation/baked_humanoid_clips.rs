@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
 use crate::asset::AssetId;
 use crate::ecs::resource::ClipPreview;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 #[derive(Default)]
 pub struct BakedHumanoidClips {
@@ -13,6 +13,8 @@ pub struct BakedHumanoidClips {
     pub scan_requested: bool,
     pub last_view: Option<(Option<SourceClipId>, ClipPreview, u32)>,
 }
+
+crate::startup_resource!(BakedHumanoidClips, Editor);
 
 pub struct BakedHumanoidClip {
     pub fps: u32,
@@ -61,8 +63,8 @@ mod tests {
     use super::*;
 
     fn make_entry(
-        source_id: SourceClipId,
-        entity: crate::ecs::world::Entity,
+        _source_id: SourceClipId,
+        _entity: crate::ecs::world::Entity,
         asset_id: AssetId,
     ) -> BakedHumanoidClip {
         BakedHumanoidClip {

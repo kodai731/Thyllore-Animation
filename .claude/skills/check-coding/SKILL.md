@@ -16,7 +16,7 @@ defined in `.claude/rules/coding.md`.
 ```
 /check-coding
 /check-coding src/ecs/systems/animation_systems.rs
-/check-coding src/exporter/
+/check-coding crates/thyllore-exporter-core/
 ```
 
 ## Target

@@ -1,12 +1,9 @@
 mod effect;
 mod flame;
 mod lightning;
+mod registration;
 mod water;
 mod wind;
-
-pub(crate) use effect::{ParameterOwnerName, PyEffect};
-
-use pyo3::prelude::*;
 
 #[cfg(test)]
 use flame::{
@@ -19,16 +16,6 @@ use lightning::{lightning_preset_names, lightning_preset_params, pack_lightning_
 use water::water_ui_params;
 #[cfg(test)]
 use wind::{pack_wind_ubo, wind_preset_params};
-
-#[pymodule]
-fn thyllore_effect_core(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(effect::blender_to_engine_matrix, m)?)?;
-    flame::register(m)?;
-    lightning::register(m)?;
-    water::register(m)?;
-    wind::register(m)?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests;

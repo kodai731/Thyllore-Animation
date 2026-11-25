@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use serde_json::json;
-use thyllore_effect_core::flame_sdf::*;
+use thyllore_effect_core::flame::*;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

@@ -15,6 +15,11 @@ pub fn mix(a: f32, b: f32, t: f32) -> f32 {
     a * (1.0 - t) + b * t
 }
 
+/// Linear interpolation `from + (to - from) * weight`.
+pub fn lerp(from: f32, to: f32, weight: f32) -> f32 {
+    from + (to - from) * weight
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -24,6 +29,13 @@ mod tests {
         assert_eq!(smoothstep(1.0, 2.0, 0.5), 0.0);
         assert_eq!(smoothstep(1.0, 2.0, 3.0), 1.0);
         assert!((smoothstep(1.0, 2.0, 1.5) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lerp_hits_both_ends() {
+        assert_eq!(lerp(2.0, 6.0, 0.0), 2.0);
+        assert_eq!(lerp(2.0, 6.0, 1.0), 6.0);
+        assert!((lerp(2.0, 6.0, 0.25) - 3.0).abs() < 1e-6);
     }
 
     #[test]

@@ -1,15 +1,16 @@
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
-use crate::animation::editable::SourceClipId;
-use crate::animation::{Skeleton, SkeletonId, SkinData};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{
     ClipLibrary, GhostFrameInfo, GhostMeshData, OnionSkinningConfig, OnionSkinningResult,
 };
+use crate::ecs::systems::sample_clip_to_pose;
 use crate::ecs::world::{Animator, World};
-use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
-use crate::vulkanr::data::Vertex;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_anim_core::{Skeleton, SkeletonId, SkinData};
+use thyllore_vulkan_core::data::Vertex;
 
 pub struct OnionSkinMeshContext<'a> {
     pub base_vertices: &'a [Vertex],
@@ -199,14 +200,14 @@ fn compute_single_ghost(
 
 fn apply_skinning_to_vertices(
     skin_data: &SkinData,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     skeleton: &Skeleton,
     base_vertices: &[Vertex],
 ) -> Vec<Vertex> {
     let vertex_count = skin_data.base_positions.len();
 
-    let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-    let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+    let mut skinned_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+    let mut skinned_normals = vec![Vec3::new(0.0, 1.0, 0.0); vertex_count];
 
     let _ = thyllore_model_core::apply_skinning(
         skin_data,
@@ -327,10 +328,10 @@ mod tests {
 
     #[test]
     fn test_compute_ghosts_returns_empty_when_disabled() {
-        use crate::animation::SkinData;
         use crate::asset::AssetStorage;
         use crate::ecs::resource::ClipLibrary;
-        use crate::ecs::World;
+        use crate::ecs::world::World;
+        use thyllore_anim_core::SkinData;
 
         let config = OnionSkinningConfig::default();
         let world = World::new();
@@ -350,10 +351,10 @@ mod tests {
 
     #[test]
     fn test_compute_ghosts_returns_empty_with_no_entities() {
-        use crate::animation::SkinData;
         use crate::asset::AssetStorage;
         use crate::ecs::resource::ClipLibrary;
-        use crate::ecs::World;
+        use crate::ecs::world::World;
+        use thyllore_anim_core::SkinData;
 
         let mut config = OnionSkinningConfig::default();
         config.enabled = true;

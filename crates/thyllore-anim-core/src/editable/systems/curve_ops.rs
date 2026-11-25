@@ -1,9 +1,7 @@
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::{CurveExtrapolation, PropertyCurve, PropertyType};
-use crate::editable::components::keyframe::{
-    BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
-};
-use crate::editable::systems::tangent::{apply_auto_tangent, sample_bezier, split_bezier};
+use crate::editable::EditableAnimationClip;
+use crate::editable::{apply_auto_tangent, sample_bezier, split_bezier};
+use crate::editable::{BezierHandle, EditableKeyframe, InterpolationType, KeyframeId};
+use crate::editable::{CurveExtrapolation, PropertyCurve, PropertyType};
 use crate::BoneId;
 
 enum CurveEnd {
@@ -723,9 +721,9 @@ mod tests {
     fn preserving_shape_keeps_mixed_linear_bezier_segments() {
         let mut curve = PropertyCurve::new(1, PropertyType::TranslationX);
 
-        let id0 = curve_add_keyframe(&mut curve, 0.0, 0.0);
+        let _id0 = curve_add_keyframe(&mut curve, 0.0, 0.0);
         let id1 = curve_add_keyframe(&mut curve, 1.0, 4.0);
-        let id2 = curve_add_keyframe(&mut curve, 2.0, 1.0);
+        let _id2 = curve_add_keyframe(&mut curve, 2.0, 1.0);
 
         curve.keyframes[0].interpolation = InterpolationType::Linear;
         curve.keyframes[2].interpolation = InterpolationType::Linear;

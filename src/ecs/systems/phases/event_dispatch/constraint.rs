@@ -1,8 +1,8 @@
-use crate::animation::{ConstraintId, ConstraintType};
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum ConstraintEvent {
@@ -13,6 +13,7 @@ pub enum ConstraintEvent {
     Add {
         entity: Entity,
         constraint_type_index: u8,
+        constrained_bone: Option<BoneId>,
     },
     Remove {
         entity: Entity,
@@ -66,7 +67,7 @@ fn dispatch_debug_constraint_events(
                     .get_resource::<crate::ecs::resource::SpringBoneState>()
                     .map_or(false, |s| s.baked_clip_source_id.is_some());
                 if is_baked {
-                    super::spring_bone::handle_spring_bone_discard(world, assets);
+                    super::spring_bone::handle_spring_bone_discard(world);
                 }
                 clear_spring_bones(world);
             }
@@ -85,8 +86,9 @@ fn dispatch_constraint_edit_events(events: &[ConstraintEvent], world: &mut World
             ConstraintEvent::Add {
                 entity,
                 constraint_type_index,
+                constrained_bone,
             } => {
-                handle_constraint_add(world, *entity, *constraint_type_index);
+                handle_constraint_add(world, *entity, *constraint_type_index, *constrained_bone);
             }
             ConstraintEvent::Remove {
                 entity,
@@ -147,7 +149,7 @@ fn dispatch_constraint_bake_events(
             let clip_library = world.resource::<ClipLibrary>();
             match clip_library.get(source_id) {
                 Some(editable) => {
-                    let anim_clip = crate::animation::editable::clip_to_animation(editable);
+                    let anim_clip = thyllore_anim_core::editable::clip_to_animation(editable);
                     let source_name = editable.name.clone();
                     drop(clip_library);
 

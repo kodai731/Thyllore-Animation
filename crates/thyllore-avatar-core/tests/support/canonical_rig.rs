@@ -1,12 +1,12 @@
 #![cfg(test)]
 #[derive(Clone, Copy, Debug)]
-pub struct CanonicalBone {
+pub(crate) struct CanonicalBone {
     pub role: &'static str,
     pub parent: Option<usize>,
     pub position: [f32; 3],
 }
 
-pub fn canonical_bones() -> Vec<CanonicalBone> {
+pub(crate) fn canonical_bones() -> Vec<CanonicalBone> {
     vec![
         CanonicalBone {
             role: "Hips",

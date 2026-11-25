@@ -1,1 +1,1 @@
-pub mod stats;
+pub(crate) mod stats;

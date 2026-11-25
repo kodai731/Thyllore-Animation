@@ -1,11 +1,11 @@
-use crate::animation::editable::SourceClipId;
-use crate::animation::{BoneId, Skeleton};
-use crate::asset::storage::AssetStorage;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::resource::{ClipLibrary, NodeAssets};
 use crate::ecs::world::{Entity, MeshRef, Name, World};
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{BoneId, Skeleton};
 
 pub fn query_clip_tracks(
     world: &World,
@@ -39,11 +39,8 @@ pub fn query_clip_tracks(
                     .unwrap_or_else(|| format!("Clip {}", inst.source_id));
 
                 let group_id =
-                    crate::ecs::systems::clip_schedule_systems::clip_schedule_find_group(
-                        schedule,
-                        inst.instance_id,
-                    )
-                    .map(|g| g.id);
+                    crate::ecs::systems::clip_schedule_find_group(schedule, inst.instance_id)
+                        .map(|g| g.id);
 
                 ClipInstanceSnapshot {
                     instance_id: inst.instance_id,
@@ -123,7 +120,7 @@ fn find_node_name_by_index(world: &World, node_index: usize) -> Option<String> {
 fn find_ancestor_with_track(
     skeleton: &Skeleton,
     bone_id: BoneId,
-    clip: &crate::animation::editable::EditableAnimationClip,
+    clip: &thyllore_anim_core::editable::EditableAnimationClip,
 ) -> Option<BoneId> {
     let mut current = bone_id;
     for _ in 0..skeleton.bones.len() {

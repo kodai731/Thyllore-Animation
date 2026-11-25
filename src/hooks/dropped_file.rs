@@ -4,16 +4,16 @@ pub type DroppedFileHandler = fn(&mut World, &str);
 
 #[derive(Clone, Copy)]
 pub struct DroppedFileHook {
-    pub extension: &'static str,
+    pub file_name_suffix: &'static str,
     pub apply: DroppedFileHandler,
 }
 
 #[macro_export]
 macro_rules! dropped_file_hook {
-    ($ext:literal, $handler:path) => {
+    ($file_name_suffix:literal, $handler:path) => {
         inventory::submit! {
             $crate::hooks::dropped_file::DroppedFileHook {
-                extension: $ext,
+                file_name_suffix: $file_name_suffix,
                 apply: $handler,
             }
         }
@@ -22,11 +22,14 @@ macro_rules! dropped_file_hook {
 
 inventory::collect!(DroppedFileHook);
 
-pub fn find_dropped_file_hook(extension: &str) -> Option<DroppedFileHandler> {
+/// A hook names the whole ending of the files it takes, so `.anim.ron` leaves other `.ron` files alone.
+pub fn find_dropped_file_hook(file_path: &str) -> Option<DroppedFileHandler> {
+    let lowercase_path = file_path.to_ascii_lowercase();
+
     inventory::iter::<DroppedFileHook>
         .into_iter()
         .copied()
-        .find(|hook| hook.extension == extension)
+        .find(|hook| lowercase_path.ends_with(hook.file_name_suffix))
         .map(|hook| hook.apply)
 }
 
@@ -36,11 +39,12 @@ mod tests {
 
     fn record_probe_drop(_world: &mut World, _path: &str) {}
 
-    crate::dropped_file_hook!("probetest", record_probe_drop);
+    crate::dropped_file_hook!(".probe.test", record_probe_drop);
 
     #[test]
-    fn test_find_hook_by_registered_extension() {
-        assert!(find_dropped_file_hook("probetest").is_some());
-        assert!(find_dropped_file_hook("no-such-extension").is_none());
+    fn hook_takes_the_files_ending_in_its_suffix() {
+        assert!(find_dropped_file_hook("dir/Clip.PROBE.test").is_some());
+        assert!(find_dropped_file_hook("dir/clip.other.test").is_none());
+        assert!(find_dropped_file_hook("dir/no-such-extension").is_none());
     }
 }

@@ -1,4 +1,4 @@
-use crate::ml::{InferenceActorId, InferenceModelKind};
+use thyllore_ml_core::{InferenceActorId, InferenceModelKind};
 
 #[derive(Clone, Debug)]
 pub struct InferenceActorSetup {

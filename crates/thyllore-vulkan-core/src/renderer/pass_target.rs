@@ -39,31 +39,51 @@ pub enum TargetRef {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ShaderStage {
+pub enum AccessStage {
     Fragment,
     Compute,
     RayTracing,
 }
 
-impl ShaderStage {
+impl AccessStage {
     fn pipeline_stage(self) -> vk::PipelineStageFlags {
         match self {
-            ShaderStage::Fragment => vk::PipelineStageFlags::FRAGMENT_SHADER,
-            ShaderStage::Compute => vk::PipelineStageFlags::COMPUTE_SHADER,
-            ShaderStage::RayTracing => vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            AccessStage::Fragment => vk::PipelineStageFlags::FRAGMENT_SHADER,
+            AccessStage::Compute => vk::PipelineStageFlags::COMPUTE_SHADER,
+            AccessStage::RayTracing => vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+        }
+    }
+}
+
+impl From<AccessStage> for vk::PipelineStageFlags {
+    fn from(stage: AccessStage) -> Self {
+        stage.pipeline_stage()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AttachmentStart {
+    Discard,
+    Sampled,
+    ColorAttachment,
+}
+
+impl AttachmentStart {
+    fn initial_layout(self) -> vk::ImageLayout {
+        match self {
+            AttachmentStart::Discard => vk::ImageLayout::UNDEFINED,
+            AttachmentStart::Sampled => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            AttachmentStart::ColorAttachment => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TargetAccess {
-    Attachment {
-        initial_layout: vk::ImageLayout,
-        final_layout: vk::ImageLayout,
-    },
-    Sampled(ShaderStage),
-    StorageRead(ShaderStage),
-    StorageReadWrite(ShaderStage),
+    Attachment(AttachmentStart),
+    Sampled(AccessStage),
+    StorageRead(AccessStage),
+    StorageReadWrite(AccessStage),
     TransferSrc,
     TransferDst,
 }
@@ -174,8 +194,8 @@ const UNKNOWN_STATE: ImageState = ImageState {
 impl TargetAccess {
     fn entry_state(self) -> ImageState {
         match self {
-            TargetAccess::Attachment { initial_layout, .. } => ImageState {
-                layout: initial_layout,
+            TargetAccess::Attachment(start) => ImageState {
+                layout: start.initial_layout(),
                 stage: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 access: vk::AccessFlags::COLOR_ATTACHMENT_READ
                     | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
@@ -216,8 +236,8 @@ impl TargetAccess {
 
     fn exit_state(self) -> ImageState {
         let mut state = self.entry_state();
-        if let TargetAccess::Attachment { final_layout, .. } = self {
-            state.layout = final_layout;
+        if let TargetAccess::Attachment(_) = self {
+            state.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
         }
         state
     }
@@ -225,17 +245,17 @@ impl TargetAccess {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PendingBarrier {
-    pub src_stage: vk::PipelineStageFlags,
-    pub dst_stage: vk::PipelineStageFlags,
-    pub image: vk::Image,
-    pub old_layout: vk::ImageLayout,
-    pub new_layout: vk::ImageLayout,
-    pub src_access: vk::AccessFlags,
-    pub dst_access: vk::AccessFlags,
+    pub(crate) src_stage: vk::PipelineStageFlags,
+    pub(crate) dst_stage: vk::PipelineStageFlags,
+    pub(crate) image: vk::Image,
+    pub(crate) old_layout: vk::ImageLayout,
+    pub(crate) new_layout: vk::ImageLayout,
+    pub(crate) src_access: vk::AccessFlags,
+    pub(crate) dst_access: vk::AccessFlags,
 }
 
 impl PendingBarrier {
-    pub fn image_memory_barrier(&self) -> vk::ImageMemoryBarrier {
+    pub(crate) fn image_memory_barrier(&self) -> vk::ImageMemoryBarrier {
         vk::ImageMemoryBarrier::builder()
             .image(self.image)
             .old_layout(self.old_layout)
@@ -263,15 +283,15 @@ pub struct ImageStateTracker {
 }
 
 impl ImageStateTracker {
-    pub fn forget(&mut self, image: vk::Image) {
-        self.states.remove(&image);
+    pub fn forget(&mut self, image: crate::types::Image) {
+        self.states.remove(&image.raw());
     }
 
     /// Records an image that was transitioned to SHADER_READ_ONLY_OPTIMAL outside the graph
     /// (history images cleared at creation), so its first read needs no barrier.
-    pub fn mark_shader_read_only(&mut self, image: vk::Image) {
+    pub fn mark_shader_read_only(&mut self, image: crate::types::Image) {
         self.states.insert(
-            image,
+            image.raw(),
             ImageState {
                 layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 stage: vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -285,18 +305,18 @@ impl ImageStateTracker {
         self.states.clear();
     }
 
-    pub fn transition(&mut self, image: vk::Image, access: TargetAccess) -> Option<PendingBarrier> {
+    pub fn transition(
+        &mut self,
+        image: crate::types::Image,
+        access: TargetAccess,
+    ) -> Option<PendingBarrier> {
+        let image = image.raw();
         let current = self.states.get(&image).copied().unwrap_or(UNKNOWN_STATE);
         let entry = access.entry_state();
         self.states.insert(image, access.exit_state());
 
-        let render_pass_discards_contents = matches!(
-            access,
-            TargetAccess::Attachment {
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                ..
-            }
-        );
+        let render_pass_discards_contents =
+            matches!(access, TargetAccess::Attachment(AttachmentStart::Discard));
         if render_pass_discards_contents {
             let image_untouched = current == UNKNOWN_STATE;
             if image_untouched {
@@ -330,12 +350,44 @@ impl ImageStateTracker {
     }
 }
 
+pub unsafe fn record_pending_barriers(
+    rrdevice: &crate::core::RRDevice,
+    command_buffer: crate::types::CommandBuffer,
+    barriers: &[PendingBarrier],
+) {
+    let command_buffer = command_buffer.raw();
+    if barriers.is_empty() {
+        return;
+    }
+
+    let src_stage = barriers
+        .iter()
+        .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.src_stage);
+    let dst_stage = barriers
+        .iter()
+        .fold(vk::PipelineStageFlags::empty(), |acc, b| acc | b.dst_stage);
+    let image_barriers: Vec<vk::ImageMemoryBarrier> = barriers
+        .iter()
+        .map(PendingBarrier::image_memory_barrier)
+        .collect();
+
+    rrdevice.device().cmd_pipeline_barrier(
+        command_buffer,
+        src_stage,
+        dst_stage,
+        vk::DependencyFlags::empty(),
+        &[] as &[vk::MemoryBarrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &image_barriers,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn image(id: u64) -> vk::Image {
-        vk::Image::from_raw(id)
+    fn image(id: u64) -> crate::types::Image {
+        crate::types::Image(vk::Image::from_raw(id))
     }
 
     #[test]
@@ -352,20 +404,36 @@ mod tests {
     #[test]
     fn read_after_read_in_same_layout_needs_no_barrier() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::Sampled(AccessStage::Fragment));
         assert!(tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Compute))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Compute))
             .is_none());
+    }
+
+    #[test]
+    fn attachment_with_loaded_contents_transitions_to_initial_layout() {
+        let mut tracker = ImageStateTracker::default();
+        tracker.transition(
+            image(1),
+            TargetAccess::StorageReadWrite(AccessStage::Compute),
+        );
+        let attachment = TargetAccess::Attachment(AttachmentStart::Sampled);
+        let barrier = tracker.transition(image(1), attachment).expect("barrier");
+        assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
+        assert_eq!(
+            barrier.new_layout,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+        );
     }
 
     #[test]
     fn write_after_read_in_same_layout_needs_barrier() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::StorageRead(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::StorageRead(AccessStage::Fragment));
         let barrier = tracker
             .transition(
                 image(1),
-                TargetAccess::StorageReadWrite(ShaderStage::Compute),
+                TargetAccess::StorageReadWrite(AccessStage::Compute),
             )
             .expect("barrier");
         assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
@@ -377,10 +445,7 @@ mod tests {
     #[test]
     fn attachment_with_undefined_initial_layout_skips_barrier_on_untouched_image() {
         let mut tracker = ImageStateTracker::default();
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
+        let attachment = TargetAccess::Attachment(AttachmentStart::Discard);
         assert!(tracker.transition(image(1), attachment).is_none());
     }
 
@@ -388,10 +453,7 @@ mod tests {
     fn attachment_with_undefined_initial_layout_orders_after_previous_use_and_lands_on_final() {
         let mut tracker = ImageStateTracker::default();
         tracker.transition(image(1), TargetAccess::TransferDst);
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
+        let attachment = TargetAccess::Attachment(AttachmentStart::Discard);
         let ordering = tracker.transition(image(1), attachment).expect("barrier");
         assert_eq!(ordering.old_layout, vk::ImageLayout::TRANSFER_DST_OPTIMAL);
         assert_eq!(ordering.new_layout, vk::ImageLayout::TRANSFER_DST_OPTIMAL);
@@ -414,30 +476,11 @@ mod tests {
     }
 
     #[test]
-    fn attachment_with_loaded_contents_transitions_to_initial_layout() {
-        let mut tracker = ImageStateTracker::default();
-        tracker.transition(
-            image(1),
-            TargetAccess::StorageReadWrite(ShaderStage::Compute),
-        );
-        let attachment = TargetAccess::Attachment {
-            initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        };
-        let barrier = tracker.transition(image(1), attachment).expect("barrier");
-        assert_eq!(barrier.old_layout, vk::ImageLayout::GENERAL);
-        assert_eq!(
-            barrier.new_layout,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
-        );
-    }
-
-    #[test]
     fn marked_shader_read_only_image_is_read_without_barrier() {
         let mut tracker = ImageStateTracker::default();
         tracker.mark_shader_read_only(image(1));
         assert!(tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Fragment))
             .is_none());
     }
 
@@ -447,7 +490,7 @@ mod tests {
 
     #[test]
     fn lifetimes_span_first_to_last_declaring_node() {
-        let sampled = TargetAccess::Sampled(ShaderStage::Fragment);
+        let sampled = TargetAccess::Sampled(AccessStage::Fragment);
         let node_uses = vec![
             vec![use_of("a", TargetAccess::TransferDst)],
             vec![use_of("a", sampled), use_of("b", TargetAccess::TransferDst)],
@@ -466,10 +509,10 @@ mod tests {
     #[test]
     fn forget_resets_to_undefined() {
         let mut tracker = ImageStateTracker::default();
-        tracker.transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment));
+        tracker.transition(image(1), TargetAccess::Sampled(AccessStage::Fragment));
         tracker.forget(image(1));
         let barrier = tracker
-            .transition(image(1), TargetAccess::Sampled(ShaderStage::Fragment))
+            .transition(image(1), TargetAccess::Sampled(AccessStage::Fragment))
             .expect("barrier");
         assert_eq!(barrier.old_layout, vk::ImageLayout::UNDEFINED);
     }

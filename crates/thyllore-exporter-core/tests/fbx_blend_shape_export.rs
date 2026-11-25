@@ -17,11 +17,11 @@ fn copy_morph_cube_fixture_to_temp() -> std::path::PathBuf {
 fn test_blend_shapes_survive_full_fbx_export() {
     let source_path = copy_morph_cube_fixture_to_temp();
     let source_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
             .expect("load morph_cube");
 
     let export_path = std::env::temp_dir().join("morph_cube_exported.fbx");
-    thyllore_exporter_core::systems::fbx::export_full_fbx(
+    thyllore_exporter_core::fbx::export_full_fbx(
         &source_model,
         None,
         &Skeleton::default(),
@@ -30,7 +30,7 @@ fn test_blend_shapes_survive_full_fbx_export() {
     .expect("export morph_cube");
 
     let exported_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(export_path.to_str().unwrap())
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(export_path.to_str().unwrap())
             .expect("reload exported morph_cube");
     assert_eq!(exported_model.fbx_data.len(), 1, "expected one mesh");
 
@@ -67,7 +67,7 @@ fn test_blend_shapes_survive_full_fbx_export() {
 fn test_morph_track_exports_as_deform_percent_curve() {
     let source_path = copy_morph_cube_fixture_to_temp();
     let source_model =
-        thyllore_importer_core::fbx::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
+        thyllore_importer_core::fbx::load_fbx_with_ufbx(source_path.to_str().unwrap())
             .expect("load morph_cube");
 
     let mut clip = EditableAnimationClip::new(0, "smile".to_string());
@@ -76,7 +76,7 @@ fn test_morph_track_exports_as_deform_percent_curve() {
     curve_add_keyframe(smile_curve, 1.0, 1.0);
 
     let export_path = std::env::temp_dir().join("morph_cube_weight_anim_exported.fbx");
-    thyllore_exporter_core::systems::fbx::export_full_fbx(
+    thyllore_exporter_core::fbx::export_full_fbx(
         &source_model,
         Some(&clip),
         &Skeleton::default(),

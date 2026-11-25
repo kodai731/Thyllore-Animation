@@ -1,18 +1,22 @@
 use std::path::{Path, PathBuf};
 
-use thyllore_effect_core::{FlameUBO, LightningSegmentsUBO, LightningUBO, WaterUBO, WindUBO};
+use thyllore_effect_core::flame::FlameUBO;
+use thyllore_effect_core::lightning::{LightningSegmentsUBO, LightningUBO};
+use thyllore_effect_core::water::WaterUBO;
+use thyllore_effect_core::wind::WindUBO;
 use thyllore_render_core::{FrameUBO, MaterialUBO, ObjectUBO};
 use thyllore_spirv_reflect::{
     compare_block_layout, BlockCoverage, DescriptorKind, GpuBlock, LayoutDifference, ReflectedBlock,
 };
+use thyllore_spirv_reflect::{reflect_shader_bytes, ShaderReflection};
 use thyllore_vulkan_core::data::{SceneUniformData, UniformBufferObject};
 use thyllore_vulkan_core::descriptor::{
-    reflect_shader_bytes, DescriptorSetTable, LayoutMismatch, PassId, PassShaders,
-    ReflectedLayoutSpec, SelectionUBO, ShaderFile, ShaderReflection, ALL_PASSES,
+    DescriptorSetTable, LayoutMismatch, PassId, PassShaders, ReflectedLayoutSpec, SelectionUBO,
+    ShaderFile, ALL_PASSES,
 };
-use thyllore_vulkan_core::renderer::TracePush;
+use thyllore_vulkan_core::renderer::{SkinningPush, TracePush};
 
-const GENERATED_PUSH_BLOCKS: [&str; 1] = ["TracePush"];
+const GENERATED_PUSH_BLOCKS: [&str; 2] = ["TracePush", "SkinningPush"];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -73,6 +77,7 @@ fn rust_blocks() -> Vec<RustBlock> {
         rust_block::<SelectionUBO>("SelectionData"),
         rust_block::<UniformBufferObject>("UniformBufferObject"),
         rust_block::<TracePush>("TracePush"),
+        rust_block::<SkinningPush>("SkinningPush"),
     ]
 }
 

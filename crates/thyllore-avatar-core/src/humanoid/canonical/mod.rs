@@ -1,1 +1,1 @@
-pub mod skeleton;
+pub(crate) mod skeleton;

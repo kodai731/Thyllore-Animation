@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
-pub use thyllore_effect_core::flame_plume::HeatPlume;
-pub use thyllore_effect_core::{FlameBaked, FlameEffect, FlameTemporalAccum};
+pub use thyllore_effect_core::flame::HeatPlume;
+pub use thyllore_effect_core::flame::{FlameBaked, FlameEffect, FlameTemporalAccum};
 
 crate::scene_owner!(FlameEffect {
     icon: crate::ecs::component::EntityIcon::Effect('F'),
     placement: |e| (e.position, e.rotation),
-    prepare_loaded: |e| thyllore_effect_core::refresh_flame_coefficients(e, &FlameBaked::default()),
+    prepare_loaded: |e| thyllore_effect_core::flame::refresh_flame_coefficients(
+        e,
+        &FlameBaked::default()
+    ),
 });
 
 /// Provenance of the last style applied to this flame. Values are baked into

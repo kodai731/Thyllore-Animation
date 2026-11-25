@@ -6,6 +6,10 @@
 stages = ["model/raster.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
+[pass.skinning]
+stages = ["skinning/compute.slang"]
+sets = {}
+
 [pass.gbuffer]
 stages = ["gbuffer/vertex.slang", "gbuffer/fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }

@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
-use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
+use thyllore_anim_core::BoneId;
 
 pub use thyllore_anim_core::editable::SnapSettings;
 
@@ -85,9 +85,19 @@ pub struct ClipDragPreview {
     pub end_time: f32,
 }
 
+/// A fit asked for before the timeline window measured its width waits for that width.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ZoomFit {
+    #[default]
+    Settled,
+    AwaitingVisibleWidth,
+}
+
 #[derive(Clone, Debug)]
 pub struct TimelineState {
     pub current_clip_id: Option<SourceClipId>,
+    /// The clip the scene names while the library does not hold it; the model load that brings it selects it.
+    pub requested_clip_name: Option<String>,
     pub preview: ClipPreview,
     pub current_time: f32,
     pub playing: bool,
@@ -96,6 +106,7 @@ pub struct TimelineState {
     pub zoom_level: f32,
     pub scroll_offset: f32,
     pub last_visible_width: f32,
+    pub zoom_fit: ZoomFit,
     pub pan_pending_delta_x: f32,
     pub selected_keyframes: HashSet<SelectedKeyframe>,
     pub expanded_tracks: HashSet<BoneId>,
@@ -112,10 +123,13 @@ pub struct TimelineState {
     pub schedule_extent_seconds: f32,
 }
 
+crate::startup_resource!(TimelineState, Editor);
+
 impl TimelineState {
     pub fn new() -> Self {
         Self {
             current_clip_id: None,
+            requested_clip_name: None,
             preview: ClipPreview::Solo,
             current_time: 0.0,
             playing: false,
@@ -124,6 +138,7 @@ impl TimelineState {
             zoom_level: 1.0,
             scroll_offset: 0.0,
             last_visible_width: 0.0,
+            zoom_fit: ZoomFit::Settled,
             pan_pending_delta_x: 0.0,
             selected_keyframes: HashSet::new(),
             expanded_tracks: HashSet::new(),

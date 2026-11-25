@@ -2,7 +2,7 @@ mod animation;
 mod editor;
 mod flame;
 mod lightning;
-pub mod mesh;
+mod mesh;
 mod ml;
 mod model;
 mod render;
@@ -14,6 +14,7 @@ pub use editor::*;
 pub use flame::*;
 pub use lightning::*;
 pub use mesh::*;
+#[cfg(feature = "ml")]
 pub use ml::*;
 pub use model::*;
 pub use render::*;

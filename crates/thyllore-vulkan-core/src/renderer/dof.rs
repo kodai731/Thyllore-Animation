@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRDofDescriptorSet;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::DofBuffer;
+use crate::FrameRenderContext;
 use thyllore_render_core::{DepthOfField, PhysicalCameraParameters};
 
 #[repr(C)]
@@ -25,13 +25,14 @@ pub unsafe fn record_dof_pass(
     pipeline: &RRPipeline,
     dof_descriptor: &RRDofDescriptorSet,
     dof_buffer: &DofBuffer,
-    framebuffer: vk::Framebuffer,
+    framebuffer: crate::types::Framebuffer,
     settings: &DepthOfField,
     camera: &PhysicalCameraParameters,
     camera_near_plane: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     let extent = dof_buffer.extent();
 
     let push_constants = DofPushConstants {
@@ -45,7 +46,13 @@ pub unsafe fn record_dof_pass(
         enabled: if settings.enabled { 1 } else { 0 },
     };
 
-    begin_render_pass(device, dof_buffer.render_pass, framebuffer, cmd, extent);
+    begin_render_pass(
+        device,
+        dof_buffer.render_pass,
+        framebuffer.raw(),
+        cmd,
+        extent,
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 

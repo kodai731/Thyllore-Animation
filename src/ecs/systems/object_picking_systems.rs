@@ -3,12 +3,13 @@ use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     ClipLibrary, HierarchyDisplayMode, ObjectIdReadback, PickRay, TimelineState,
 };
-use crate::ecs::systems::clip_track_systems::resolve_mesh_bone_id;
 use crate::ecs::systems::hierarchy_systems::{
-    hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
+    hierarchy_deselect_all, hierarchy_reveal_entity, hierarchy_select, hierarchy_toggle_selection,
 };
+use crate::ecs::systems::resolve_mesh_bone_id;
 use crate::ecs::world::{Entity, MeshRef, World};
 use crate::hooks::object_pick::ObjectPickHooks;
+use glam::Vec3;
 
 pub fn find_entity_by_object_id(
     world: &World,
@@ -73,6 +74,7 @@ pub fn apply_mesh_selection(
     }
     state.display_mode = HierarchyDisplayMode::Entities;
     drop(state);
+    hierarchy_reveal_entity(world, entity);
 
     sync_curve_editor_on_mesh_select(world, assets, entity);
 }
@@ -107,8 +109,8 @@ pub(crate) fn resolve_closest_pick(
     }
 
     let surface_distance = surface_world_position
-        .map(|p| cgmath::Vector3::new(p[0], p[1], p[2]) - ray.origin)
-        .map(|to_surface| cgmath::dot(to_surface, ray.direction))
+        .map(|p| Vec3::new(p[0], p[1], p[2]) - ray.origin)
+        .map(|to_surface| to_surface.dot(ray.direction))
         .unwrap_or(f32::INFINITY);
 
     if effect_distance < surface_distance {

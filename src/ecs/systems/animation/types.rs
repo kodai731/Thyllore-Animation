@@ -1,22 +1,20 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 
-use crate::animation::SkeletonId;
 use crate::ecs::resource::AnimationType;
+use thyllore_anim_core::SkeletonId;
 
 pub struct AnimationEvalResult {
     pub updated_meshes: Vec<usize>,
-    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Mat4>, AnimationType)>,
 }
 
 #[derive(Clone)]
 pub(crate) struct ActiveInstanceInfo {
-    pub(crate) source_id: crate::animation::editable::SourceClipId,
     pub(crate) asset_id: crate::asset::AssetId,
-    pub(crate) instance_id: Option<crate::animation::editable::ClipInstanceId>,
     pub(crate) local_time: f32,
     pub(crate) weight: f32,
-    pub(crate) blend_mode: crate::animation::editable::BlendMode,
-    pub(crate) ease_out: crate::animation::editable::EaseType,
+    pub(crate) blend_mode: thyllore_anim_core::editable::BlendMode,
+    pub(crate) ease_out: thyllore_anim_core::editable::EaseType,
     pub(crate) start_time: f32,
     pub(crate) end_time: f32,
 }

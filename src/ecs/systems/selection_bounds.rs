@@ -1,11 +1,11 @@
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 use thyllore_math_core::{Aabb, BoundingSphere};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::world::{Children, Entity, GlobalTransform, MeshRef, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::{GraphicsResources, MeshBuffer};
 
 pub const EMPTY_ENTITY_RADIUS: f32 = 0.5;
 pub const BONE_RADIUS_FALLBACK: f32 = 0.1;
@@ -68,17 +68,16 @@ fn mesh_entity_bounding_sphere(
     let mesh_ref = world.get_component::<MeshRef>(entity)?;
     let mesh_asset = assets.meshes.get(&mesh_ref.mesh_asset_id)?;
     let mesh = graphics.meshes.get(mesh_asset.graphics_mesh_index)?;
-    let local_bounds = Aabb::from_points(
-        mesh.vertex_data
-            .vertices
-            .iter()
-            .map(|vertex| Vector3::new(vertex.pos.x, vertex.pos.y, vertex.pos.z)),
-    )?;
+    let local_bounds = posed_mesh_bounds(mesh)?;
 
     let world_matrix = world
         .get_component::<GlobalTransform>(entity)
-        .map_or_else(|| Matrix4::from_scale(1.0), |global| global.0);
+        .map_or_else(|| Mat4::IDENTITY, |global| global.0);
     Some(local_bounds.transformed(&world_matrix).bounding_sphere())
+}
+
+fn posed_mesh_bounds(mesh: &MeshBuffer) -> Option<Aabb> {
+    Aabb::from_points(mesh.posed_geometry().iter().map(|vertex| vertex.pos))
 }
 
 pub fn bone_bounding_sphere(
@@ -98,7 +97,7 @@ pub fn bone_bounding_sphere(
         .chain(bone.children.iter().copied());
     let neighbour_distances: Vec<f32> = neighbour_ids
         .filter_map(|id| globals.get(id as usize))
-        .map(|matrix| (translation_of(matrix) - center).magnitude())
+        .map(|matrix| (translation_of(matrix) - center).length())
         .collect();
     let radius = if neighbour_distances.is_empty() {
         BONE_RADIUS_FALLBACK
@@ -109,6 +108,46 @@ pub fn bone_bounding_sphere(
     Some(BoundingSphere { center, radius })
 }
 
-fn translation_of(matrix: &Matrix4<f32>) -> Vector3<f32> {
-    Vector3::new(matrix.w.x, matrix.w.y, matrix.w.z)
+fn translation_of(matrix: &Mat4) -> Vec3 {
+    Vec3::new(matrix.w_axis.x, matrix.w_axis.y, matrix.w_axis.z)
+}
+
+#[cfg(test)]
+mod tests {
+    use glam::{UVec4, Vec4};
+    use thyllore_model_core::{SkinData, Vertex};
+
+    use super::*;
+
+    #[test]
+    fn skinned_mesh_bounds_follow_the_pose() {
+        let rest_positions = [Vec3::ZERO, Vec3::new(1.0, 2.0, 0.0)];
+        let pose_offset = Vec3::new(10.0, 0.0, 0.0);
+
+        let mut mesh = MeshBuffer::default();
+        mesh.vertex_data.vertices = rest_positions
+            .iter()
+            .map(|&pos| Vertex {
+                pos,
+                ..Default::default()
+            })
+            .collect();
+        mesh.set_skin_data(Some(SkinData {
+            skeleton_id: 0,
+            bone_indices: vec![UVec4::ZERO; rest_positions.len()],
+            bone_weights: vec![Vec4::X; rest_positions.len()],
+            base_positions: rest_positions.to_vec(),
+            base_normals: vec![Vec3::Y; rest_positions.len()],
+        }));
+        mesh.pose_skin(vec![Mat4::from_translation(pose_offset), Mat4::IDENTITY]);
+
+        let bounds = posed_mesh_bounds(&mesh).unwrap();
+
+        assert!(bounds
+            .min
+            .abs_diff_eq(rest_positions[0] + pose_offset, 1e-6));
+        assert!(bounds
+            .max
+            .abs_diff_eq(rest_positions[1] + pose_offset, 1e-6));
+    }
 }

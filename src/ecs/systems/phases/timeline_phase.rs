@@ -13,9 +13,12 @@ use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
 use crate::ecs::systems::batch_run_systems::batch_apply_pending_anim_edits;
-use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
-use crate::ecs::systems::humanoid_bake_systems::refresh_baked_humanoid_clips;
-use crate::ecs::systems::timeline::{schedule_extent_seconds, timeline_update};
+use crate::ecs::systems::clip_library_sync_playable_assets;
+use crate::ecs::systems::motion_path_sync;
+use crate::ecs::systems::refresh_baked_humanoid_clips;
+use crate::ecs::systems::timeline::{
+    schedule_extent_seconds, timeline_apply_awaited_fit_zoom, timeline_update,
+};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
 
@@ -24,6 +27,8 @@ pub fn run_timeline_phase(ctx: &mut FrameContext) {
 
     #[cfg(feature = "ml")]
     run_inference_actor_phase(ctx);
+
+    motion_path_sync(ctx);
 }
 
 fn update_timeline(ctx: &mut FrameContext) {
@@ -53,6 +58,7 @@ fn update_timeline(ctx: &mut FrameContext) {
         .resource::<FrameClock>()
         .fixed_delta_seconds()
         .unwrap_or(ctx.delta_time);
+    timeline_apply_awaited_fit_zoom(&mut timeline_state, &clip_library);
     timeline_update(&mut timeline_state, &*clip_library, timeline_delta);
     drop(clip_library);
     drop(timeline_state);
@@ -90,7 +96,7 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let dirty_source_ids = {
         let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-        clip_library_sync_dirty(&mut clip_library, ctx.assets)
+        clip_library_sync_playable_assets(&mut clip_library, ctx.assets)
     };
     if dirty_source_ids.is_empty() {
         return;
@@ -107,7 +113,7 @@ fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     for asset_id in removed_assets {
         ctx.assets.animation_clips.remove(&asset_id);
     }
-    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(ctx.world);
+    crate::ecs::systems::request_bake_scan(ctx.world);
 }
 
 #[cfg(feature = "ml")]

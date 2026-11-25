@@ -1,4 +1,4 @@
-use crate::flame_shell::FLAME_SHELL_BASE_RADIUS;
+use crate::flame::FLAME_SHELL_BASE_RADIUS;
 use thyllore_math_core::{approximate_erf, biweight_profile, evaluate_chebyshev, ChebyshevSeries};
 
 // Mirror of shaders/flame/include/radial_integral.slang; the accuracy tests below cover both.
@@ -12,7 +12,7 @@ use thyllore_math_core::{approximate_erf, biweight_profile, evaluate_chebyshev, 
 /// Exponent variation across a band below which the constant-exponent moments are used.
 const FLAT_EXPONENT: f32 = 2e-2;
 /// Maximum support radius in R(h) units, bounded by the shell proxy headroom.
-pub const FLAME_RADIAL_RMAX: f32 = crate::flame_shell::FLAME_SHELL_SUPPORT_HEADROOM;
+pub const FLAME_RADIAL_RMAX: f32 = crate::flame::FLAME_SHELL_SUPPORT_HEADROOM;
 /// Height taper of the radial density.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameRadialTaper {
@@ -235,107 +235,12 @@ pub fn build_height_series(height_coefficients: &[[f32; 4]; 2]) -> ChebyshevSeri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flame::{FlameCoefficients, FlameEffect};
+    use crate::flame::FlameEffect;
 
     const SHARPNESS: f32 = 4.0;
 
     fn default_taper() -> FlameRadialTaper {
         FlameRadialTaper::from_effect(&FlameEffect::default(), &Default::default())
-    }
-
-    fn reference_integral(
-        origin: [f32; 3],
-        direction: [f32; 3],
-        t_near: f32,
-        t_far: f32,
-        coefficients: &FlameCoefficients,
-        taper: FlameRadialTaper,
-        sharpness: f32,
-    ) -> f64 {
-        let height = build_height_series(&coefficients.height);
-        let steps = 40000;
-        let dt = (t_far - t_near) as f64 / steps as f64;
-        (0..steps)
-            .map(|i| {
-                let t = t_near as f64 + (i as f64 + 0.5) * dt;
-                let p = [
-                    origin[0] as f64 + t * direction[0] as f64,
-                    origin[1] as f64 + t * direction[1] as f64,
-                    origin[2] as f64 + t * direction[2] as f64,
-                ];
-                let h = p[1].clamp(0.0, 1.0) as f32;
-                let radius_squared = p[0] * p[0] + p[2] * p[2];
-                let u_squared = support_inv_sq(h, taper, sharpness, 1.0) as f64 * radius_squared;
-                let density = (1.0 - u_squared).max(0.0).powi(2);
-                evaluate_chebyshev(&height, h) as f64 * density
-            })
-            .sum::<f64>()
-            * dt
-    }
-
-    fn normalize_direction(d: [f32; 3]) -> [f32; 3] {
-        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-        [d[0] / len, d[1] / len, d[2] / len]
-    }
-
-    /// Segment of the ray inside the cylinder proxy, matching what the shader hands the integral.
-    fn clip_to_shell_proxy(origin: [f32; 3], direction: [f32; 3]) -> Option<(f32, f32)> {
-        let radius = crate::flame_shell::flame_shell_outer_radius(0.0, 1.0, 1.0);
-        let a = direction[0] * direction[0] + direction[2] * direction[2];
-        let b = 2.0 * (origin[0] * direction[0] + origin[2] * direction[2]);
-        let c = origin[0] * origin[0] + origin[2] * origin[2] - radius * radius;
-        let discriminant = b * b - 4.0 * a * c;
-        if a <= 0.0 || discriminant <= 0.0 {
-            return None;
-        }
-
-        let root = discriminant.sqrt();
-        let mut t_near = ((-b - root) / (2.0 * a)).max(0.0);
-        let mut t_far = (-b + root) / (2.0 * a);
-        if direction[1].abs() > 1e-9 {
-            let slab_0 = -origin[1] / direction[1];
-            let slab_1 = (1.0 - origin[1]) / direction[1];
-            t_near = t_near.max(slab_0.min(slab_1));
-            t_far = t_far.min(slab_0.max(slab_1));
-        } else if origin[1] < 0.0 || origin[1] > 1.0 {
-            return None;
-        }
-        (t_far > t_near).then_some((t_near, t_far))
-    }
-
-    /// Rays covering side, tilted and near-vertical views of the unit-local flame.
-    fn representative_rays() -> Vec<([f32; 3], [f32; 3], f32, f32)> {
-        let mut rays = Vec::new();
-        for origin in [
-            [0.0f32, 0.0, 6.7],
-            [0.0, 0.5, 6.7],
-            [4.7, 1.0, 4.7],
-            [0.8, 2.5, 0.8],
-            [5.0, 0.12, 0.5],
-        ] {
-            for target_x in [-0.45f32, -0.2, 0.0, 0.2, 0.45] {
-                for target_y in [0.05f32, 0.3, 0.6, 0.95] {
-                    let direction = normalize_direction([
-                        target_x - origin[0],
-                        target_y - origin[1],
-                        -origin[2],
-                    ]);
-                    // Enter and exit the unit-local y slab, which is what the shell clamp yields.
-                    if direction[1].abs() < 1e-3 {
-                        continue;
-                    }
-                    let t_slab_0 = -origin[1] / direction[1];
-                    let t_slab_1 = (1.0 - origin[1]) / direction[1];
-                    let t_near = t_slab_0.min(t_slab_1).max(0.0);
-                    let t_far = t_slab_0.max(t_slab_1);
-                    if t_far <= t_near {
-                        continue;
-                    }
-                    rays.push((origin, direction, t_near, t_far));
-                }
-            }
-        }
-        rays
     }
 
     #[test]
@@ -400,7 +305,7 @@ mod tests {
                 let height = step as f32 / 20.0;
                 let density_edge = flame_radial_support_radius(sharpness, 1.0)
                     * flame_radial_radius_scale(height, taper);
-                let proxy = crate::flame_shell::flame_shell_outer_radius(height, 1.0, 1.0);
+                let proxy = crate::flame::flame_shell_outer_radius(height, 1.0, 1.0);
                 assert!(
                     density_edge <= proxy,
                     "k={sharpness} h={height}: support reaches {density_edge} but the proxy cuts at {proxy}"
@@ -437,8 +342,9 @@ mod tests {
                 [0.2, 0.95, -0.6],
                 [1.0, 0.0, 1.0],
             ] {
-                let baseline = evaluate_ring_smooth_density(p, &height, taper, 4.0, 0.75, 1.1, 1.0);
-                let displaced = evaluate_ring_smooth_density_displaced(
+                let _baseline =
+                    evaluate_ring_smooth_density(p, &height, taper, 4.0, 0.75, 1.1, 1.0);
+                let _displaced = evaluate_ring_smooth_density_displaced(
                     p,
                     &height,
                     taper,

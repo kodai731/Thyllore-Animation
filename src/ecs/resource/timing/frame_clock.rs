@@ -19,6 +19,8 @@ impl Default for FrameClock {
     }
 }
 
+crate::startup_resource!(FrameClock, Editor);
+
 impl FrameClock {
     pub const BATCH_DELTA_SECONDS: f32 = 1.0 / 60.0;
 

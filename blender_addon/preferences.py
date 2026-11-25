@@ -124,13 +124,8 @@ class ThylloreAnimationPreferences(AddonPreferences):
 
         layout = self.layout
 
-        box = layout.box()
-        box.label(text="Curve Copilot", icon="FCURVE")
-        box.prop(self, "enable_curve_copilot")
-        box.prop(self, "curve_copilot_model_path")
-        effective_ctx = effective_context_length()
-        if effective_ctx is not None:
-            box.label(text=f"Prediction accuracy: ctx {effective_ctx}", icon="INFO")
+        if operators.has_curve_copilot():
+            self._draw_curve_copilot_box(layout)
 
         if CAPS.telemetry_available:
             self._draw_telemetry_box(layout)
@@ -161,6 +156,15 @@ class ThylloreAnimationPreferences(AddonPreferences):
             row = box.row()
             row.label(text=f"Device: {self.device_id or '(not set)'}")
             row.operator("thyllore.regenerate_device_id", text="Regenerate")
+
+    def _draw_curve_copilot_box(self, layout):
+        box = layout.box()
+        box.label(text="Curve Copilot", icon="FCURVE")
+        box.prop(self, "enable_curve_copilot")
+        box.prop(self, "curve_copilot_model_path")
+        effective_ctx = effective_context_length()
+        if effective_ctx is not None:
+            box.label(text=f"Prediction accuracy: ctx {effective_ctx}", icon="INFO")
 
     def _draw_telemetry_box(self, layout):
         box = layout.box()

@@ -1,2 +1,2 @@
-pub mod motion_spec;
-pub mod pose_table;
+pub(crate) mod motion_spec;
+pub(crate) mod pose_table;

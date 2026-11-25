@@ -1,4 +1,3 @@
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
@@ -9,6 +8,7 @@ use crate::ecs::systems::{
     TreeRow, TreeStep,
 };
 use crate::ecs::world::{Children, Entity, World};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TreeNavigation {

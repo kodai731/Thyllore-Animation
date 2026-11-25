@@ -1,9 +1,7 @@
-pub mod copilot;
-#[cfg(feature = "debug-log")]
-pub mod debug_log;
+mod copilot;
 pub mod degrade;
 pub mod feedback;
-pub mod mode;
+mod mode;
 pub mod model_path;
 
 #[cfg(feature = "python")]

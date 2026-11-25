@@ -1,5 +1,5 @@
 use crate::ecs::resource::{PendingMeshRequest, TextToMeshState, TextToMeshStatus};
-use crate::grpc::{
+use thyllore_grpc_client::{
     GrpcRequest, GrpcThreadHandle, MeshInputMode, MeshModelType, TextToImageModelType,
     TextToMeshRequest,
 };

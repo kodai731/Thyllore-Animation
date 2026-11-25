@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '(\.rs|Cargo\.toml)$'; then
+    exit 0
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo is not on PATH, module_facade check skipped (CI runs it)" >&2
+    exit 0
+fi
+
+staged_tree="$(mktemp -d)"
+trap 'rm -rf "$staged_tree"' EXIT
+
+git ls-files -z -- '*.rs' '*Cargo.toml' | git checkout-index -z --stdin --prefix="$staged_tree/"
+
+THYLLORE_MODULE_FACADE_ROOT="$staged_tree" bash "$REPO_ROOT/scripts/check_module_facade.sh"

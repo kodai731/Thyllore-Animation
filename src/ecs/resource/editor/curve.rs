@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use super::timeline::CurveTrackRef;
-use crate::animation::editable::{
+use thyllore_anim_core::editable::{
     BezierHandle, EditableAnimationClip, KeyframeId, PropertyType, TweenKind,
 };
-use crate::animation::BoneId;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CurveEditorTarget {
@@ -144,6 +144,8 @@ pub struct CurveEditorState {
     pub value_field: String,
     pub tween: Option<TweenSession>,
 }
+
+crate::startup_resource!(CurveEditorState, Editor);
 
 impl CurveEditorState {
     pub fn selected_bone_id(&self) -> Option<BoneId> {

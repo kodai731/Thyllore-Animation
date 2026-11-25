@@ -1,12 +1,12 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
-use crate::ecs::resource::{ClipLibrary, EditHistory, TimelineState};
+use crate::ecs::resource::{ClipLibrary, ClipRevision, EditHistory, TimelineState};
 use crate::ecs::systems::edit_history_push_clip_mergeable;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClipId};
 
 /// The active clip as it was before an edit, so the edit can be pushed to the history afterwards.
 pub(super) struct ClipSnapshot {
     clip_id: SourceClipId,
-    before: EditableAnimationClip,
+    before: ClipRevision,
 }
 
 impl ClipSnapshot {
@@ -15,7 +15,7 @@ impl ClipSnapshot {
         clip_library: &ClipLibrary,
     ) -> Option<Self> {
         let clip_id = timeline_state.current_clip_id?;
-        let before = clip_library.get(clip_id)?.clone();
+        let before = clip_library.revision(clip_id)?;
         Some(Self { clip_id, before })
     }
 

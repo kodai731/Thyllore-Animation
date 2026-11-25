@@ -1,0 +1,4 @@
+# Whole-word keywords of mesh/material names; the first matching role wins, no match is Garment, and a user-assigned role is never re-guessed.
+hair = ["hair", "bangs", "ponytail", "twintail"]
+skin = ["body", "skin", "face", "head", "hand", "hands", "leg", "legs", "arm", "arms"]
+accessory = ["accessory", "acc", "ribbon", "glasses", "earring", "necklace", "hat"]

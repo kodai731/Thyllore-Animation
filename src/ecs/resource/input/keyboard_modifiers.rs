@@ -4,3 +4,5 @@ pub struct KeyboardModifiers {
     pub shift: bool,
     pub alt: bool,
 }
+
+crate::startup_resource!(KeyboardModifiers, Editor);

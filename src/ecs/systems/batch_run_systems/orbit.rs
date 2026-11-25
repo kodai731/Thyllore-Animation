@@ -2,6 +2,7 @@ use crate::ecs::component::MotionPath;
 use crate::ecs::resource::BatchEffectOrbit;
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
+use glam::Vec3;
 
 /// XZ circular orbit offset at `t_seconds`: (R cos(2πt/T), 0, R sin(2πt/T)), zero for T <= 0.
 pub fn compute_orbit_offset(radius: f32, period_seconds: f32, t_seconds: f32) -> [f32; 3] {
@@ -37,7 +38,7 @@ pub fn batch_run_update_orbit(world: &mut World) {
             .first()
             .and_then(|&first| world.get_component::<Transform>(first))
             .map(|transform| transform.translation)
-            .unwrap_or(cgmath::Vector3::new(0.0, 0.0, 0.0));
+            .unwrap_or(Vec3::new(0.0, 0.0, 0.0));
         orbit.initial = Some(center);
         (orbit.radius, orbit.period_seconds, center)
     };

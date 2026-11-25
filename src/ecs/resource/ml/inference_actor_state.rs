@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::ml::{InferenceActorId, InferenceRequestId, InferenceResult, InferenceThreadHandle};
+use crate::ml::InferenceThreadHandle;
+use thyllore_ml_core::{InferenceActorId, InferenceRequestId, InferenceResult};
 
 pub struct ActorRuntime {
     pub(crate) thread_handle: InferenceThreadHandle,
@@ -28,3 +29,6 @@ impl InferenceActorState {
         self.actors.get(&actor_id)?.thread_handle.max_steps()
     }
 }
+
+#[cfg(feature = "ml")]
+crate::startup_resource!(InferenceActorState, CoreResources);

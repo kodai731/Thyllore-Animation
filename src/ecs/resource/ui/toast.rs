@@ -1,5 +1,7 @@
 pub const TOAST_DURATION_SECS: f32 = 1.5;
 
+crate::startup_resource!(UiToast, Editor);
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToastMessage {
     pub text: String,

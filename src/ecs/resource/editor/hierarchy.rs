@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum HierarchyDisplayMode {
@@ -42,3 +42,5 @@ pub struct HierarchyState {
     pub selected_bone_id: Option<BoneId>,
     pub expanded_bone_ids: HashSet<BoneId>,
 }
+
+crate::startup_resource!(HierarchyState, Editor);

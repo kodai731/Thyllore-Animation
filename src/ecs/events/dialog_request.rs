@@ -1,6 +1,6 @@
-use crate::animation::editable::SourceClipId;
 use crate::ecs::events::{ClipExportFormat, EventQueue};
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::SourceClipId;
 
 /// A file dialog the platform opens for the engine; the result comes back as a queued command.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -12,11 +12,14 @@ pub enum DialogRequest {
         format: ClipExportFormat,
     },
     ExportModelGltf,
+    ExportModelFbx,
     SaveSpringBoneBake,
     PickMaterialTexture {
         material: String,
     },
 }
+
+crate::startup_resource!(EventQueue<DialogRequest>, Editor);
 
 pub fn send_dialog_request(world: &World, request: DialogRequest) {
     world

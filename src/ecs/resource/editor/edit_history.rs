@@ -1,12 +1,26 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+use std::collections::HashMap;
+
+use glam::Vec3;
+
 use crate::ecs::component::ClipSchedule;
+use crate::ecs::resource::{ClipRevision, RemovedClip, RemovedPose, SkeletonSnapshot};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+
+/// What deleting a clip changed besides the library, so an undo puts all of it back.
+#[derive(Clone, Debug, Default)]
+pub struct ClipDeletionEffects {
+    pub schedules: Vec<(Entity, ClipSchedule)>,
+    pub selected_clip: Option<SourceClipId>,
+    pub created_clip: Option<SourceClipId>,
+    pub pose: Option<RemovedPose>,
+}
 
 #[derive(Clone, Debug)]
 pub enum EditCommand {
     ClipModified {
         clip_id: SourceClipId,
-        before: EditableAnimationClip,
+        before: ClipRevision,
         description: &'static str,
     },
     ScheduleModified {
@@ -20,7 +34,17 @@ pub enum EditCommand {
     },
     ClipRemoved {
         clip_id: SourceClipId,
-        removed: SourceClip,
+        removed: RemovedClip,
+        effects: ClipDeletionEffects,
+        description: &'static str,
+    },
+    SkeletonModified {
+        before: SkeletonSnapshot,
+        description: &'static str,
+    },
+    ModelScaled {
+        factor: f32,
+        root_scales: Vec<(Entity, Vec3)>,
         description: &'static str,
     },
 }
@@ -30,6 +54,7 @@ pub enum EditCommandAfter {
     Clip(EditableAnimationClip),
     Schedule(ClipSchedule),
     ClipCreated(SourceClip),
+    Skeleton(SkeletonSnapshot),
     Empty,
 }
 
@@ -39,11 +64,78 @@ pub struct EditEntry {
     pub after: EditCommandAfter,
 }
 
+impl EditEntry {
+    fn follow_respawned_entities(self, respawned: &HashMap<Entity, Entity>) -> Option<Self> {
+        let command = match self.command {
+            EditCommand::ScheduleModified {
+                entity,
+                before,
+                description,
+            } => EditCommand::ScheduleModified {
+                entity: *respawned.get(&entity)?,
+                before,
+                description,
+            },
+            EditCommand::ClipRemoved {
+                clip_id,
+                removed,
+                effects,
+                description,
+            } => EditCommand::ClipRemoved {
+                clip_id,
+                removed,
+                effects: ClipDeletionEffects {
+                    schedules: follow_respawned_owners(effects.schedules, respawned),
+                    ..effects
+                },
+                description,
+            },
+            EditCommand::ModelScaled {
+                factor,
+                root_scales,
+                description,
+            } => EditCommand::ModelScaled {
+                factor,
+                root_scales: follow_respawned_owners(root_scales, respawned),
+                description,
+            },
+            command @ (EditCommand::ClipModified { .. }
+            | EditCommand::ClipAdded { .. }
+            | EditCommand::SkeletonModified { .. }) => command,
+        };
+
+        Some(Self {
+            command,
+            after: self.after,
+        })
+    }
+}
+
+fn follow_respawned_owners<T>(
+    owned: Vec<(Entity, T)>,
+    respawned: &HashMap<Entity, Entity>,
+) -> Vec<(Entity, T)> {
+    owned
+        .into_iter()
+        .filter_map(|(owner, value)| Some((*respawned.get(&owner)?, value)))
+        .collect()
+}
+
+pub const DEFAULT_MAX_HISTORY: usize = 100;
+
 #[derive(Debug)]
 pub struct EditHistory {
     undo_stack: Vec<EditEntry>,
     redo_stack: Vec<EditEntry>,
     max_history: usize,
+}
+
+crate::startup_resource!(EditHistory, Editor);
+
+impl Default for EditHistory {
+    fn default() -> Self {
+        Self::new(DEFAULT_MAX_HISTORY)
+    }
 }
 
 impl EditHistory {
@@ -58,7 +150,7 @@ impl EditHistory {
     pub fn push_clip_edit(
         &mut self,
         clip_id: SourceClipId,
-        before: EditableAnimationClip,
+        before: ClipRevision,
         after: EditableAnimationClip,
         description: &'static str,
     ) {
@@ -114,18 +206,52 @@ impl EditHistory {
     pub fn push_clip_removed(
         &mut self,
         clip_id: SourceClipId,
-        removed: SourceClip,
+        removed: RemovedClip,
+        effects: ClipDeletionEffects,
         description: &'static str,
     ) {
         let entry = EditEntry {
             command: EditCommand::ClipRemoved {
                 clip_id,
                 removed,
+                effects,
                 description,
             },
             after: EditCommandAfter::Empty,
         };
         self.push_entry(entry);
+    }
+
+    pub fn push_skeleton_edit(
+        &mut self,
+        before: SkeletonSnapshot,
+        after: SkeletonSnapshot,
+        description: &'static str,
+    ) {
+        let entry = EditEntry {
+            command: EditCommand::SkeletonModified {
+                before,
+                description,
+            },
+            after: EditCommandAfter::Skeleton(after),
+        };
+        self.push_entry(entry);
+    }
+
+    pub fn push_model_scale(
+        &mut self,
+        factor: f32,
+        root_scales: Vec<(Entity, Vec3)>,
+        description: &'static str,
+    ) {
+        self.push_entry(EditEntry {
+            command: EditCommand::ModelScaled {
+                factor,
+                root_scales,
+                description,
+            },
+            after: EditCommandAfter::Empty,
+        });
     }
 
     fn push_entry(&mut self, entry: EditEntry) {
@@ -134,6 +260,16 @@ impl EditHistory {
 
         if self.undo_stack.len() > self.max_history {
             self.undo_stack.remove(0);
+        }
+    }
+
+    /// A scene rebuild respawns its entities: entries follow them and forget the entities that left.
+    pub fn follow_respawned_entities(&mut self, respawned: &HashMap<Entity, Entity>) {
+        for stack in [&mut self.undo_stack, &mut self.redo_stack] {
+            *stack = std::mem::take(stack)
+                .into_iter()
+                .filter_map(|entry| entry.follow_respawned_entities(respawned))
+                .collect();
         }
     }
 
@@ -177,6 +313,8 @@ impl EditCommand {
             EditCommand::ScheduleModified { description, .. } => description,
             EditCommand::ClipAdded { description, .. } => description,
             EditCommand::ClipRemoved { description, .. } => description,
+            EditCommand::SkeletonModified { description, .. } => description,
+            EditCommand::ModelScaled { description, .. } => description,
         }
     }
 }
@@ -184,15 +322,23 @@ impl EditCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::resource::ClipOrigin;
 
     fn make_dummy_clip(name: &str) -> EditableAnimationClip {
         EditableAnimationClip::new(1, name.to_string())
     }
 
+    fn make_dummy_revision(name: &str) -> ClipRevision {
+        ClipRevision {
+            clip: make_dummy_clip(name),
+            origin: ClipOrigin::User,
+        }
+    }
+
     #[test]
     fn test_push_and_undo_clip_edit() {
-        let mut history = EditHistory::new(100);
-        let before = make_dummy_clip("before");
+        let mut history = EditHistory::default();
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
 
         history.push_clip_edit(1, before, after, "test edit");
@@ -209,7 +355,7 @@ mod tests {
                 description,
             } => {
                 assert_eq!(*clip_id, 1);
-                assert_eq!(before.name, "before");
+                assert_eq!(before.clip.name, "before");
                 assert_eq!(*description, "test edit");
             }
             _ => panic!("unexpected command type"),
@@ -218,8 +364,8 @@ mod tests {
 
     #[test]
     fn test_push_and_redo() {
-        let mut history = EditHistory::new(100);
-        let before = make_dummy_clip("before");
+        let mut history = EditHistory::default();
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
 
         history.push_clip_edit(1, before, after, "edit");
@@ -234,8 +380,8 @@ mod tests {
 
     #[test]
     fn test_redo_cleared_on_new_edit() {
-        let mut history = EditHistory::new(100);
-        let before = make_dummy_clip("b1");
+        let mut history = EditHistory::default();
+        let before = make_dummy_revision("b1");
         let after = make_dummy_clip("a1");
         history.push_clip_edit(1, before, after, "first");
 
@@ -243,7 +389,7 @@ mod tests {
         history.push_to_redo(entry);
         assert!(history.can_redo());
 
-        let before2 = make_dummy_clip("b2");
+        let before2 = make_dummy_revision("b2");
         let after2 = make_dummy_clip("a2");
         history.push_clip_edit(1, before2, after2, "second");
 
@@ -255,7 +401,7 @@ mod tests {
         let mut history = EditHistory::new(3);
 
         for i in 0..5 {
-            let before = make_dummy_clip(&format!("b{}", i));
+            let before = make_dummy_revision(&format!("b{}", i));
             let after = make_dummy_clip(&format!("a{}", i));
             history.push_clip_edit(1, before, after, "edit");
         }
@@ -269,8 +415,8 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_returns_entry() {
-        let mut history = EditHistory::new(100);
-        let before = make_dummy_clip("before");
+        let mut history = EditHistory::default();
+        let before = make_dummy_revision("before");
         let after = make_dummy_clip("after");
         history.push_clip_edit(1, before, after, "edit");
 
@@ -279,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_last_undo_mut_empty() {
-        let mut history = EditHistory::new(100);
+        let mut history = EditHistory::default();
         assert!(history.last_undo_mut().is_none());
     }
 
@@ -288,7 +434,7 @@ mod tests {
         let commands = [
             EditCommand::ClipModified {
                 clip_id: 1,
-                before: make_dummy_clip("before"),
+                before: make_dummy_revision("before"),
                 description: "Move keyframe",
             },
             EditCommand::ScheduleModified {
@@ -302,15 +448,36 @@ mod tests {
             },
             EditCommand::ClipRemoved {
                 clip_id: 1,
-                removed: SourceClip::new(1, make_dummy_clip("removed")),
+                removed: RemovedClip {
+                    source: SourceClip::new(1, make_dummy_clip("removed")),
+                    origin: ClipOrigin::User,
+                },
+                effects: ClipDeletionEffects::default(),
                 description: "Remove clip",
+            },
+            EditCommand::SkeletonModified {
+                before: SkeletonSnapshot {
+                    skeleton: thyllore_anim_core::Skeleton::new("s"),
+                    skins: Vec::new(),
+                    spring_setups: Vec::new(),
+                    constraint_sets: Vec::new(),
+                    clip_tracks: Vec::new(),
+                    humanoid_mapping: Default::default(),
+                },
+                description: "Remove bone",
             },
         ];
 
         let descriptions: Vec<&str> = commands.iter().map(EditCommand::description).collect();
         assert_eq!(
             descriptions,
-            ["Move keyframe", "Move clip", "Add clip", "Remove clip"]
+            [
+                "Move keyframe",
+                "Move clip",
+                "Add clip",
+                "Remove clip",
+                "Remove bone"
+            ]
         );
     }
 }

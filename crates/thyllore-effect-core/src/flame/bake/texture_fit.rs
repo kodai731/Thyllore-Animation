@@ -13,8 +13,7 @@ use thyllore_texture_fit_core::{
 ///
 /// `profile_radius` is R, `y` is the transverse coordinate on the projection plane.
 pub fn project_row(amplitude: f32, profile_radius: f32, sharpness: f32, y: f32) -> f32 {
-    let support_radius =
-        crate::flame_radial::flame_radial_support_radius(sharpness, 1.0) * profile_radius;
+    let support_radius = crate::flame::flame_radial_support_radius(sharpness, 1.0) * profile_radius;
     let inside = (1.0 - y * y / (support_radius * support_radius)).max(0.0);
     amplitude * (16.0 / 15.0) * support_radius * inside * inside * inside.sqrt()
 }
@@ -41,14 +40,14 @@ pub fn project_profile(
             .collect(),
         (0.0, 1.0),
     );
-    let taper = crate::flame_radial::FlameRadialTaper::from_effect(effect, baked);
+    let taper = crate::flame::FlameRadialTaper::from_effect(effect, baked);
     let sharpness = effect.radial_sharpness;
 
     heights
         .iter()
         .map(|&h| {
             let f_h = evaluate_chebyshev(&height, h);
-            let r_h = crate::flame_radial::flame_radial_radius_scale(h, taper);
+            let r_h = crate::flame::flame_radial_radius_scale(h, taper);
             columns
                 .iter()
                 .map(|&y| project_row(f_h, r_h, sharpness, y))
@@ -91,7 +90,7 @@ pub fn fit_silhouette(
         .map(|j| {
             (j as f32 / 32.0)
                 * 3.0
-                * crate::flame_radial::flame_radial_support_radius(initial.radial_sharpness, 1.0)
+                * crate::flame::flame_radial_support_radius(initial.radial_sharpness, 1.0)
         })
         .collect();
 
@@ -448,7 +447,7 @@ pub fn apply_texture_fit(
         if profile {
             baked.envelope = Some(fit.envelope_profile);
             let max_radius = (1.5
-                / crate::flame_radial::flame_radial_support_radius(effect.radial_sharpness, 1.0))
+                / crate::flame::flame_radial_support_radius(effect.radial_sharpness, 1.0))
             .min(2.0);
             baked.radius = Some(fit.radius_profile.map(|v| v.clamp(0.05, max_radius)));
             baked.blend = blend;
@@ -797,8 +796,7 @@ mod tests {
 
             // Numerical integration: ∫ amplitude * (1 - (y^2+z^2)/Sr^2)^2 dz over the support,
             // Sr = support_radius(sharpness) * R
-            let support_radius =
-                crate::flame_radial::flame_radial_support_radius(sharpness, 1.0) * radius;
+            let support_radius = crate::flame::flame_radial_support_radius(sharpness, 1.0) * radius;
             let z_max = support_radius;
             let steps = 200000;
             let dz = 2.0 * z_max / steps as f32;
@@ -919,10 +917,7 @@ mod tests {
             .map(|j| {
                 (j as f32 / 32.0)
                     * 3.0
-                    * crate::flame_radial::flame_radial_support_radius(
-                        target_effect.radial_sharpness,
-                        1.0,
-                    )
+                    * crate::flame::flame_radial_support_radius(target_effect.radial_sharpness, 1.0)
             })
             .collect();
 
@@ -984,7 +979,8 @@ mod tests {
 
         // All white image (no flame structure)
         let white_pixels: Vec<[f32; 3]> = vec![[1.0, 1.0, 1.0]; width * height];
-        let result = fit_flame_texture(&white_pixels, width, height, &initial, &Default::default());
+        let _result =
+            fit_flame_texture(&white_pixels, width, height, &initial, &Default::default());
         // Should be None (mask covers everything, no flame structure) or finite values
 
         // Uniform noise image
@@ -1140,7 +1136,7 @@ mod tests {
             .map(|j| {
                 (j as f32 / 32.0)
                     * 3.0
-                    * crate::flame_radial::flame_radial_support_radius(effect.radial_sharpness, 1.0)
+                    * crate::flame::flame_radial_support_radius(effect.radial_sharpness, 1.0)
             })
             .collect();
         let profile = project_profile(&effect, &Default::default(), &heights, &columns);
@@ -1151,7 +1147,7 @@ mod tests {
             .position(|&c| (c - 0.0).abs() < 1e-6)
             .unwrap();
         let axis_profile: Vec<f32> = profile.iter().map(|row| row[center_col_idx]).collect();
-        let axis_result = crate::flame_fit::fit_envelope_from_profile(
+        let axis_result = thyllore_texture_fit_core::fit_envelope_from_profile(
             &axis_profile,
             effect.edge.radius_tip_ratio,
             effect.warp.taper_power,

@@ -55,6 +55,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
 
@@ -98,6 +100,8 @@ jobs:
           /opt/blender/blender --version
 
       - name: Setup slangc
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_slang.sh
 
       - name: Build ZIP per platform

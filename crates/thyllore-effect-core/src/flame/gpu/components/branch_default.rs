@@ -1,5 +1,5 @@
-use crate::flame::constants::*;
-use crate::flame::gpu::components::FlameBranchAgeProfile;
+use crate::flame::FlameBranchAgeProfile;
+use crate::flame::*;
 
 impl Default for FlameBranchAgeProfile {
     fn default() -> Self {

@@ -1,4 +1,5 @@
 use dear_imgui_rs as imgui;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 fn test_guard() -> std::sync::MutexGuard<'static, ()> {
@@ -172,15 +173,20 @@ fn context_consumer_captures_managed_texture_bytes_and_binding() {
 
 #[test]
 fn snapshot_preserves_standard_sampler_callbacks() {
+    static LINEAR_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static NEAREST_CALLS: AtomicUsize = AtomicUsize::new(0);
+
     unsafe extern "C" fn linear(
         _parent_list: *const imgui::sys::ImDrawList,
         _cmd: *const imgui::sys::ImDrawCmd,
     ) {
+        LINEAR_CALLS.fetch_add(1, Ordering::Relaxed);
     }
     unsafe extern "C" fn nearest(
         _parent_list: *const imgui::sys::ImDrawList,
         _cmd: *const imgui::sys::ImDrawCmd,
     ) {
+        NEAREST_CALLS.fetch_add(1, Ordering::Relaxed);
     }
 
     let _guard = test_guard();

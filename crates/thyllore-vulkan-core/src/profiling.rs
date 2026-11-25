@@ -1,16 +1,16 @@
-use crate::core::device::RRDevice;
+use crate::core::RRDevice;
 use crate::resource::GpuResource;
-use vulkanalia::prelude::v1_0::*;
+use crate::vulkan::*;
 
 /// Converts raw query ticks to milliseconds.
 const TIMESTAMP_QUERY_COUNT: u32 = 128;
 
-pub fn ticks_to_ms(start_tick: u64, end_tick: u64, timestamp_period: f32) -> f32 {
+pub(crate) fn ticks_to_ms(start_tick: u64, end_tick: u64, timestamp_period: f32) -> f32 {
     (end_tick.saturating_sub(start_tick)) as f32 * timestamp_period / 1e6
 }
 
 /// Decodes query results from the WITH_AVAILABILITY layout.
-pub fn decode_results(
+pub(crate) fn decode_results(
     labels: &[(String, u32, u32)], // (label, start_idx, end_idx)
     data: &[u64],
 ) -> Option<Vec<(String, u64, u64)>> {
@@ -37,11 +37,7 @@ pub struct GpuTimestampProfiler {
 }
 
 impl GpuTimestampProfiler {
-    pub unsafe fn new(
-        device: &vulkanalia::Device,
-        timestamp_period: f32,
-        frames_in_flight: usize,
-    ) -> Self {
+    pub unsafe fn new(rrdevice: &RRDevice, timestamp_period: f32, frames_in_flight: usize) -> Self {
         let mut pools = Vec::with_capacity(frames_in_flight);
         let mut labels = Vec::with_capacity(frames_in_flight);
         let mut next_query = Vec::with_capacity(frames_in_flight);
@@ -50,7 +46,10 @@ impl GpuTimestampProfiler {
             let pool_info = vk::QueryPoolCreateInfo::builder()
                 .query_type(vk::QueryType::TIMESTAMP)
                 .query_count(TIMESTAMP_QUERY_COUNT);
-            let pool = device.create_query_pool(&pool_info, None).unwrap();
+            let pool = rrdevice
+                .device()
+                .create_query_pool(&pool_info, None)
+                .unwrap();
             pools.push(pool);
             labels.push(Vec::new());
             next_query.push(0);
@@ -66,15 +65,18 @@ impl GpuTimestampProfiler {
 
     pub unsafe fn begin_frame(
         &mut self,
-        device: &vulkanalia::Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
     ) {
-        device.cmd_reset_query_pool(cmd, self.pools[slot], 0, TIMESTAMP_QUERY_COUNT);
+        let cmd = cmd.raw();
+        rrdevice
+            .device()
+            .cmd_reset_query_pool(cmd, self.pools[slot], 0, TIMESTAMP_QUERY_COUNT);
         self.labels[slot].clear();
         self.next_query[slot] = 0;
 
-        device.cmd_write_timestamp(
+        rrdevice.device().cmd_write_timestamp(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             self.pools[slot],
@@ -86,15 +88,16 @@ impl GpuTimestampProfiler {
 
     pub unsafe fn end_frame(
         &mut self,
-        device: &vulkanalia::Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
     ) {
+        let cmd = cmd.raw();
         let q = self.next_query[slot];
         if q >= TIMESTAMP_QUERY_COUNT {
             return;
         }
-        device.cmd_write_timestamp(
+        rrdevice.device().cmd_write_timestamp(
             cmd,
             vk::PipelineStageFlags::BOTTOM_OF_PIPE,
             self.pools[slot],
@@ -108,16 +111,17 @@ impl GpuTimestampProfiler {
 
     pub unsafe fn begin_scope(
         &mut self,
-        device: &vulkanalia::Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
         label: String,
     ) {
+        let cmd = cmd.raw();
         let q = self.next_query[slot];
         if q >= TIMESTAMP_QUERY_COUNT {
             return;
         }
-        device.cmd_write_timestamp(
+        rrdevice.device().cmd_write_timestamp(
             cmd,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             self.pools[slot],
@@ -129,10 +133,11 @@ impl GpuTimestampProfiler {
 
     pub unsafe fn end_scope(
         &mut self,
-        device: &vulkanalia::Device,
-        cmd: vk::CommandBuffer,
+        rrdevice: &RRDevice,
+        cmd: crate::types::CommandBuffer,
         slot: usize,
     ) {
+        let cmd = cmd.raw();
         let pending = match self.labels[slot].last_mut() {
             Some(entry) => entry,
             None => return,
@@ -141,7 +146,7 @@ impl GpuTimestampProfiler {
         if q >= TIMESTAMP_QUERY_COUNT {
             return;
         }
-        device.cmd_write_timestamp(
+        rrdevice.device().cmd_write_timestamp(
             cmd,
             vk::PipelineStageFlags::BOTTOM_OF_PIPE,
             self.pools[slot],
@@ -153,7 +158,7 @@ impl GpuTimestampProfiler {
 
     pub unsafe fn collect(
         &mut self,
-        device: &vulkanalia::Device,
+        rrdevice: &RRDevice,
         slot: usize,
     ) -> Option<Vec<(String, f32)>> {
         let used = self.next_query[slot];
@@ -164,7 +169,7 @@ impl GpuTimestampProfiler {
         let word_count = used * 2;
         let mut data = vec![0u8; (word_count as usize) * 8];
 
-        let result = device.get_query_pool_results(
+        let result = rrdevice.device().get_query_pool_results(
             self.pools[slot],
             0,
             used,
@@ -196,10 +201,10 @@ impl GpuTimestampProfiler {
         Some(results)
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         for pool in &mut self.pools {
             if *pool != vk::QueryPool::null() {
-                device.destroy_query_pool(*pool, None);
+                rrdevice.device().destroy_query_pool(*pool, None);
                 *pool = vk::QueryPool::null();
             }
         }
@@ -208,7 +213,7 @@ impl GpuTimestampProfiler {
 
 impl GpuResource for GpuTimestampProfiler {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        Self::destroy(self, &rrdevice.device);
+        Self::destroy(self, rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

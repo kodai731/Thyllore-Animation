@@ -1,5 +1,5 @@
-pub mod framebuffer;
-pub mod pass;
+mod framebuffer;
+mod pass;
 
 pub use framebuffer::*;
 pub use pass::*;

@@ -1,9 +1,9 @@
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::systems::clip_schedule_systems::{
+use crate::ecs::systems::timeline::clip_instance::modify_clip_group;
+use crate::ecs::systems::{
     clip_schedule_add_to_group, clip_schedule_create_group, clip_schedule_remove_from_group,
     clip_schedule_remove_group,
 };
-use crate::ecs::systems::timeline::clip_instance::modify_clip_group;
 use crate::ecs::world::{Entity, World};
 
 use super::ClipInstanceEvent;

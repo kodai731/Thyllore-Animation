@@ -37,13 +37,7 @@ pub(crate) fn dispatch_window_event(
 
         WindowEvent::DroppedFile(path_buf) => {
             if let Some(path) = path_buf.to_str() {
-                let extension = std::path::Path::new(path)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.to_ascii_lowercase());
-
-                let handler = extension
-                    .and_then(|ext| crate::hooks::dropped_file::find_dropped_file_hook(&ext));
+                let handler = crate::hooks::dropped_file::find_dropped_file_hook(path);
 
                 match handler {
                     Some(apply) => apply(&mut app.data.ecs_world, path),

@@ -11,7 +11,7 @@ fn assert_unique_names(names: &mut Vec<&str>) {
 }
 
 /// The invariants every effect's generated tables must hold.
-pub fn assert_tables_are_consistent<C>(
+pub(crate) fn assert_tables_are_consistent<C>(
     scalars: &[ScalarParam<C>],
     ui: &[UiParam],
     ownership_len: usize,
@@ -63,7 +63,7 @@ pub fn assert_tables_are_consistent<C>(
     assert_eq!(through_value, C::default());
 }
 
-pub fn groups_in_display_order(ui: &[UiParam]) -> Vec<&'static str> {
+pub(crate) fn groups_in_display_order(ui: &[UiParam]) -> Vec<&'static str> {
     let mut groups: Vec<&str> = Vec::new();
     for param in ui {
         if !param.group.is_empty() && !groups.contains(&param.group) {
@@ -73,6 +73,6 @@ pub fn groups_in_display_order(ui: &[UiParam]) -> Vec<&'static str> {
     groups
 }
 
-pub fn primary_names(ui: &[UiParam]) -> Vec<&'static str> {
+pub(crate) fn primary_names(ui: &[UiParam]) -> Vec<&'static str> {
     ui.iter().filter(|p| p.primary).map(|p| p.name).collect()
 }

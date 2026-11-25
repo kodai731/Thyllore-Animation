@@ -2,6 +2,7 @@ use std::env;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
+    thyllore_log_core::panic_hook::install();
     thyllore_animation::app::cleanup_old_screenshots()?;
 
     let config = match thyllore_animation::app::config::from_args(env::args().collect())? {

@@ -193,11 +193,12 @@ fn map_type(type_name: &str, nested: &BTreeMap<String, Vec<ReflectedMember>>) ->
         "float32" => "f32",
         "int32" => "i32",
         "uint32" => "u32",
+        "uint64" => "u64",
         "bool" => "u32",
         "float32x2" => "[f32; 2]",
         "float32x3" => "[f32; 3]",
         "float32x4" => "[f32; 4]",
-        "float32x4x4" => "Matrix4<f32>",
+        "float32x4x4" => "GpuMat4",
         other if nested.contains_key(other) => other,
         _ => return None,
     };
@@ -278,7 +279,7 @@ mod tests {
     fn generates_nested_structs_before_the_block() {
         let mut config = GpuBlockCodegenConfig {
             header: "Generated from SPIR-V by `cargo run --bin gen`; do not edit.".into(),
-            imports: vec!["cgmath::Matrix4".into()],
+            imports: vec!["thyllore_math_core::GpuMat4".into()],
             extra_derives: BTreeMap::new(),
         };
         config
@@ -289,7 +290,7 @@ mod tests {
         assert_eq!(
             generated,
             "// Generated from SPIR-V by `cargo run --bin gen`; do not edit.\n\
-             use cgmath::Matrix4;\n\
+             use thyllore_math_core::GpuMat4;\n\
              use thyllore_spirv_reflect::declare_gpu_block;\n\
              \n\
              declare_gpu_block! {\n\
@@ -303,7 +304,7 @@ mod tests {
              declare_gpu_block! {\n\
              \x20   #[derive(Clone, Copy, Debug)]\n\
              \x20   pub struct Outer {\n\
-             \x20       pub view: Matrix4<f32>,\n\
+             \x20       pub view: GpuMat4,\n\
              \x20       pub color_base: Color = nested Color,\n\
              \x20       pub modes: [Color; 2] = nested Color,\n\
              \x20       pub warp_y_scale: [f32; 4],\n\
@@ -313,6 +314,25 @@ mod tests {
              \x20   }\n\
              }\n"
         );
+    }
+
+    #[test]
+    fn maps_device_addresses_and_the_padding_that_aligns_them() {
+        let addresses = ReflectedBlock {
+            type_name: "Addresses".into(),
+            size: 16,
+            members: vec![
+                member("sourceAddress", 0, 8, "uint64"),
+                member("count", 8, 4, "uint32"),
+                member("_padding", 12, 4, "float32"),
+            ],
+        };
+
+        let generated =
+            generate_gpu_blocks_rust(&addresses, &GpuBlockCodegenConfig::default()).unwrap();
+        assert!(generated.contains("pub source_address: u64,"));
+        assert!(generated.contains("pub count: u32,"));
+        assert!(generated.contains("pub _padding: f32,"));
     }
 
     #[test]

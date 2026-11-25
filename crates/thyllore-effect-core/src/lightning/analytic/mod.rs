@@ -1,7 +1,7 @@
-pub mod flash;
-pub mod hash_channel;
-pub mod strike;
-pub mod timing;
+mod flash;
+mod hash_channel;
+mod strike;
+mod timing;
 
 pub use flash::*;
 pub use hash_channel::*;

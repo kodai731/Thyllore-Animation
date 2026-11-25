@@ -1,4 +1,4 @@
-use cgmath::{Quaternion, Vector3};
+use glam::{Quat, Vec3};
 
 use crate::BoneId;
 
@@ -16,7 +16,7 @@ pub struct IkConstraintData {
     pub chain_length: u32,
     pub target_bone: BoneId,
     pub effector_bone: BoneId,
-    pub pole_vector: Option<Vector3<f32>>,
+    pub pole_vector: Option<Vec3>,
     pub pole_target: Option<BoneId>,
     pub twist: f32,
     pub enabled: bool,
@@ -42,8 +42,8 @@ impl Default for IkConstraintData {
 pub struct AimConstraintData {
     pub source_bone: BoneId,
     pub target_bone: BoneId,
-    pub aim_axis: Vector3<f32>,
-    pub up_axis: Vector3<f32>,
+    pub aim_axis: Vec3,
+    pub up_axis: Vec3,
     pub up_target: Option<BoneId>,
     pub enabled: bool,
     pub weight: f32,
@@ -54,8 +54,8 @@ impl Default for AimConstraintData {
         Self {
             source_bone: 0,
             target_bone: 0,
-            aim_axis: Vector3::new(0.0, 0.0, 1.0),
-            up_axis: Vector3::new(0.0, 1.0, 0.0),
+            aim_axis: Vec3::new(0.0, 0.0, 1.0),
+            up_axis: Vec3::new(0.0, 1.0, 0.0),
             up_target: None,
             enabled: true,
             weight: 1.0,
@@ -90,7 +90,7 @@ impl Default for ParentConstraintData {
 pub struct PositionConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Vector3<f32>,
+    pub offset: Vec3,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -101,7 +101,7 @@ impl Default for PositionConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Vector3::new(0.0, 0.0, 0.0),
+            offset: Vec3::new(0.0, 0.0, 0.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,
@@ -113,7 +113,7 @@ impl Default for PositionConstraintData {
 pub struct RotationConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Quaternion<f32>,
+    pub offset: Quat,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -124,7 +124,7 @@ impl Default for RotationConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            offset: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,
@@ -136,7 +136,7 @@ impl Default for RotationConstraintData {
 pub struct ScaleConstraintData {
     pub constrained_bone: BoneId,
     pub target_bone: BoneId,
-    pub offset: Vector3<f32>,
+    pub offset: Vec3,
     pub affect_axes: [bool; 3],
     pub enabled: bool,
     pub weight: f32,
@@ -147,7 +147,7 @@ impl Default for ScaleConstraintData {
         Self {
             constrained_bone: 0,
             target_bone: 0,
-            offset: Vector3::new(1.0, 1.0, 1.0),
+            offset: Vec3::new(1.0, 1.0, 1.0),
             affect_axes: [true, true, true],
             enabled: true,
             weight: 1.0,
@@ -177,6 +177,17 @@ impl ConstraintType {
         }
     }
 
+    pub fn set_enabled(&mut self, enabled: bool) {
+        match self {
+            Self::Ik(d) => d.enabled = enabled,
+            Self::Aim(d) => d.enabled = enabled,
+            Self::Parent(d) => d.enabled = enabled,
+            Self::Position(d) => d.enabled = enabled,
+            Self::Rotation(d) => d.enabled = enabled,
+            Self::Scale(d) => d.enabled = enabled,
+        }
+    }
+
     pub fn constrained_bone_id(&self) -> BoneId {
         match self {
             Self::Ik(d) => d.effector_bone,
@@ -185,6 +196,57 @@ impl ConstraintType {
             Self::Position(d) => d.constrained_bone,
             Self::Rotation(d) => d.constrained_bone,
             Self::Scale(d) => d.constrained_bone,
+        }
+    }
+
+    pub fn set_constrained_bone_id(&mut self, bone: BoneId) {
+        match self {
+            Self::Ik(d) => d.effector_bone = bone,
+            Self::Aim(d) => d.source_bone = bone,
+            Self::Parent(d) => d.constrained_bone = bone,
+            Self::Position(d) => d.constrained_bone = bone,
+            Self::Rotation(d) => d.constrained_bone = bone,
+            Self::Scale(d) => d.constrained_bone = bone,
+        }
+    }
+
+    pub fn target_bone_id(&self) -> Option<BoneId> {
+        match self {
+            Self::Ik(d) => Some(d.target_bone),
+            Self::Aim(d) => Some(d.target_bone),
+            Self::Parent(_) => None,
+            Self::Position(d) => Some(d.target_bone),
+            Self::Rotation(d) => Some(d.target_bone),
+            Self::Scale(d) => Some(d.target_bone),
+        }
+    }
+
+    pub fn set_target_bone_id(&mut self, bone: BoneId) {
+        match self {
+            Self::Ik(d) => d.target_bone = bone,
+            Self::Aim(d) => d.target_bone = bone,
+            Self::Parent(_) => {}
+            Self::Position(d) => d.target_bone = bone,
+            Self::Rotation(d) => d.target_bone = bone,
+            Self::Scale(d) => d.target_bone = bone,
+        }
+    }
+
+    pub fn affect_axes(&self) -> Option<[bool; 3]> {
+        match self {
+            Self::Position(d) => Some(d.affect_axes),
+            Self::Rotation(d) => Some(d.affect_axes),
+            Self::Scale(d) => Some(d.affect_axes),
+            Self::Ik(_) | Self::Aim(_) | Self::Parent(_) => None,
+        }
+    }
+
+    pub fn set_affect_axes(&mut self, axes: [bool; 3]) {
+        match self {
+            Self::Position(d) => d.affect_axes = axes,
+            Self::Rotation(d) => d.affect_axes = axes,
+            Self::Scale(d) => d.affect_axes = axes,
+            Self::Ik(_) | Self::Aim(_) | Self::Parent(_) => {}
         }
     }
 

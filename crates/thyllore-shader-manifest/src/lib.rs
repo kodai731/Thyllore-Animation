@@ -13,7 +13,8 @@ pub use bindings_codegen::{generate_shader_bindings_rust, BindingCodegenError};
 pub use codegen::generate_pass_manifest_rust;
 pub use cpp_abi::{
     layout_asserts_cpp, layout_differences, natural_layout_block, parse_module, rust_bindings,
-    slang_type_name, CppAbiCodegenError, CppAbiParseError, CppModule, UniformPassing,
+    slang_type_name, CppAbiCodegenError, CppAbiParseError, CppExport, CppField, CppModule,
+    CppParam, CppStruct, UniformPassing,
 };
 pub use gpu_block_codegen::{
     find_declared_block, generate_gpu_blocks_rust, GpuBlockCodegenConfig, GpuBlockCodegenError,

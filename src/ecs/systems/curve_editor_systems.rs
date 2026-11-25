@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{
-    curve_add_keyframe, curve_remove_keyframe, curve_sample, EditableAnimationClip, PropertyType,
-};
-use crate::animation::BoneId;
 use crate::ecs::resource::{
     ClipLibrary, CurveEditorBuffer, CurveEditorPlacement, CurveEditorState, TimelineState,
 };
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{
+    curve_add_keyframe, curve_remove_keyframe, curve_sample, EditableAnimationClip, PropertyType,
+};
+use thyllore_anim_core::BoneId;
 
 use super::batch_run_systems::{unit_action_parse, BatchAction};
 
@@ -46,7 +46,7 @@ pub fn curve_editor_swap_buffer(
     buffer: &mut CurveEditorBuffer,
     clip: &mut EditableAnimationClip,
     bone_id: BoneId,
-) {
+) -> bool {
     let keys_to_swap: Vec<(BoneId, PropertyType)> = buffer
         .snapshots
         .keys()
@@ -55,12 +55,12 @@ pub fn curve_editor_swap_buffer(
         .collect();
 
     if keys_to_swap.is_empty() {
-        return;
+        return false;
     }
 
     let track = match clip.tracks.get_mut(&bone_id) {
         Some(t) => t,
-        None => return,
+        None => return false,
     };
 
     for (_, prop) in &keys_to_swap {
@@ -85,6 +85,8 @@ pub fn curve_editor_swap_buffer(
             }
         }
     }
+
+    true
 }
 
 /// `open_curve_editor`: a headless run opens the editor as its floating window on the timeline's

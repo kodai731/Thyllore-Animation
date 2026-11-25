@@ -7,7 +7,7 @@ use crate::ecs::systems::{
     clear_lightning_target, spawn_lightning_target, spawn_lightning_waypoint,
 };
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 impl UiCommand for LightningUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {

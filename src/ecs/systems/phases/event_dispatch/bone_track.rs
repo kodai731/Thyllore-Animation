@@ -1,10 +1,10 @@
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Debug)]
 pub struct EnsureBoneTrack {
@@ -52,12 +52,12 @@ fn resolve_track_name(world: &World, assets: &AssetStorage, bone_id: BoneId) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
-    use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
+    use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 
     #[test]
     fn applying_to_a_clip_without_the_track_creates_it_with_the_role_name() {

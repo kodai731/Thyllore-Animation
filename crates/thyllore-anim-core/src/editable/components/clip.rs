@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::BoneId;
 
@@ -11,6 +11,8 @@ use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
+    /// Assigned by the clip library when the clip is registered, so a clip file does not hold it.
+    #[serde(skip)]
     pub id: SourceClipId,
     pub name: String,
     pub duration: f32,
@@ -18,7 +20,11 @@ pub struct EditableAnimationClip {
     /// keyframes, so a schedule can loop over an unkeyed clip.
     #[serde(default)]
     pub min_duration: f32,
+    #[serde(serialize_with = "serialize_tracks_by_bone_id")]
     pub tracks: HashMap<BoneId, BoneTrack>,
+    /// Tracks whose bone name the bound model lacks; `clip_remap_bone_ids` binds them again by name.
+    #[serde(default)]
+    pub unbound_tracks: Vec<BoneTrack>,
     /// Keyed by process-local `PropertyType::Custom` codes; `AnimationClipFile` persists them by name.
     #[serde(skip)]
     pub scalar_curves: Vec<PropertyCurve>,
@@ -26,6 +32,15 @@ pub struct EditableAnimationClip {
     pub morph_tracks: Vec<MorphTrack>,
     pub source_path: Option<String>,
     next_curve_id: u64,
+}
+
+/// Written in bone id order, so the same clip always encodes to the same bytes.
+fn serialize_tracks_by_bone_id<S: Serializer>(
+    tracks: &HashMap<BoneId, BoneTrack>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let ordered_tracks: BTreeMap<&BoneId, &BoneTrack> = tracks.iter().collect();
+    ordered_tracks.serialize(serializer)
 }
 
 impl EditableAnimationClip {
@@ -36,6 +51,7 @@ impl EditableAnimationClip {
             duration: 0.0,
             min_duration: 0.0,
             tracks: HashMap::new(),
+            unbound_tracks: Vec::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),
             source_path: None,
@@ -68,6 +84,19 @@ impl EditableAnimationClip {
 
     pub fn track_count(&self) -> usize {
         self.tracks.len()
+    }
+
+    /// Bones the loaded model lacks; their tracks are kept but not played.
+    pub fn unbound_track_names(&self) -> Vec<&str> {
+        self.unbound_tracks
+            .iter()
+            .map(|track| track.bone_name.as_str())
+            .collect()
+    }
+
+    /// Bone and morph tracks pose a model; a clip with neither is an empty take.
+    pub fn has_pose_tracks(&self) -> bool {
+        !self.tracks.is_empty() || !self.morph_tracks.is_empty()
     }
 
     pub fn total_keyframe_count(&self) -> usize {
@@ -212,6 +241,24 @@ mod tests {
     }
 
     #[test]
+    fn tracks_encode_in_bone_id_order() {
+        let mut clip = EditableAnimationClip::new(1, "ordered".to_string());
+        for bone_id in [9, 2, 31, 5, 17, 0, 23, 11] {
+            clip.add_track(bone_id, format!("bone{bone_id}"));
+        }
+
+        let encoded = ron::to_string(&clip).expect("serialize");
+
+        let name_offsets: Vec<usize> = [0, 2, 5, 9, 11, 17, 23, 31]
+            .iter()
+            .map(|bone_id| encoded.find(&format!("\"bone{bone_id}\"")).expect("track"))
+            .collect();
+        assert!(name_offsets.is_sorted(), "{name_offsets:?}");
+        let decoded: EditableAnimationClip = ron::from_str(&encoded).expect("deserialize");
+        assert_eq!(decoded.track_count(), 8);
+    }
+
+    #[test]
     fn test_morph_tracks_ron_roundtrip() {
         let mut clip = EditableAnimationClip::new(2, "morph".to_string());
         let track = clip.get_or_add_morph_track("face", "eye_blink");
@@ -239,6 +286,7 @@ impl Default for EditableAnimationClip {
             duration: 0.0,
             min_duration: 0.0,
             tracks: HashMap::new(),
+            unbound_tracks: Vec::new(),
             scalar_curves: Vec::new(),
             morph_tracks: Vec::new(),
             source_path: None,

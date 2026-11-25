@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Args;
-use thyllore_effect_core::WaterSecondaryRays;
+use thyllore_effect_core::water::WaterSecondaryRays;
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{WaterProbeCapture, WaterRenderSettings};

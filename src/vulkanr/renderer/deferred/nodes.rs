@@ -1,5 +1,4 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::{composite_pass::*, onion_skin_pass::*, post_process_pass::*, tonemap_pass::*};
 use crate::app::post_process::{
@@ -8,27 +7,14 @@ use crate::app::post_process::{
 };
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassGraph, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef,
-    TargetUse, TransientRequest,
+    AccessStage, AttachmentStart, CoreTarget, PassGraph, PassStage, RenderPassNode, TargetAccess,
+    TargetRef, TargetUse, TransientRequest,
 };
+use thyllore_vulkan_core::types::CommandBuffer;
 
 const HDR_COLOR: TargetRef = TargetRef::Core(CoreTarget::HdrColor);
 const OFFSCREEN: TargetRef = TargetRef::Core(CoreTarget::Offscreen);
 const ONION_GHOST: TargetRef = TargetRef::Core(CoreTarget::OnionSkinGhost);
-
-const fn cleared_attachment() -> TargetAccess {
-    TargetAccess::Attachment {
-        initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    }
-}
-
-const fn loaded_attachment(layout: vk::ImageLayout) -> TargetAccess {
-    TargetAccess::Attachment {
-        initial_layout: layout,
-        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    }
-}
 
 fn tonemap_input(ctx: &PassContext) -> TargetRef {
     if is_dof_enabled(ctx) {
@@ -60,7 +46,7 @@ fn is_auto_exposure_enabled(ctx: &PassContext) -> bool {
         && ctx.auto_exposure_buffers.is_some()
 }
 
-pub struct CompositeHdrNode;
+pub(super) struct CompositeHdrNode;
 
 impl RenderPassNode for CompositeHdrNode {
     fn name(&self) -> &'static str {
@@ -72,13 +58,16 @@ impl RenderPassNode for CompositeHdrNode {
     }
 
     fn writes(&self, _ctx: &PassContext) -> Vec<TargetUse> {
-        vec![TargetUse::new(HDR_COLOR, cleared_attachment())]
+        vec![TargetUse::new(
+            HDR_COLOR,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -86,7 +75,7 @@ impl RenderPassNode for CompositeHdrNode {
     }
 }
 
-pub struct OnionSkinNode;
+pub(super) struct OnionSkinNode;
 
 impl RenderPassNode for OnionSkinNode {
     fn name(&self) -> &'static str {
@@ -101,13 +90,16 @@ impl RenderPassNode for OnionSkinNode {
         if !is_onion_skin_active(ctx) {
             return Vec::new();
         }
-        vec![TargetUse::new(ONION_GHOST, cleared_attachment())]
+        vec![TargetUse::new(
+            ONION_GHOST,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
@@ -115,7 +107,7 @@ impl RenderPassNode for OnionSkinNode {
     }
 }
 
-pub struct BloomDownsampleNode {
+pub(super) struct BloomDownsampleNode {
     mip_index: usize,
 }
 
@@ -155,7 +147,7 @@ impl RenderPassNode for BloomDownsampleNode {
             index => bloom_mip(ctx, index - 1),
         };
         source
-            .map(|target| TargetUse::new(target, TargetAccess::Sampled(ShaderStage::Fragment)))
+            .map(|target| TargetUse::new(target, TargetAccess::Sampled(AccessStage::Fragment)))
             .into_iter()
             .collect()
     }
@@ -165,7 +157,9 @@ impl RenderPassNode for BloomDownsampleNode {
             return Vec::new();
         }
         bloom_mip(ctx, self.mip_index)
-            .map(|target| TargetUse::new(target, cleared_attachment()))
+            .map(|target| {
+                TargetUse::new(target, TargetAccess::Attachment(AttachmentStart::Discard))
+            })
             .into_iter()
             .collect()
     }
@@ -173,7 +167,7 @@ impl RenderPassNode for BloomDownsampleNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -181,7 +175,7 @@ impl RenderPassNode for BloomDownsampleNode {
     }
 }
 
-pub struct BloomUpsampleNode {
+pub(super) struct BloomUpsampleNode {
     pass_index: usize,
 }
 
@@ -209,7 +203,7 @@ impl RenderPassNode for BloomUpsampleNode {
         }
         self.target_mip(ctx)
             .and_then(|target| bloom_mip(ctx, target + 1))
-            .map(|source| TargetUse::new(source, TargetAccess::Sampled(ShaderStage::Fragment)))
+            .map(|source| TargetUse::new(source, TargetAccess::Sampled(AccessStage::Fragment)))
             .into_iter()
             .collect()
     }
@@ -223,7 +217,7 @@ impl RenderPassNode for BloomUpsampleNode {
             .map(|target| {
                 TargetUse::new(
                     target,
-                    loaded_attachment(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL),
+                    TargetAccess::Attachment(AttachmentStart::ColorAttachment),
                 )
             })
             .into_iter()
@@ -233,7 +227,7 @@ impl RenderPassNode for BloomUpsampleNode {
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -241,7 +235,7 @@ impl RenderPassNode for BloomUpsampleNode {
     }
 }
 
-pub struct DofNode;
+pub(super) struct DofNode;
 
 impl RenderPassNode for DofNode {
     fn name(&self) -> &'static str {
@@ -272,7 +266,7 @@ impl RenderPassNode for DofNode {
         }
         vec![TargetUse::new(
             HDR_COLOR,
-            TargetAccess::Sampled(ShaderStage::Fragment),
+            TargetAccess::Sampled(AccessStage::Fragment),
         )]
     }
 
@@ -282,14 +276,14 @@ impl RenderPassNode for DofNode {
         }
         vec![TargetUse::new(
             TargetRef::Transient(DOF_OUTPUT),
-            cleared_attachment(),
+            TargetAccess::Attachment(AttachmentStart::Discard),
         )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
@@ -297,7 +291,7 @@ impl RenderPassNode for DofNode {
     }
 }
 
-pub struct AutoExposureNode;
+pub(super) struct AutoExposureNode;
 
 impl RenderPassNode for AutoExposureNode {
     fn name(&self) -> &'static str {
@@ -321,14 +315,14 @@ impl RenderPassNode for AutoExposureNode {
         }
         vec![TargetUse::new(
             tonemap_input(ctx),
-            TargetAccess::Sampled(ShaderStage::Compute),
+            TargetAccess::Sampled(AccessStage::Compute),
         )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         frame_slot: usize,
     ) -> Result<()> {
@@ -336,7 +330,7 @@ impl RenderPassNode for AutoExposureNode {
     }
 }
 
-pub struct TonemapNode;
+pub(super) struct TonemapNode;
 
 impl RenderPassNode for TonemapNode {
     fn name(&self) -> &'static str {
@@ -352,7 +346,7 @@ impl RenderPassNode for TonemapNode {
     }
 
     fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
-        let sampled = TargetAccess::Sampled(ShaderStage::Fragment);
+        let sampled = TargetAccess::Sampled(AccessStage::Fragment);
         let mut reads = vec![TargetUse::new(tonemap_input(ctx), sampled)];
         if is_bloom_enabled(ctx) {
             reads.extend(bloom_mip(ctx, 0).map(|target| TargetUse::new(target, sampled)));
@@ -361,13 +355,16 @@ impl RenderPassNode for TonemapNode {
     }
 
     fn writes(&self, _ctx: &PassContext) -> Vec<TargetUse> {
-        vec![TargetUse::new(OFFSCREEN, cleared_attachment())]
+        vec![TargetUse::new(
+            OFFSCREEN,
+            TargetAccess::Attachment(AttachmentStart::Discard),
+        )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
@@ -375,7 +372,7 @@ impl RenderPassNode for TonemapNode {
     }
 }
 
-pub struct OnionCompositeNode;
+pub(super) struct OnionCompositeNode;
 
 impl RenderPassNode for OnionCompositeNode {
     fn name(&self) -> &'static str {
@@ -392,7 +389,7 @@ impl RenderPassNode for OnionCompositeNode {
         }
         vec![TargetUse::new(
             ONION_GHOST,
-            TargetAccess::Sampled(ShaderStage::Fragment),
+            TargetAccess::Sampled(AccessStage::Fragment),
         )]
     }
 
@@ -402,14 +399,14 @@ impl RenderPassNode for OnionCompositeNode {
         }
         vec![TargetUse::new(
             OFFSCREEN,
-            loaded_attachment(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
+            TargetAccess::Attachment(AttachmentStart::Sampled),
         )]
     }
 
     unsafe fn record(
         &self,
         ctx: &PassContext,
-        cmd: vk::CommandBuffer,
+        cmd: CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {

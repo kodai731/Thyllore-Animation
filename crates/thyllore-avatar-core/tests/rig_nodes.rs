@@ -1,7 +1,7 @@
 #![cfg(test)]
 mod support;
 
-use cgmath::{InnerSpace, Quaternion, Vector3};
+use glam::{DQuat, DVec3};
 
 use support::canonical_bones;
 use support::rig_convention::rig_convention;
@@ -122,7 +122,7 @@ fn world_aligned_all_bones_have_qc() {
     let convention = rig_convention("vrm_normalized");
     let nodes = build_rig_nodes(&convention);
     let bones = canonical_bones();
-    let qc = Quaternion::from(support::rig_positions::character_to_file_rotation(
+    let qc = DQuat::from_mat3(&support::rig_positions::character_to_file_rotation(
         convention.character_to_file,
     ));
 
@@ -133,10 +133,10 @@ fn world_aligned_all_bones_have_qc() {
             .unwrap();
         let node = &nodes[node_index];
         assert!(
-            (node.world_rotation.s - qc.s).abs() < 1e-9
-                && (node.world_rotation.v.x - qc.v.x).abs() < 1e-9
-                && (node.world_rotation.v.y - qc.v.y).abs() < 1e-9
-                && (node.world_rotation.v.z - qc.v.z).abs() < 1e-9,
+            (node.world_rotation.w - qc.w).abs() < 1e-9
+                && (node.world_rotation.x - qc.x).abs() < 1e-9
+                && (node.world_rotation.y - qc.y).abs() < 1e-9
+                && (node.world_rotation.z - qc.z).abs() < 1e-9,
             "bone {}: got {:?}, expected {:?}",
             bone.role,
             node.world_rotation,
@@ -192,10 +192,10 @@ fn deterministic() {
             let diff = n1.world_position - n2.world_position;
             assert!(diff.dot(diff) < 1e-18, "node {i} position mismatch");
             assert!(
-                (n1.world_rotation.s - n2.world_rotation.s).abs() < 1e-15
-                    && (n1.world_rotation.v.x - n2.world_rotation.v.x).abs() < 1e-15
-                    && (n1.world_rotation.v.y - n2.world_rotation.v.y).abs() < 1e-15
-                    && (n1.world_rotation.v.z - n2.world_rotation.v.z).abs() < 1e-15,
+                (n1.world_rotation.w - n2.world_rotation.w).abs() < 1e-15
+                    && (n1.world_rotation.x - n2.world_rotation.x).abs() < 1e-15
+                    && (n1.world_rotation.y - n2.world_rotation.y).abs() < 1e-15
+                    && (n1.world_rotation.z - n2.world_rotation.z).abs() < 1e-15,
                 "node {i} rotation mismatch"
             );
         }
@@ -206,7 +206,7 @@ fn deterministic() {
 fn adversarial_has_at_least_3_bone_axis_types() {
     let convention = rig_convention("adversarial");
     let bones = canonical_bones();
-    let mut distinct_axes: Vec<Vector3<f64>> = Vec::new();
+    let mut distinct_axes: Vec<DVec3> = Vec::new();
     for i in 0..bones.len() {
         let axis = bone_local_axis(&convention, i);
         let mut is_duplicate = false;

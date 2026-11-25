@@ -1,10 +1,15 @@
-use thyllore_avatar_core::humanoid::components::geometry_warning::GeometryWarning;
-use thyllore_avatar_core::humanoid::components::mapping::{HumanoidMapping, UnresolvedRole};
-use thyllore_avatar_core::humanoid::components::mapping_issues::MappingIssue;
-use thyllore_avatar_core::humanoid::components::rest_pose::RestPose;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::stats::components::stats::AvatarStats;
-use thyllore_avatar_core::vrchat::rank::{Platform, RankReport};
+use std::collections::BTreeMap;
+
+use thyllore_anim_core::spring_bone::CapsuleFitParams;
+use thyllore_avatar_core::cloth_setup::{ChainGenReport, ChainGenSettings, RootAttachment};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole};
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::GeometryWarning;
+use thyllore_avatar_core::humanoid::MappingIssue;
+use thyllore_avatar_core::humanoid::RestPose;
+use thyllore_avatar_core::humanoid::{HumanoidMapping, UnresolvedRole};
+use thyllore_avatar_core::stats::AvatarStats;
+use thyllore_avatar_core::vrchat::{Platform, RankReport};
 
 #[derive(Clone, Debug, Default)]
 pub struct AvatarSetupState {
@@ -20,5 +25,12 @@ pub struct AvatarSetupState {
     pub stats: AvatarStats,
     pub platform: Platform,
     pub rank: Option<RankReport>,
-    pub spring_prefix: String,
+    pub submesh_roles: BTreeMap<SubmeshKey, SubmeshRole>,
+    pub submesh_attachments: BTreeMap<SubmeshKey, RootAttachment>,
+    pub hidden_triangles: BTreeMap<SubmeshKey, Vec<u32>>,
+    pub chain_gen: ChainGenSettings,
+    pub chain_gen_report: Option<ChainGenReport>,
+    pub body_collider_fit: CapsuleFitParams,
 }
+
+crate::startup_resource!(AvatarSetupState, Editor);

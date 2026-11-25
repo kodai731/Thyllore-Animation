@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
+use crate::rgb_channels::RGB_CHANNEL_SUFFIXES;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
@@ -33,6 +33,17 @@ pub enum UiKind {
     Absorption,
     /// 3D spatial offset (x, y, z) in local space, edited with a 3-element drag widget.
     Offset,
+}
+
+impl UiKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            UiKind::Scalar => "scalar",
+            UiKind::Color => "color",
+            UiKind::Absorption => "absorption",
+            UiKind::Offset => "offset",
+        }
+    }
 }
 
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.

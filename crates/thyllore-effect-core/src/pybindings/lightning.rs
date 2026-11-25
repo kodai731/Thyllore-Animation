@@ -31,7 +31,7 @@ declare_effect_pyfunctions! {
 
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj, waypoints=Vec::new()))]
-pub fn pack_lightning_ubo(
+pub(super) fn pack_lightning_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
@@ -54,16 +54,16 @@ pub fn pack_lightning_ubo(
 }
 
 #[pyfunction]
-pub fn lightning_ubo_size() -> usize {
+pub(super) fn lightning_ubo_size() -> usize {
     std::mem::size_of::<LightningUBO>()
 }
 
 #[pyfunction]
-pub fn lightning_max_waypoints() -> usize {
+pub(super) fn lightning_max_waypoints() -> usize {
     LIGHTNING_MAX_WAYPOINTS
 }
 
 #[pyfunction]
-pub fn lightning_segments_ubo_size() -> usize {
+pub(super) fn lightning_segments_ubo_size() -> usize {
     std::mem::size_of::<LightningSegmentsUBO>()
 }

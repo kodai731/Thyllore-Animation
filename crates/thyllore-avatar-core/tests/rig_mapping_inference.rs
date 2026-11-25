@@ -4,50 +4,28 @@ mod support;
 use support::fixture_bones::load_fixture_bones;
 use support::rig_names::bone_name;
 
-fn role_to_string(
-    role: thyllore_avatar_core::humanoid::components::role::HumanoidRole,
-) -> &'static str {
+fn role_to_string(role: thyllore_avatar_core::humanoid::HumanoidRole) -> &'static str {
     match role {
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips => "Hips",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Spine => "Spine",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Chest => "Chest",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::UpperChest => "UpperChest",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Neck => "Neck",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::Head => "Head",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftShoulder => {
-            "LeftShoulder"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightShoulder => {
-            "RightShoulder"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperArm => {
-            "LeftUpperArm"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperArm => {
-            "RightUpperArm"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerArm => {
-            "LeftLowerArm"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerArm => {
-            "RightLowerArm"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftHand => "LeftHand",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightHand => "RightHand",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftUpperLeg => {
-            "LeftUpperLeg"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightUpperLeg => {
-            "RightUpperLeg"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftLowerLeg => {
-            "LeftLowerLeg"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightLowerLeg => {
-            "RightLowerLeg"
-        }
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::LeftFoot => "LeftFoot",
-        thyllore_avatar_core::humanoid::components::role::HumanoidRole::RightFoot => "RightFoot",
+        thyllore_avatar_core::humanoid::HumanoidRole::Hips => "Hips",
+        thyllore_avatar_core::humanoid::HumanoidRole::Spine => "Spine",
+        thyllore_avatar_core::humanoid::HumanoidRole::Chest => "Chest",
+        thyllore_avatar_core::humanoid::HumanoidRole::UpperChest => "UpperChest",
+        thyllore_avatar_core::humanoid::HumanoidRole::Neck => "Neck",
+        thyllore_avatar_core::humanoid::HumanoidRole::Head => "Head",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftShoulder => "LeftShoulder",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightShoulder => "RightShoulder",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperArm => "LeftUpperArm",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightUpperArm => "RightUpperArm",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerArm => "LeftLowerArm",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightLowerArm => "RightLowerArm",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftHand => "LeftHand",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightHand => "RightHand",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftUpperLeg => "LeftUpperLeg",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightUpperLeg => "RightUpperLeg",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftLowerLeg => "LeftLowerLeg",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightLowerLeg => "RightLowerLeg",
+        thyllore_avatar_core::humanoid::HumanoidRole::LeftFoot => "LeftFoot",
+        thyllore_avatar_core::humanoid::HumanoidRole::RightFoot => "RightFoot",
         _ => panic!("unexpected role"),
     }
 }
@@ -55,12 +33,11 @@ fn role_to_string(
 fn test_convention(convention_id: &str) {
     let bones = load_fixture_bones(convention_id);
 
-    let (mapping, unresolved) =
-        thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+    let (mapping, unresolved) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
 
     let unresolved_required: Vec<_> = unresolved
         .iter()
-        .filter(|u| thyllore_avatar_core::humanoid::components::role::REQUIRED.contains(&u.role))
+        .filter(|u| thyllore_avatar_core::humanoid::REQUIRED.contains(&u.role))
         .collect();
     assert!(
         unresolved_required.is_empty(),
@@ -69,7 +46,7 @@ fn test_convention(convention_id: &str) {
         unresolved_required
     );
 
-    for role in thyllore_avatar_core::humanoid::components::role::REQUIRED {
+    for role in thyllore_avatar_core::humanoid::REQUIRED {
         let bone_index = mapping.by_role.get(&role).unwrap_or_else(|| {
             panic!(
                 "convention {}: required role {:?} not resolved",

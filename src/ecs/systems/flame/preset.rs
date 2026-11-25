@@ -5,7 +5,7 @@ impl EffectPreset for FlameEffect {
     type Applied = AppliedFlamePreset;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        thyllore_effect_core::apply_flame_preset(self, name)
+        thyllore_effect_core::flame::apply_flame_preset(self, name)
     }
 
     fn applied(name: &str) -> Self::Applied {

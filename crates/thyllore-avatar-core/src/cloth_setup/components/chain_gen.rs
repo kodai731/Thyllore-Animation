@@ -1,0 +1,446 @@
+use std::sync::LazyLock;
+
+use glam::Vec3;
+use thyllore_model_core::BoneId;
+use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
+
+use super::submesh_role::{SubmeshRole, SubmeshSelector};
+use crate::humanoid::components::role::HumanoidRole;
+
+pub use thyllore_anim_core::spring_bone::RootAttachment;
+
+#[derive(Debug, Clone, Copy)]
+pub enum ChainGenOwner {
+    Setup,
+}
+
+#[derive(Clone, Debug, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct ChainGenSettings {
+    /// Joints per chain
+    #[persist(ui(min = 1.0, max = 16.0, format = "%.0f"))]
+    pub joint_count: u32,
+    /// Chains per submesh; 0 takes the count from the φ distribution
+    #[persist(ui(min = 0.0, max = 32.0, format = "%.0f"))]
+    pub column_count: u32,
+    /// Centerline distance in model units under which two strands join one chain; 0 keeps every strand apart
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub strand_merge_distance: f32,
+    /// Arc length in model units over which the root bone keeps its weight; 0 uses the first joint length
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub root_blend_width: f32,
+    /// Distance band in model units over which a vertex blends with the neighbouring column; 0 keeps columns hard
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub column_blend_width: f32,
+    #[nested]
+    pub azimuth: AzimuthStrandSettings,
+    #[nested]
+    pub card: CardStrandSettings,
+    #[nested]
+    pub garment: GarmentSupportSettings,
+}
+
+/// Settings of the azimuth placement, which rings the hair around the skin's widest cross-section.
+/// Columns are placed by the spherical azimuth φ about the world up axis (+Y), measured from the
+/// reference axis of `tangent_frame_around(up)` (+X) toward its side axis (−Z).
+#[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct AzimuthStrandSettings {
+    /// Shift of the hair root band from the skin's widest cross-section in model units (positive = toward tips, negative = toward the root bone)
+    #[persist(renamed_from = ["root_band_offset"], ui(min = -100.0, max = 100.0, format = "%.3f"))]
+    pub root_band_offset: f32,
+}
+
+/// Settings of the card placement, which follows each hair card's UV strand.
+#[derive(Clone, Debug, Default, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct CardStrandSettings {
+    /// Length from each card's base kept as a rigid root in model units (0 = the full card is chain)
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub root_rigid_length: f32,
+}
+
+/// Settings of the garment placement, which starts the chain below the lowest ring the body supports.
+#[derive(Clone, Debug, PartialEq, SceneFields)]
+#[params(tag = ChainGenOwner, owner = Setup)]
+pub struct GarmentSupportSettings {
+    /// Gap in model units between a garment ring and the body under which the ring counts as fitted or caught
+    #[persist(ui(min = 0.0, max = 100.0, format = "%.3f"))]
+    pub fit_gap: f32,
+    /// Share of a ring's sectors the body must support for the ring to count as supported
+    #[persist(ui(min = 0.0, max = 1.0, format = "%.2f"))]
+    pub support_ratio: f32,
+}
+
+impl Default for GarmentSupportSettings {
+    fn default() -> Self {
+        Self {
+            fit_gap: 0.02,
+            support_ratio: 0.25,
+        }
+    }
+}
+
+impl Default for ChainGenSettings {
+    fn default() -> Self {
+        Self {
+            joint_count: 4,
+            column_count: 0,
+            strand_merge_distance: 0.0,
+            root_blend_width: 0.0,
+            column_blend_width: 0.0,
+            azimuth: AzimuthStrandSettings::default(),
+            card: CardStrandSettings::default(),
+            garment: GarmentSupportSettings::default(),
+        }
+    }
+}
+
+pub static CHAIN_GEN_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<ChainGenSettings>>> =
+    LazyLock::new(|| {
+        let mut out = Vec::new();
+        ChainGenSettings::collect_scalars::<ChainGenSettings, RootPath<ChainGenSettings>>(
+            "", &mut out,
+        );
+        out
+    });
+
+pub static CHAIN_GEN_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
+    let mut out = Vec::new();
+    ChainGenSettings::collect_ui("", "", &mut out);
+    out
+});
+
+#[derive(Debug, Clone)]
+pub struct ChainGenParams {
+    pub root: Option<HumanoidRole>,
+    pub attachment: RootAttachment,
+    pub target: SubmeshSelector,
+    pub settings: ChainGenSettings,
+}
+
+pub fn default_root_of_submesh(role: SubmeshRole) -> Option<HumanoidRole> {
+    match role {
+        SubmeshRole::Hair => Some(HumanoidRole::Head),
+        SubmeshRole::Garment => Some(HumanoidRole::Hips),
+        SubmeshRole::Skin | SubmeshRole::Accessory => None,
+    }
+}
+
+pub fn default_attachment(root: HumanoidRole) -> RootAttachment {
+    if root == HumanoidRole::Head {
+        RootAttachment::Cap
+    } else {
+        RootAttachment::Ring
+    }
+}
+
+pub fn attachment_or_default(
+    root: Option<HumanoidRole>,
+    attachment: Option<RootAttachment>,
+) -> RootAttachment {
+    attachment.unwrap_or_else(|| root.map_or(RootAttachment::Ring, default_attachment))
+}
+
+/// The submesh part of a generated bone name: lower case, one `_` between runs of other characters.
+pub fn submesh_label(target: &SubmeshSelector) -> String {
+    let text = match target.material() {
+        Some(material) => format!("{} {}", target.mesh(), material),
+        None => target.mesh().to_string(),
+    };
+    let mut label = String::with_capacity(text.len());
+    for ch in text.chars() {
+        let lowered = ch.to_ascii_lowercase();
+        if lowered.is_ascii_alphanumeric() {
+            label.push(lowered);
+        } else if !label.ends_with('_') && !label.is_empty() {
+            label.push('_');
+        }
+    }
+    label.trim_end_matches('_').to_string()
+}
+
+/// A body collider in the same space as the target; a sphere has `tail == head`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BodyCollider {
+    pub bone: BoneId,
+    pub head: Vec3,
+    pub tail: Vec3,
+    pub radius: f32,
+}
+
+/// A body surface in the same space as the target: skin vertices or collider samples with the bones that drive them.
+#[derive(Debug, Clone, Default)]
+pub struct SkinSurface {
+    pub positions: Vec<Vec3>,
+    pub triangles: Vec<[u32; 3]>,
+    /// Per-vertex bone influences, heaviest first
+    pub influences: Vec<Vec<(BoneId, f32)>>,
+}
+
+impl SkinSurface {
+    /// A point set every vertex of which `bone` drives alone, without a surface.
+    pub fn points_driven_by(bone: BoneId, positions: Vec<Vec3>) -> Self {
+        let influences = vec![vec![(bone, 1.0)]; positions.len()];
+        Self {
+            positions,
+            triangles: Vec::new(),
+            influences,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChainGenInput<'a> {
+    pub positions: &'a [Vec3],
+    pub triangles: &'a [[u32; 3]],
+    pub root_position: Vec3,
+    pub root_bone: BoneId,
+    /// The body surfaces (skin meshes and collider samples) in the same space as `positions`; empty falls back to `positions` as the attachment surface
+    pub skins: &'a [SkinSurface],
+    /// Per-vertex texture coordinates; empty means no strand parameter is available
+    pub tex_coords: &'a [[f32; 2]],
+    /// Garment vertices the user marked as covered by the body; empty finds the supported rings instead
+    pub covered_vertices: &'a [u32],
+    /// Chains whose membership the user assigned; empty splits the target into chains instead
+    pub given_chains: &'a [GivenChain],
+}
+
+/// A chain the user assigned: its vertices, and its joint heads followed by the chain tail when the user placed them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GivenChain {
+    pub column: usize,
+    pub vertices: Vec<u32>,
+    pub joints: Option<Vec<Vec3>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedJoint {
+    pub name: String,
+    pub head: Vec3,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedChain {
+    pub column: usize,
+    pub joints: Vec<GeneratedJoint>,
+    pub tail: Vec3,
+    pub vertices: Vec<u32>,
+}
+
+fn chain_name_prefix(target: &SubmeshSelector) -> String {
+    format!("{}_", submesh_label(target))
+}
+
+pub fn chain_name(params: &ChainGenParams, column: usize) -> String {
+    format!("{}{:02}", chain_name_prefix(&params.target), column)
+}
+
+/// The column of a chain name of this submesh; `None` for a name of another submesh.
+pub fn chain_column(target: &SubmeshSelector, name: &str) -> Option<usize> {
+    name.strip_prefix(&chain_name_prefix(target))?.parse().ok()
+}
+
+pub fn joint_name(params: &ChainGenParams, column: usize, joint: usize) -> String {
+    format!("{}_{:02}", chain_name(params, column), joint)
+}
+
+/// The bone placed at the chain's end point under its last joint, so the last joint swings towards a
+/// measured tail instead of an extrapolated one (the VRM 1.0 terminal joint).
+pub fn end_bone_name(last_joint_name: &str) -> String {
+    format!("{last_joint_name}_end")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InfluenceTarget {
+    Root,
+    Joint {
+        chain: usize,
+        joint: usize,
+    },
+    /// A skin bone, carried over to a garment vertex the skin covers
+    Bone(BoneId),
+}
+
+/// Height of the rings the garment support is judged in, and the spacing of body samples, in model units.
+pub const SUPPORT_RING_HEIGHT: f32 = 0.02;
+
+/// The lowest ring of a garment the body supports: the chain hangs from `bone` below `boundary_height`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GarmentSupport {
+    pub boundary_height: f32,
+    pub bone: BoneId,
+}
+
+/// A target vertex the body covers, with the influences of its nearest body point.
+#[derive(Debug, Clone)]
+pub struct CoveredVertex {
+    pub vertex: u32,
+    pub influences: Vec<(BoneId, f32)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VertexInfluences {
+    pub vertex: u32,
+    pub influences: Vec<(InfluenceTarget, f32)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum StrandMode {
+    Card,
+    Azimuth,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct GeneratedBoneRecord {
+    pub name: String,
+    pub parent: String,
+    pub head: [f32; 3],
+    /// The chain end point, present on the last joint of each chain
+    pub tail: Option<[f32; 3]>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ChainWeightRecord {
+    pub mesh: String,
+    pub vertex: u32,
+    pub component: u32,
+    pub bone: String,
+    pub weight: f32,
+    pub position: [f32; 3],
+}
+
+/// The hair root band as model-space heights along the up axis
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct RootBandRecord {
+    pub equator_height: f32,
+    pub height: f32,
+    pub center: [f32; 3],
+}
+
+/// The head capsule the hair chains collide with, as model-space points
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HeadCapsuleRecord {
+    pub bottom: [f32; 3],
+    pub top: [f32; 3],
+    pub radius: f32,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct StrandCenterlineRecord {
+    pub component: u32,
+    pub chain: usize,
+    pub points: Vec<[f32; 3]>,
+}
+
+/// How the hair chains were placed and the card centerlines the card path used
+#[derive(Debug, Clone)]
+pub struct StrandPlacement {
+    pub mode: StrandMode,
+    pub centerlines: Vec<StrandCenterlineRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChainPlacement {
+    pub chains: Vec<GeneratedChain>,
+    pub strands: Option<StrandPlacement>,
+    /// Garment vertices the body covers; they keep body bones instead of chain joints
+    pub covered: Vec<CoveredVertex>,
+    /// The ring the garment hangs from, when the body supports one
+    pub support: Option<GarmentSupport>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ChainGenReport {
+    pub target: String,
+    pub bones: Vec<GeneratedBoneRecord>,
+    pub vertex_weights: Vec<ChainWeightRecord>,
+    pub root_band: Option<RootBandRecord>,
+    pub head_capsule: Option<HeadCapsuleRecord>,
+    pub attachment_positions: Vec<[f32; 3]>,
+    pub strand_mode: Option<StrandMode>,
+    pub strand_centerlines: Vec<StrandCenterlineRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChainGenRequest {
+    pub target: SubmeshSelector,
+    pub root: HumanoidRole,
+    pub attachment: RootAttachment,
+    pub settings: ChainGenSettings,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn submesh_label_lowers_and_joins_runs_with_one_underscore() {
+        let selector: SubmeshSelector = "woman 1_mat2/Hair".parse().unwrap();
+        assert_eq!(submesh_label(&selector), "woman_1_mat2_hair");
+        let mesh_only: SubmeshSelector = "Hair_back".parse().unwrap();
+        assert_eq!(submesh_label(&mesh_only), "hair_back");
+    }
+
+    #[test]
+    fn joint_names_differ_between_submeshes_and_follow_the_chain_name() {
+        let params = |target: &str| ChainGenParams {
+            root: Some(HumanoidRole::Head),
+            attachment: RootAttachment::Cap,
+            target: target.parse().unwrap(),
+            settings: ChainGenSettings::default(),
+        };
+        assert_eq!(joint_name(&params("Hair_back"), 3, 1), "hair_back_03_01");
+        assert_eq!(joint_name(&params("Hair_side"), 3, 1), "hair_side_03_01");
+        assert_eq!(chain_name(&params("Hair_side"), 3), "hair_side_03");
+    }
+
+    #[test]
+    fn chain_column_inverts_chain_name_for_this_submesh_only() {
+        let params = ChainGenParams {
+            root: Some(HumanoidRole::Head),
+            attachment: RootAttachment::Cap,
+            target: "Hair_side".parse().unwrap(),
+            settings: ChainGenSettings::default(),
+        };
+        assert_eq!(
+            chain_column(&params.target, &chain_name(&params, 3)),
+            Some(3)
+        );
+        assert_eq!(chain_column(&params.target, "hair_back_03"), None);
+        assert_eq!(chain_column(&params.target, "hair_side_"), None);
+    }
+
+    #[test]
+    fn tables_list_every_setting_in_declaration_order() {
+        let names: Vec<&str> = CHAIN_GEN_UI_PARAMS.iter().map(|p| p.name).collect();
+        assert_eq!(
+            names,
+            [
+                "joint_count",
+                "column_count",
+                "strand_merge_distance",
+                "root_blend_width",
+                "column_blend_width",
+                "azimuth_root_band_offset",
+                "card_root_rigid_length",
+                "garment_fit_gap",
+                "garment_support_ratio"
+            ]
+        );
+        let scalar_names: Vec<&str> = CHAIN_GEN_SCALAR_PARAMS.iter().map(|p| p.name).collect();
+        assert_eq!(names, scalar_names);
+    }
+
+    #[test]
+    fn integer_settings_round_trip_through_the_scalar_table() {
+        let mut settings = ChainGenSettings::default();
+        let joint_count = CHAIN_GEN_SCALAR_PARAMS
+            .iter()
+            .find(|p| p.name == "joint_count")
+            .unwrap();
+        (joint_count.set)(&mut settings, 7.0);
+        assert_eq!(settings.joint_count, 7);
+        assert_eq!((joint_count.get)(&settings), 7.0);
+    }
+}

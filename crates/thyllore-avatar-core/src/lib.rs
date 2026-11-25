@@ -1,6 +1,9 @@
+pub mod cloth_setup;
+pub mod collider;
 pub mod expression;
 pub mod humanoid;
 pub mod material;
 pub mod motion;
 pub mod stats;
 pub mod vrchat;
+pub mod vrm;

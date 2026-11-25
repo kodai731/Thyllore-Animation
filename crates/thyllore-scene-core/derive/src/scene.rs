@@ -5,7 +5,7 @@ use syn::{
     Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Token, Type,
 };
 
-pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
+pub(crate) fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     let Data::Struct(data) = &input.data else {
         return Err(Error::new_spanned(
             &input.ident,
@@ -33,14 +33,14 @@ pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     })
 }
 
-pub struct StructAttributes {
+pub(crate) struct StructAttributes {
     pub tag: Path,
     pub owner: Option<Ident>,
     pub group: Option<LitStr>,
     pub scene: Option<SceneNames>,
 }
 
-pub struct SceneNames {
+pub(crate) struct SceneNames {
     pub key: LitStr,
     pub tags: Ident,
     pub snapshot: Ident,
@@ -49,7 +49,7 @@ pub struct SceneNames {
     pub overwrite: Ident,
 }
 
-pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> {
+pub(crate) fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> {
     let scene_attr = input.attrs.iter().find(|a| a.path().is_ident("scene"));
     let params_attr = input.attrs.iter().find(|a| a.path().is_ident("params"));
     let (attr, is_scene) = match (scene_attr, params_attr) {
@@ -128,13 +128,13 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
     })
 }
 
-pub enum FieldSpec {
+pub(crate) enum FieldSpec {
     Persist(ParamField),
     Runtime(ParamField),
     Nested(NestedField),
 }
 
-pub struct ParamField {
+pub(crate) struct ParamField {
     pub ident: Ident,
     pub field_ty: Type,
     pub value_ty: Type,
@@ -149,20 +149,20 @@ pub struct ParamField {
     pub curve: bool,
 }
 
-pub enum Conversion {
+pub(crate) enum Conversion {
     Plain,
     From,
     With(Path),
 }
 
-pub struct NestedField {
+pub(crate) struct NestedField {
     pub ident: Ident,
     pub ty: Type,
     pub persisted: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ValueKind {
+pub(crate) enum ValueKind {
     F32,
     U32,
     Bool,
@@ -171,7 +171,7 @@ pub enum ValueKind {
 }
 
 #[derive(Default)]
-pub struct UiAttributes {
+pub(crate) struct UiAttributes {
     pub primary: bool,
     pub kind: Option<Ident>,
     pub min: Option<Expr>,
@@ -181,7 +181,7 @@ pub struct UiAttributes {
     pub label: Option<LitStr>,
 }
 
-pub fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
+pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
     let mut specs = Vec::new();
 
     for field in fields.iter() {
@@ -253,7 +253,7 @@ fn parse_nested_persisted(attr: &syn::Attribute) -> Result<bool> {
     Ok(persisted)
 }
 
-pub fn parse_param_field(
+pub(crate) fn parse_param_field(
     field: &Field,
     attr: &syn::Attribute,
     attrs: &StructAttributes,
@@ -316,7 +316,7 @@ pub fn parse_param_field(
         if kind == ValueKind::Other {
             return Err(Error::new_spanned(
                 field,
-                "ui is only available for f32 / u32 / bool / [f32; N] values",
+                "ui is only available for f32 / u32 / bool / [f32; N] / Vec3 values",
             ));
         }
         if ui.min.is_none() || ui.max.is_none() {
@@ -409,6 +409,7 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
 
 fn value_kind(ty: &Type) -> ValueKind {
     match ty {
+        Type::Path(path) if is_vec3(path) => ValueKind::Array(3),
         Type::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 => {
             match path.path.segments[0].ident.to_string().as_str() {
                 "f32" => ValueKind::F32,
@@ -435,6 +436,13 @@ fn value_kind(ty: &Type) -> ValueKind {
     }
 }
 
+fn is_vec3(path: &syn::TypePath) -> bool {
+    let Some(last) = path.path.segments.last() else {
+        return false;
+    };
+    path.qself.is_none() && last.ident == "Vec3" && last.arguments.is_none()
+}
+
 fn doc_comment(field: &Field) -> String {
     let lines: Vec<String> = field
         .attrs
@@ -454,7 +462,7 @@ fn doc_comment(field: &Field) -> String {
     lines.join(" ")
 }
 
-pub fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
+pub(crate) fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
     let field = &param.ident;
     let value_ty = &param.value_ty;
     match &param.conversion {
@@ -466,7 +474,7 @@ pub fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
     }
 }
 
-pub fn write_value(
+pub(crate) fn write_value(
     param: &ParamField,
     component: &TokenStream,
     value: &TokenStream,
@@ -1195,6 +1203,16 @@ mod tests {
     fn rejects_color_kind_on_non_rgb_arrays() {
         let message = expand_err(&format!("{TOP} struct S {{ #[persist(ui(kind = Color, min = 0.0, max = 1.0))] pub c: [f32; 2] }}"));
         assert!(message.contains("[f32; 3]"), "{message}");
+    }
+
+    #[test]
+    fn vector3_with_ui_is_a_three_component_array() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Offset, min = -1.0, max = 1.0))] pub dir: Vec3 }}"
+        ));
+        for suffix in ["dir_x", "dir_y", "dir_z"] {
+            assert!(expanded.contains(&format!("\"{suffix}\"")), "{expanded}");
+        }
     }
 
     #[test]

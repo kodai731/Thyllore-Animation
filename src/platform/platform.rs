@@ -4,7 +4,7 @@ use std::path::Path;
 use winit::dpi::LogicalSize;
 use winit::event_loop::{EventLoop, EventLoopBuilder};
 
-use crate::hooks::external_command::{ExternalCommand, ExternalCommandSender};
+use crate::hooks::external_command::ExternalCommand;
 use crate::platform::ui::theme::UiFonts;
 use winit::window::{Window, WindowBuilder};
 
@@ -60,7 +60,7 @@ pub fn init(title: &str, take_focus: bool) -> System {
     let window = builder.build(&event_loop).expect("Failed to create window");
 
     let mut imgui = Context::create();
-    super::ui::theme::style::apply_thyllore_style(imgui.style_mut());
+    super::ui::theme::apply_thyllore_style(imgui.style_mut());
     imgui
         .set_ini_filename(None::<&Path>)
         .expect("no ini filename to validate");

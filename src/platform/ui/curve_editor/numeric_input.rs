@@ -1,13 +1,15 @@
-use crate::animation::editable::{EditableKeyframe, PropertyCurve};
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::EditableKeyframe;
+
+use super::view::{find_drawn_curve, DrawnCurve};
 
 const SHARED_VALUE_TOLERANCE: f32 = 1e-6;
 const FIELD_WIDTH: f32 = 80.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum NumericEdit {
+pub(super) enum NumericEdit {
     Set(f32),
     Add(f32),
     Multiply(f32),
@@ -19,7 +21,7 @@ enum KeyField {
     Value,
 }
 
-pub fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
+pub(super) fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
     let text = text.trim();
 
     if let Some(rest) = text.strip_prefix("*=") {
@@ -36,7 +38,7 @@ pub fn parse_numeric_edit(text: &str) -> Option<NumericEdit> {
     }
 }
 
-pub fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
+pub(super) fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
     match edit {
         NumericEdit::Set(value) => value,
         NumericEdit::Add(delta) => current + delta,
@@ -44,7 +46,7 @@ pub fn apply_numeric_edit(edit: NumericEdit, current: f32) -> f32 {
     }
 }
 
-pub fn shared_value(mut values: impl Iterator<Item = f32>) -> Option<f32> {
+pub(super) fn shared_value(mut values: impl Iterator<Item = f32>) -> Option<f32> {
     let first = values.next()?;
     values
         .all(|value| (value - first).abs() <= SHARED_VALUE_TOLERANCE)
@@ -55,7 +57,7 @@ pub(super) fn build_selected_key_fields(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &mut CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     track_ref: CurveTrackRef,
 ) {
     let selected_keys = collect_selected_keys(&editor_state.selected_keyframes, curves);
@@ -79,15 +81,13 @@ pub(super) fn build_selected_key_fields(
 
 fn collect_selected_keys<'a>(
     selected_keyframes: &'a [CurveSelectedKeyframe],
-    curves: &[(&'a PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'a>],
 ) -> Vec<(&'a CurveSelectedKeyframe, &'a EditableKeyframe)> {
     selected_keyframes
         .iter()
         .filter_map(|selected| {
-            curves
-                .iter()
-                .find(|(curve, _, _)| curve.property_type == selected.property_type)
-                .and_then(|(curve, _, _)| curve.get_keyframe(selected.keyframe_id))
+            find_drawn_curve(curves, selected.property_type)
+                .and_then(|DrawnCurve { curve, .. }| curve.get_keyframe(selected.keyframe_id))
                 .map(|key| (selected, key))
         })
         .collect()

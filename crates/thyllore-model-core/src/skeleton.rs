@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 use std::collections::HashMap;
 
 pub type BoneId = u32;
@@ -10,8 +10,8 @@ pub struct Bone {
     pub name: String,
     pub parent_id: Option<BoneId>,
     pub children: Vec<BoneId>,
-    pub local_transform: Matrix4<f32>,
-    pub inverse_bind_pose: Matrix4<f32>,
+    pub local_transform: Mat4,
+    pub inverse_bind_pose: Mat4,
     pub node_index: Option<usize>,
 }
 
@@ -22,8 +22,8 @@ impl Default for Bone {
             name: String::new(),
             parent_id: None,
             children: Vec::new(),
-            local_transform: Matrix4::identity(),
-            inverse_bind_pose: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
+            inverse_bind_pose: Mat4::IDENTITY,
             node_index: None,
         }
     }
@@ -36,7 +36,7 @@ pub struct Skeleton {
     pub bones: Vec<Bone>,
     pub bone_name_to_id: HashMap<String, BoneId>,
     pub root_bone_ids: Vec<BoneId>,
-    pub root_transform: Matrix4<f32>,
+    pub root_transform: Mat4,
 }
 
 impl Default for Skeleton {
@@ -47,7 +47,7 @@ impl Default for Skeleton {
             bones: Vec::new(),
             bone_name_to_id: HashMap::new(),
             root_bone_ids: Vec::new(),
-            root_transform: Matrix4::identity(),
+            root_transform: Mat4::IDENTITY,
         }
     }
 }
@@ -60,7 +60,7 @@ impl Skeleton {
             bones: Vec::new(),
             bone_name_to_id: HashMap::new(),
             root_bone_ids: Vec::new(),
-            root_transform: Matrix4::identity(),
+            root_transform: Mat4::IDENTITY,
         }
     }
 
@@ -71,8 +71,8 @@ impl Skeleton {
             name: name.to_string(),
             parent_id,
             children: Vec::new(),
-            local_transform: Matrix4::identity(),
-            inverse_bind_pose: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
+            inverse_bind_pose: Mat4::IDENTITY,
             node_index: None,
         };
 

@@ -1,17 +1,17 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LightningEffect, LIGHTNING_DOMAIN};
-use crate::ecs::resource::LightningRenderSettings;
 use crate::ecs::systems::effect_edit::EffectPreset;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_LIGHTNING_NAME: &str = "Lightning";
 pub const DEFAULT_LIGHTNING_PRESET: &str = "bolt";
 
 pub const LIGHTNING_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "lightning",
-    max_instances: thyllore_effect_core::LIGHTNING_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::lightning::LIGHTNING_MAX_INSTANCES,
     spawn: spawn_lightning_instance,
     entities: lightning_entities,
     default_in_empty_scene: false,
@@ -29,7 +29,7 @@ fn spawn_lightning_instance(
     ordinal: usize,
 ) -> Entity {
     let mut effect = LightningEffect {
-        position: cgmath::Vector3::new(2.5 * ordinal as f32, 0.0, 0.0),
+        position: Vec3::new(2.5 * ordinal as f32, 0.0, 0.0),
         ..LightningEffect::default()
     };
     effect.apply_preset(DEFAULT_LIGHTNING_PRESET);
@@ -54,19 +54,6 @@ pub fn spawn_lightning_with_clip(
     effect: LightningEffect,
 ) -> Entity {
     let entity = spawn_lightning(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &LIGHTNING_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &LIGHTNING_DOMAIN);
     entity
 }
-
-fn insert_lightning_default_resources(world: &mut World) {
-    if !world.contains_resource::<LightningRenderSettings>() {
-        world.insert_resource(LightningRenderSettings::default());
-    }
-}
-
-crate::effect_default_resource!("lightning", insert_lightning_default_resources);

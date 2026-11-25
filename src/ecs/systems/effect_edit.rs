@@ -4,7 +4,7 @@ use crate::ecs::resource::HierarchyState;
 use crate::ecs::storage::Component;
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::scene::SceneOwner;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub trait EffectPreset: SceneOwner + Clone {
     type Applied: Component;
@@ -89,7 +89,7 @@ mod tests {
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::world::{Entity, World};
     use crate::scene::test_support::ProbeOwner;
-    use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+    use thyllore_vulkan_core::resource::GraphicsResources;
 
     fn spawn_probe(world: &mut World) -> Entity {
         let entity = world.spawn();
@@ -136,7 +136,7 @@ mod tests {
     }
 
     #[derive(Debug, PartialEq)]
-    pub struct AppliedProbePreset(String);
+    pub(crate) struct AppliedProbePreset(String);
 
     impl EffectPreset for ProbeOwner {
         type Applied = AppliedProbePreset;

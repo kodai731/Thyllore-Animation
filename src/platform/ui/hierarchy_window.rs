@@ -3,7 +3,7 @@ use imgui::{Condition, Key};
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
+use crate::ecs::resource::{BoneDisplayStyle, BoneDrawMode, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
@@ -14,7 +14,7 @@ use crate::ecs::world::World;
 use crate::platform::ui::theme::{
     entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 
@@ -342,6 +342,8 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
         }
     }
 
+    draw_bone_draw_mode_combo(ui, world, bone_gizmo.draw_mode);
+
     let mut in_front = bone_gizmo.in_front;
     if ui.checkbox("In Front", &mut in_front) {
         world.send_command(HierarchyEvent::SetBoneInFront(in_front));
@@ -362,6 +364,20 @@ fn build_bone_display_panel(ui: &imgui::Ui, world: &World, bone_gizmo: &BoneGizm
         {
             world.send_command(HierarchyEvent::SetBoneDistanceScaleFactor(factor));
         }
+    }
+}
+
+fn draw_bone_draw_mode_combo(ui: &imgui::Ui, world: &World, current: BoneDrawMode) {
+    let mut index = BoneDrawMode::ALL
+        .iter()
+        .position(|mode| *mode == current)
+        .unwrap_or(0);
+    ui.set_next_item_width(-1.0);
+    let changed = ui.combo("##bone_draw_mode", &mut index, &BoneDrawMode::ALL, |mode| {
+        mode.label().into()
+    });
+    if changed {
+        world.send_command(HierarchyEvent::SetBoneDrawMode(BoneDrawMode::ALL[index]));
     }
 }
 
@@ -397,10 +413,19 @@ fn handle_tree_activation_keys(ui: &imgui::Ui, world: &World, state: &HierarchyS
         world.send_command(CameraEvent::FrameSelection(CameraMotion::Eased));
     }
 
-    let entities_selected =
-        state.display_mode == HierarchyDisplayMode::Entities && state.selected_entity.is_some();
-    if entities_selected && ui.is_key_pressed(Key::Delete) {
-        world.send_command(HierarchyEvent::DeleteSelectedEntities);
+    if !ui.is_key_pressed(Key::Delete) {
+        return;
+    }
+    match state.display_mode {
+        HierarchyDisplayMode::Entities if state.selected_entity.is_some() => {
+            world.send_command(HierarchyEvent::DeleteSelectedEntities);
+        }
+        HierarchyDisplayMode::Bones => {
+            if let Some(bone_id) = state.selected_bone_id {
+                world.send_command(HierarchyEvent::DeleteBone(bone_id));
+            }
+        }
+        HierarchyDisplayMode::Entities => {}
     }
 }
 

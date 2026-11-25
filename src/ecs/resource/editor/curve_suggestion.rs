@@ -1,6 +1,6 @@
-use crate::animation::editable::PropertyType;
-use crate::animation::BoneId;
-use crate::ml::InferenceRequestId;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_anim_core::BoneId;
+use thyllore_ml_core::InferenceRequestId;
 
 #[derive(Clone)]
 pub struct GhostCurveSuggestion {
@@ -48,3 +48,6 @@ impl Default for CurveSuggestionState {
         }
     }
 }
+
+#[cfg(feature = "ml")]
+crate::startup_resource!(CurveSuggestionState, CoreResources);

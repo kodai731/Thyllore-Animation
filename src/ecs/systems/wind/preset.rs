@@ -5,7 +5,7 @@ impl EffectPreset for WindTornadoEffect {
     type Applied = AppliedWindPreset;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        thyllore_effect_core::apply_wind_preset(self, name)
+        thyllore_effect_core::wind::apply_wind_preset(self, name)
     }
 
     fn applied(name: &str) -> Self::Applied {

@@ -1,15 +1,13 @@
-use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::{Mat4, Vec4};
 
-use crate::animation::{compose_transform, Skeleton, SkeletonPose};
-use crate::render::RenderBackend;
-use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
+use thyllore_anim_core::{compose_transform, Skeleton, SkeletonPose};
+use thyllore_vulkan_core::resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
     skeleton: &Skeleton,
-) -> Vec<Matrix4<f32>> {
-    let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
+) -> Vec<Mat4> {
+    let mut transforms = vec![Mat4::IDENTITY; skeleton.bones.len()];
     for bone in &skeleton.bones {
         let matched_node = nodes.iter().find(|n| n.name == bone.name).or_else(|| {
             bone.node_index
@@ -23,53 +21,28 @@ pub(crate) fn build_node_based_bone_transforms(
     transforms
 }
 
-pub fn apply_skinning_to_single_mesh(
+pub(crate) fn apply_skinning_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     skeleton: &Skeleton,
 ) -> bool {
-    if mesh_idx >= graphics.meshes.len() {
+    let Some(mesh) = graphics.meshes.get_mut(mesh_idx) else {
+        return false;
+    };
+    if mesh.skin_data().is_none() {
         return false;
     }
 
-    let skin_data = match &graphics.meshes[mesh_idx].skin_data {
-        Some(sd) => sd,
-        None => return false,
-    };
-
-    let vertex_count = skin_data.base_positions.len();
-    let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-    let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
-
-    let _ = thyllore_model_core::apply_skinning(
-        skin_data,
-        global_transforms,
+    mesh.pose_skin(thyllore_model_core::build_skin_palette(
         skeleton,
-        &mut skinned_positions,
-        &mut skinned_normals,
-    );
-
-    let mesh = &mut graphics.meshes[mesh_idx];
-    for (i, pos) in skinned_positions.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].pos.x = pos.x;
-            mesh.vertex_data.vertices[i].pos.y = pos.y;
-            mesh.vertex_data.vertices[i].pos.z = pos.z;
-        }
-    }
-    for (i, normal) in skinned_normals.iter().enumerate() {
-        if i < mesh.vertex_data.vertices.len() {
-            mesh.vertex_data.vertices[i].normal.x = normal.x;
-            mesh.vertex_data.vertices[i].normal.y = normal.y;
-            mesh.vertex_data.vertices[i].normal.z = normal.z;
-        }
-    }
+        global_transforms,
+    ));
 
     true
 }
 
-pub fn apply_node_animation_to_single_mesh(
+pub(crate) fn apply_node_animation_to_single_mesh(
     graphics: &mut GraphicsResources,
     mesh_idx: usize,
     nodes: &[NodeData],
@@ -80,7 +53,7 @@ pub fn apply_node_animation_to_single_mesh(
     }
 
     let mesh = &graphics.meshes[mesh_idx];
-    if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+    if mesh.skin_data().is_some() || mesh.base_vertices.is_empty() {
         return false;
     }
 
@@ -99,7 +72,7 @@ pub fn apply_node_animation_to_single_mesh(
     for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
         if i < mesh.base_vertices.len() {
             let base = &mesh.base_vertices[i];
-            let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+            let pos = transform * Vec4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
             v.pos.x = pos.x * scale;
             v.pos.y = pos.y * scale;
             v.pos.z = pos.z * scale;
@@ -134,8 +107,8 @@ pub fn compute_node_global_transforms(
         nodes: &[NodeData],
         node_idx: usize,
         computed: &mut [bool],
-        global_transforms: &mut [Matrix4<f32>],
-    ) -> Matrix4<f32> {
+        global_transforms: &mut [Mat4],
+    ) -> Mat4 {
         if computed[node_idx] {
             return global_transforms[node_idx];
         }
@@ -159,7 +132,7 @@ pub fn compute_node_global_transforms(
     }
 
     let mut computed = vec![false; node_count];
-    let mut global_transforms = vec![Matrix4::identity(); node_count];
+    let mut global_transforms = vec![Mat4::IDENTITY; node_count];
 
     for i in 0..node_count {
         compute_global(nodes, i, &mut computed, &mut global_transforms);
@@ -168,63 +141,4 @@ pub fn compute_node_global_transforms(
     for (i, node) in nodes.iter_mut().enumerate() {
         node.global_transform = global_transforms[i];
     }
-}
-
-pub unsafe fn upload_animations(
-    backend: &mut dyn RenderBackend,
-    updated_meshes: &[usize],
-) -> Result<()> {
-    for &mesh_idx in updated_meshes {
-        backend.upload_mesh_vertices(mesh_idx)?;
-    }
-
-    if !updated_meshes.is_empty() {
-        backend.update_acceleration_structure(updated_meshes)?;
-        backend.rebuild_tlas()?;
-    }
-
-    Ok(())
-}
-
-pub fn prepare_node_animation(
-    graphics: &mut GraphicsResources,
-    nodes: &mut [NodeData],
-    skeleton: &Skeleton,
-    pose: &SkeletonPose,
-    node_animation_scale: f32,
-) -> Vec<usize> {
-    compute_node_global_transforms(nodes, skeleton, pose);
-
-    let mut updated_mesh_indices = Vec::new();
-
-    for (mesh_idx, mesh) in graphics.meshes.iter_mut().enumerate() {
-        if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
-            continue;
-        }
-
-        let Some(node_idx) = mesh.node_index else {
-            continue;
-        };
-
-        let node_found = nodes.iter().find(|n| n.index == node_idx);
-        let Some(node) = node_found else {
-            continue;
-        };
-
-        let transform = node.global_transform;
-
-        for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
-            if i < mesh.base_vertices.len() {
-                let base = &mesh.base_vertices[i];
-                let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
-                v.pos.x = pos.x * node_animation_scale;
-                v.pos.y = pos.y * node_animation_scale;
-                v.pos.z = pos.z * node_animation_scale;
-            }
-        }
-
-        updated_mesh_indices.push(mesh_idx);
-    }
-
-    updated_mesh_indices
 }

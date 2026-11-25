@@ -1,9 +1,23 @@
-use crate::animation::editable::SourceClipId;
+use thyllore_anim_core::editable::SourceClipId;
 
 #[derive(Clone, Debug)]
 pub struct PoseEntry {
     pub id: SourceClipId,
     pub captured_time: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoseSelection {
+    Selected,
+    NotSelected,
+}
+
+/// A pose taken out of the library with its place in the list, so it can be put back.
+#[derive(Clone, Debug)]
+pub struct RemovedPose {
+    pub index: usize,
+    pub entry: PoseEntry,
+    pub selection: PoseSelection,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -12,16 +26,37 @@ pub struct PoseLibrary {
     pub selected_pose_id: Option<SourceClipId>,
 }
 
+crate::startup_resource!(PoseLibrary, Editor);
+
 impl PoseLibrary {
     pub fn add_pose(&mut self, id: SourceClipId, captured_time: f32) {
         self.poses.push(PoseEntry { id, captured_time });
     }
 
-    pub fn remove_pose(&mut self, id: SourceClipId) {
-        self.poses.retain(|entry| entry.id != id);
-        if self.selected_pose_id == Some(id) {
+    /// `None` for a clip that is not a pose.
+    pub fn take_pose(&mut self, id: SourceClipId) -> Option<RemovedPose> {
+        let index = self.poses.iter().position(|entry| entry.id == id)?;
+        let selection = if self.selected_pose_id == Some(id) {
             self.selected_pose_id = None;
+            PoseSelection::Selected
+        } else {
+            PoseSelection::NotSelected
+        };
+
+        Some(RemovedPose {
+            index,
+            entry: self.poses.remove(index),
+            selection,
+        })
+    }
+
+    pub fn restore_pose(&mut self, removed: RemovedPose) {
+        let index = removed.index.min(self.poses.len());
+        if removed.selection == PoseSelection::Selected {
+            self.selected_pose_id = Some(removed.entry.id);
         }
+
+        self.poses.insert(index, removed.entry);
     }
 
     pub fn contains(&self, id: SourceClipId) -> bool {
@@ -54,10 +89,24 @@ mod tests {
         assert!(lib.contains(20));
 
         lib.selected_pose_id = Some(10);
-        lib.remove_pose(10);
+        let removed = lib.take_pose(10).expect("pose 10");
         assert_eq!(lib.poses.len(), 1);
         assert!(!lib.contains(10));
         assert!(lib.selected_pose_id.is_none());
+
+        lib.restore_pose(removed);
+        assert_eq!(lib.pose_ids(), vec![10, 20]);
+        assert_eq!(lib.selected_pose_id, Some(10));
+        assert_eq!(lib.poses[0].captured_time, 1.0);
+    }
+
+    #[test]
+    fn taking_a_clip_that_is_not_a_pose_takes_nothing() {
+        let mut lib = PoseLibrary::default();
+        lib.add_pose(10, 1.0);
+
+        assert!(lib.take_pose(99).is_none());
+        assert_eq!(lib.pose_ids(), vec![10]);
     }
 
     #[test]

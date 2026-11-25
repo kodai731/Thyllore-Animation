@@ -4,32 +4,33 @@ use std::borrow::Cow;
 use imgui::{DrawCornerFlags, DrawListMut, StyleVar, Ui};
 
 use crate::ecs::resource::UiWidgetState;
-use crate::ecs::World;
+use crate::ecs::world::World;
 use crate::platform::ui::pointer::{is_last_item_double_clicked, read_ui_pointer};
 
 use super::anim::ui_anim;
 use super::colors::{
-    srgb_to_linear_rgba, ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3,
-    TEXT, TEXT_SECONDARY,
+    ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
 use super::icons::Icon;
+use thyllore_color_core::srgb_to_linear_rgba;
 
 const TREE_INDENT: f32 = 16.0;
-pub const ICON_BUTTON_SIZE: f32 = 24.0;
-pub const PROPERTY_LABEL_WIDTH: f32 = 96.0;
+pub(crate) const ICON_BUTTON_SIZE: f32 = 24.0;
+pub(super) const PROPERTY_LABEL_WIDTH: f32 = 96.0;
+const LABEL_COLUMN_MAX_FRACTION: f32 = 0.5;
 const TOOLBAR_DIVIDER_WIDTH: f32 = 12.0;
 const TOOLBAR_DIVIDER_HEIGHT: f32 = 18.0;
 const SEGMENT_PADDING_X: f32 = 8.0;
 const SEGMENT_ROUNDING: f32 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ButtonState {
+pub(crate) enum ButtonState {
     Normal,
     Active,
 }
 
-pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bool {
+pub(crate) fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bool {
     let size = ICON_BUTTON_SIZE;
     let glyph = icon.glyph();
     let text_size = ui.calc_text_size(&glyph);
@@ -73,7 +74,7 @@ pub fn icon_button(ui: &Ui, icon: Icon, tooltip: &str, state: ButtonState) -> bo
 const ELLIPSIS: char = '…';
 const AXIS_LABEL_GAP: f32 = 2.0;
 
-pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
+pub(super) fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
     if text.chars().count() <= max_chars {
         return Cow::Borrowed(text);
     }
@@ -83,19 +84,52 @@ pub fn truncate_label(text: &str, max_chars: usize) -> Cow<'_, str> {
     Cow::Owned(truncated)
 }
 
-pub fn property_label(ui: &Ui, label: &str) {
-    let display = fit_label_to_column(ui, label);
-    ui.text_colored(srgb_to_linear_rgba(TEXT_SECONDARY), &display);
+fn write_property_label(ui: &Ui, label: &str, column_width: f32, color: [f32; 4]) {
+    let column_start = ui.cursor_pos()[0];
+    let display = fit_label_to_column(ui, label, column_width);
+    ui.text_colored(color, &display);
     if matches!(display, Cow::Owned(_)) && ui.is_item_hovered() {
         ui.tooltip_text(label);
     }
 
-    ui.same_line_with_pos(PROPERTY_LABEL_WIDTH);
+    ui.same_line_with_pos(column_start + column_width);
     ui.set_next_item_width(-1.0);
 }
 
-fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {
-    let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= PROPERTY_LABEL_WIDTH;
+pub(crate) fn property_label(ui: &Ui, label: &str) {
+    write_property_label(
+        ui,
+        label,
+        PROPERTY_LABEL_WIDTH,
+        srgb_to_linear_rgba(TEXT_SECONDARY),
+    );
+}
+
+pub(crate) fn property_label_in_column(ui: &Ui, label: &str, column_width: f32) {
+    write_property_label(ui, label, column_width, srgb_to_linear_rgba(TEXT_SECONDARY));
+}
+
+pub(crate) fn property_label_colored(ui: &Ui, label: &str, color: [f32; 4]) {
+    write_property_label(ui, label, PROPERTY_LABEL_WIDTH, color);
+}
+
+/// The label column that shows every given label in full, within half of the available width.
+pub(crate) fn label_column_width<'a>(
+    ui: &Ui,
+    labels: impl IntoIterator<Item = Cow<'a, str>>,
+) -> f32 {
+    let inner_spacing = ui.clone_style().item_inner_spacing()[0];
+    let widest = labels
+        .into_iter()
+        .map(|label| ui.calc_text_size(label.as_ref())[0])
+        .fold(0.0, f32::max);
+    let max_width = ui.content_region_avail()[0] * LABEL_COLUMN_MAX_FRACTION;
+    (widest + inner_spacing).clamp(PROPERTY_LABEL_WIDTH, max_width.max(PROPERTY_LABEL_WIDTH))
+}
+
+fn fit_label_to_column<'a>(ui: &Ui, label: &'a str, column_width: f32) -> Cow<'a, str> {
+    let text_width = column_width - ui.clone_style().item_inner_spacing()[0];
+    let fits = |candidate: &str| ui.calc_text_size(candidate)[0] <= text_width;
     if fits(label) {
         return Cow::Borrowed(label);
     }
@@ -107,7 +141,13 @@ fn fit_label_to_column<'a>(ui: &Ui, label: &'a str) -> Cow<'a, str> {
     truncate_label(label, fitting_chars)
 }
 
-pub fn vector3_field(ui: &Ui, id: &str, values: &mut [f32; 3], speed: f32, format: &str) -> bool {
+pub(crate) fn vector3_field(
+    ui: &Ui,
+    id: &str,
+    values: &mut [f32; 3],
+    speed: f32,
+    format: &str,
+) -> bool {
     let component_width = vector3_component_width(ui.content_region_avail()[0]);
     let axes = [("X", AXIS_X, "x"), ("Y", AXIS_Y, "y"), ("Z", AXIS_Z, "z")];
 
@@ -129,11 +169,11 @@ pub fn vector3_field(ui: &Ui, id: &str, values: &mut [f32; 3], speed: f32, forma
     changed
 }
 
-pub fn vector3_component_width(available: f32) -> f32 {
+pub(super) fn vector3_component_width(available: f32) -> f32 {
     available / 3.0
 }
 
-pub fn toolbar_divider(ui: &Ui) {
+pub(crate) fn toolbar_divider(ui: &Ui) {
     ui.same_line_with_spacing(0.0, 0.0);
     let [x, y] = ui.cursor_screen_pos();
     let line_x = x + TOOLBAR_DIVIDER_WIDTH * 0.5;
@@ -155,7 +195,12 @@ fn segment_width(text_size: [f32; 2], padding: f32) -> f32 {
     text_size[0] + 2.0 * padding
 }
 
-pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -> Option<usize> {
+pub(crate) fn segmented_control(
+    ui: &Ui,
+    id: &str,
+    options: &[&str],
+    selected: usize,
+) -> Option<usize> {
     let _id_token = ui.push_id(id);
     let last_index = options.len().saturating_sub(1);
     let mut clicked = None;
@@ -207,7 +252,7 @@ pub fn segmented_control(ui: &Ui, id: &str, options: &[&str], selected: usize) -
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum SectionDefault {
+pub(crate) enum SectionDefault {
     Open,
     Closed,
 }
@@ -246,7 +291,7 @@ fn toggle_knob_x(left: f32, width: f32, knob_radius: f32, t: f32) -> f32 {
     left + knob_radius + track_inner_width * t
 }
 
-pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefault) -> bool {
+pub(crate) fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefault) -> bool {
     let display_label = strip_display_suffix(label);
     let id = ui.get_id(label).raw();
     let default_open = matches!(default, SectionDefault::Open);
@@ -312,7 +357,7 @@ pub fn section_header(ui: &Ui, world: &World, label: &str, default: SectionDefau
     is_open
 }
 
-pub fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> bool {
+pub(crate) fn toggle_switch(ui: &Ui, world: &World, label: &str, value: &mut bool) -> bool {
     let id = ui.get_id(label).raw();
     let display_label = strip_display_suffix(label);
 
@@ -415,7 +460,7 @@ fn draw_clear_cross(
         .build();
 }
 
-pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
+pub(crate) fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
     let icon_gutter = 22.0;
     let style = ui.clone_style();
     let field_height = ui.frame_height();
@@ -465,13 +510,13 @@ pub fn search_field(ui: &Ui, id: &str, hint: &str, text: &mut String) -> bool {
     changed
 }
 
-pub fn is_in_expand_hit(mouse_x: f32, row_left: f32, depth: usize) -> bool {
+pub(super) fn is_in_expand_hit(mouse_x: f32, row_left: f32, depth: usize) -> bool {
     let expand_left = row_left + depth as f32 * TREE_INDENT;
     mouse_x >= expand_left && mouse_x < expand_left + TREE_INDENT
 }
 
 #[derive(Clone)]
-pub struct TreeRowSpec<'a> {
+pub(crate) struct TreeRowSpec<'a> {
     pub id: &'a str,
     pub label: &'a str,
     pub icon: &'a str,
@@ -482,14 +527,14 @@ pub struct TreeRowSpec<'a> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum TreeRowResponse {
+pub(crate) enum TreeRowResponse {
     None,
     Clicked,
     ExpandToggled,
     DoubleClicked,
 }
 
-pub fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
+pub(crate) fn tree_row(ui: &Ui, world: &World, spec: &TreeRowSpec) -> TreeRowResponse {
     let id = ui.get_id(spec.id).raw();
     let row_height = ui.frame_height();
     let row_width = ui.content_region_avail()[0];

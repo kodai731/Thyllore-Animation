@@ -1,9 +1,9 @@
 use copypasta::{ClipboardContext, ClipboardProvider};
 use imgui::ClipboardBackend;
 
-pub struct ClipboardSupport(pub ClipboardContext);
+pub(super) struct ClipboardSupport(pub ClipboardContext);
 
-pub fn init() -> Option<ClipboardSupport> {
+pub(super) fn init() -> Option<ClipboardSupport> {
     ClipboardContext::new().ok().map(ClipboardSupport)
 }
 

@@ -3,9 +3,9 @@ use super::path::{displace_path, emit_path, scatter_end_offset};
 use super::segment::{Segment, LIGHTNING_MAX_SEGMENTS};
 use super::test_support::{difference, length, segments_match, waypoint_effect};
 use crate::lightning::analytic::timing;
-use crate::lightning::effect::LightningSource;
-use crate::LightningEffect;
-use cgmath::Vector3;
+use crate::lightning::LightningEffect;
+use crate::lightning::LightningSource;
+use glam::Vec3;
 use thyllore_math_core::hash_u32;
 
 #[test]
@@ -239,7 +239,7 @@ fn time_inside_first_burst(effect: &LightningEffect) -> f32 {
         + effect.timing.sustain_time * 0.5
 }
 
-fn corner_bounds(corners: &[Vector3<f32>; 8]) -> ([f32; 3], [f32; 3]) {
+fn corner_bounds(corners: &[Vec3; 8]) -> ([f32; 3], [f32; 3]) {
     let mut min = [corners[0].x, corners[0].y, corners[0].z];
     let mut max = min;
     for corner in corners {

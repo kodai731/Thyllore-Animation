@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, WATER_SCALAR_PARAMS, WATER_UI_PARAMS};
+use thyllore_effect_core::water::{WATER_SCALAR_PARAMS, WATER_UI_PARAMS};
+use thyllore_effect_core::{ScalarParam, UiParam};
 
 use super::effect::WaterTorusEffect;
 use crate::ecs::component::{

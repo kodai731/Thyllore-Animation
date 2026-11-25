@@ -1,13 +1,13 @@
 use anyhow::{bail, Result};
-use thyllore_effect_core::TextureFitGroups;
+use thyllore_effect_core::flame::TextureFitGroups;
 
 use crate::ecs::component::{ClipSchedule, FlameBaked, FlameEffect};
 use crate::ecs::resource::{
     ClipDragPreview, ClipDragType, FlameRenderSettings, TimelineInteractionState,
 };
+use crate::ecs::systems::find_entity_clip_id;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
-use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction, EffectEdit};
 use crate::ecs::world::{Entity, World};
@@ -16,28 +16,28 @@ use super::apply_texture_fit_from_path;
 use super::FlameUiCommand;
 
 #[derive(Debug, Default)]
-pub struct AddFlame;
+pub(super) struct AddFlame;
 
 #[derive(Debug, Default)]
-pub struct OpenFlameCurves;
+pub(super) struct OpenFlameCurves;
 
 #[derive(Debug, Default)]
-pub struct TimelineSelectFlameClip;
+pub(super) struct TimelineSelectFlameClip;
 
 #[derive(Debug)]
-pub struct FlameClipPreview {
+pub(super) struct FlameClipPreview {
     pub end_seconds: f32,
 }
 
 #[derive(Debug)]
-pub struct ApplyTextureFit {
+pub(super) struct ApplyTextureFit {
     pub path: String,
     pub blend: f32,
     pub profile: bool,
 }
 
 #[derive(Debug)]
-pub struct ApplyTextureFitRoundtrip {
+pub(super) struct ApplyTextureFitRoundtrip {
     pub path: String,
     pub blend: f32,
     pub profile: bool,

@@ -1,16 +1,16 @@
-use cgmath::Vector3;
+use glam::{Mat4, Vec3};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use thyllore_anim_core::editable::clip_from_animation;
-use thyllore_animation::ecs::systems::{
-    apply_skinning, compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
-};
-use thyllore_animation::loader::fbx::load_fbx_to_graphics_resources;
-use thyllore_animation::loader::gltf::load_gltf_file;
-use thyllore_animation::loader::ModelLoadResult;
+use thyllore_anim_core::{compute_pose_global_transforms, create_pose_from_rest};
+use thyllore_animation::ecs::systems::sample_clip_to_pose;
+use thyllore_importer_core::fbx::load_fbx_to_graphics_resources;
+use thyllore_importer_core::gltf::load_gltf_file;
+use thyllore_importer_core::ModelLoadResult;
+use thyllore_model_core::apply_skinning;
 
 const TOLERANCE: f32 = 1e-3;
 
@@ -36,8 +36,8 @@ fn resolve_asset_path(asset_path: &str) -> PathBuf {
 fn remap_globals_to_original_bone_order(
     orig_skel: &thyllore_anim_core::Skeleton,
     rt_skel: &thyllore_anim_core::Skeleton,
-    rt_globals: &[cgmath::Matrix4<f32>],
-) -> Vec<cgmath::Matrix4<f32>> {
+    rt_globals: &[Mat4],
+) -> Vec<Mat4> {
     let rt_id_by_name: HashMap<&str, usize> = rt_skel
         .bones
         .iter()
@@ -148,8 +148,8 @@ fn sample_and_compare(
             let rt_globals_in_orig_order =
                 remap_globals_to_original_bone_order(orig_skel, rt_skel, &rt_globals);
 
-            let mut orig_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut orig_normals = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut orig_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut orig_normals = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
             apply_skinning(
                 orig_skin,
                 &orig_globals,
@@ -158,8 +158,8 @@ fn sample_and_compare(
                 &mut orig_normals,
             );
 
-            let mut rt_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut rt_normals = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut rt_positions = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut rt_normals = vec![Vec3::new(0.0, 0.0, 0.0); vertex_count];
             apply_skinning(
                 orig_skin,
                 &rt_globals_in_orig_order,
@@ -228,12 +228,12 @@ fn test_gltf_to_fbx_roundtrip() -> anyhow::Result<()> {
 
     // Export to FBX
     let fbx_output_path = std::env::temp_dir().join("roundtrip_gltf_to_fbx.fbx");
-    thyllore_exporter_core::systems::fbx::animation::export_animation_fbx(
+    thyllore_exporter_core::fbx::export_animation_fbx(
         &editable_clip,
         skeleton,
         &fbx_output_path,
         false,
-        thyllore_importer_core::fbx::fbx::FbxAxesInfo {
+        thyllore_file_format_core::fbx::FbxAxesInfo {
             up_axis: 1,
             up_axis_sign: 1,
             front_axis: 2,
@@ -276,7 +276,7 @@ fn test_fbx_to_gltf_roundtrip() -> anyhow::Result<()> {
 
     // Export to glTF
     let gltf_output_path = std::env::temp_dir().join("roundtrip_fbx_to_gltf.glb");
-    thyllore_exporter_core::systems::gltf::export_gltf_animation_only(
+    thyllore_exporter_core::gltf::export_gltf_animation_only(
         &editable_clip,
         skeleton,
         &gltf_output_path,

@@ -2,7 +2,7 @@ use super::path::{branch_detail_levels, compute_branch_tangent, displace_path, e
 use super::segment::{
     compute_distance, push_segment, segment_length, Segment, LIGHTNING_MAX_SEGMENTS,
 };
-use crate::LightningEffect;
+use crate::lightning::LightningEffect;
 use thyllore_math_core::hash_f32;
 
 const END_ZONE_ANGLE_SCALE: f32 = 1.5;

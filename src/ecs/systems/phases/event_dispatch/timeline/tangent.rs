@@ -1,9 +1,9 @@
-use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::systems::timeline::keyframe_edit::edit_curve;
 use crate::ecs::systems::timeline::tangent_edit::{
     set_manual_tangents, set_tangent_continuity, set_tangent_type, set_tangent_weight_mode,
 };
+use thyllore_anim_core::editable::SourceClipId;
 
 use super::TimelineEvent;
 

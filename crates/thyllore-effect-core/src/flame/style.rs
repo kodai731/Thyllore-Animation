@@ -241,7 +241,7 @@ pub fn apply_flame_style(
 mod tests {
     use super::*;
     use crate::flame::flame_parameter_snapshot;
-    use crate::flame::ownership::{changed_parameters, parameter_owner, ParameterOwner};
+    use crate::flame::{changed_parameters, parameter_owner, ParameterOwner};
     use std::collections::HashSet;
 
     fn full_style() -> FlameStyle {
@@ -359,11 +359,10 @@ mod tests {
             apply_flame_style(&mut effect, &full_style(), StyleGroups::default())
                 .into_iter()
                 .collect();
-        let expected: HashSet<&str> =
-            crate::flame::ownership::parameters_owned_by(ParameterOwner::Style)
-                .into_iter()
-                .filter(|name| *name != "sigma_t")
-                .collect();
+        let expected: HashSet<&str> = crate::flame::parameters_owned_by(ParameterOwner::Style)
+            .into_iter()
+            .filter(|name| *name != "sigma_t")
+            .collect();
         assert_eq!(applied, expected);
     }
 

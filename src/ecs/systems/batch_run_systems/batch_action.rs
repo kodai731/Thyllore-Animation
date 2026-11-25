@@ -156,6 +156,34 @@ crate::batch_action!("reset_camera_up", unit_action_parse::<ResetCameraUp>);
 crate::batch_action!("camera_to_model", unit_action_parse::<CameraToModel>);
 crate::batch_action!("frame_selection", unit_action_parse::<FrameSelection>);
 
+/// Loads a model file the way the toolbar's open buttons and a file drop do.
+#[derive(Debug)]
+pub struct LoadModel(pub String);
+
+impl BatchAction for LoadModel {
+    fn name(&self) -> &'static str {
+        "load_model"
+    }
+    fn apply(&self, world: &mut World) {
+        world.send_command(CameraEvent::LoadModel {
+            path: self.0.clone(),
+        });
+    }
+}
+
+fn load_model_parse(text: &str) -> Option<Result<Box<dyn BatchAction>>> {
+    let model_file = text.strip_prefix("load_model=")?.trim();
+    Some(if model_file.is_empty() {
+        Err(anyhow::anyhow!(
+            "load_model expects load_model=<model file>"
+        ))
+    } else {
+        Ok(Box::new(LoadModel(model_file.to_string())) as Box<dyn BatchAction>)
+    })
+}
+
+crate::batch_action!("load_model", load_model_parse);
+
 #[derive(Debug)]
 pub struct ViewMode(pub DebugViewMode);
 

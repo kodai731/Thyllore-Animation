@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use serde_json::json;
-use thyllore_effect_core::TextureFitGroups;
+use thyllore_effect_core::flame::TextureFitGroups;
 
 use crate::ecs::component::{FlameBaked, FlameEffect};
 use crate::ecs::systems::effect_edit::{apply_effect_update, resolve_selected_effect};
@@ -10,11 +10,11 @@ use crate::ecs::world::World;
 
 fn handle_dropped_png(world: &mut World, path: &str) {
     world
-        .resource_mut::<crate::ecs::FlameUIState>()
+        .resource_mut::<crate::ecs::resource::FlameUIState>()
         .texture_fit_path = path.to_string();
 }
 
-crate::dropped_file_hook!("png", handle_dropped_png);
+crate::dropped_file_hook!(".png", handle_dropped_png);
 
 /// Run a texture fit against the selected flame and write the results into
 /// its parameter and baked components. The heavy fit itself stays in
@@ -171,9 +171,9 @@ pub fn apply_texture_fit_from_path(
         let g = buf[i + 1] as f32 / 255.0;
         let b = buf[i + 2] as f32 / 255.0;
         pixels.push([
-            thyllore_effect_core::flame_fit::srgb_to_linear(r),
-            thyllore_effect_core::flame_fit::srgb_to_linear(g),
-            thyllore_effect_core::flame_fit::srgb_to_linear(b),
+            thyllore_color_core::srgb_to_linear(r),
+            thyllore_color_core::srgb_to_linear(g),
+            thyllore_color_core::srgb_to_linear(b),
         ]);
     }
     let mut max_luminance = 0.0f32;
@@ -188,26 +188,28 @@ pub fn apply_texture_fit_from_path(
         "mean_luminance": luminance_sum / total_pixels.max(1) as f64,
     });
 
-    let fit = match thyllore_effect_core::fit_flame_texture(&pixels, width, height, effect, baked) {
-        Some(f) => f,
-        None => {
-            eprintln!("warning: texture fit failed for image '{}'", path);
-            dump(
-                Some(&bytes),
-                json!({
-                    "ok": false,
-                    "error": "mask_empty",
-                    "png": png_json,
-                    "decode": decode_json,
-                }),
-                effect,
-                baked,
-            );
-            return;
-        }
-    };
+    let fit =
+        match thyllore_effect_core::flame::fit_flame_texture(&pixels, width, height, effect, baked)
+        {
+            Some(f) => f,
+            None => {
+                eprintln!("warning: texture fit failed for image '{}'", path);
+                dump(
+                    Some(&bytes),
+                    json!({
+                        "ok": false,
+                        "error": "mask_empty",
+                        "png": png_json,
+                        "decode": decode_json,
+                    }),
+                    effect,
+                    baked,
+                );
+                return;
+            }
+        };
 
-    thyllore_effect_core::apply_texture_fit(effect, baked, &fit, groups, blend, profile);
+    thyllore_effect_core::flame::apply_texture_fit(effect, baked, &fit, groups, blend, profile);
     dump(
         Some(&bytes),
         json!({

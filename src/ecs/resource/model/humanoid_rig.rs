@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use thyllore_anim_core::BoneId;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::motion::components::retarget_context::RetargetContext;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::motion::RetargetContext;
 
 #[derive(Clone, Debug)]
 pub struct HumanoidRig {
@@ -19,3 +19,5 @@ pub struct HumanoidRigState {
     pub revision: u64,
     pub rig: Option<HumanoidRig>,
 }
+
+crate::startup_resource!(HumanoidRigState, Editor);

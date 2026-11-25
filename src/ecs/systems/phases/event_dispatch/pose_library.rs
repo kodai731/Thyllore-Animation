@@ -1,9 +1,9 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::resource::{ClipLibrary, EditHistory, PoseLibrary, TimelineState};
-use crate::ecs::systems::pose_library_systems::{apply_pose_to_clip, capture_current_pose};
+use crate::ecs::systems::{apply_pose_to_clip, capture_current_pose, delete_library_clip};
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use thyllore_anim_core::editable::SourceClipId;
 
@@ -39,12 +39,11 @@ fn dispatch_pose_library_events(
                 {
                     drop(clip_library);
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    let pose_id =
-                        crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                            &mut clip_library,
-                            assets,
-                            pose,
-                        );
+                    let pose_id = crate::ecs::systems::clip_library_register_and_activate(
+                        &mut clip_library,
+                        assets,
+                        pose,
+                    );
 
                     let source = clip_library.source_clips.get(&pose_id).cloned();
                     drop(clip_library);
@@ -81,7 +80,7 @@ fn dispatch_pose_library_events(
 
                 if let (Some(pose), Some(target_id)) = (pose_clip, target_clip_id) {
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
-                    let before = clip_library.get(target_id).cloned();
+                    let before = clip_library.revision(target_id);
 
                     if let Some(target) = clip_library.get_mut(target_id) {
                         apply_pose_to_clip(&pose, target, target_time);
@@ -102,23 +101,11 @@ fn dispatch_pose_library_events(
             }
 
             PoseLibraryEvent::Delete(pose_id) => {
-                let removed_source = {
-                    let clip_library = world.resource::<ClipLibrary>();
-                    clip_library.source_clips.get(pose_id).cloned()
+                let Some((removed, effects)) = delete_library_clip(world, assets, *pose_id) else {
+                    continue;
                 };
-
-                let mut pose_library = world.resource_mut::<PoseLibrary>();
-                pose_library.remove_pose(*pose_id);
-
-                let mut clip_library = world.resource_mut::<ClipLibrary>();
-                clip_library.remove(*pose_id);
-                drop(clip_library);
-
-                if let Some(removed) = removed_source {
-                    if world.contains_resource::<EditHistory>() {
-                        let mut edit_history = world.resource_mut::<EditHistory>();
-                        edit_history.push_clip_removed(*pose_id, removed, "delete pose");
-                    }
+                if let Some(mut edit_history) = world.get_resource_mut::<EditHistory>() {
+                    edit_history.push_clip_removed(*pose_id, removed, effects, "delete pose");
                 }
 
                 log!("Deleted pose (id={})", pose_id);

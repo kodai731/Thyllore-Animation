@@ -39,16 +39,16 @@ pub fn verify_token(token: &str, key: &VerifyingKey, now_unix: u64) -> bool {
 }
 
 #[cfg(test)]
-pub mod test_support {
+pub(super) mod test_support {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
     use ed25519_dalek::{Signer, SigningKey};
 
-    pub fn signing_key() -> SigningKey {
+    pub(crate) fn signing_key() -> SigningKey {
         SigningKey::from_bytes(&[7u8; 32])
     }
 
-    pub fn sign_token(key: &SigningKey, payload: &str) -> String {
+    pub(crate) fn sign_token(key: &SigningKey, payload: &str) -> String {
         let signature = key.sign(payload.as_bytes());
         format!(
             "{}.{}",
@@ -57,7 +57,7 @@ pub mod test_support {
         )
     }
 
-    pub fn token_with_exp(key: &SigningKey, exp: u64) -> String {
+    pub(crate) fn token_with_exp(key: &SigningKey, exp: u64) -> String {
         sign_token(key, &format!("{{\"exp\":{exp}}}"))
     }
 }

@@ -93,8 +93,13 @@ def blender_to_engine_matrix(m):
     return _mat4_mul(C, _mat4_mul(m, C_INV))
 
 
-def blender_camera_to_engine_matrix(m):
+def blender_frame_to_engine_matrix(m):
+    """A world-space frame (camera, bone): its axes become engine vectors, its own local axes stay."""
     return _mat4_mul(C, m)
+
+
+def blender_camera_to_engine_matrix(m):
+    return blender_frame_to_engine_matrix(m)
 
 
 def blender_to_engine_quaternion(q):
@@ -110,14 +115,27 @@ def engine_to_blender_point(p):
     return (p[0], -p[2], p[1])
 
 
+def blender_to_engine_metres(p, scale_length):
+    """A Blender world point (scene units) as an engine point in metres."""
+    return tuple(c * scale_length for c in blender_to_engine_point(p))
+
+
+def engine_metres_to_blender(p, scale_length):
+    """An engine point in metres as a Blender world point (scene units)."""
+    return tuple(c / scale_length for c in engine_to_blender_point(p))
+
+
 def engine_projection(fovy_rad, aspect, near):
-    f = 1.0 / math.tan(fovy_rad / 2.0)
-    return [
-        [f / aspect, 0.0, 0.0, 0.0],
-        [0.0, -f, 0.0, 0.0],
-        [0.0, 0.0, 0.0, near],
-        [0.0, 0.0, -1.0, 0.0],
-    ]
+    import thyllore_effect_core as fx
+
+    return fx.engine_projection(fovy_rad, aspect, near)
+
+
+def blender_window_to_engine_projection(window_matrix, near):
+    """The engine projection of a viewport from Blender's ``region_data.window_matrix``."""
+    import thyllore_effect_core as fx
+
+    return fx.engine_projection_from_window([tuple(row) for row in window_matrix], near)
 
 
 def z_pass_to_engine_depth(z_eye, near):

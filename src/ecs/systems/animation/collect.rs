@@ -1,17 +1,17 @@
-use crate::animation::editable::{BlendMode, EaseType, SourceClipId};
-use crate::animation::SkeletonId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
-use crate::ecs::compute_local_time;
 use crate::ecs::resource::{
     BakedHumanoidClips, ClipLibrary, ClipPreview, SpringBoneMode, SpringBoneState, TimelineState,
 };
+use crate::ecs::systems::compute_local_time;
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::{BlendMode, EaseType, SourceClipId};
+use thyllore_anim_core::SkeletonId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 
-fn resolve_playable_asset(
+pub(crate) fn resolve_playable_asset(
     source_id: SourceClipId,
     entity: Entity,
     clip_library: &ClipLibrary,
@@ -37,15 +37,14 @@ pub(crate) fn collect_animated_entities(
     let should_log = is_baked
         && world
             .get_resource::<SpringBoneState>()
-            .map_or(false, |s| s.frame_count < 3);
+            .map_or(false, |s| s.simulation.frame_count < 3);
 
     let solo_clip_id = world
         .get_resource::<TimelineState>()
         .filter(|timeline| timeline.preview == ClipPreview::Solo)
         .and_then(|timeline| timeline.current_clip_id);
     let solo_preview = solo_clip_id.and_then(|clip_id| {
-        crate::ecs::systems::clip_schedule_systems::find_preview_owner(world)
-            .map(|owner| (owner, clip_id))
+        crate::ecs::systems::find_preview_owner(world).map(|owner| (owner, clip_id))
     });
 
     let empty_baked = BakedHumanoidClips::default();
@@ -174,10 +173,7 @@ pub(crate) fn build_active_instances(
     baked: &BakedHumanoidClips,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
-    let active = crate::ecs::systems::clip_schedule_systems::clip_schedule_active_instances(
-        schedule,
-        animator.time,
-    );
+    let active = crate::ecs::systems::clip_schedule_active_instances(schedule, animator.time);
 
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
@@ -194,15 +190,11 @@ pub(crate) fn build_active_instances(
                 animator.looping,
             );
 
-            let weight = crate::ecs::systems::clip_schedule_systems::clip_schedule_effective_weight(
-                schedule,
-                inst.instance_id,
-            );
+            let weight =
+                crate::ecs::systems::clip_schedule_effective_weight(schedule, inst.instance_id);
 
             Some(ActiveInstanceInfo {
-                source_id: inst.source_id,
                 asset_id,
-                instance_id: Some(inst.instance_id),
                 local_time,
                 weight,
                 blend_mode: inst.blend_mode,
@@ -243,9 +235,7 @@ pub(crate) fn build_solo_instance(
     );
 
     Some(ActiveInstanceInfo {
-        source_id: clip_id,
         asset_id,
-        instance_id: None,
         local_time,
         weight: 1.0,
         blend_mode: BlendMode::Override,
@@ -258,8 +248,8 @@ pub(crate) fn build_solo_instance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableAnimationClip, SourceClip};
-    use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+    use crate::ecs::systems::clip_schedule_add_instance;
+    use thyllore_anim_core::editable::{EditableAnimationClip, SourceClip};
 
     fn register_clip(clip_library: &mut ClipLibrary, clip_id: SourceClipId, duration: f32) {
         let mut clip = EditableAnimationClip::new(clip_id, format!("clip_{clip_id}"));
@@ -308,9 +298,7 @@ mod tests {
 
         assert_eq!(instances.len(), 1);
         let solo = &instances[0];
-        assert_eq!(solo.source_id, 1);
         assert_eq!(solo.asset_id, 101);
-        assert_eq!(solo.instance_id, None);
         assert_eq!(solo.weight, 1.0);
         assert_eq!(solo.blend_mode, BlendMode::Override);
         assert_eq!(solo.start_time, 0.0);
@@ -336,7 +324,7 @@ mod tests {
         let instances = collect_solo(3, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 3);
+        assert_eq!(instances[0].asset_id, 103);
         assert_eq!(instances[0].weight, 1.0);
         let muted_after: Vec<bool> = schedule.instances.iter().map(|i| i.muted).collect();
         assert_eq!(muted_after, muted_before);
@@ -348,7 +336,7 @@ mod tests {
         register_clip(&mut clip_library, 1, 2.0);
         register_clip(&mut clip_library, 2, 2.0);
         let mut schedule = ClipSchedule::new();
-        let audible_id = clip_schedule_add_instance(&mut schedule, 1, 2.0);
+        clip_schedule_add_instance(&mut schedule, 1, 2.0);
         clip_schedule_add_instance(&mut schedule, 2, 2.0);
         schedule.instances[0].weight = 0.4;
         schedule.instances[1].muted = true;
@@ -359,8 +347,7 @@ mod tests {
         let instances = build_active_instances(&schedule, entity, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 1);
-        assert_eq!(instances[0].instance_id, Some(audible_id));
+        assert_eq!(instances[0].asset_id, 101);
         assert!((instances[0].weight - 0.4).abs() < 1e-6);
     }
 
@@ -393,7 +380,6 @@ mod tests {
         let instances = build_active_instances(&schedule, 42, &clip_library, &baked, &animator);
 
         assert_eq!(instances.len(), 1);
-        assert_eq!(instances[0].source_id, 1);
         assert_eq!(instances[0].asset_id, 999);
     }
 

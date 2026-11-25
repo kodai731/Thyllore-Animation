@@ -1,6 +1,6 @@
 #[derive(Clone, Debug)]
 pub enum FlameUiCommand {
-    UpdateBaked(Box<thyllore_effect_core::FlameBaked>),
+    UpdateBaked(Box<thyllore_effect_core::flame::FlameBaked>),
     ApplyTextureFit {
         path: String,
         blend: f32,

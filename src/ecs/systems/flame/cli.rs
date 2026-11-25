@@ -1,13 +1,14 @@
+use glam::{Quat, Vec3};
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
 use clap::Args;
-use thyllore_effect_core::{
-    apply_flame_preset, find_scalar_param, refresh_flame_coefficients, FlameBaked, FlameColor,
-    FlameDebugView, FlameTrailState, StyleGroups, TextureFitGroups, FLAME_PRESET_NAMES,
-    FLAME_SCALAR_PARAMS,
+use thyllore_effect_core::flame::{
+    apply_flame_preset, refresh_flame_coefficients, FlameBaked, FlameColor, FlameDebugView,
+    FlameTrailState, StyleGroups, TextureFitGroups, FLAME_PRESET_NAMES, FLAME_SCALAR_PARAMS,
 };
+use thyllore_scene_core::find_scalar_param;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
@@ -119,7 +120,7 @@ impl FlameOverrides {
         };
         for i in 1..count {
             let effect = FlameEffect {
-                position: cgmath::Vector3::new(1.5 * i as f32, 0.0, 0.0),
+                position: Vec3::new(1.5 * i as f32, 0.0, 0.0),
                 radius: 0.7,
                 height: 0.8,
                 color: FlameColor {
@@ -219,7 +220,7 @@ impl FlameOverrides {
                 let center = world
                     .get_component::<FlameEffect>(first)
                     .map(|e| e.position)
-                    .unwrap_or(cgmath::Vector3::new(0.0, 0.0, 0.0));
+                    .unwrap_or(Vec3::new(0.0, 0.0, 0.0));
                 world.insert_component(
                     first,
                     MotionPath {
@@ -246,11 +247,7 @@ pub(crate) fn flame_set_valid_keys() -> Vec<&'static str> {
 pub fn apply_flame_overrides(effect: &mut FlameEffect, overrides: &[(String, f32)]) {
     for (key, value) in overrides {
         if key == ROT_Z_DEG_KEY {
-            effect.rotation = cgmath::Quaternion::from(cgmath::Euler::new(
-                cgmath::Deg(0.0),
-                cgmath::Deg(0.0),
-                cgmath::Deg(*value),
-            ));
+            effect.rotation = Quat::from_rotation_z(value.to_radians());
             continue;
         }
 

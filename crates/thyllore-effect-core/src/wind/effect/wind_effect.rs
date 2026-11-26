@@ -99,10 +99,10 @@ pub struct WindTornadoEffect {
     #[persist(curve, ui(min = 0.0, max = 0.95, group = "eddy"))]
     pub eddy_erosion: f32,
     /// Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)
-    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 16.0, group = "eddy"))]
     pub puff_count_theta: u32,
     /// Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)
-    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 16.0, group = "eddy"))]
     pub puff_count_height: u32,
     /// Radius of each puff clump in world units
     #[persist(curve, ui(min = 0.01, max = 1.0, group = "eddy"))]

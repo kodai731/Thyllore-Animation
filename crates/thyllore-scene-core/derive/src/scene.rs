@@ -315,15 +315,23 @@ pub(crate) fn parse_param_field(
             ));
         }
         let seed_kind = ui.kind.as_ref().is_some_and(|k| k == "Seed");
+        let switch_kind = ui.kind.as_ref().is_some_and(|k| k == "Switch");
+        let rangeless_kind = seed_kind || switch_kind;
         let has_range = ui.min.is_some() && ui.max.is_some();
         let has_range_bound = ui.min.is_some() || ui.max.is_some();
-        if seed_kind && has_range_bound {
-            return Err(Error::new_spanned(field, "Seed takes no `min` / `max`"));
+        if rangeless_kind && has_range_bound {
+            return Err(Error::new_spanned(
+                field,
+                "Seed / Switch take no `min` / `max`",
+            ));
         }
         if seed_kind && kind != ValueKind::U32 {
             return Err(Error::new_spanned(field, "Seed needs a u32 value"));
         }
-        if !seed_kind && !has_range {
+        if switch_kind && kind != ValueKind::Bool {
+            return Err(Error::new_spanned(field, "Switch needs a bool value"));
+        }
+        if !rangeless_kind && !has_range {
             return Err(Error::new_spanned(field, "ui requires `min` and `max`"));
         }
         let color_kind = ui
@@ -824,10 +832,15 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
         .min
         .as_ref()
         .map_or_else(|| quote!(0.0), |min| quote!(#min));
+    let rangeless_max = if ui.kind.as_ref().is_some_and(|k| k == "Switch") {
+        quote!(1.0)
+    } else {
+        quote!(u32::MAX as f32)
+    };
     let max = ui
         .max
         .as_ref()
-        .map_or_else(|| quote!(u32::MAX as f32), |max| quote!(#max));
+        .map_or_else(|| rangeless_max, |max| quote!(#max));
     let default_kind = match param.kind {
         ValueKind::Array(3) => "Color",
         _ => "Scalar",
@@ -1201,12 +1214,37 @@ mod tests {
         let message = expand_err(&format!(
             "{TOP} struct S {{ #[persist(ui(kind = Seed, min = 0.0, max = 8.0))] pub seed: u32 }}"
         ));
-        assert!(message.contains("Seed takes no `min` / `max`"), "{message}");
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
 
         let message = expand_err(&format!(
             "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: f32 }}"
         ));
         assert!(message.contains("Seed needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn switch_kind_is_a_bool_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: bool }}"
+        ));
+        assert!(expanded.contains("UiKind :: Switch"), "{expanded}");
+        assert!(expanded.contains("max : 1.0"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch, min = 0.0, max = 1.0))] pub enabled: bool }}"
+        ));
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: u32 }}"
+        ));
+        assert!(message.contains("Switch needs a bool value"), "{message}");
     }
 
     #[test]

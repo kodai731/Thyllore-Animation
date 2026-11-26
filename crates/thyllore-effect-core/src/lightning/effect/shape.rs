@@ -36,10 +36,10 @@ pub struct LightningShape {
     pub end_offset: [f32; 3],
     #[persist]
     pub source: LightningSource,
-    #[persist(curve, debug_range = (1.0, 8.0), ui(min = 1.0, max = 32.0, format = "%.0f"))]
+    #[persist(curve, debug_range = (1.0, 8.0), ui(kind = Int, min = 1.0, max = 32.0))]
     pub strikes_per_burst: u32,
     /// Midpoint displacement subdivisions of the channel; the segment count is 2^detail_levels
-    #[persist(curve, ui(min = 1.0, max = 8.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 1.0, max = 8.0))]
     pub detail_levels: u32,
     /// Lateral displacement of the first subdivision relative to the strike length
     #[persist(curve, ui(primary, min = 0.0, max = 2.0))]

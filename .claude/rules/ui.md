@@ -47,7 +47,8 @@ pub probability: f32,
 ## Widget kind follows the declaration
 
 `ui(kind = ..)` picks the widget: `Scalar` (float slider, the default), `Int` (whole-number slider,
-`u32` fields only), `Color` / `Absorption` (`[f32; 3]` pickers) and `Offset` (three-component drag).
+`u32` fields only), `Seed` (typed-in whole number without `min` / `max`, `u32` fields only),
+`Color` / `Absorption` (`[f32; 3]` pickers) and `Offset` (three-component drag).
 A hand-written `UiRow::IntSlider` or `UiRow::Slider` for a value that is a field of the effect struct
 is a defect; declare `ui(..)` on the field. Hand-written rows remain only for knobs that are not
 fields (a macro that writes several parameters, a remapped view of one parameter).

@@ -403,6 +403,7 @@ fn draw_scalar_row<C>(
     match meta.kind {
         UiKind::Scalar => draw_scalar(ui, world, meta, scalars, component, keys, label_column),
         UiKind::Int => draw_int(ui, world, meta, scalars, component, keys, label_column),
+        UiKind::Seed => draw_seed(ui, world, meta, scalars, component, keys, label_column),
         UiKind::Color => draw_color(
             ui,
             world,
@@ -527,6 +528,33 @@ fn draw_int<C>(
         .build(&mut value);
     open_text_entry_on_double_click(ui);
     if changed {
+        (scalar.set)(component, value as f32);
+    }
+    show_tooltip(ui, meta.tooltip);
+    draw_key_button(ui, world, meta.name, &targets, &[value as f32]);
+    changed
+}
+
+fn draw_seed<C>(
+    ui: &imgui::Ui,
+    world: &World,
+    meta: &UiParam,
+    scalars: &[ScalarParam<C>],
+    component: &mut C,
+    keys: KeyDomain,
+    label_column: f32,
+) -> bool {
+    let Some(scalar) = find_scalar_param(scalars, meta.name) else {
+        return false;
+    };
+    let targets = key_targets(keys, &[scalar]);
+
+    let mut value = (scalar.get)(component).round() as i32;
+    property_label_in_column(ui, &meta.display_label(), label_column);
+    reserve_key_button_width(ui, &targets);
+    let changed = ui.input_int(format!("##{}", meta.name), &mut value);
+    if changed {
+        value = value.max(0);
         (scalar.set)(component, value as f32);
     }
     show_tooltip(ui, meta.tooltip);

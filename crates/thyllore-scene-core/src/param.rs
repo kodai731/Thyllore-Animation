@@ -29,6 +29,8 @@ pub fn find_scalar_param<'a, C>(
 pub enum UiKind {
     Scalar,
     Int,
+    /// Whole number whose size carries no meaning, typed in rather than picked from a range.
+    Seed,
     Color,
     /// Beer-Lambert coefficients per meter, edited as the colour transmitted over a reference distance.
     Absorption,
@@ -41,6 +43,7 @@ impl UiKind {
         match self {
             UiKind::Scalar => "scalar",
             UiKind::Int => "int",
+            UiKind::Seed => "seed",
             UiKind::Color => "color",
             UiKind::Absorption => "absorption",
             UiKind::Offset => "offset",
@@ -104,7 +107,7 @@ impl UiParam {
     /// Every `ScalarParam` name this parameter's widget reads and writes.
     pub fn scalar_accessor_names(&self) -> Vec<String> {
         match self.kind {
-            UiKind::Scalar | UiKind::Int => vec![self.name.to_string()],
+            UiKind::Scalar | UiKind::Int | UiKind::Seed => vec![self.name.to_string()],
             UiKind::Color | UiKind::Absorption => self.color_component_names().to_vec(),
             UiKind::Offset => self.offset_component_names().to_vec(),
         }

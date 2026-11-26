@@ -59,6 +59,22 @@ fn test_bool_scalar_param_maps_zero_and_nonzero() {
 }
 
 #[test]
+fn test_emitter_kind_scalar_param_selects_a_known_kind_only() {
+    let param = find_scalar_param(&FLAME_SCALAR_PARAMS, "emitter_kind").expect("param");
+    let mut effect = FlameEffect::default();
+
+    (param.set)(&mut effect, FlameEmitterKind::Ring.as_shader_value() as f32);
+    assert_eq!(effect.emitter.kind, FlameEmitterKind::Ring);
+    assert_eq!(
+        (param.get)(&effect),
+        FlameEmitterKind::Ring.as_shader_value() as f32
+    );
+
+    (param.set)(&mut effect, FlameEmitterKind::ALL.len() as f32);
+    assert_eq!(effect.emitter.kind, FlameEmitterKind::Ring);
+}
+
+#[test]
 fn test_wind_aliases_write_wind_direction_components() {
     let mut effect = FlameEffect::default();
     let set = |effect: &mut FlameEffect, name: &str, value: f32| {

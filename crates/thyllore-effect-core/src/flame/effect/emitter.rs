@@ -39,6 +39,20 @@ impl FlameEmitterKind {
     }
 }
 
+mod shader_value {
+    use super::FlameEmitterKind;
+
+    pub(super) fn get(kind: &FlameEmitterKind) -> u32 {
+        kind.as_shader_value()
+    }
+
+    pub(super) fn set(kind: &mut FlameEmitterKind, value: u32) {
+        if let Some(known_kind) = FlameEmitterKind::from_shader_value(value) {
+            *kind = known_kind;
+        }
+    }
+}
+
 pub static EMITTER_IS_NOT_RING: UiCondition = UiCondition {
     description: "the emitter is not a ring, so the ring parameters have no effect",
 };
@@ -53,7 +67,7 @@ pub fn emitter_ui_conditions(emitter: &FlameEmitter) -> Vec<&'static UiCondition
 #[derive(Clone, Copy, Debug, PartialEq, thyllore_scene_core::SceneFields)]
 #[params(tag = ParameterOwner)]
 pub struct FlameEmitter {
-    #[runtime]
+    #[runtime(as = u32, with = shader_value)]
     pub kind: FlameEmitterKind,
     #[runtime(ui(
         primary,

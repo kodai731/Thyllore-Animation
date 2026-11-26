@@ -251,6 +251,9 @@ def build_param_properties(param: dict) -> dict[str, object]:
             )
         }
 
+    if ui_kind == "seed":
+        return {name: bpy.props.IntProperty(name=label, description=tooltip, default=default, min=0)}
+
     kind = property_kind(default)
     if kind == "bool":
         return {name: bpy.props.BoolProperty(name=label, description=tooltip, default=default)}

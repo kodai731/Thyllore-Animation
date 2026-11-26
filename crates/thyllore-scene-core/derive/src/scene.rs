@@ -219,12 +219,6 @@ pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<
             specs.push(FieldSpec::Persist(param));
         } else if let Some(attr) = runtime {
             let mut param = parse_param_field(field, attr, attrs)?;
-            if !matches!(param.conversion, Conversion::Plain) {
-                return Err(Error::new_spanned(
-                    field,
-                    "runtime fields take no `as` / `with`",
-                ));
-            }
             param.doc = doc_comment(field);
             specs.push(FieldSpec::Runtime(param));
         } else if let Some(attr) = nested {
@@ -320,7 +314,16 @@ pub(crate) fn parse_param_field(
                 "ui is only available for f32 / u32 / bool / [f32; N] / Vec3 values",
             ));
         }
-        if ui.min.is_none() || ui.max.is_none() {
+        let seed_kind = ui.kind.as_ref().is_some_and(|k| k == "Seed");
+        let has_range = ui.min.is_some() && ui.max.is_some();
+        let has_range_bound = ui.min.is_some() || ui.max.is_some();
+        if seed_kind && has_range_bound {
+            return Err(Error::new_spanned(field, "Seed takes no `min` / `max`"));
+        }
+        if seed_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Seed needs a u32 value"));
+        }
+        if !seed_kind && !has_range {
             return Err(Error::new_spanned(field, "ui requires `min` and `max`"));
         }
         let color_kind = ui
@@ -817,8 +820,14 @@ fn component_suffixes(param: &ParamField, len: usize) -> Vec<&'static str> {
 fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     let ui = param.ui.as_ref()?;
     let field_name = param.ident.to_string();
-    let min = ui.min.as_ref().expect("checked at parse");
-    let max = ui.max.as_ref().expect("checked at parse");
+    let min = ui
+        .min
+        .as_ref()
+        .map_or_else(|| quote!(0.0), |min| quote!(#min));
+    let max = ui
+        .max
+        .as_ref()
+        .map_or_else(|| quote!(u32::MAX as f32), |max| quote!(#max));
     let default_kind = match param.kind {
         ValueKind::Array(3) => "Color",
         _ => "Scalar",
@@ -1180,6 +1189,37 @@ mod tests {
             "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: f32 }}"
         ));
         assert!(message.contains("Int needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn seed_kind_is_a_u32_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Seed"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed, min = 0.0, max = 8.0))] pub seed: u32 }}"
+        ));
+        assert!(message.contains("Seed takes no `min` / `max`"), "{message}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: f32 }}"
+        ));
+        assert!(message.contains("Seed needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn converted_runtime_field_is_a_scalar() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[runtime(as = u32, with = shader_value)] pub kind: Kind }}"
+        ));
+        assert!(expanded.contains("shader_value :: get"), "{expanded}");
+        assert!(expanded.contains("shader_value :: set"), "{expanded}");
+        assert!(
+            expanded.contains("PERSISTED_FIELDS : & 'static [& 'static str] = & []"),
+            "{expanded}"
+        );
     }
 
     #[test]

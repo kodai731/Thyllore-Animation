@@ -10,7 +10,7 @@ use crate::ecs::resource::{WindDebugCapture, WindDebugView, WindRenderSettings, 
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::WIND_SPAWN_HOOK;
 use crate::platform::ui::effect::sections::{build_effect_section, EffectPanel, EffectSectionView};
-use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
+use crate::platform::ui::ui_rows::UiRow;
 
 type WindSectionView = EffectSectionView<WindTornadoEffect, WindRenderSettings>;
 
@@ -42,32 +42,18 @@ static RENDER_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
 
 fn wind_debug_rows() -> Vec<UiRow<WindSectionView>> {
     let mut rows = vec![
-        UiRow::Choice {
-            label: "Shading Mode",
-            options: |_, view: &WindSectionView| {
-                WindShadingMode::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.shading_mode,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.shading_mode = WindShadingMode::ALL[index],
-        },
-        UiRow::Choice {
-            label: "Debug View",
-            options: |_, view: &WindSectionView| {
-                WindDebugView::ALL
-                    .iter()
-                    .map(|&debug_view| ChoiceOption {
-                        label: debug_view.label().to_string(),
-                        selected: debug_view == view.render.debug_view,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.debug_view = WindDebugView::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Shading Mode",
+            WindSectionView,
+            WindShadingMode,
+            render.shading_mode
+        ),
+        crate::variant_choice_row!(
+            "Debug View",
+            WindSectionView,
+            WindDebugView,
+            render.debug_view
+        ),
     ];
 
     rows.extend(RENDER_UI_PARAMS.iter().map(|param| UiRow::Scalar {

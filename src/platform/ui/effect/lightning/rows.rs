@@ -11,7 +11,7 @@ use crate::ecs::systems::lightning::LightningUiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 
 use crate::platform::ui::effect::sections::EffectSectionView;
-use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
+use crate::platform::ui::ui_rows::{ListRows, UiRow};
 
 #[derive(Clone, Default)]
 pub(super) struct LightningExtra {
@@ -133,32 +133,18 @@ pub(super) fn lightning_extra_head_rows(
 
 pub(super) fn lightning_debug_rows() -> Vec<UiRow<LightningSectionView>> {
     let mut rows = vec![
-        UiRow::Choice {
-            label: "Shading Mode",
-            options: |_, view: &LightningSectionView| {
-                LightningShadingMode::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.shading_mode,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.shading_mode = LightningShadingMode::ALL[index],
-        },
-        UiRow::Choice {
-            label: "Debug View",
-            options: |_, view: &LightningSectionView| {
-                LightningDebugView::ALL
-                    .iter()
-                    .map(|&debug_view| ChoiceOption {
-                        label: debug_view.label().to_string(),
-                        selected: debug_view == view.render.debug_view,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.debug_view = LightningDebugView::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Shading Mode",
+            LightningSectionView,
+            LightningShadingMode,
+            render.shading_mode
+        ),
+        crate::variant_choice_row!(
+            "Debug View",
+            LightningSectionView,
+            LightningDebugView,
+            render.debug_view
+        ),
     ];
 
     rows.extend(RENDER_UI_PARAMS.iter().map(|param| UiRow::Scalar {

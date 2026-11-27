@@ -10,25 +10,18 @@ use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::WATER_SPAWN_HOOK;
 use crate::platform::ui::effect::sections::{build_effect_section, EffectPanel, EffectSectionView};
-use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
+use crate::platform::ui::ui_rows::UiRow;
 
 type WaterSectionView = EffectSectionView<WaterTorusEffect, WaterRenderSettings>;
 
 fn water_debug_rows() -> Vec<UiRow<WaterSectionView>> {
     vec![
-        UiRow::Choice {
-            label: "Secondary Rays",
-            options: |_, view: &WaterSectionView| {
-                WaterSecondaryRays::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.secondary_rays,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.secondary_rays = WaterSecondaryRays::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Secondary Rays",
+            WaterSectionView,
+            WaterSecondaryRays,
+            render.secondary_rays
+        ),
         UiRow::Toggle {
             label: "Debug View",
             get: |view| view.render.debug_view != 0,

@@ -6,41 +6,15 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::world::World;
 
 use super::section_view::FlameSectionView;
-use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
-
-fn emitter_rows() -> Vec<UiRow<FlameEffect>> {
-    vec![
-        UiRow::Vector3 {
-            label: "Position",
-            speed: 0.1,
-            format: "%.2f",
-            get: |effect| effect.position.into(),
-            set: |effect, position| {
-                effect.position = position.into();
-            },
-        },
-        UiRow::Choice {
-            label: "Emitter",
-            options: |_world, effect| {
-                FlameEmitterKind::ALL
-                    .iter()
-                    .map(|&kind| ChoiceOption {
-                        label: kind.label().to_string(),
-                        selected: kind == effect.emitter.kind,
-                    })
-                    .collect()
-            },
-            pick: |effect, index| {
-                if let Some(&kind) = FlameEmitterKind::ALL.get(index) {
-                    effect.emitter.kind = kind;
-                }
-            },
-        },
-    ]
-}
+use crate::platform::ui::ui_rows::UiRow;
 
 pub(super) fn flame_param_rows(declared_rows: Vec<UiRow<FlameEffect>>) -> Vec<UiRow<FlameEffect>> {
-    let mut rows = emitter_rows();
+    let mut rows = vec![crate::variant_choice_row!(
+        "Emitter",
+        FlameEffect,
+        FlameEmitterKind,
+        emitter.kind
+    )];
     rows.extend(declared_rows);
     rows.push(UiRow::Group {
         title: "Macros".into(),
@@ -142,40 +116,18 @@ fn trail_rows() -> Vec<UiRow<FlameSectionView>> {
 
 fn shading_rows(shading_mode: FlameShadingMode) -> Vec<UiRow<FlameSectionView>> {
     let mut rows: Vec<UiRow<FlameSectionView>> = vec![
-        UiRow::Choice {
-            label: "Shading Mode",
-            options: |_world, view| {
-                FlameShadingMode::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.shading_mode,
-                    })
-                    .collect()
-            },
-            pick: |view, index| {
-                if let Some(&mode) = FlameShadingMode::ALL.get(index) {
-                    view.render.shading_mode = mode;
-                }
-            },
-        },
-        UiRow::Choice {
-            label: "Debug View",
-            options: |_world, view| {
-                FlameDebugView::ALL
-                    .iter()
-                    .map(|&debug_view| ChoiceOption {
-                        label: debug_view.label().to_string(),
-                        selected: debug_view == view.render.debug_view,
-                    })
-                    .collect()
-            },
-            pick: |view, index| {
-                if let Some(&debug_view) = FlameDebugView::ALL.get(index) {
-                    view.render.debug_view = debug_view;
-                }
-            },
-        },
+        crate::variant_choice_row!(
+            "Shading Mode",
+            FlameSectionView,
+            FlameShadingMode,
+            render.shading_mode
+        ),
+        crate::variant_choice_row!(
+            "Debug View",
+            FlameSectionView,
+            FlameDebugView,
+            render.debug_view
+        ),
         UiRow::Slider {
             label: "Jitter Depth",
             min: 0.0,
@@ -289,8 +241,8 @@ mod tests {
         let declared_rows = vec![UiRow::Heading("declared")];
         let rows = flame_param_rows(declared_rows);
 
-        assert_eq!(visible_labels(&rows), ["Position", "Emitter"]);
-        assert!(matches!(rows[2], UiRow::Heading("declared")));
+        assert_eq!(visible_labels(&rows), ["Emitter"]);
+        assert!(matches!(rows[1], UiRow::Heading("declared")));
         let Some(UiRow::Group { title, rows, .. }) = rows.last() else {
             panic!("last row is not the macro group");
         };

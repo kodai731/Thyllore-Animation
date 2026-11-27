@@ -4,6 +4,7 @@ mod labels;
 mod row;
 #[cfg(test)]
 mod tests;
+mod variant_choice;
 
 pub use draw::draw_rows;
 #[cfg(test)]

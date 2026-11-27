@@ -137,13 +137,8 @@ mod tests {
     fn ring_params_follow_the_emitter_choice_only_for_a_ring_emitter() {
         let ring_rows = FlamePanel::param_rows(&view_with_emitter(FlameEmitterKind::Ring));
         assert_eq!(
-            visible_labels(&ring_rows)[..4],
-            [
-                "Position",
-                "Emitter",
-                RING_PARAM_NAMES[0],
-                RING_PARAM_NAMES[1]
-            ]
+            visible_labels(&ring_rows)[..3],
+            ["Emitter", RING_PARAM_NAMES[0], RING_PARAM_NAMES[1]]
         );
         assert!(find_duplicate_labels(&ring_rows).is_empty());
 

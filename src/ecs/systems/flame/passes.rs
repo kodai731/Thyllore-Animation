@@ -154,8 +154,11 @@ fn instance_scissor(
         ubo.wind_bend.wind_direction[0] * ubo.wind_bend.bend_amount,
         ubo.wind_bend.wind_direction[1] * ubo.wind_bend.bend_amount,
     ];
-    let support_scale = thyllore_effect_core::flame::flame_shell_support_scale(
+    let emitter_kind = thyllore_effect_core::flame::FlameEmitterKind::from_shader_value(
         ubo.emitter_params.kind as u32,
+    )?;
+    let support_scale = thyllore_effect_core::flame::flame_shell_support_scale(
+        emitter_kind,
         ubo.emitter_params.ring_major_ratio,
         ubo.support_motion.support_margin,
     );

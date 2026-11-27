@@ -9,24 +9,18 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::lightning::LightningUiCommand;
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
-use crate::ecs::world::Entity;
 
-use crate::platform::ui::effect::rows::{instance_options, preset_options};
-use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
+use crate::platform::ui::effect::sections::EffectSectionView;
+use crate::platform::ui::ui_rows::{ListRows, UiRow};
 
-#[derive(Clone)]
-pub(super) struct LightningSectionView {
-    pub instances: Vec<String>,
-    pub instance_index: usize,
-    pub preset: Option<String>,
+#[derive(Clone, Default)]
+pub(super) struct LightningExtra {
     pub target_name: Option<String>,
     pub waypoints: Vec<String>,
-    pub selected: Option<Entity>,
-    pub effect: LightningEffect,
-    pub render: LightningRenderSettings,
 }
+
+pub(super) type LightningSectionView =
+    EffectSectionView<LightningEffect, LightningRenderSettings, LightningExtra>;
 
 struct LightningRenderPath;
 
@@ -60,7 +54,8 @@ fn waypoint_items(
     _world: &crate::ecs::world::World,
     view: &LightningSectionView,
 ) -> Vec<(String, usize)> {
-    view.waypoints
+    view.extra
+        .waypoints
         .iter()
         .enumerate()
         .map(|(i, name)| (name.clone(), i))
@@ -83,41 +78,15 @@ fn waypoint_on_change(
     Box::new(LightningUiCommand::RemoveWaypoint(item))
 }
 
-pub(super) fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
-    let mut rows = vec![UiRow::Action {
-        label: "Add Lightning",
-        enabled: |_, _| true,
-        on_click: |_| Box::new(ScalarCurveEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key)),
-    }];
+pub(super) fn lightning_extra_head_rows(
+    view: &LightningSectionView,
+) -> Vec<UiRow<LightningSectionView>> {
+    let mut rows = Vec::new();
 
-    if view.instances.len() > 1 {
-        rows.push(UiRow::Choice {
-            label: "Instance",
-            options: |_, view: &LightningSectionView| {
-                instance_options(&view.instances, view.instance_index)
-            },
-            pick: |view, index| view.instance_index = index,
-        });
-    }
-
-    rows.push(UiRow::Choice {
-        label: "Preset",
-        options: |_, view: &LightningSectionView| {
-            preset_options(
-                thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES,
-                view.preset.as_deref(),
-            )
-        },
-        pick: |view, index| {
-            view.preset =
-                Some(thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[index].to_string());
-        },
-    });
-
-    match &view.target_name {
+    match &view.extra.target_name {
         Some(_) => {
             rows.push(UiRow::Canvas(|ui, _world, view: &LightningSectionView| {
-                if let Some(name) = &view.target_name {
+                if let Some(name) = &view.extra.target_name {
                     ui.text(format!("Target: {name}"));
                 }
             }));
@@ -162,49 +131,20 @@ pub(super) fn lightning_head_rows(view: &LightningSectionView) -> Vec<UiRow<Ligh
     rows
 }
 
-pub(super) fn lightning_tail_rows() -> Vec<UiRow<LightningSectionView>> {
-    vec![
-        UiRow::Action {
-            label: "Curves",
-            enabled: |_, _| true,
-            on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
-        },
-        UiRow::Group {
-            title: "Lightning Debug".into(),
-            initially_open: false,
-            rows: lightning_debug_rows(),
-        },
-    ]
-}
-
-fn lightning_debug_rows() -> Vec<UiRow<LightningSectionView>> {
+pub(super) fn lightning_debug_rows() -> Vec<UiRow<LightningSectionView>> {
     let mut rows = vec![
-        UiRow::Choice {
-            label: "Shading Mode",
-            options: |_, view: &LightningSectionView| {
-                LightningShadingMode::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.shading_mode,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.shading_mode = LightningShadingMode::ALL[index],
-        },
-        UiRow::Choice {
-            label: "Debug View",
-            options: |_, view: &LightningSectionView| {
-                LightningDebugView::ALL
-                    .iter()
-                    .map(|&debug_view| ChoiceOption {
-                        label: debug_view.label().to_string(),
-                        selected: debug_view == view.render.debug_view,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.debug_view = LightningDebugView::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Shading Mode",
+            LightningSectionView,
+            LightningShadingMode,
+            render.shading_mode
+        ),
+        crate::variant_choice_row!(
+            "Debug View",
+            LightningSectionView,
+            LightningDebugView,
+            render.debug_view
+        ),
     ];
 
     rows.extend(RENDER_UI_PARAMS.iter().map(|param| UiRow::Scalar {
@@ -226,105 +166,48 @@ fn lightning_debug_rows() -> Vec<UiRow<LightningSectionView>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
-    fn view_with_instances(count: usize) -> LightningSectionView {
+    fn view_with_target(target_name: Option<&str>) -> LightningSectionView {
         LightningSectionView {
-            instances: (1..=count).map(|i| format!("Lightning {i}")).collect(),
+            instances: vec!["Lightning 1".to_string()],
             instance_index: 0,
             preset: None,
-            target_name: None,
-            waypoints: Vec::new(),
             selected: None,
             effect: LightningEffect::default(),
             render: LightningRenderSettings::default(),
+            extra: LightningExtra {
+                target_name: target_name.map(str::to_string),
+                waypoints: Vec::new(),
+            },
         }
     }
 
-    fn view_with_target() -> LightningSectionView {
-        let mut v = view_with_instances(1);
-        v.target_name = Some("Target Locator".to_string());
-        v
+    #[test]
+    fn extra_head_rows_without_target_show_add_target() {
+        let rows = lightning_extra_head_rows(&view_with_target(None));
+        assert_eq!(
+            visible_labels(&rows),
+            ["Add Target", "Waypoints", "Add Waypoint"]
+        );
+        assert!(find_duplicate_labels(&rows).is_empty());
     }
 
     #[test]
-    fn head_rows_without_target_show_add_target() {
-        let rows = lightning_head_rows(&view_with_instances(1));
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
-        assert!(
-            labels.contains(&"Add Target"),
-            "expected Add Target in {:?}",
-            labels
+    fn extra_head_rows_with_target_show_clear_target() {
+        let rows = lightning_extra_head_rows(&view_with_target(Some("Target Locator")));
+        assert_eq!(
+            visible_labels(&rows),
+            ["Clear Target", "Waypoints", "Add Waypoint"]
         );
-        assert!(
-            !labels.contains(&"Clear Target"),
-            "should not have Clear Target in {:?}",
-            labels
-        );
-    }
-
-    #[test]
-    fn head_rows_with_target_show_clear_target() {
-        let rows = lightning_head_rows(&view_with_target());
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
-        assert!(
-            labels.contains(&"Clear Target"),
-            "expected Clear Target in {:?}",
-            labels
-        );
-        assert!(
-            !labels.contains(&"Add Target"),
-            "should not have Add Target in {:?}",
-            labels
-        );
-    }
-
-    #[test]
-    fn head_rows_with_two_instances_show_instance_choice() {
-        let rows = lightning_head_rows(&view_with_instances(2));
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
-        assert!(
-            labels.contains(&"Instance"),
-            "expected Instance in {:?}",
-            labels
-        );
-    }
-
-    #[test]
-    fn head_rows_with_one_instance_hide_instance_choice() {
-        let rows = lightning_head_rows(&view_with_instances(1));
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
-        assert!(
-            !labels.contains(&"Instance"),
-            "should not have Instance in {:?}",
-            labels
-        );
-    }
-
-    #[test]
-    fn head_rows_no_duplicates() {
-        let rows = lightning_head_rows(&view_with_instances(2));
-        let dupes = crate::platform::ui::ui_rows::find_duplicate_labels(&rows);
-        assert!(dupes.is_empty(), "duplicate labels: {:?}", dupes);
-    }
-
-    #[test]
-    fn tail_rows_show_curves_before_debug_group() {
-        let rows = lightning_tail_rows();
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
-        assert_eq!(labels, ["Curves"]);
-        let last = rows.last().unwrap();
-        let UiRow::Group { title, .. } = last else {
-            panic!("last row is not a Group");
-        };
-        assert_eq!(&**title, "Lightning Debug");
+        assert!(find_duplicate_labels(&rows).is_empty());
     }
 
     #[test]
     fn debug_rows_keep_order_without_duplicates() {
         let rows = lightning_debug_rows();
-        let labels: Vec<&str> = crate::platform::ui::ui_rows::visible_labels(&rows);
         assert_eq!(
-            labels,
+            visible_labels(&rows),
             [
                 "Shading Mode",
                 "Debug View",
@@ -332,7 +215,6 @@ mod tests {
                 "Dump Debug",
             ]
         );
-        let dupes = crate::platform::ui::ui_rows::find_duplicate_labels(&rows);
-        assert!(dupes.is_empty(), "duplicate labels: {:?}", dupes);
+        assert!(find_duplicate_labels(&rows).is_empty());
     }
 }

@@ -72,11 +72,6 @@ fn new_variants_appear_in_visible_labels() {
             get: |_| 0,
             set: |_, _| {},
         },
-        UiRow::IntInput {
-            label: "II",
-            get: |_| 0,
-            set: |_, _| {},
-        },
         UiRow::FloatInput {
             label: "FI",
             format: "%.3f",
@@ -91,7 +86,7 @@ fn new_variants_appear_in_visible_labels() {
             set: |_, _| {},
         },
     ];
-    assert_eq!(visible_labels(&rows), ["S", "IS", "II", "FI", "V3"]);
+    assert_eq!(visible_labels(&rows), ["S", "IS", "FI", "V3"]);
 }
 
 #[test]

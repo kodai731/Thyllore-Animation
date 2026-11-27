@@ -1,4 +1,4 @@
-use crate::flame::{refresh_flame_coefficients, FlameBaked, FlameEffect};
+use crate::flame::{refresh_flame_coefficients, FlameBaked, FlameEffect, FlameEmitterKind};
 use glam::{Quat, Vec2, Vec3};
 
 pub const FLAME_PRESET_NAMES: &[&str] = &["campfire", "candle", "torch", "inferno", "blue", "ring"];
@@ -88,7 +88,7 @@ pub fn apply_flame_preset(effect: &mut FlameEffect, name: &str) -> bool {
             preset.height = 1.2;
             preset.radius = 0.5;
             preset.intensity = 2.4;
-            preset.emitter.kind = 1;
+            preset.emitter.kind = FlameEmitterKind::Ring;
             preset.emitter.ring_major_radius = 1.5;
             preset.emitter.ring_angular_speed = 0.6;
             preset.noise.amplitude = 1.6;

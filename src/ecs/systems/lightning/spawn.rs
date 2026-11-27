@@ -1,6 +1,5 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LightningEffect, LIGHTNING_DOMAIN};
-use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::effect_edit::EffectPreset;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
@@ -57,20 +56,4 @@ pub fn spawn_lightning_with_clip(
     let entity = spawn_lightning(world, name, effect);
     crate::ecs::systems::ensure_entity_clip(world, assets, entity, &LIGHTNING_DOMAIN);
     entity
-}
-
-/// The lightning the UI and the lightning events act on: the selected entity when it is a
-/// lightning, otherwise the first one.
-pub fn resolve_selected_lightning(world: &World) -> Option<Entity> {
-    let selected = world
-        .get_resource::<HierarchyState>()
-        .and_then(|state| state.selected_entity);
-
-    if let Some(entity) = selected {
-        if world.get_component::<LightningEffect>(entity).is_some() {
-            return Some(entity);
-        }
-    }
-
-    world.entities_with::<LightningEffect>().first().copied()
 }

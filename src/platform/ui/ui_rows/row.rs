@@ -54,11 +54,6 @@ pub enum UiRow<C: 'static> {
         get: fn(&C) -> i32,
         set: fn(&mut C, i32),
     },
-    IntInput {
-        label: &'static str,
-        get: fn(&C) -> i32,
-        set: fn(&mut C, i32),
-    },
     FloatInput {
         label: &'static str,
         format: &'static str,

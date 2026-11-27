@@ -71,7 +71,7 @@ pub fn build_effect_json(
     ]);
     value["time_scale"] = json!(effect.time_scale);
     value["time_offset"] = json!(effect.time_offset);
-    value["emitter_kind"] = json!(effect.emitter.kind);
+    value["emitter_kind"] = json!(effect.emitter.kind.as_shader_value());
     value["ring_major_radius"] = json!(effect.emitter.ring_major_radius);
     value["ring_angular_speed"] = json!(effect.emitter.ring_angular_speed);
     value["aniso_axis_advect"] = json!(effect.contour.aniso_axis_advect);

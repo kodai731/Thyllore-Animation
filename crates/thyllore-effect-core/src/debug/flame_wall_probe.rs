@@ -7,7 +7,7 @@ use glam::{Mat4, Vec3, Vec4};
 
 use crate::flame::{
     build_flame_inverse_model_matrix, build_flame_model_matrix, effective_sigma_t,
-    flame_bounding_radius, FlameEffect,
+    flame_bounding_radius, FlameEffect, FlameEmitterKind,
 };
 use crate::flame::{
     build_height_series, evaluate_ring_smooth_density, ring_support_span, FlameRadialTaper,
@@ -122,7 +122,7 @@ pub fn probe_flame_wall(
     let model = build_flame_model_matrix(effect);
     let height_series = build_height_series(&effect.coefficients.height);
     let taper = FlameRadialTaper::from_effect(effect, baked);
-    let ring_major = if effect.emitter.kind == 1 {
+    let ring_major = if effect.emitter.kind == FlameEmitterKind::Ring {
         effect.emitter.ring_major_radius / flame_bounding_radius(effect).max(1e-3)
     } else {
         0.0
@@ -324,7 +324,7 @@ pub fn probe_flame_wall(
         camera_local: [camera_local.x, camera_local.y, camera_local.z],
         camera_density,
         camera_inside_support: camera_density > 0.0,
-        emitter_approximated: effect.emitter.kind != 1,
+        emitter_approximated: effect.emitter.kind != FlameEmitterKind::Ring,
         hit_fraction: hits.len() as f32 / rays.len() as f32,
         tangential_hit_fraction: tangential / hit_count,
         saturated_hit_fraction: saturated / hit_count,
@@ -343,7 +343,7 @@ mod tests {
     fn ring_effect() -> FlameEffect {
         FlameEffect {
             emitter: FlameEmitter {
-                kind: 1,
+                kind: FlameEmitterKind::Ring,
                 ring_major_radius: 1.5,
                 ..FlameEmitter::default()
             },

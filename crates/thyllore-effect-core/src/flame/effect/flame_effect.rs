@@ -8,6 +8,8 @@ pub struct FlameEffect {
     pub position: Vec3,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
     pub rotation: Quat,
+    #[nested(runtime)]
+    pub emitter: FlameEmitter,
     #[persist(curve, debug_range = (0.5, 4.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
     pub height: f32,
     #[persist(curve, debug_range = (0.2, 2.0), ui(primary, min = 0.05, max = 10.0, group = "body"))]
@@ -37,8 +39,6 @@ pub struct FlameEffect {
     #[nested]
     pub envelope: FlameEnvelope,
     #[nested(runtime)]
-    pub emitter: FlameEmitter,
-    #[nested(runtime)]
     pub boundary: FlameBoundary,
     #[persist(owner = Shape)]
     pub radial_sharpness: f32,
@@ -60,9 +60,14 @@ pub struct FlameEffect {
     pub mix: FlameMix,
     #[nested]
     pub thermal: FlameThermal,
-    /// Closed-form segments per ray of the wave walk: finer noise needs more
-    /// (the segment grid aliases at noise frequency > ~2 with 64); 64 = default.
-    #[persist]
+    /// Closed-form segments per ray: the noise grid aliases into a pixel hatch above
+    /// Noise Frequency ~2 at 64; 128 resolves frequency ~4 at twice the cost
+    #[persist(ui(
+        kind = Int,
+        min = crate::flame::WAVE_SEGMENTS_MIN as f32,
+        max = crate::flame::WAVE_SEGMENTS_MAX as f32,
+        label = "Noise Segments"
+    ))]
     pub wave_segments: u32,
     #[nested]
     pub twist: FlameTwist,

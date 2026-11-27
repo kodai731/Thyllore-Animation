@@ -18,7 +18,7 @@ pub struct LightningLook {
     /// Radius of the beam the arcs wrap around; 0 keeps a bare channel
     #[persist(curve, ui(min = 0.0, max = 10.0))]
     pub beam_radius: f32,
-    #[persist(curve, ui(min = 0.0, max = 64.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 64.0))]
     pub beam_arc_count: u32,
     /// Radiance of the ambient flash emitted while a stroke is alive; 0 disables it
     #[persist(curve, ui(min = 0.0, max = 10.0))]

@@ -179,6 +179,7 @@ pub(crate) struct UiAttributes {
     pub format: Option<LitStr>,
     pub group: Option<LitStr>,
     pub label: Option<LitStr>,
+    pub hidden_when: Option<syn::Path>,
 }
 
 pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
@@ -218,12 +219,6 @@ pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<
             specs.push(FieldSpec::Persist(param));
         } else if let Some(attr) = runtime {
             let mut param = parse_param_field(field, attr, attrs)?;
-            if !matches!(param.conversion, Conversion::Plain) {
-                return Err(Error::new_spanned(
-                    field,
-                    "runtime fields take no `as` / `with`",
-                ));
-            }
             param.doc = doc_comment(field);
             specs.push(FieldSpec::Runtime(param));
         } else if let Some(attr) = nested {
@@ -319,7 +314,24 @@ pub(crate) fn parse_param_field(
                 "ui is only available for f32 / u32 / bool / [f32; N] / Vec3 values",
             ));
         }
-        if ui.min.is_none() || ui.max.is_none() {
+        let seed_kind = ui.kind.as_ref().is_some_and(|k| k == "Seed");
+        let switch_kind = ui.kind.as_ref().is_some_and(|k| k == "Switch");
+        let rangeless_kind = seed_kind || switch_kind;
+        let has_range = ui.min.is_some() && ui.max.is_some();
+        let has_range_bound = ui.min.is_some() || ui.max.is_some();
+        if rangeless_kind && has_range_bound {
+            return Err(Error::new_spanned(
+                field,
+                "Seed / Switch take no `min` / `max`",
+            ));
+        }
+        if seed_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Seed needs a u32 value"));
+        }
+        if switch_kind && kind != ValueKind::Bool {
+            return Err(Error::new_spanned(field, "Switch needs a bool value"));
+        }
+        if !rangeless_kind && !has_range {
             return Err(Error::new_spanned(field, "ui requires `min` and `max`"));
         }
         let color_kind = ui
@@ -331,6 +343,10 @@ pub(crate) fn parse_param_field(
                 field,
                 "Color / Absorption need a [f32; 3] value",
             ));
+        }
+        let int_kind = ui.kind.as_ref().is_some_and(|k| k == "Int");
+        if int_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Int needs a u32 value"));
         }
     }
     if scalars && !matches!(kind, ValueKind::Array(_)) {
@@ -396,6 +412,8 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
             ui.group = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("label") {
             ui.label = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("hidden_when") {
+            ui.hidden_when = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("primary") {
             ui.primary = true;
         } else {
@@ -810,8 +828,19 @@ fn component_suffixes(param: &ParamField, len: usize) -> Vec<&'static str> {
 fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     let ui = param.ui.as_ref()?;
     let field_name = param.ident.to_string();
-    let min = ui.min.as_ref().expect("checked at parse");
-    let max = ui.max.as_ref().expect("checked at parse");
+    let min = ui
+        .min
+        .as_ref()
+        .map_or_else(|| quote!(0.0), |min| quote!(#min));
+    let rangeless_max = if ui.kind.as_ref().is_some_and(|k| k == "Switch") {
+        quote!(1.0)
+    } else {
+        quote!(u32::MAX as f32)
+    };
+    let max = ui
+        .max
+        .as_ref()
+        .map_or_else(|| rangeless_max, |max| quote!(#max));
     let default_kind = match param.kind {
         ValueKind::Array(3) => "Color",
         _ => "Scalar",
@@ -831,6 +860,10 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     };
     let tooltip = &param.doc;
     let primary = ui.primary;
+    let hidden_when = match &ui.hidden_when {
+        Some(condition) => quote!(Some(&#condition)),
+        None => quote!(None),
+    };
 
     Some(quote! {
         out.push(::thyllore_scene_core::UiParam {
@@ -845,6 +878,7 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
             tooltip: #tooltip,
             persisted: #persisted,
             primary: #primary,
+            hidden_when: #hidden_when,
         });
     })
 }
@@ -1155,6 +1189,87 @@ mod tests {
         assert!(expanded.contains("group : \"noise\""), "{expanded}");
         assert!(expanded.contains("< Owner > :: Style"), "{expanded}");
         assert!(!expanded.contains("LazyLock"), "{expanded}");
+    }
+
+    #[test]
+    fn int_kind_needs_a_u32_value() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Int"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: f32 }}"
+        ));
+        assert!(message.contains("Int needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn seed_kind_is_a_u32_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Seed"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed, min = 0.0, max = 8.0))] pub seed: u32 }}"
+        ));
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: f32 }}"
+        ));
+        assert!(message.contains("Seed needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn switch_kind_is_a_bool_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: bool }}"
+        ));
+        assert!(expanded.contains("UiKind :: Switch"), "{expanded}");
+        assert!(expanded.contains("max : 1.0"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch, min = 0.0, max = 1.0))] pub enabled: bool }}"
+        ));
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: u32 }}"
+        ));
+        assert!(message.contains("Switch needs a bool value"), "{message}");
+    }
+
+    #[test]
+    fn converted_runtime_field_is_a_scalar() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[runtime(as = u32, with = shader_value)] pub kind: Kind }}"
+        ));
+        assert!(expanded.contains("shader_value :: get"), "{expanded}");
+        assert!(expanded.contains("shader_value :: set"), "{expanded}");
+        assert!(
+            expanded.contains("PERSISTED_FIELDS : & 'static [& 'static str] = & []"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn hidden_when_references_the_declared_condition() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(min = 0.0, max = 1.0, hidden_when = FOLLOWS_TARGET))] pub end: f32, #[persist(ui(min = 0.0, max = 1.0))] pub start: f32 }}"
+        ));
+        assert!(
+            expanded.contains("hidden_when : Some (& FOLLOWS_TARGET)"),
+            "{expanded}"
+        );
+        assert!(expanded.contains("hidden_when : None"), "{expanded}");
     }
 
     #[test]

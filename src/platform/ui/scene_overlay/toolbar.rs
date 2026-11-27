@@ -3,6 +3,7 @@ use std::path::Path;
 use imgui::{Condition, StyleVar};
 
 use crate::asset::AssetStorage;
+use crate::ecs::component::Icon;
 use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::ViewportInput;
 use crate::ecs::resource::{
@@ -17,7 +18,7 @@ use crate::platform::ui::pointer::read_ui_pointer;
 use crate::platform::ui::theme::colors::SURFACE3;
 use crate::platform::ui::theme::segmented_control;
 use crate::platform::ui::theme::shadow::draw_window_shadow;
-use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, Icon, ICON_BUTTON_SIZE};
+use crate::platform::ui::theme::{icon_button, toggle_switch, ButtonState, ICON_BUTTON_SIZE};
 use thyllore_color_core::srgb_to_linear_rgba;
 use thyllore_vulkan_core::resource::GraphicsResources;
 

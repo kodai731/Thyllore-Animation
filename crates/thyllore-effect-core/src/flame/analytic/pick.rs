@@ -1,7 +1,7 @@
 use glam::{Mat4, Vec3, Vec4};
 
 use crate::flame::{flame_bounding_radius, flame_proxy_pad, FlameEffect, FlameProxyPad};
-use crate::flame::{flame_shell_outer_radius, flame_shell_support_scale};
+use crate::flame::{flame_shell_outer_radius, flame_shell_support_scale, FlameEmitterKind};
 
 /// Axis-aligned bounds of the shell proxy in flame-local units, widened by the wind bend so a
 /// leaning flame stays enclosed. Shared by the render-pass scissor and by click picking: both
@@ -15,7 +15,7 @@ pub struct FlameLocalBounds {
 /// Emitter-dependent proxy widening for an effect (ring tubes reach past the
 /// cylinder support). See `flame_shell_support_scale`.
 pub fn flame_support_scale(effect: &FlameEffect) -> f32 {
-    let ring_major_norm = if effect.emitter.kind == 1 {
+    let ring_major_norm = if effect.emitter.kind == FlameEmitterKind::Ring {
         effect.emitter.ring_major_radius / flame_bounding_radius(effect).max(1e-6)
     } else {
         0.0

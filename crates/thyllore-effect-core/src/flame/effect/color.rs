@@ -19,7 +19,7 @@ pub struct FlameColor {
     #[persist(curve, debug_range = (800.0, 3000.0), ui(label = "Temp Tip K", min = 1000.0, max = 6500.0, format = "%.0f"))]
     pub temperature_tip_k: f32,
     /// Derive the base/tip colors from the blackbody temperatures
-    #[persist(ui(min = 0.0, max = 1.0, format = "%.0f"))]
+    #[persist(ui(kind = Switch))]
     pub use_blackbody: bool,
     #[persist]
     pub occlusion_lum_ref: f32,

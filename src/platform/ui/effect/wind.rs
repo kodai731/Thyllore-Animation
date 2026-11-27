@@ -3,28 +3,16 @@ use std::sync::LazyLock;
 
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields, UiParam};
 
-use crate::ecs::component::{AppliedWindPreset, WindTornadoEffect, WIND_DOMAIN};
+use crate::ecs::component::{
+    AppliedWindPreset, ScalarChannelDomain, WindTornadoEffect, WIND_DOMAIN,
+};
 use crate::ecs::resource::{WindDebugCapture, WindDebugView, WindRenderSettings, WindShadingMode};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::wind::WindUiCommand;
-use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
-use crate::ecs::world::{Entity, World};
-use crate::platform::ui::effect::rows::{effect_instances, instance_options, preset_options};
-use crate::platform::ui::form_window::{FormSection, RowsSection};
-use crate::platform::ui::param_widgets::rows_from_params;
-use crate::platform::ui::ui_rows::{ChoiceOption, FieldRows, UiRow};
+use crate::ecs::systems::WIND_SPAWN_HOOK;
+use crate::platform::ui::effect::sections::{build_effect_section, EffectPanel, EffectSectionView};
+use crate::platform::ui::ui_rows::UiRow;
 
-#[derive(Clone)]
-struct WindSectionView {
-    instances: Vec<String>,
-    instance_index: usize,
-    preset: Option<String>,
-    selected: Option<Entity>,
-    effect: WindTornadoEffect,
-    render: WindRenderSettings,
-}
+type WindSectionView = EffectSectionView<WindTornadoEffect, WindRenderSettings>;
 
 struct WindRenderPath;
 
@@ -52,82 +40,20 @@ static RENDER_UI_PARAMS: LazyLock<Vec<UiParam>> = LazyLock::new(|| {
     out
 });
 
-fn wind_head_rows(view: &WindSectionView) -> Vec<UiRow<WindSectionView>> {
-    let mut rows = vec![UiRow::Action {
-        label: "Add Wind",
-        enabled: |_, _| true,
-        on_click: |_| Box::new(ScalarCurveEvent::AddEffect(WIND_SPAWN_HOOK.key)),
-    }];
-
-    if view.instances.len() > 1 {
-        rows.push(UiRow::Choice {
-            label: "Instance",
-            options: |_, view: &WindSectionView| {
-                instance_options(&view.instances, view.instance_index)
-            },
-            pick: |view, index| view.instance_index = index,
-        });
-    }
-
-    rows.push(UiRow::Choice {
-        label: "Preset",
-        options: |_, view: &WindSectionView| {
-            preset_options(
-                thyllore_effect_core::wind::WIND_PRESET_NAMES,
-                view.preset.as_deref(),
-            )
-        },
-        pick: |view, index| {
-            view.preset = Some(thyllore_effect_core::wind::WIND_PRESET_NAMES[index].to_string());
-        },
-    });
-
-    rows
-}
-
-fn wind_tail_rows() -> Vec<UiRow<WindSectionView>> {
-    vec![
-        UiRow::Action {
-            label: "Curves",
-            enabled: |_, _| true,
-            on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
-        },
-        UiRow::Group {
-            title: "Wind Debug".into(),
-            initially_open: false,
-            rows: wind_debug_rows(),
-        },
-    ]
-}
-
 fn wind_debug_rows() -> Vec<UiRow<WindSectionView>> {
     let mut rows = vec![
-        UiRow::Choice {
-            label: "Shading Mode",
-            options: |_, view: &WindSectionView| {
-                WindShadingMode::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.shading_mode,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.shading_mode = WindShadingMode::ALL[index],
-        },
-        UiRow::Choice {
-            label: "Debug View",
-            options: |_, view: &WindSectionView| {
-                WindDebugView::ALL
-                    .iter()
-                    .map(|&debug_view| ChoiceOption {
-                        label: debug_view.label().to_string(),
-                        selected: debug_view == view.render.debug_view,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.debug_view = WindDebugView::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Shading Mode",
+            WindSectionView,
+            WindShadingMode,
+            render.shading_mode
+        ),
+        crate::variant_choice_row!(
+            "Debug View",
+            WindSectionView,
+            WindDebugView,
+            render.debug_view
+        ),
     ];
 
     rows.extend(RENDER_UI_PARAMS.iter().map(|param| UiRow::Scalar {
@@ -151,114 +77,51 @@ fn wind_debug_rows() -> Vec<UiRow<WindSectionView>> {
     rows
 }
 
-fn read_wind_section_view(
-    ecs_world: &World,
-    winds: &[Entity],
-    selected_wind_entity: Option<Entity>,
-) -> WindSectionView {
-    let instance_index = selected_wind_entity
-        .and_then(|entity| winds.iter().position(|&e| e == entity))
-        .unwrap_or(0);
-    let (instances, _) = effect_instances(ecs_world, winds, instance_index, "Wind");
-    let preset = selected_wind_entity.and_then(|entity| {
-        ecs_world
-            .get_component::<AppliedWindPreset>(entity)
-            .map(|preset| preset.name.clone())
-    });
-    let render = ecs_world
-        .get_resource::<WindRenderSettings>()
-        .map(|settings| *settings)
-        .unwrap_or_default();
-    let effect = selected_wind_entity
-        .and_then(|entity| ecs_world.get_component::<WindTornadoEffect>(entity))
-        .cloned()
-        .unwrap_or_default();
+struct WindPanel;
 
-    WindSectionView {
-        instances,
-        instance_index,
-        preset,
-        selected: selected_wind_entity,
-        effect,
-        render,
-    }
-}
+impl EffectPanel for WindPanel {
+    type Component = WindTornadoEffect;
+    type RenderSettings = WindRenderSettings;
+    type Extra = ();
 
-fn wind_section(world: &World) -> Option<Box<dyn FormSection>> {
-    let winds = world.entities_with::<WindTornadoEffect>();
-    let selected_wind_entity = resolve_selected_wind(world);
-    let view = read_wind_section_view(world, &winds, selected_wind_entity);
+    const NAME: &'static str = "Wind";
+    const ADD_LABEL: &'static str = "Add Wind";
+    const SPAWN_HOOK_KEY: &'static str = WIND_SPAWN_HOOK.key;
+    const PRESET_NAMES: &'static [&'static str] = thyllore_effect_core::wind::WIND_PRESET_NAMES;
 
-    let mut rows = wind_head_rows(&view);
-    if view.selected.is_some() {
-        rows.push(UiRow::Field(Box::new(FieldRows {
-            scope: "effect",
-            field: |view: &mut WindSectionView| &mut view.effect,
-            rows: rows_from_params(
-                &thyllore_effect_core::wind::WIND_UI_PARAMS,
-                &thyllore_effect_core::wind::WIND_SCALAR_PARAMS,
-                &[],
-            ),
-        })));
-        rows.extend(wind_tail_rows());
+    fn ui_params() -> &'static [UiParam] {
+        &thyllore_effect_core::wind::WIND_UI_PARAMS
     }
 
-    let group = UiRow::Group {
-        title: "Wind".into(),
-        initially_open: false,
-        rows,
-    };
-
-    Some(Box::new(RowsSection {
-        rows: vec![group],
-        view,
-        commit: commit_wind_view,
-        keys: Some(&WIND_DOMAIN),
-    }))
-}
-
-fn commit_wind_view(world: &World, shown: &WindSectionView, view: &WindSectionView) {
-    if view.instance_index != shown.instance_index {
-        world.send_command(OverlayEvent::SelectEffectInstance {
-            key: WIND_SPAWN_HOOK.key,
-            index: view.instance_index,
-        });
+    fn scalar_params() -> &'static [ScalarParam<WindTornadoEffect>] {
+        &thyllore_effect_core::wind::WIND_SCALAR_PARAMS
     }
 
-    let mut effect_applied_this_frame = false;
-    if let (Some(chosen), Some(_)) = (&view.preset, view.selected) {
-        if view.preset != shown.preset {
-            world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            world.send_command(WindUiCommand::ApplyPreset(chosen.clone()));
-            effect_applied_this_frame = true;
-        }
+    fn domain() -> &'static ScalarChannelDomain {
+        &WIND_DOMAIN
     }
 
-    let Some(entity) = view.selected else {
-        return;
-    };
-    if !effect_applied_this_frame && view.effect != shown.effect {
-        world.send_command(WindUiCommand::UpdateEffect {
-            entity,
-            effect: Box::new(view.effect.clone()),
-        });
+    fn applied_preset_name(applied: &AppliedWindPreset) -> String {
+        applied.name.clone()
     }
 
-    if view.render != shown.render {
-        world.send_command(WindUiCommand::UpdateRenderSettings(view.render));
+    fn debug_rows(_view: &WindSectionView) -> Vec<UiRow<WindSectionView>> {
+        wind_debug_rows()
     }
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect::sections::EffectSectionHook {
     key: "wind",
     order: 2,
-    section: wind_section,
+    section: build_effect_section::<WindPanel>,
 });
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ecs::events::UiCommandQueue;
+    use crate::ecs::world::World;
+    use crate::platform::ui::effect::sections::{commit_effect_view, effect_head_rows};
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
     fn view_with_instances(count: usize) -> WindSectionView {
@@ -269,19 +132,20 @@ mod tests {
             selected: None,
             effect: WindTornadoEffect::default(),
             render: WindRenderSettings::default(),
+            extra: (),
         }
     }
 
     #[test]
     fn head_rows_with_two_instances_show_instance_choice() {
-        let rows = wind_head_rows(&view_with_instances(2));
+        let rows = effect_head_rows::<WindPanel>(&view_with_instances(2));
         assert_eq!(visible_labels(&rows), ["Add Wind", "Instance", "Preset"]);
         assert!(find_duplicate_labels(&rows).is_empty());
     }
 
     #[test]
     fn head_rows_with_one_instance_hide_instance_choice() {
-        let rows = wind_head_rows(&view_with_instances(1));
+        let rows = effect_head_rows::<WindPanel>(&view_with_instances(1));
         assert_eq!(visible_labels(&rows), ["Add Wind", "Preset"]);
     }
 
@@ -304,7 +168,7 @@ mod tests {
     fn committed_command_names(shown: &WindSectionView, view: &WindSectionView) -> Vec<String> {
         let mut world = World::new();
         world.insert_resource(UiCommandQueue::default());
-        commit_wind_view(&world, shown, view);
+        commit_effect_view::<WindPanel>(&world, shown, view);
 
         let names = world
             .resource_mut::<UiCommandQueue>()

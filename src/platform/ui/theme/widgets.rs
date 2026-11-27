@@ -12,7 +12,7 @@ use super::colors::{
     ACCENT, AXIS_X, AXIS_Y, AXIS_Z, OUTLINE, SURFACE1, SURFACE2, SURFACE3, TEXT, TEXT_SECONDARY,
 };
 use super::fonts::UiFonts;
-use super::icons::Icon;
+use crate::ecs::component::Icon;
 use thyllore_color_core::srgb_to_linear_rgba;
 
 const TREE_INDENT: f32 = 16.0;

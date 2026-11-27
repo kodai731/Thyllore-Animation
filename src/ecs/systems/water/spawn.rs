@@ -1,6 +1,5 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
-use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -53,21 +52,4 @@ pub fn spawn_water_with_clip(
     let entity = spawn_water(world, name, effect);
     crate::ecs::systems::ensure_entity_clip(world, assets, entity, &WATER_DOMAIN);
     entity
-}
-
-/// The water the UI and the water events act on: the selected entity when it is a water,
-/// otherwise the first one. Keeping this in one place is what lets the hierarchy selection
-/// stay the single source of truth.
-pub fn resolve_selected_water(world: &World) -> Option<Entity> {
-    let selected = world
-        .get_resource::<HierarchyState>()
-        .and_then(|state| state.selected_entity);
-
-    if let Some(entity) = selected {
-        if world.get_component::<WaterTorusEffect>(entity).is_some() {
-            return Some(entity);
-        }
-    }
-
-    world.entities_with::<WaterTorusEffect>().first().copied()
 }

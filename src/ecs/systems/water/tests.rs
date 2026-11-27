@@ -1,4 +1,4 @@
-use crate::ecs::component::{EntityIcon, WaterTorusEffect};
+use crate::ecs::component::{EntityIcon, Icon, WaterTorusEffect};
 use crate::ecs::resource::TimelineState;
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
@@ -25,7 +25,7 @@ fn spawned_water_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<WaterTorusEffect>(entity).is_some());
 
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Effect('W'));
+    assert_eq!(display.icon, EntityIcon::Effect(Icon::Waves));
 }
 
 #[test]

@@ -52,6 +52,16 @@ fn test_colors_and_offsets_have_their_widget_kinds() {
 }
 
 #[test]
+fn test_only_the_end_offset_is_hidden_while_a_target_drives_the_end_point() {
+    let hidden_names: Vec<&str> = LIGHTNING_UI_PARAMS
+        .iter()
+        .filter(|param| param.is_hidden_in(&[&END_FOLLOWS_TARGET]))
+        .map(|param| param.name)
+        .collect();
+    assert_eq!(hidden_names, ["shape_end_offset"]);
+}
+
+#[test]
 fn test_offset_aliases_write_the_end_offset_components() {
     let mut effect = LightningEffect::default();
     let set = |effect: &mut LightningEffect, name: &str, value: f32| {

@@ -24,10 +24,15 @@ pub fn find_scalar_param<'a, C>(
 /// Widget family a parameter is edited with; `Color` and `Absorption` are `[f32; 3]` parameters
 /// whose components are reachable through the `<name>_r/_g/_b` scalar aliases. `Offset` is a
 /// `[f32; 3]` spatial offset whose components are reachable through the `<name>_x/_y/_z` scalar
-/// aliases.
+/// aliases. `Int` is a whole-number parameter edited in steps of one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiKind {
     Scalar,
+    Int,
+    /// Whole number whose size carries no meaning, typed in rather than picked from a range.
+    Seed,
+    /// On / off parameter.
+    Switch,
     Color,
     /// Beer-Lambert coefficients per meter, edited as the colour transmitted over a reference distance.
     Absorption,
@@ -39,11 +44,21 @@ impl UiKind {
     pub fn name(self) -> &'static str {
         match self {
             UiKind::Scalar => "scalar",
+            UiKind::Int => "int",
+            UiKind::Seed => "seed",
+            UiKind::Switch => "switch",
             UiKind::Color => "color",
             UiKind::Absorption => "absorption",
             UiKind::Offset => "offset",
         }
     }
+}
+
+/// A situation in which a parameter has no widget, reported by whoever shows the parameters.
+/// Declared as a `static`; two conditions are the same only when they are the same static.
+#[derive(Debug)]
+pub struct UiCondition {
+    pub description: &'static str,
 }
 
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
@@ -62,9 +77,18 @@ pub struct UiParam {
     /// Persisted parameters are saved with the scene; runtime ones are driven by playback.
     pub persisted: bool,
     pub primary: bool,
+    pub hidden_when: Option<&'static UiCondition>,
 }
 
 impl UiParam {
+    pub fn is_hidden_in(&self, active_conditions: &[&'static UiCondition]) -> bool {
+        self.hidden_when.is_some_and(|hidden_when| {
+            active_conditions
+                .iter()
+                .any(|active| std::ptr::eq(*active, hidden_when))
+        })
+    }
+
     /// Explicit label, or the parameter name title-cased (`noise_amplitude` -> `Noise Amplitude`).
     pub fn display_label(&self) -> Cow<'static, str> {
         match self.label {
@@ -86,7 +110,9 @@ impl UiParam {
     /// Every `ScalarParam` name this parameter's widget reads and writes.
     pub fn scalar_accessor_names(&self) -> Vec<String> {
         match self.kind {
-            UiKind::Scalar => vec![self.name.to_string()],
+            UiKind::Scalar | UiKind::Int | UiKind::Seed | UiKind::Switch => {
+                vec![self.name.to_string()]
+            }
             UiKind::Color | UiKind::Absorption => self.color_component_names().to_vec(),
             UiKind::Offset => self.offset_component_names().to_vec(),
         }
@@ -136,6 +162,7 @@ mod tests {
             tooltip: "",
             persisted: true,
             primary: false,
+            hidden_when: None,
         };
         let derived = UiParam {
             label: None,
@@ -143,6 +170,39 @@ mod tests {
         };
         assert_eq!(explicit.display_label(), "Swirl");
         assert_eq!(derived.display_label(), "Swirl Gain");
+    }
+
+    #[test]
+    fn test_param_is_hidden_only_in_the_condition_it_declares() {
+        static FOLLOWS_TARGET: UiCondition = UiCondition {
+            description: "a target drives the value",
+        };
+        static OTHER: UiCondition = UiCondition {
+            description: "another situation",
+        };
+        let always_shown = UiParam {
+            name: "end_offset",
+            path: "end_offset",
+            group: "",
+            label: None,
+            kind: UiKind::Offset,
+            min: 0.0,
+            max: 1.0,
+            format: "",
+            tooltip: "",
+            persisted: true,
+            primary: false,
+            hidden_when: None,
+        };
+        let conditional = UiParam {
+            hidden_when: Some(&FOLLOWS_TARGET),
+            ..always_shown
+        };
+
+        assert!(!always_shown.is_hidden_in(&[&FOLLOWS_TARGET]));
+        assert!(!conditional.is_hidden_in(&[]));
+        assert!(!conditional.is_hidden_in(&[&OTHER]));
+        assert!(conditional.is_hidden_in(&[&OTHER, &FOLLOWS_TARGET]));
     }
 
     #[test]
@@ -159,6 +219,7 @@ mod tests {
             tooltip: "",
             persisted: true,
             primary: false,
+            hidden_when: None,
         };
         assert_eq!(tint.color_component_names(), ["tint_r", "tint_g", "tint_b"]);
     }

@@ -27,9 +27,8 @@ fn test_effect_from_dump_values() {
         effect.noise.frequency
     );
     assert_eq!(
-        effect.emitter.kind, 1,
-        "emitter_kind={}",
-        effect.emitter.kind
+        effect.emitter.kind,
+        thyllore_effect_core::flame::FlameEmitterKind::Ring
     );
     assert!(
         (effect.edge.low - 0.27).abs() < 1e-4,

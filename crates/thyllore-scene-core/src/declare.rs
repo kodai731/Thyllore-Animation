@@ -256,6 +256,7 @@ macro_rules! declare_scene_format {
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_tooltip)?),
                     persisted: true,
                     primary: $crate::declare_scene_format!(@ui_primary $(, primary $ui_primary_comma)?),
+                    hidden_when: None,
                 },
             )? )+
             $( $(
@@ -271,6 +272,7 @@ macro_rules! declare_scene_format {
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_tooltip)?),
                     persisted: false,
                     primary: $crate::declare_scene_format!(@ui_primary $(, primary $rt_ui_primary_comma)?),
+                    hidden_when: None,
                 },
             )? )*
         ];

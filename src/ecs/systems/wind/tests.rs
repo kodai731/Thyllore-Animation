@@ -1,6 +1,7 @@
 use super::*;
-use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect};
+use crate::ecs::component::{EditorDisplay, EntityIcon, Icon, WindTornadoEffect};
 use crate::ecs::resource::{HierarchyState, PickRay, WindRenderSettings};
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
 use crate::ecs::world::{GlobalTransform, Name, Transform, World};
 use glam::Vec3;
@@ -18,7 +19,7 @@ fn spawned_wind_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<WindTornadoEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Effect('T'));
+    assert_eq!(display.icon, EntityIcon::Effect(Icon::Wind));
 }
 
 #[test]
@@ -26,12 +27,18 @@ fn selected_wind_wins_over_the_first_wind() {
     let mut world = World::new();
     let first = spawn_wind(&mut world, "Wind 1", WindTornadoEffect::default());
     let second = spawn_wind(&mut world, "Wind 2", WindTornadoEffect::default());
-    assert_eq!(resolve_selected_wind(&world), Some(first));
+    assert_eq!(
+        resolve_selected_effect::<WindTornadoEffect>(&world),
+        Some(first)
+    );
 
     let mut hierarchy = HierarchyState::default();
     hierarchy.selected_entity = Some(second);
     world.insert_resource(hierarchy);
-    assert_eq!(resolve_selected_wind(&world), Some(second));
+    assert_eq!(
+        resolve_selected_effect::<WindTornadoEffect>(&world),
+        Some(second)
+    );
 }
 
 #[test]

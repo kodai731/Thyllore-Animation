@@ -112,8 +112,9 @@ same check locally with `scripts/ci_v2_curve_copilot_inference_smoke.sh`.
 | Model loading, pose overrides, node / bone transforms | the row above + `cargo test --test bounds_validation_tests --test scale_matrix_tests --no-default-features` |
 | Avatar workflow (blend shape edit / keying, `.anim` and sidecar export, `unity/**`) | `./run.sh unity-verify` — Blender rig → engine batch run (GPU + display) → Unity batch; fails when Unity's sampled blend shape weights differ from the engine's |
 
-ONNX Runtime must be present at `vendor/onnxruntime/onnxruntime-linux-x64-*/lib/`
-and `ORT_DYLIB_PATH` set (see `.cargo/config.toml`) for any test that loads a model.
+ONNX Runtime must be present at `vendor/onnxruntime/onnxruntime-<os>-*/lib/` for any test that loads a model.
+`thyllore_ml_core::onnx_runtime` loads the archive matching the host OS before the first session; set
+`ORT_DYLIB_PATH` only to override it.
 
 ### When CI is Still the Right Choice
 

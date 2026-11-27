@@ -38,6 +38,7 @@ pub struct V2CurveCopilotSession {
 
 impl V2CurveCopilotSession {
     pub fn from_onnx_path(path: &str) -> Result<Self> {
+        crate::onnx_runtime::ensure_onnx_runtime_loaded()?;
         let ort = OrtSession::builder()?
             .with_intra_threads(1)?
             .with_inter_threads(1)?

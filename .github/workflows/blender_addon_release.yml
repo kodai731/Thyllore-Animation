@@ -56,23 +56,20 @@ jobs:
               {
                   "platform": "win_amd64",
                   "os": "windows-latest",
-                  "ort_archive": "onnxruntime-win-x64",
-                  "ort_ext": "zip",
-                  "ort_lib": "lib/onnxruntime.dll",
+                  "ort_runtime": "win-x64",
+                  "ort_lib": "onnxruntime.dll",
               },
               {
                   "platform": "linux_x86_64",
                   "os": "ubuntu-latest",
-                  "ort_archive": "onnxruntime-linux-x64",
-                  "ort_ext": "tgz",
-                  "ort_lib": "lib/libonnxruntime.so",
+                  "ort_runtime": "linux-x64",
+                  "ort_lib": "libonnxruntime.so",
               },
               {
                   "platform": "macosx_arm64",
                   "os": "macos-latest",
-                  "ort_archive": "onnxruntime-osx-arm64",
-                  "ort_ext": "tgz",
-                  "ort_lib": "lib/libonnxruntime.dylib",
+                  "ort_runtime": "osx-arm64",
+                  "ort_lib": "libonnxruntime.dylib",
               },
           ]
           selected = os.environ["SELECTED_PLATFORM"]
@@ -146,18 +143,13 @@ jobs:
         id: ort
         shell: pwsh
         run: |
-          $archive = "${{ matrix.ort_archive }}-$env:ORT_VERSION.${{ matrix.ort_ext }}"
-          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$env:ORT_VERSION/$archive"
-          $dest = Join-Path $env:RUNNER_TEMP $archive
+          $package = "microsoft.ml.onnxruntime"
+          $url = "https://api.nuget.org/v3-flatcontainer/$package/$env:ORT_VERSION/$package.$env:ORT_VERSION.nupkg"
+          $dest = Join-Path $env:RUNNER_TEMP "onnxruntime.zip"
           Invoke-WebRequest -Uri $url -OutFile $dest -MaximumRetryCount 3 -RetryIntervalSec 2
           $extractDir = Join-Path $env:RUNNER_TEMP "ort"
-          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-          if ('${{ matrix.ort_ext }}' -eq 'zip') {
-              Expand-Archive -Path $dest -DestinationPath $extractDir -Force
-          } else {
-              tar -xzf $dest -C $extractDir
-          }
-          $libPath = Join-Path $extractDir "${{ matrix.ort_archive }}-$env:ORT_VERSION" "${{ matrix.ort_lib }}"
+          Expand-Archive -Path $dest -DestinationPath $extractDir -Force
+          $libPath = Join-Path $extractDir "runtimes" "${{ matrix.ort_runtime }}" "native" "${{ matrix.ort_lib }}"
           if (-not (Test-Path $libPath)) { throw "ONNX Runtime lib not found: $libPath" }
           "lib_path=$libPath" >> $env:GITHUB_OUTPUT
 

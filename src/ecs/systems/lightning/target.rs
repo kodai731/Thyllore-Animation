@@ -6,16 +6,21 @@ use crate::ecs::world::{Entity, Name, Transform, World};
 use crate::ecs::FrameContext;
 use crate::hooks::scene::spawn_scene_owner;
 
-pub fn find_entity_named(world: &World, name: &str) -> Option<Entity> {
+/// Targets and waypoints are locators, so only locators are searched.
+pub fn find_locator_named(world: &World, name: &str) -> Option<Entity> {
     world
-        .iter_components::<Name>()
-        .find(|(_, entity_name)| entity_name.0 == name)
+        .iter_components::<Locator>()
         .map(|(entity, _)| entity)
+        .find(|entity| {
+            world
+                .get_component::<Name>(*entity)
+                .is_some_and(|entity_name| entity_name.0 == name)
+        })
 }
 
 pub fn resolve_lightning_target(world: &World, lightning: Entity) -> Option<Entity> {
     let target = world.get_component::<LightningTarget>(lightning)?;
-    find_entity_named(world, &target.entity_name)
+    find_locator_named(world, &target.entity_name)
 }
 
 /// Spawns a locator child at the bolt's end point and links the bolt to it.

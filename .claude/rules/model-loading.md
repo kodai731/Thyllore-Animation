@@ -22,6 +22,9 @@ paths:
   (`src/scene/scene_io.rs`) is the one definition of that directory for models and clip files. A generated mesh
   has no `ModelSource`; its entity carries `GeneratedGlb` (the bytes it was built from) and is not persisted.
 - Whether a model is loaded is computed, never stored: a `ModelSource` entity without `Children` is not loaded.
+  Everything a load parents under the model entity (the mesh entities, and the bone entities a model load hook
+  spawns, see `ecs-architecture.md`) is created by `attach_scene_model` and leaves with the world reset of the
+  next load, so nothing may add a child to an unloaded model entity.
   `request_pending_model_loads` (`src/ecs/systems/model_load_systems/source.rs`, a `dispatch_prep_hook!`) pushes
   one `SceneLoadCommand::LoadModel { entity }` per dispatch, so startup and runtime loads share one path. One
   scene holds one model: the model added last is loaded (`select_model_to_load`), otherwise a model asked to

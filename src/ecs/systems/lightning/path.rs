@@ -1,7 +1,7 @@
 use glam::Vec3;
 use thyllore_effect_core::lightning::LIGHTNING_MAX_WAYPOINTS;
 
-use super::target::find_entity_named;
+use super::target::find_locator_named;
 use crate::ecs::component::{EditorDisplay, LightningEffect, LightningPath, Locator};
 use crate::ecs::world::{Entity, Name, Parent, Transform, World};
 use crate::ecs::FrameContext;
@@ -79,7 +79,7 @@ pub fn follow_lightning_path(world: &mut World) {
 
         let mut waypoints = Vec::with_capacity(LIGHTNING_MAX_WAYPOINTS);
         for name in &waypoint_names {
-            let Some(waypoint) = find_entity_named(world, name) else {
+            let Some(waypoint) = find_locator_named(world, name) else {
                 continue;
             };
             adopt_lightning_child(world, lightning, waypoint);
@@ -99,7 +99,7 @@ pub fn follow_lightning_path(world: &mut World) {
 }
 
 fn find_waypoint_translation(world: &World, name: &str) -> Option<Vec3> {
-    let waypoint = find_entity_named(world, name)?;
+    let waypoint = find_locator_named(world, name)?;
     world
         .get_component::<Transform>(waypoint)
         .map(|transform| transform.translation)
@@ -108,7 +108,7 @@ fn find_waypoint_translation(world: &World, name: &str) -> Option<Vec3> {
 fn find_unused_waypoint_name(world: &World, lightning_name: &str, first_number: usize) -> String {
     (first_number..)
         .map(|number| format!("{lightning_name} Waypoint {number}"))
-        .find(|name| find_entity_named(world, name).is_none())
+        .find(|name| find_locator_named(world, name).is_none())
         .unwrap_or_else(|| format!("{lightning_name} Waypoint"))
 }
 

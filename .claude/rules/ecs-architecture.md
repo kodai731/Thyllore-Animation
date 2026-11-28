@@ -326,15 +326,19 @@ Editor windows are the other half: each file in `src/platform/ui/` registers its
 (`src/hooks/ui_window.rs`), reads `LayoutSnapshot` / `ViewportInput` and its own state resource from `World`, and
 sends commands. When to use a hook and when a command is decided in `hierarchy.md`, "Hook or command?".
 
-## Bones are NOT Entities
+## Bones are entities; the skeleton is an asset
 
-- Bones are data within `Skeleton.bones: Vec<Bone>`
-- Bones identified by `BoneId` (u32 index), not `Entity`
-- Constraints reference bones via `BoneId`
-
-This is a deliberate design choice: skeleton data is a small, structured hierarchy that benefits from
-contiguous memory (Vec) rather than ECS entity overhead. Flecs also recognizes this pattern —
-small structural hierarchies can use optimized storage rather than full entity relationships.
+- The skeleton's structure (parent links, bind pose, names) is the `Skeleton` asset (`Skeleton.bones`), shared
+  by every instance that uses it.
+- Each bone of a loaded model is an entity carrying `BoneEntity { skeleton_id, bone_id }`, parented like the
+  bones under the model entity (`src/ecs/systems/bone_entity_systems.rs`, a model load hook).
+- `SkeletonBones` on the model entity is the one `BoneId` → `Entity` table. `BoneId` stays the persistent id
+  (clip tracks, sidecars, import / export); resolve it to the entity through that table, never by name.
+- Asset or entity: if editing one copy must change the other, it is an asset; if not, it is an entity.
+- Migration state (#272): bone entities exist but carry no `Transform` yet; the pose still lives in `Animator`.
+  The pose moves to the bone entities' `Transform` (with skinning built from `GlobalTransform`) in one step,
+  so the pose is never held in two places. Until then bone entities are hidden from the hierarchy and must
+  not be reparented or deleted by generic entity code.
 
 ## Reference Projects
 

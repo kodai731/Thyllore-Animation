@@ -258,8 +258,6 @@ jobs:
           pip install "maturin>=1.5"
 
       - name: Download ONNX Runtime (bundled into the ZIP for wheel import)
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: bash scripts/setup_onnxruntime.sh
 
       - name: Collect vendored wheels

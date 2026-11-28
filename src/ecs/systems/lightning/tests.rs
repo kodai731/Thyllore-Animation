@@ -298,6 +298,26 @@ fn linked_bolt_takes_the_target_local_translation_as_end_offset() {
 }
 
 #[test]
+fn target_name_resolves_to_the_locator_and_not_to_another_entity_of_that_name() {
+    let mut world = World::new();
+    let lightning = spawn_lightning(
+        &mut world,
+        DEFAULT_LIGHTNING_NAME,
+        LightningEffect::default(),
+    );
+    world.entity().with_name("Head").build();
+    let target = spawn_scene_owner(&mut world, "Head", Locator::at(Vec3::ZERO));
+    world.insert_component(
+        lightning,
+        LightningTarget {
+            entity_name: "Head".to_string(),
+        },
+    );
+
+    assert_eq!(resolve_lightning_target(&world, lightning), Some(target));
+}
+
+#[test]
 fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
     let mut world = World::new();
     let lightning = spawn_lightning(

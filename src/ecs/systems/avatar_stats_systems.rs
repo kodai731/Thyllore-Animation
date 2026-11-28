@@ -1,8 +1,8 @@
-use crate::animation::Skeleton;
 use crate::ecs::component::SpringBoneSetup;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use std::collections::HashSet;
-use thyllore_avatar_core::stats::components::stats::AvatarStats;
+use thyllore_anim_core::Skeleton;
+use thyllore_avatar_core::stats::AvatarStats;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub(crate) fn count_avatar_stats(
     graphics: &GraphicsResources,
@@ -42,7 +42,7 @@ pub(crate) fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
         skinned_meshes: graphics
             .meshes
             .iter()
-            .filter(|mesh| mesh.skin_data.is_some())
+            .filter(|mesh| mesh.skin_data().is_some())
             .count() as u32,
         materials: materials.len() as u32,
         morph_meshes: morph_meshes.len() as u32,
@@ -53,13 +53,13 @@ pub(crate) fn count_mesh_stats(graphics: &GraphicsResources) -> AvatarStats {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Matrix4, Vector3};
+    use glam::{Mat4, Vec3};
     use thyllore_model_core::MeshMorph;
-    use thyllore_vulkan_core::resource::mesh_buffer::MeshBuffer;
+    use thyllore_vulkan_core::resource::MeshBuffer;
 
     use super::*;
-    use crate::animation::SkinData;
     use crate::ecs::component::{SpringChain, SpringJointParam};
+    use thyllore_anim_core::SkinData;
 
     fn make_chain_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::new("chain");
@@ -67,11 +67,11 @@ mod tests {
         let spine = skeleton.add_bone("Spine", Some(root));
         let chest = skeleton.add_bone("Chest", Some(spine));
         skeleton.bones[root as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.bones[spine as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.5, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0));
         skeleton.bones[chest as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.25, 0.1));
+            Mat4::from_translation(Vec3::new(0.0, 0.25, 0.1));
         skeleton
     }
 
@@ -82,7 +82,7 @@ mod tests {
             source_mesh: source_mesh.to_string(),
             channels: Vec::new(),
         };
-        mesh.skin_data = skin;
+        mesh.set_skin_data(skin);
         mesh
     }
 

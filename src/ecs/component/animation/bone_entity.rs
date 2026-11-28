@@ -1,5 +1,5 @@
-use crate::animation::{BoneId, SkeletonId};
 use crate::ecs::world::Entity;
+use thyllore_anim_core::{BoneId, SkeletonId};
 
 #[derive(Clone, Debug)]
 pub struct BoneEntity {

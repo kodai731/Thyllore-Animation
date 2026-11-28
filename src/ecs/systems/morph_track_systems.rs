@@ -1,17 +1,18 @@
-use thyllore_anim_core::editable::components::morph_track::MorphTrackSample;
-use thyllore_anim_core::editable::systems::morph_sample::sample_morph_tracks;
+use thyllore_anim_core::editable::sample_morph_tracks;
+use thyllore_anim_core::editable::MorphTrackSample;
 
-use crate::animation::editable::{
-    clip_recalculate_duration, curve_add_keyframe, EditableAnimationClip,
-};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ClipSchedule, MorphWeights};
 use crate::ecs::resource::{ClipLibrary, MorphTrackPlayback, TimelineState};
 use crate::ecs::world::{Entity, Parent, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::{
+    clip_recalculate_duration, curve_add_keyframe, EditableAnimationClip,
+};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::morph_weight_systems::find_mesh_morph;
 use super::scalar_clip_systems::{ensure_entity_clip_named, find_entity_clip_id};
+use super::timeline::keyframe_edit::edit_clip;
 
 const EXPRESSION_CLIP_NAME: &str = "Expression";
 const SAME_KEY_TIME_EPSILON: f32 = 1e-6;
@@ -46,14 +47,18 @@ pub fn key_morph_weights(
 
     let clip_id = ensure_entity_clip_named(world, assets, root, EXPRESSION_CLIP_NAME);
     let mut clip_library = world.resource_mut::<ClipLibrary>();
-    let Some(clip) = clip_library.get_mut(clip_id) else {
-        return;
-    };
+    edit_clip(&mut clip_library, clip_id, |clip| {
+        let keyed_channels = channels_to_key(&channel_names, &weights, clip, &source_mesh);
+        if keyed_channels.is_empty() {
+            return false;
+        }
 
-    for (channel, weight) in channels_to_key(&channel_names, &weights, clip, &source_mesh) {
-        insert_morph_key(clip, &source_mesh, &channel, time, weight);
-    }
-    clip_recalculate_duration(clip);
+        for (channel, weight) in keyed_channels {
+            insert_morph_key(clip, &source_mesh, &channel, time, weight);
+        }
+        clip_recalculate_duration(clip);
+        true
+    });
 }
 
 fn channels_to_key(

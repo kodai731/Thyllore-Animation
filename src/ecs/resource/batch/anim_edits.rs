@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
+use thyllore_avatar_core::motion::seed::MotionSpec;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BatchAnimEdit {

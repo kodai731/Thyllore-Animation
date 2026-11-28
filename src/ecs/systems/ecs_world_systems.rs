@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
@@ -10,11 +10,11 @@ use crate::ecs::world::{
 pub fn transform_propagation_system(world: &mut World) {
     let root_entities = world.get_root_entities();
 
-    fn propagate(world: &mut World, entity: Entity, parent_global: Matrix4<f32>) {
+    fn propagate(world: &mut World, entity: Entity, parent_global: Mat4) {
         let local_matrix = world
             .get_component::<Transform>(entity)
             .map(|t| t.to_matrix())
-            .unwrap_or_else(Matrix4::identity);
+            .unwrap_or(Mat4::IDENTITY);
 
         let global_matrix = parent_global * local_matrix;
 
@@ -33,7 +33,7 @@ pub fn transform_propagation_system(world: &mut World) {
     }
 
     for root in root_entities {
-        propagate(world, root, Matrix4::identity());
+        propagate(world, root, Mat4::IDENTITY);
     }
 }
 
@@ -84,7 +84,8 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
 }
 
 pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
-    use crate::ecs::{create_pose_from_rest, sample_clip_to_pose};
+    use crate::ecs::systems::sample_clip_to_pose;
+    use thyllore_anim_core::create_pose_from_rest;
 
     let animated_entities = world.query_animated();
 

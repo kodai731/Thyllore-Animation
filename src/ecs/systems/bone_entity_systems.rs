@@ -1,10 +1,10 @@
-use crate::animation::Skeleton;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{BoneEntity, EditorDisplay, SkeletonBones};
 use crate::ecs::world::{Entity, Name, Parent, World};
 use crate::hooks::model_load::LoadedModel;
+use thyllore_anim_core::Skeleton;
 
-pub fn spawn_bone_entities(world: &mut World, owner: Entity, skeleton: &Skeleton) -> SkeletonBones {
+fn spawn_bone_entities(world: &mut World, owner: Entity, skeleton: &Skeleton) -> SkeletonBones {
     let mut entities: Vec<Entity> = Vec::with_capacity(skeleton.bones.len());
 
     for bone in &skeleton.bones {
@@ -61,8 +61,8 @@ crate::model_load_hook!("bone_entities", Rig, bone_entities_attach_loaded);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::{Bone, BoneId};
-    use cgmath::{Matrix4, SquareMatrix};
+    use glam::Mat4;
+    use thyllore_anim_core::{Bone, BoneId};
 
     fn make_skeleton(bone_count: usize) -> Skeleton {
         let mut skeleton = Skeleton::new("test");
@@ -79,8 +79,8 @@ mod tests {
                 name: format!("bone_{}", i),
                 parent_id,
                 children: Vec::new(),
-                local_transform: Matrix4::identity(),
-                inverse_bind_pose: Matrix4::identity(),
+                local_transform: Mat4::IDENTITY,
+                inverse_bind_pose: Mat4::IDENTITY,
                 node_index: None,
             };
             skeleton.bones.push(bone);

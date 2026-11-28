@@ -1,16 +1,15 @@
-use super::ui_command::WaterUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
-use crate::ecs::resource::{HierarchyState, WaterHistorySnapshotState, WaterRenderSettings};
 use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
+use glam::Vec3;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
 pub const WATER_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "water",
-    max_instances: thyllore_effect_core::WATER_MAX_INSTANCES,
+    max_instances: thyllore_effect_core::water::WATER_MAX_INSTANCES,
     spawn: spawn_water_instance,
     entities: water_entities,
     default_in_empty_scene: false,
@@ -24,7 +23,7 @@ fn water_entities(world: &World) -> Vec<Entity> {
 
 fn spawn_water_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
     let effect = WaterTorusEffect {
-        position: cgmath::Vector3::new(0.0, -0.5, 2.5 * ordinal as f32),
+        position: Vec3::new(0.0, -0.5, 2.5 * ordinal as f32),
         ..WaterTorusEffect::default()
     };
     spawn_water_with_clip(
@@ -51,39 +50,6 @@ pub fn spawn_water_with_clip(
     effect: WaterTorusEffect,
 ) -> Entity {
     let entity = spawn_water(world, name, effect);
-    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
-        world,
-        assets,
-        entity,
-        &WATER_DOMAIN,
-    );
+    crate::ecs::systems::ensure_entity_clip(world, assets, entity, &WATER_DOMAIN);
     entity
 }
-
-/// The water the UI and the water events act on: the selected entity when it is a water,
-/// otherwise the first one. Keeping this in one place is what lets the hierarchy selection
-/// stay the single source of truth.
-pub fn resolve_selected_water(world: &World) -> Option<Entity> {
-    let selected = world
-        .get_resource::<HierarchyState>()
-        .and_then(|state| state.selected_entity);
-
-    if let Some(entity) = selected {
-        if world.get_component::<WaterTorusEffect>(entity).is_some() {
-            return Some(entity);
-        }
-    }
-
-    world.entities_with::<WaterTorusEffect>().first().copied()
-}
-
-fn insert_water_default_resources(world: &mut World) {
-    if !world.contains_resource::<WaterRenderSettings>() {
-        world.insert_resource(WaterRenderSettings::default());
-    }
-    if !world.contains_resource::<WaterHistorySnapshotState>() {
-        world.insert_resource(WaterHistorySnapshotState::default());
-    }
-}
-
-crate::effect_default_resource!("water", insert_water_default_resources);

@@ -4,7 +4,7 @@ use crate::lightning::LightningParameterOwner;
 #[params(tag = LightningParameterOwner, owner = Frame, group = "branch")]
 pub struct LightningBranching {
     /// Recursion depth of the branch tree; 0 leaves the main channel alone
-    #[persist(curve, ui(min = 0.0, max = 5.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 5.0))]
     pub depth: u32,
     #[persist(curve, ui(min = 0.0, max = 1.0))]
     pub probability: f32,

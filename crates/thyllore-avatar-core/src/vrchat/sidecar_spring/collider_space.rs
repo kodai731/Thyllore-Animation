@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use super::format::{SidecarCollider, SidecarSpring};
 use super::frame::BoneRestFrame;
@@ -48,8 +48,8 @@ fn map_collider(
 ) -> SidecarCollider {
     let map_vector = |vector: [f32; 3]| -> [f32; 3] {
         match target {
-            ColliderSpace::BoneLocal => frame.to_local(Vector3::from(vector)).into(),
-            ColliderSpace::Model => frame.to_model(Vector3::from(vector)).into(),
+            ColliderSpace::BoneLocal => frame.to_local(Vec3::from(vector)).into(),
+            ColliderSpace::Model => frame.to_model(Vec3::from(vector)).into(),
         }
     };
     let radius = match target {
@@ -66,7 +66,7 @@ fn map_collider(
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Matrix4;
+    use glam::Mat4;
 
     use super::*;
     use crate::vrchat::sidecar_spring::{SidecarColliderOrigin, SidecarColliderShape};
@@ -94,10 +94,11 @@ mod tests {
     #[test]
     fn names_order_and_unknown_bones_survive_a_round_trip() {
         let bones = [bone("Head")];
-        let frames = [
-            BoneRestFrame::from_global_transform(&Matrix4::from_scale(200.0), 0.01)
-                .expect("regular frame"),
-        ];
+        let frames =
+            [
+                BoneRestFrame::from_global_transform(&Mat4::from_scale(Vec3::splat(200.0)), 0.01)
+                    .expect("regular frame"),
+            ];
         let spring = SidecarSpring {
             colliders: vec![capsule("head_guard", "Head"), capsule("hat", "Hat")],
             ..Default::default()

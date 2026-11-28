@@ -3,10 +3,10 @@ use std::sync::LazyLock;
 use thyllore_anim_core::spring_bone::{JointForceForm, SpringJointParam, SPRING_JOINT_UI_PARAMS};
 use thyllore_scene_core::{FieldPath, ScalarParam, SceneFields};
 
-use crate::animation::BoneId;
 use crate::ecs::component::SpringChain;
 use crate::ecs::systems::phases::event_dispatch::spring_bone::SpringBoneEvent;
 use crate::ecs::world::Entity;
+use thyllore_anim_core::BoneId;
 
 use super::force_rows::force_field_row;
 use super::section::SpringView;
@@ -14,7 +14,7 @@ use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::{ListRows, UiRow};
 
 #[derive(Clone)]
-pub struct ChainView {
+pub(super) struct ChainView {
     pub entity: Entity,
     pub chain: SpringChain,
     pub bones: std::rc::Rc<[(BoneId, String)]>,
@@ -22,7 +22,7 @@ pub struct ChainView {
 }
 
 #[derive(Clone)]
-pub struct JointView {
+pub(super) struct JointView {
     pub bones: std::rc::Rc<[(BoneId, String)]>,
     pub selected_bone: Option<BoneId>,
     pub joint: SpringJointParam,
@@ -30,7 +30,7 @@ pub struct JointView {
 }
 
 impl JointView {
-    pub fn new(
+    pub(super) fn new(
         bones: std::rc::Rc<[(BoneId, String)]>,
         selected_bone: Option<BoneId>,
         joint: SpringJointParam,
@@ -45,7 +45,7 @@ impl JointView {
     }
 
     /// The joint with the force the form currently selects.
-    pub fn joint_param(&self) -> SpringJointParam {
+    pub(super) fn joint_param(&self) -> SpringJointParam {
         SpringJointParam {
             force: self.force.into(),
             ..self.joint.clone()
@@ -73,7 +73,7 @@ static JOINT_SCALARS: LazyLock<Vec<ScalarParam<JointView>>> = LazyLock::new(|| {
     out
 });
 
-pub fn chain_list_row() -> UiRow<SpringView> {
+pub(super) fn chain_list_row() -> UiRow<SpringView> {
     UiRow::List(Box::new(ListRows::<SpringView, ChainView> {
         title: "Chains",
         items: |_, view: &SpringView| {
@@ -103,7 +103,7 @@ pub fn chain_list_row() -> UiRow<SpringView> {
     }))
 }
 
-pub fn chain_rows() -> Vec<UiRow<ChainView>> {
+pub(super) fn chain_rows() -> Vec<UiRow<ChainView>> {
     let mut rows: Vec<UiRow<ChainView>> = Vec::new();
 
     rows.push(UiRow::Toggle {
@@ -155,7 +155,7 @@ pub fn chain_rows() -> Vec<UiRow<ChainView>> {
     rows
 }
 
-pub fn joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
+pub(super) fn joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
     let mut rows: Vec<UiRow<JointView>> = Vec::new();
     rows.push(UiRow::Choice {
         label: "Bone",
@@ -183,7 +183,7 @@ pub fn joint_rows(view: &JointView) -> Vec<UiRow<JointView>> {
 }
 
 /// The force block of the joint's model, then the parameters every model shares.
-pub fn joint_param_rows(view: &JointView) -> Vec<UiRow<JointView>> {
+pub(super) fn joint_param_rows(view: &JointView) -> Vec<UiRow<JointView>> {
     let mut rows = vec![force_field_row(
         "force",
         &view.force,

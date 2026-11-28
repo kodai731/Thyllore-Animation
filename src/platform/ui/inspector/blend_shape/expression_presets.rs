@@ -5,7 +5,7 @@ use crate::ecs::systems::find_expression_morph_entity;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::world::{Entity, World};
 use crate::platform::ui::ui_rows::{ListRows, UiRow};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone)]
 pub(super) struct ExpressionPresetsView {

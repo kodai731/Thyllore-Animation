@@ -1,8 +1,8 @@
 #![cfg(test)]
 use std::collections::HashMap;
 
-use cgmath::{InnerSpace, Vector3};
-use thyllore_anim_core::editable::components::clip::EditableAnimationClip;
+use glam::Vec3;
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 mod support;
 
@@ -15,23 +15,18 @@ fn check_clip_against_all_conventions(clip: &EditableAnimationClip) {
 fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
     let (bones, skeleton) = support::fixture_bones::load_fixture_rig(convention_id);
 
-    let (mapping, _) = thyllore_avatar_core::humanoid::systems::name_match::infer_mapping(&bones);
+    let (mapping, _) = thyllore_avatar_core::humanoid::infer_mapping(&bones);
 
-    let frame = thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame(
-        &mapping, &bones,
-    )
-    .unwrap();
+    let frame = thyllore_avatar_core::humanoid::derive_humanoid_frame(&mapping, &bones).unwrap();
 
-    let rest_pose =
-        thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose(&mapping, &bones);
+    let rest_pose = thyllore_avatar_core::humanoid::detect_rest_pose(&mapping, &bones);
 
-    let ctx = thyllore_avatar_core::motion::systems::retarget_pose::build_retarget_context(
+    let ctx = thyllore_avatar_core::motion::build_retarget_context(
         &skeleton, &mapping, &frame, rest_pose,
     )
     .unwrap();
 
-    let hips_idx =
-        mapping.by_role[&thyllore_avatar_core::humanoid::components::role::HumanoidRole::Hips];
+    let hips_idx = mapping.by_role[&thyllore_avatar_core::humanoid::HumanoidRole::Hips];
     let hips_bind = skeleton.bones[hips_idx].world_position;
     let hips_height = ctx.hips_height;
 
@@ -45,21 +40,11 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
     for frame_idx in 0..=total_frames {
         let time = frame_idx as f32 / 30.0;
         let mut remapped = clip.clone();
-        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(
-            &mut remapped,
-            &name_to_id,
-        );
-        let sampled =
-            thyllore_avatar_core::motion::systems::humanoid_pose_sampler::sample_humanoid_pose(
-                &remapped, &mapping, time,
-            );
+        thyllore_anim_core::editable::clip_remap_bone_ids(&mut remapped, &name_to_id);
+        let sampled = thyllore_avatar_core::motion::sample_humanoid_pose(&remapped, &mapping, time);
 
-        let retargeted =
-            thyllore_avatar_core::motion::systems::retarget_pose::retarget_to_bones(&ctx, &sampled);
-        let positions = thyllore_avatar_core::motion::systems::retarget_pose::pose_world_positions(
-            &ctx,
-            &retargeted,
-        );
+        let retargeted = thyllore_avatar_core::motion::retarget_to_bones(&ctx, &sampled);
+        let positions = thyllore_avatar_core::motion::pose_world_positions(&ctx, &retargeted);
 
         let reference = support::reference_pose::reference_world_positions(&sampled);
 
@@ -84,12 +69,12 @@ fn check_one(convention_id: &str, clip: &EditableAnimationClip) {
                 (ref_pos[2] - canonical_hips[2]) / canonical_hips_height,
             ];
 
-            let diff = Vector3::new(
+            let diff = Vec3::new(
                 normalized[0] - expected_diff[0],
                 normalized[1] - expected_diff[1],
                 normalized[2] - expected_diff[2],
             );
-            let err = diff.magnitude();
+            let err = diff.length();
             assert!(
                 err < 1e-3,
                 "convention {} frame {} time {:.2} role {:?} error {:.6} (got [{:.4},{:.4},{:.4}], expected [{:.4},{:.4},{:.4}])",

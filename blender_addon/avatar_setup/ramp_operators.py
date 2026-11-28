@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.armature import armature_of
 from ..common.spring_properties import (
@@ -19,11 +19,13 @@ from ..common.spring_properties import (
     copy_joint_values,
     joint_for_bone,
     ramp_values,
+    simulated_joints,
     spring_settings_to_edit,
     write_sidecar_spring,
 )
 from ..common.logged_report import report
-from .operators import armature_bone_specs, target_armature
+from ..common.rig_snapshot import read_bones
+from .operators import target_armature
 
 
 def active_bone_name(context):
@@ -46,6 +48,14 @@ def active_submesh_origin(context, arm):
     return {"mesh": obj.name, "material": material.name if material is not None else ""}
 
 
+def chains_from_bone(settings, spring, bones, bone_name: str, scope: str) -> list[str]:
+    """A chain joint selects its own chain's scope; any other bone selects the chains below it."""
+    chain = chain_with_joint(settings, bone_name)
+    if chain is not None:
+        return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
+    return avatar_api.chains_under_bone({"spring": spring, "bones": bones, "bone_name": bone_name})
+
+
 def target_chain_names(context, arm, settings, spring, bones, scope):
     """The chains the ramp applies to, from what is selected: the submesh the chains were generated on,
     a bone, or the entry selected in the Chains list."""
@@ -58,14 +68,11 @@ def target_chain_names(context, arm, settings, spring, bones, scope):
 
     bone_name = active_bone_name(context)
     if bone_name is not None:
-        chain = chain_with_joint(settings, bone_name)
-        if chain is not None:
-            return tml.chains_in_scope(spring, bones, chain.name, scope)
-        return tml.chains_under_bone(spring, bones, bone_name)
+        return chains_from_bone(settings, spring, bones, bone_name, scope)
 
     chain = active_chain(settings)
     if chain is not None:
-        return tml.chains_in_scope(spring, bones, chain.name, scope)
+        return avatar_api.chains_in_scope({"spring": spring, "bones": bones, "chain_name": chain.name, "scope": scope})
     raise ValueError("Select the submesh the chains were generated on, a bone, or a chain in the list")
 
 
@@ -78,7 +85,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return _TML_AVAILABLE and target_armature(context) is not None
+        return _AVATAR_API_AVAILABLE and target_armature(context) is not None
 
     def execute(self, context):
         arm = target_armature(context)
@@ -86,7 +93,7 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
         form = context.window_manager.thyllore_ramp
 
         spring = spring_settings_to_edit(settings)
-        bones = armature_bone_specs(context, arm)
+        bones = read_bones(context, arm)
 
         try:
             names = target_chain_names(context, arm, settings, spring, bones, form.scope)
@@ -99,12 +106,12 @@ class THYLLORE_OT_ApplyRamp(bpy.types.Operator):
             return {"CANCELLED"}
 
         try:
-            output = tml.apply_ramp(
-                spring,
-                bones,
-                names,
-                ramp_values(form),
-            )
+            output = avatar_api.apply_ramp({
+                "spring": spring,
+                "bones": bones,
+                "chain_names": names,
+                "ramp": ramp_values(form),
+            })
         except ValueError as e:
             report(self, "ERROR", f"apply_ramp failed: {e}")
             return {"CANCELLED"}
@@ -130,22 +137,19 @@ class THYLLORE_OT_LoadRampFromChain(bpy.types.Operator):
     def execute(self, context):
         arm = target_armature(context)
         settings = arm.data.thyllore_spring
-        chains = settings.chains
-        index = settings.active_chain_index
-
-        if index < 0 or index >= len(chains):
-            report(self, "ERROR", "Active chain index out of range")
+        chain = active_chain(settings)
+        if chain is None:
+            report(self, "ERROR", "Select a chain in the Chains list")
             return {"CANCELLED"}
-
-        chain = chains[index]
-        if len(chain.joints) == 0:
+        joints = simulated_joints(chain)
+        if len(joints) == 0:
             report(self, "ERROR", "Chain has no joints")
             return {"CANCELLED"}
 
         form = context.window_manager.thyllore_ramp
 
-        copy_joint_values(chain.joints[0], form.root)
-        copy_joint_values(chain.joints[-1], form.tip)
+        copy_joint_values(joints[0], form.root)
+        copy_joint_values(joints[-1], form.tip)
 
         report(self, "INFO", f"Loaded ramp from chain '{chain.name}'")
         return {"FINISHED"}

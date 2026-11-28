@@ -33,8 +33,10 @@ fn test_assets_directory_structure() {
 #[test]
 fn test_font_files_exist() {
     let font_files = [
-        "assets/fonts/Roboto-Regular.ttf",
+        "assets/fonts/Inter-Regular.ttf",
+        "assets/fonts/Inter-SemiBold.ttf",
         "assets/fonts/mplus-1p-regular.ttf",
+        "assets/fonts/lucide.ttf",
     ];
 
     for font in &font_files {
@@ -89,13 +91,9 @@ fn test_src_directory_structure() {
     let src_dirs = [
         "src/app",
         "src/vulkanr",
-        "src/loader",
-        "src/render",
         "src/scene",
         "src/platform",
         "src/debugview",
-        "src/logger",
-        "src/math",
     ];
 
     for dir in &src_dirs {

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
+use thyllore_grpc_client::{MeshInputMode, MeshModelType, TextToImageModelType};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TextToMeshStatus {
@@ -50,3 +50,6 @@ impl Default for TextToMeshState {
         }
     }
 }
+
+#[cfg(feature = "auto-rig")]
+crate::startup_resource!(TextToMeshState, CoreResources);

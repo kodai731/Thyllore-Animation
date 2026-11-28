@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::{RRAutoExposureAverageDescriptorSet, RRAutoExposureHistogramDescriptorSet};
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::AutoExposureBuffers;
+use crate::FrameRenderContext;
 use thyllore_render_core::AutoExposure;
 
 #[repr(C)]
@@ -40,9 +40,10 @@ pub unsafe fn record_auto_exposure_pass(
     settings: &AutoExposure,
     delta_time: f32,
     frame_slot: usize,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
     let pixel_count = buffers.width * buffers.height;
 
     let histogram_push = HistogramPushConstants {
@@ -68,7 +69,7 @@ pub unsafe fn record_auto_exposure_pass(
     dispatch_histogram(
         device,
         histogram_pipeline,
-        histogram_descriptor.descriptor_set(frame_slot)?,
+        histogram_descriptor.descriptor_set(frame_slot)?.raw(),
         &histogram_push,
         buffers,
         cmd,

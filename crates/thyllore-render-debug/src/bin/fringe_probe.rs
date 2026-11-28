@@ -7,12 +7,12 @@
 use std::fs;
 use std::process;
 
-use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
-use thyllore_effect_core::flame_wave::*;
-use thyllore_effect_core::{
+use glam::{Mat4, Vec3, Vec4};
+use thyllore_effect_core::flame::*;
+use thyllore_effect_core::flame::{
     build_flame_inverse_model_matrix, build_flame_ubo, flame_bounding_radius,
 };
-use thyllore_effect_core::{ring_support_span, FlameRadialTaper};
+use thyllore_effect_core::flame::{ring_support_span, FlameRadialTaper};
 
 use thyllore_render_debug::dump_effect::{camera_from_dump, flame_from_dump};
 use thyllore_render_debug::fringe_field::{flow_warp_with_rate, sample_wave_field, WarpParams};
@@ -102,12 +102,12 @@ fn parse_args() -> Args {
     }
 }
 
-fn transform_point(matrix: &Matrix4<f32>, point: Vector3<f32>) -> Vector3<f32> {
-    (matrix * Vector4::new(point.x, point.y, point.z, 1.0)).truncate()
+fn transform_point(matrix: &Mat4, point: Vec3) -> Vec3 {
+    (matrix * Vec4::new(point.x, point.y, point.z, 1.0)).truncate()
 }
 
-fn transform_vector(matrix: &Matrix4<f32>, vector: Vector3<f32>) -> Vector3<f32> {
-    (matrix * Vector4::new(vector.x, vector.y, vector.z, 0.0)).truncate()
+fn transform_vector(matrix: &Mat4, vector: Vec3) -> Vec3 {
+    (matrix * Vec4::new(vector.x, vector.y, vector.z, 0.0)).truncate()
 }
 
 fn slab_interval(origin_y: f32, direction_y: f32, t_max: f32) -> Option<(f32, f32)> {
@@ -149,12 +149,12 @@ fn main() {
 
     // Build mode table: unified 128-mode table when the unified field is on,
     // else legacy 96 + envelope; sorted by |k| ascending below.
-    let mut modes: Vec<WaveMode> = if thyllore_effect_core::read_env_wave_unified() {
+    let mut modes: Vec<WaveMode> = if thyllore_effect_core::flame::read_env_wave_unified() {
         build_unified_erosion_modes(
             WAVE_K_RATIO,
             WAVE_ENV_MU,
-            effect.boundary.amp * thyllore_effect_core::read_env_unified_tilt_gain_b(),
-            effect.contour.wiggle_amp * thyllore_effect_core::read_env_unified_tilt_gain_w(),
+            effect.boundary.amp * thyllore_effect_core::flame::read_env_unified_tilt_gain_b(),
+            effect.contour.wiggle_amp * thyllore_effect_core::flame::read_env_unified_tilt_gain_w(),
         )
     } else {
         let mut m = generate_wave_modes_with_ratio(WAVE_K_RATIO).to_vec();
@@ -179,8 +179,7 @@ fn main() {
         .into_iter()
         .enumerate()
     {
-        mode.phase +=
-            thyllore_effect_core::flame_wave::medium_swirl_phase_rate(i, mode.k) * drift_time;
+        mode.phase += thyllore_effect_core::flame::medium_swirl_phase_rate(i, mode.k) * drift_time;
         shear_modes.push(mode);
     }
 
@@ -191,18 +190,18 @@ fn main() {
     // Camera setup
     let ubo = build_flame_ubo(&effect, &baked, &temporal);
     let inverse_model = build_flame_inverse_model_matrix(&effect);
-    let camera_world = Vector3::from(cam.position);
+    let camera_world = Vec3::from(cam.position);
     let camera_local = transform_point(&inverse_model, camera_world);
     let tan_half = (cam.fov_y_degrees * std::f32::consts::PI / 180.0 * 0.5).tan();
     let aspect = (cam.viewport_size_px[0] / cam.viewport_size_px[1].max(1.0)).max(1e-3);
-    let forward = Vector3::from(cam.forward);
-    let right = Vector3::from(cam.right);
-    let up = Vector3::from(cam.up);
-    let t_max = camera_local.magnitude() + 4.0;
+    let forward = Vec3::from(cam.forward);
+    let right = Vec3::from(cam.right);
+    let up = Vec3::from(cam.up);
+    let t_max = camera_local.length() + 4.0;
 
     // Ring support parameters
     let taper = FlameRadialTaper::from_effect(&effect, &baked);
-    let ring_major = if effect.emitter.kind == 1 {
+    let ring_major = if effect.emitter.kind == FlameEmitterKind::Ring {
         effect.emitter.ring_major_radius / flame_bounding_radius(&effect).max(1e-3)
     } else {
         0.0

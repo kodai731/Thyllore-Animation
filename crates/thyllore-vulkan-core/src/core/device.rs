@@ -1,10 +1,13 @@
 use super::descriptor_allocator::{DescriptorAllocator, PoolSignature};
 use super::swapchain::*;
+use crate::types::{Entry, Instance};
 use crate::vulkan::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::time::{Duration, Instant};
 use thiserror::Error;
+use vulkanalia::vk::KhrAccelerationStructureExtension;
 use vulkanalia::Device as VulkanDevice;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,10 +22,10 @@ impl ValidationMode {
     }
 }
 
-pub const VALIDATION_LAYER: vk::ExtensionName =
+pub(crate) const VALIDATION_LAYER: vk::ExtensionName =
     vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 
-pub const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
+pub(crate) const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
     vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
     vk::KHR_RAY_QUERY_EXTENSION.name,
@@ -37,15 +40,6 @@ impl Device {
     pub fn new(device: VulkanDevice) -> Self {
         Device(device)
     }
-    pub fn null() -> Self {
-        unsafe { Device(std::mem::zeroed()) }
-    }
-}
-
-impl Default for Device {
-    fn default() -> Self {
-        Device::null()
-    }
 }
 
 impl Deref for Device {
@@ -55,37 +49,50 @@ impl Deref for Device {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RRDevice {
-    pub device: Device,
-    pub physical_device: vk::PhysicalDevice,
-    pub graphics_queue: vk::Queue,
-    pub present_queue: vk::Queue,
+    device: Device,
+    pub(crate) physical_device: vk::PhysicalDevice,
+    pub(crate) graphics_queue: vk::Queue,
+    pub(crate) present_queue: vk::Queue,
     pub graphics_queue_family_index: u32,
-    pub msaa_samples: vk::SampleCountFlags,
+    pub(crate) msaa_samples: vk::SampleCountFlags,
     pub min_uniform_buffer_offset_alignment: u64,
     pub timestamp_period: f32,
     pub wide_lines: bool,
     descriptor_allocator: RefCell<DescriptorAllocator>,
+    idle_wait: Cell<Duration>,
 }
 
 impl RRDevice {
-    pub unsafe fn default() -> RRDevice {
-        Self {
-            device: std::mem::zeroed(),
-            physical_device: vk::PhysicalDevice::default(),
-            graphics_queue: vk::Queue::default(),
-            present_queue: vk::Queue::default(),
-            graphics_queue_family_index: 0,
-            msaa_samples: vk::SampleCountFlags::default(),
-            min_uniform_buffer_offset_alignment: 256,
-            timestamp_period: 1.0,
-            wide_lines: false,
-            descriptor_allocator: RefCell::default(),
-        }
+    #[inline]
+    pub(crate) fn device(&self) -> &Device {
+        &self.device
     }
 
-    pub unsafe fn new(
+    #[inline]
+    pub(crate) unsafe fn buffer_address(&self, buffer: vk::Buffer) -> vk::DeviceAddress {
+        self.device
+            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(buffer))
+    }
+
+    #[inline]
+    pub(crate) unsafe fn acceleration_structure_address(
+        &self,
+        acceleration_structure: vk::AccelerationStructureKHR,
+    ) -> vk::DeviceAddress {
+        self.device.get_acceleration_structure_device_address_khr(
+            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                .acceleration_structure(acceleration_structure),
+        )
+    }
+
+    #[inline]
+    pub fn msaa_samples(&self) -> crate::pipeline::SampleCount {
+        crate::pipeline::SampleCount::from_raw(self.msaa_samples)
+    }
+
+    pub(crate) unsafe fn new(
         entry: &Entry,
         instance: &Instance,
         surface: &vk::SurfaceKHR,
@@ -112,7 +119,9 @@ impl RRDevice {
             &physical_device,
         )?;
 
-        let properties = instance.get_physical_device_properties(physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
         let wide_lines = supports_wide_lines(instance, physical_device);
@@ -129,10 +138,11 @@ impl RRDevice {
             timestamp_period,
             wide_lines,
             descriptor_allocator: RefCell::default(),
+            idle_wait: Cell::default(),
         })
     }
 
-    pub unsafe fn new_headless(
+    pub(crate) unsafe fn new_headless(
         entry: &Entry,
         instance: &Instance,
         device_extensions: &[vk::ExtensionName],
@@ -156,7 +166,9 @@ impl RRDevice {
             &physical_device,
         )?;
 
-        let properties = instance.get_physical_device_properties(physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
         let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
         let timestamp_period = properties.limits.timestamp_period;
         let wide_lines = supports_wide_lines(instance, physical_device);
@@ -173,15 +185,17 @@ impl RRDevice {
             timestamp_period,
             wide_lines,
             descriptor_allocator: RefCell::default(),
+            idle_wait: Cell::default(),
         })
     }
 
     pub unsafe fn connect_surface(
         &mut self,
         instance: &Instance,
-        surface: &vk::SurfaceKHR,
+        surface: &crate::types::Surface,
     ) -> Result<()> {
-        let present_index = PresentQueueIndex::find(instance, surface, &self.physical_device)?;
+        let present_index =
+            PresentQueueIndex::find(instance, &surface.raw(), &self.physical_device)?;
         self.present_queue = self.device.get_device_queue(present_index.0, 0);
         Ok(())
     }
@@ -191,8 +205,13 @@ impl RRDevice {
 pub struct GraphicsQueueIndex(pub u32);
 
 impl GraphicsQueueIndex {
-    pub unsafe fn find(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<Self> {
-        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+    pub(crate) unsafe fn find(
+        instance: &Instance,
+        physical_device: &vk::PhysicalDevice,
+    ) -> Result<Self> {
+        let properties = instance
+            .raw()
+            .get_physical_device_queue_family_properties(*physical_device);
         let index = properties
             .iter()
             .position(|p| p.queue_flags.contains(vk::QueueFlags::GRAPHICS))
@@ -206,14 +225,16 @@ impl GraphicsQueueIndex {
 pub struct PresentQueueIndex(pub u32);
 
 impl PresentQueueIndex {
-    pub unsafe fn find(
+    pub(crate) unsafe fn find(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
     ) -> Result<Self> {
-        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_queue_family_properties(*physical_device);
         for (index, _) in properties.iter().enumerate() {
-            if instance.get_physical_device_surface_support_khr(
+            if instance.raw().get_physical_device_surface_support_khr(
                 *physical_device,
                 index as u32,
                 *surface,
@@ -232,7 +253,7 @@ pub struct QueueFamilyIndices {
 }
 
 impl QueueFamilyIndices {
-    pub unsafe fn get(
+    pub(crate) unsafe fn get(
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         physical_device: &vk::PhysicalDevice,
@@ -277,7 +298,7 @@ unsafe fn create_device_common(
     };
 
     let mut extensions: Vec<*const i8> = device_extensions.iter().map(|n| n.as_ptr()).collect();
-    if cfg!(target_os = "macos") && entry.version()? >= portability_macro_version {
+    if cfg!(target_os = "macos") && entry.raw().version()? >= portability_macro_version {
         extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
     }
 
@@ -311,7 +332,9 @@ unsafe fn create_device_common(
         .push_next(&mut ray_query_features)
         .push_next(&mut ray_tracing_pipeline_features);
 
-    let vulkan_device = instance.create_device(*physical_device, &info, None)?;
+    let vulkan_device = instance
+        .raw()
+        .create_device(*physical_device, &info, None)?;
     Ok(Device::new(vulkan_device))
 }
 
@@ -378,7 +401,9 @@ unsafe fn device_local_memory_bytes(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
 ) -> u64 {
-    let memory = instance.get_physical_device_memory_properties(physical_device);
+    let memory = instance
+        .raw()
+        .get_physical_device_memory_properties(physical_device);
     (0..memory.memory_heap_count as usize)
         .filter(|&i| {
             memory.memory_heaps[i]
@@ -411,8 +436,10 @@ unsafe fn pick_ranked_physical_device(
 ) -> Result<(vk::PhysicalDevice, vk::SampleCountFlags)> {
     let preferred_name = preferred_gpu_name_lowercase();
     let mut best: Option<(vk::PhysicalDevice, (bool, u64, bool))> = None;
-    for physical_device in instance.enumerate_physical_devices()? {
-        let properties = instance.get_physical_device_properties(physical_device);
+    for physical_device in instance.raw().enumerate_physical_devices()? {
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(physical_device);
 
         if let Err(error) =
             check_physical_device_capabilities(instance, &physical_device, device_extensions)
@@ -469,7 +496,9 @@ unsafe fn pick_ranked_physical_device(
             "Failed to find suitable physical device (headless)"
         })
     })?;
-    let properties = instance.get_physical_device_properties(physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(physical_device);
     log!("Selected Physical Device (`{}`).", properties.device_name);
     let sample_count = get_max_msaa_samples(instance, physical_device);
     Ok((physical_device, sample_count))
@@ -495,7 +524,9 @@ unsafe fn check_physical_device_capabilities(
     physical_device: &vk::PhysicalDevice,
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
-    let properties = instance.get_physical_device_properties(*physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(*physical_device);
     log!("Checking device: {}", properties.device_name);
     log!("Device type: {:?}", properties.device_type);
 
@@ -507,7 +538,9 @@ unsafe fn check_physical_device_capabilities(
     }
     log!("Device type check passed");
 
-    let features = instance.get_physical_device_features(*physical_device);
+    let features = instance
+        .raw()
+        .get_physical_device_features(*physical_device);
     if features.sampler_anisotropy != vk::TRUE {
         log!("Device rejected: No sampler anisotropy");
         return Err(anyhow!(SuitabilityError("No sampler anisotropy")));
@@ -566,6 +599,7 @@ unsafe fn check_physical_device_extensions(
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
     let extensions = instance
+        .raw()
         .enumerate_device_extension_properties(*physical_device, None)?
         .iter()
         .map(|e| e.extension_name)
@@ -605,7 +639,9 @@ unsafe fn get_max_msaa_samples(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
 ) -> vk::SampleCountFlags {
-    let properties = instance.get_physical_device_properties(physical_device);
+    let properties = instance
+        .raw()
+        .get_physical_device_properties(physical_device);
     let counts = properties.limits.framebuffer_color_sample_counts
         & properties.limits.framebuffer_depth_sample_counts;
     [
@@ -638,6 +674,7 @@ pub unsafe fn create_headless_instance(entry: &Entry) -> Result<Instance> {
     }
 
     let available_layers = entry
+        .raw()
         .enumerate_instance_layer_properties()?
         .iter()
         .map(|l| l.layer_name)
@@ -654,12 +691,12 @@ pub unsafe fn create_headless_instance(entry: &Entry) -> Result<Instance> {
         .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions);
 
-    let instance = entry.create_instance(&info, None)?;
-    Ok(instance)
+    let instance = entry.raw().create_instance(&info, None)?;
+    Ok(Instance(instance))
 }
 
 pub unsafe fn destroy_headless_instance(instance: &Instance) {
-    instance.destroy_instance(None);
+    instance.raw().destroy_instance(None);
 }
 
 pub unsafe fn destroy_headless_device(device: &RRDevice, instance: &Instance) {
@@ -677,7 +714,7 @@ impl RRDevice {
         self.present_queue != vk::Queue::null()
     }
 
-    pub unsafe fn allocate_descriptor_sets(
+    pub(crate) unsafe fn allocate_descriptor_sets(
         &self,
         layout: vk::DescriptorSetLayout,
         signature: &PoolSignature,
@@ -688,7 +725,7 @@ impl RRDevice {
             .allocate(&self.device, layout, signature, count)
     }
 
-    pub fn release_descriptor_sets(
+    pub(crate) fn release_descriptor_sets(
         &self,
         layout: vk::DescriptorSetLayout,
         sets: impl IntoIterator<Item = vk::DescriptorSet>,
@@ -696,7 +733,7 @@ impl RRDevice {
         self.descriptor_allocator.borrow_mut().release(layout, sets);
     }
 
-    pub fn forget_descriptor_layout(&self, layout: vk::DescriptorSetLayout) {
+    pub(crate) fn forget_descriptor_layout(&self, layout: vk::DescriptorSetLayout) {
         self.descriptor_allocator.borrow_mut().forget_layout(layout);
     }
 
@@ -710,18 +747,96 @@ impl RRDevice {
     }
 
     pub unsafe fn wait_graphics_queue_idle(&self) -> Result<()> {
-        self.device.queue_wait_idle(self.graphics_queue)?;
+        self.wait_queue_idle(self.graphics_queue)
+    }
+
+    pub(crate) unsafe fn wait_queue_idle(&self, queue: vk::Queue) -> Result<()> {
+        let wait_start = Instant::now();
+        let wait_result = self.device.queue_wait_idle(queue);
+        self.add_idle_wait(wait_start.elapsed());
+
+        wait_result?;
         Ok(())
     }
 
+    pub unsafe fn wait_idle(&self) -> Result<()> {
+        let wait_start = Instant::now();
+        let wait_result = self.device.device_wait_idle();
+        self.add_idle_wait(wait_start.elapsed());
+
+        wait_result?;
+        Ok(())
+    }
+
+    fn add_idle_wait(&self, waited: Duration) {
+        self.idle_wait.set(self.idle_wait.get() + waited);
+    }
+
+    /// Time spent blocked in the idle waits above since the previous call.
+    pub fn take_idle_wait(&self) -> Duration {
+        self.idle_wait.take()
+    }
+
+    pub unsafe fn wait_for_fence(&self, fence: crate::types::Fence) -> Result<()> {
+        self.device
+            .wait_for_fences(&[fence.raw()], true, u64::MAX)?;
+        Ok(())
+    }
+
+    pub unsafe fn free_command_buffers(
+        &self,
+        command_pool: crate::types::CommandPool,
+        command_buffers: &[crate::types::CommandBuffer],
+    ) {
+        let command_buffers: Vec<vk::CommandBuffer> =
+            command_buffers.iter().map(|cb| cb.raw()).collect();
+        self.device
+            .free_command_buffers(command_pool.raw(), &command_buffers);
+    }
+
     pub unsafe fn query_physical_device_api_version(&self, instance: &Instance) -> u32 {
-        let properties = instance.get_physical_device_properties(self.physical_device);
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(self.physical_device);
         properties.api_version
     }
+
+    pub unsafe fn gpu_identity(&self, instance: &Instance) -> GpuIdentity {
+        let properties = instance
+            .raw()
+            .get_physical_device_properties(self.physical_device);
+        let name = std::ffi::CStr::from_ptr(properties.device_name.as_ptr())
+            .to_string_lossy()
+            .to_string();
+        let driver_version = format_vulkan_version(properties.driver_version);
+        let api_version = format_vulkan_version(properties.api_version);
+        GpuIdentity {
+            name,
+            driver_version,
+            api_version,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GpuIdentity {
+    pub name: String,
+    pub driver_version: String,
+    pub api_version: String,
+}
+
+fn format_vulkan_version(version: u32) -> String {
+    format!(
+        "{}.{}.{}",
+        vk::version_major(version),
+        vk::version_minor(version),
+        vk::version_patch(version)
+    )
 }
 
 unsafe fn supports_wide_lines(instance: &Instance, physical_device: vk::PhysicalDevice) -> bool {
     instance
+        .raw()
         .get_physical_device_features(physical_device)
         .wide_lines
         == vk::TRUE

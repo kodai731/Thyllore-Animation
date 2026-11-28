@@ -1,4 +1,4 @@
-use crate::vulkanr::data::Vertex;
+use thyllore_vulkan_core::data::Vertex;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OnionSkinningConfig {
@@ -24,6 +24,8 @@ impl Default for OnionSkinningConfig {
         }
     }
 }
+
+crate::startup_resource!(OnionSkinningConfig, PostProcessing);
 
 #[derive(Clone, Debug)]
 pub struct GhostFrameInfo {

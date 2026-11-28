@@ -1,15 +1,15 @@
-use cgmath::Vector2;
+use glam::Vec2;
 
 use crate::ecs::context::EcsContext;
-use crate::ecs::systems::camera_systems::{
+use crate::ecs::systems::{
     advance_camera_transition, compute_camera_position, compute_camera_up,
     tick_fly_speed_indicator, update_camera_near_plane,
 };
-use crate::ecs::{
+use crate::ecs::systems::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
     update_billboard_transform,
 };
-use crate::math::calculate_billboard_click_rect;
+use thyllore_math_core::calculate_billboard_click_rect;
 
 pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
     {
@@ -42,7 +42,7 @@ pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
         camera_up,
     );
 
-    let screen_size = Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let screen_size = Vec2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
     let billboard_rect = calculate_billboard_click_rect(
         light_position,
         screen_size,

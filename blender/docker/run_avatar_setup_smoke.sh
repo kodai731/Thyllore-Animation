@@ -15,10 +15,14 @@ fi
 mkdir -p "$REPO_ROOT/log/blender_avatar_setup_smoke"
 LOG="$REPO_ROOT/log/blender_avatar_setup_smoke/smoke.log"
 
-CANONICAL_ROOT="$(cd "$(readlink "$REPO_ROOT/assets/models")/../.." && pwd -P)"
+CANONICAL_ROOT="$(cd "$(readlink -f "$REPO_ROOT/assets/models")/../.." && pwd -P)"
+MODEL_MOUNT=()
+if [[ "$CANONICAL_ROOT" != "$REPO_ROOT" ]]; then
+    MODEL_MOUNT=(-v "$CANONICAL_ROOT:$CANONICAL_ROOT")
+fi
 
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
-    -v "$CANONICAL_ROOT:$CANONICAL_ROOT" \
+    ${MODEL_MOUNT[@]+"${MODEL_MOUNT[@]}"} \
     -v "$REPO_ROOT:$REPO_ROOT" \
     -w "$REPO_ROOT" \
     thyllore-blender-xvfb:local \

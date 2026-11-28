@@ -1,15 +1,15 @@
 use thyllore_anim_core::editable::PropertyType;
 
-use crate::animation::editable::{
-    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
-    EditableAnimationClip, SourceClipId,
-};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_domain_for_entity, ClipSchedule, ScalarChannelDomain,
 };
 use crate::ecs::resource::{ClipLibrary, HierarchyState};
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::editable::{
+    clip_recalculate_duration, curve_add_keyframe, curve_sample, ClipInstance,
+    EditableAnimationClip, SourceClipId,
+};
 
 pub fn find_entity_clip_id(world: &World, entity: Entity) -> Option<SourceClipId> {
     world
@@ -221,21 +221,21 @@ pub(crate) mod test_support {
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect.
-    pub const PROBE_LEVEL: ScalarChannel = ScalarChannel {
+    pub(crate) const PROBE_LEVEL: ScalarChannel = ScalarChannel {
         display_name: "Level",
         cli_name: "probe_level",
         debug_value_range: (0.0, 1.0),
         renamed_from: &[],
     };
 
-    pub const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
+    pub(crate) const PROBE_HEIGHT: ScalarChannel = ScalarChannel {
         display_name: "Height",
         cli_name: "probe_height",
         debug_value_range: (0.5, 4.0),
         renamed_from: &[],
     };
 
-    pub static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
+    pub(crate) static PROBE_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
         name: "Probe",
         channel_table: || &[PROBE_LEVEL, PROBE_HEIGHT],
         has_component: probe_has_component,
@@ -246,13 +246,13 @@ pub(crate) mod test_support {
 
     crate::scalar_channel_domain!(PROBE_DOMAIN);
 
-    pub fn probe_property(channel: &ScalarChannel) -> PropertyType {
+    pub(crate) fn probe_property(channel: &ScalarChannel) -> PropertyType {
         PROBE_DOMAIN
             .property_type_of(channel)
             .expect("channel belongs to the Probe domain")
     }
 
-    pub const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    pub(crate) const PROBE_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
         key: "probe",
         max_instances: 4,
         spawn: spawn_probe_instance,
@@ -293,7 +293,7 @@ pub(crate) mod test_support {
         spawn_probe_with_clip(world, assets, &format!("Probe {}", ordinal + 1))
     }
 
-    pub fn spawn_probe(world: &mut World, name: &str) -> Entity {
+    pub(crate) fn spawn_probe(world: &mut World, name: &str) -> Entity {
         spawn_scene_owner(
             world,
             name,
@@ -304,7 +304,7 @@ pub(crate) mod test_support {
         )
     }
 
-    pub fn spawn_probe_with_clip(
+    pub(crate) fn spawn_probe_with_clip(
         world: &mut World,
         assets: &mut AssetStorage,
         name: &str,
@@ -317,8 +317,11 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{probe_property, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
+    use super::test_support::{
+        probe_property, spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
+    };
     use super::*;
+    use crate::scene::test_support::ProbeOwner;
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {
@@ -405,5 +408,57 @@ mod tests {
         assert!(clip
             .get_scalar_curve(probe_property(&PROBE_HEIGHT))
             .is_some());
+    }
+
+    fn world_with_clip_library() -> (World, AssetStorage) {
+        let mut world = World::new();
+        world.insert_resource(ClipLibrary::new());
+        (world, AssetStorage::new())
+    }
+
+    #[test]
+    fn despawn_removes_the_entity_and_only_its_scheduled_clip() {
+        let (mut world, mut assets) = world_with_clip_library();
+        let leaving = spawn_probe_with_clip(&mut world, &mut assets, "Leaving");
+        let staying = spawn_probe_with_clip(&mut world, &mut assets, "Staying");
+        let leaving_clip = find_entity_clip_id(&world, leaving).expect("leaving clip");
+        let staying_clip = find_entity_clip_id(&world, staying).expect("staying clip");
+
+        despawn_entity_with_clip(&mut world, leaving);
+
+        assert_eq!(world.entities_with::<ProbeOwner>(), vec![staying]);
+        let library = world.resource::<ClipLibrary>();
+        assert!(library.get(leaving_clip).is_none());
+        assert!(library.get(staying_clip).is_some());
+        assert!(!library.is_dirty(leaving_clip));
+    }
+
+    #[test]
+    fn despawn_of_an_unscheduled_entity_keeps_every_clip() {
+        let (mut world, mut assets) = world_with_clip_library();
+        let scheduled = spawn_probe_with_clip(&mut world, &mut assets, "Scheduled");
+        let unscheduled = spawn_probe(&mut world, "Unscheduled");
+
+        despawn_entity_with_clip(&mut world, unscheduled);
+
+        assert_eq!(world.entities_with::<ProbeOwner>(), vec![scheduled]);
+        assert_eq!(world.resource::<ClipLibrary>().clip_count(), 1);
+    }
+
+    #[test]
+    fn despawn_without_a_clip_library_still_removes_the_entity() {
+        let mut world = World::new();
+        let entity = spawn_probe(&mut world, "Probe");
+        let mut schedule = ClipSchedule::new();
+        crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(
+            &mut schedule,
+            1,
+            1.0,
+        );
+        world.insert_component(entity, schedule);
+
+        despawn_entity_with_clip(&mut world, entity);
+
+        assert!(world.entities_with::<ProbeOwner>().is_empty());
     }
 }

@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::world::{Entity, World};
-use crate::loader::ModelLoadResult;
+use thyllore_importer_core::ModelLoadResult;
 
 /// The entity a model load produced and the importer result it was built from.
 pub struct LoadedModel<'a> {

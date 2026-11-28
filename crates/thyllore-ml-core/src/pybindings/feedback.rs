@@ -1,15 +1,10 @@
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pythonize::{depythonize, pythonize};
+use pythonize::depythonize;
 
-use super::error::anyhow_to_pyerr;
 use crate::degrade::now_unix;
 use crate::feedback;
 use crate::feedback::{FeedbackEndpoint, FeedbackRecordInputs};
-
-fn pythonize_to_pyerr(err: pythonize::PythonizeError) -> PyErr {
-    PyValueError::new_err(err.to_string())
-}
+use thyllore_ml_api::python::{anyhow_to_pyerr, depythonize_error_to_pyerr, pythonize_value};
 
 #[pyfunction]
 #[pyo3(signature = (
@@ -18,7 +13,7 @@ fn pythonize_to_pyerr(err: pythonize::PythonizeError) -> PyErr {
     record_id="", revision=0, ts=None
 ))]
 #[allow(clippy::too_many_arguments)]
-pub fn build_feedback_record<'py>(
+pub(super) fn build_feedback_record<'py>(
     py: Python<'py>,
     model_hash: &str,
     channel_kind: &str,
@@ -51,18 +46,19 @@ pub fn build_feedback_record<'py>(
         revision,
         ts: ts.unwrap_or_else(now_unix),
     });
-    pythonize(py, &record).map_err(pythonize_to_pyerr)
+    pythonize_value(py, &record)
 }
 
 #[pyfunction]
-pub fn send_feedback_batch<'py>(
+pub(super) fn send_feedback_batch<'py>(
     py: Python<'py>,
     feedback_url: &str,
     ingest_token: &str,
     anon_id: &str,
     records: Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let records: Vec<serde_json::Value> = depythonize(&records).map_err(pythonize_to_pyerr)?;
+    let records: Vec<serde_json::Value> =
+        depythonize(&records).map_err(depythonize_error_to_pyerr)?;
     let endpoint = FeedbackEndpoint {
         url: feedback_url.to_string(),
         ingest_token: ingest_token.to_string(),
@@ -77,11 +73,11 @@ pub fn send_feedback_batch<'py>(
         "full_token": response.full_token,
         "exp": response.exp,
     });
-    pythonize(py, &payload).map_err(pythonize_to_pyerr)
+    pythonize_value(py, &payload)
 }
 
 #[pyfunction]
-pub fn send_message(
+pub(super) fn send_message(
     py: Python<'_>,
     feedback_url: &str,
     ingest_token: &str,

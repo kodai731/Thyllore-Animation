@@ -1,0 +1,36 @@
+use std::path::PathBuf;
+
+use crate::asset::AssetStorage;
+use crate::ecs::resource::SceneState;
+use crate::ecs::systems::clip_library_register_loaded;
+use crate::ecs::world::World;
+use crate::hooks::effect_spawn::spawn_empty_scene_defaults;
+use crate::scene::{apply_loaded_scene_to_world, LoadedScene};
+
+pub struct StartupScene {
+    pub path: PathBuf,
+    pub loaded: LoadedScene,
+}
+
+pub fn apply_startup_scene(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    startup_scene: Option<StartupScene>,
+) {
+    let Some(StartupScene { path, loaded }) = startup_scene else {
+        world.insert_resource(SceneState::new());
+        spawn_empty_scene_defaults(world, assets);
+        return;
+    };
+
+    let mut scene_state = SceneState::new();
+    scene_state.set_from_loaded(path, loaded.scene.metadata.clone());
+    world.insert_resource(scene_state);
+
+    restore_loaded_scene(world, assets, &loaded);
+}
+
+fn restore_loaded_scene(world: &mut World, assets: &mut AssetStorage, loaded: &LoadedScene) {
+    clip_library_register_loaded(world, assets, loaded.clips.clone());
+    apply_loaded_scene_to_world(loaded, world, assets);
+}

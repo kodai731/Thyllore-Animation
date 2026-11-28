@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix};
+use glam::Mat4;
 
 use crate::{GpuMeshRef, MeshId, RenderInfo};
 
@@ -35,7 +35,7 @@ pub struct SkeletonHandle {
 pub struct RenderData {
     pub mesh_ref: GpuMeshRef,
     pub render_info: RenderInfo,
-    pub model_matrix: Matrix4<f32>,
+    pub model_matrix: Mat4,
 }
 
 impl Default for RenderData {
@@ -43,7 +43,7 @@ impl Default for RenderData {
         Self {
             mesh_ref: GpuMeshRef::default(),
             render_info: RenderInfo::default(),
-            model_matrix: Matrix4::identity(),
+            model_matrix: Mat4::IDENTITY,
         }
     }
 }
@@ -53,11 +53,11 @@ impl RenderData {
         Self {
             mesh_ref,
             render_info,
-            model_matrix: Matrix4::identity(),
+            model_matrix: Mat4::IDENTITY,
         }
     }
 
-    pub fn with_model_matrix(mut self, model_matrix: Matrix4<f32>) -> Self {
+    pub fn with_model_matrix(mut self, model_matrix: Mat4) -> Self {
         self.model_matrix = model_matrix;
         self
     }

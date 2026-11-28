@@ -4,8 +4,9 @@ mod labels;
 mod row;
 #[cfg(test)]
 mod tests;
+mod variant_choice;
 
 pub use draw::draw_rows;
 #[cfg(test)]
-pub use labels::{find_duplicate_labels, row_labels, visible_labels};
+pub(super) use labels::{find_duplicate_labels, row_labels, visible_labels};
 pub use row::*;

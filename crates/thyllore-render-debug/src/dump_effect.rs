@@ -1,6 +1,7 @@
-use cgmath::{Vector2, Vector3};
-use thyllore_effect_core::{
-    refresh_flame_coefficients, FlameBaked, FlameCoefficients, FlameEffect, FlameTemporalAccum,
+use glam::{Quat, Vec2, Vec3};
+use thyllore_effect_core::flame::{
+    refresh_flame_coefficients, FlameBaked, FlameCoefficients, FlameEffect, FlameEmitterKind,
+    FlameTemporalAccum,
 };
 
 /// Camera description reconstructed from a flame dump JSON.
@@ -41,7 +42,7 @@ pub fn flame_from_dump(
 
     // position
     if let Some(pos) = read_array3(flame_json.get("position").unwrap()) {
-        effect.position = Vector3::new(pos[0], pos[1], pos[2]);
+        effect.position = Vec3::new(pos[0], pos[1], pos[2]);
     }
 
     // scalar fields
@@ -112,11 +113,11 @@ pub fn flame_from_dump(
     // rotation [w, x, y, z] (4-element array)
     if let Some(rot) = flame_json.get("rotation").and_then(|v| v.as_array()) {
         if rot.len() >= 4 {
-            effect.rotation = cgmath::Quaternion::new(
-                rot[0].as_f64().unwrap() as f32,
+            effect.rotation = Quat::from_xyzw(
                 rot[1].as_f64().unwrap() as f32,
                 rot[2].as_f64().unwrap() as f32,
                 rot[3].as_f64().unwrap() as f32,
+                rot[0].as_f64().unwrap() as f32,
             );
         }
     }
@@ -124,16 +125,19 @@ pub fn flame_from_dump(
     // wind_direction [x, y] (2-element array)
     if let Some(wd) = flame_json.get("wind_direction").and_then(|v| v.as_array()) {
         if wd.len() >= 2 {
-            effect.wind.direction = Vector2::new(
+            effect.wind.direction = Vec2::new(
                 wd[0].as_f64().unwrap() as f32,
                 wd[1].as_f64().unwrap() as f32,
             );
         }
     }
 
-    // emitter_kind from integer
-    if let Some(v) = flame_json.get("emitter_kind").and_then(|f| f.as_i64()) {
-        effect.emitter.kind = v as u32;
+    let dumped_emitter_kind = flame_json
+        .get("emitter_kind")
+        .and_then(|f| f.as_u64())
+        .and_then(|value| FlameEmitterKind::from_shader_value(value as u32));
+    if let Some(kind) = dumped_emitter_kind {
+        effect.emitter.kind = kind;
     }
 
     // use_blackbody from boolean
@@ -155,7 +159,7 @@ pub fn flame_from_dump(
 
     // light_position_world
     if let Some(lp) = read_array3(flame_json.get("light_position_world").unwrap()) {
-        effect.light_position_world = Vector3::new(lp[0], lp[1], lp[2]);
+        effect.light_position_world = Vec3::new(lp[0], lp[1], lp[2]);
     }
 
     // self_shadow_strength

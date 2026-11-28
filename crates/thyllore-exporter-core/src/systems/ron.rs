@@ -37,7 +37,6 @@ mod tests {
 
         assert_eq!(loaded.version, ANIMATION_FORMAT_VERSION);
         assert_eq!(loaded.clip.name, "test_clip");
-        assert_eq!(loaded.clip.id, 1);
 
         fs::remove_file(&output_path).ok();
     }

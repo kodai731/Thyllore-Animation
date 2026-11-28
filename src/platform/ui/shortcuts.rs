@@ -12,7 +12,7 @@ use crate::platform::ui::theme::{
     draw_raised_window_frame, property_label, push_raised_window_style, section_header,
     SectionDefault,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 const SHORTCUTS_WINDOW_TITLE: &str = "Keyboard Shortcuts";
 const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
@@ -24,7 +24,7 @@ const SHORTCUT_SCOPES: [ShortcutScope; 5] = [
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShortcutScope {
+pub(super) enum ShortcutScope {
     Global,
     SceneView,
     Hierarchy,
@@ -45,7 +45,7 @@ impl ShortcutScope {
 }
 
 #[derive(Clone, Debug)]
-pub struct ShortcutEntry {
+pub(super) struct ShortcutEntry {
     pub scope: ShortcutScope,
     pub chord: String,
     pub label: &'static str,
@@ -137,7 +137,7 @@ fn imgui_key_name(key: imgui::Key) -> &'static str {
     }
 }
 
-pub fn collect_shortcuts() -> Vec<ShortcutEntry> {
+pub(super) fn collect_shortcuts() -> Vec<ShortcutEntry> {
     let global = default_bindings().into_iter().map(|binding| ShortcutEntry {
         scope: match binding.scope {
             BindingScope::Global => ShortcutScope::Global,

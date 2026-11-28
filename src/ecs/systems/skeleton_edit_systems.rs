@@ -1,8 +1,6 @@
-use cgmath::{Vector3, Vector4};
+use glam::{UVec4, Vec3, Vec4};
 use thyllore_model_core::{BoneRemap, SkinData, INFLUENCES_PER_VERTEX};
 
-use crate::animation::editable::SourceClipId;
-use crate::animation::{BoneId, ConstraintType, Skeleton, SkeletonId};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{Constrained, ConstraintSet, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{
@@ -14,11 +12,13 @@ use crate::ecs::storage::Component;
 use crate::ecs::systems::avatar_setup_systems::{
     refresh_avatar_validation, skeleton_to_bone_inputs,
 };
-use crate::ecs::systems::humanoid_rig_systems::{invalidate_humanoid_rig, sync_humanoid_rig};
+use crate::ecs::systems::humanoid_rig_systems::rebuild_humanoid_rig;
 use crate::ecs::systems::spring_bone_edit_systems::reset_spring_bone_state;
 use crate::ecs::world::{Entity, World};
-use crate::exporter::fbx_exporter::clusters_from_skin_data;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::{BoneId, ConstraintType, Skeleton, SkeletonId};
+use thyllore_exporter_core::fbx::clusters_from_skin_data;
+use thyllore_vulkan_core::resource::{GraphicsResources, MeshBuffer};
 
 fn edited_skeleton_mut(assets: &mut AssetStorage) -> anyhow::Result<(SkeletonId, &mut Skeleton)> {
     assets
@@ -43,7 +43,7 @@ pub fn add_skeleton_bone(
     graphics: &GraphicsResources,
     parent_name: &str,
     name: &str,
-    local_offset: Vector3<f32>,
+    local_offset: Vec3,
 ) -> anyhow::Result<BoneId> {
     let before = capture_skeleton_snapshot(world, assets, graphics);
 
@@ -62,7 +62,7 @@ pub fn set_skeleton_bone_offset(
     assets: &mut AssetStorage,
     graphics: &GraphicsResources,
     bone_name: &str,
-    local_offset: Vector3<f32>,
+    local_offset: Vec3,
 ) -> anyhow::Result<()> {
     let (_, skeleton) = edited_skeleton_mut(assets)?;
     let bone_id = resolve_bone(skeleton, bone_name)?;
@@ -94,9 +94,20 @@ pub fn remove_skeleton_bone(
     Ok(())
 }
 
+fn edit_skin_of_skeleton(mesh: &mut MeshBuffer, skeleton_id: SkeletonId) -> Option<&mut SkinData> {
+    let is_skinned_by_skeleton = mesh
+        .skin_data()
+        .is_some_and(|skin| skin.skeleton_id == skeleton_id);
+    if !is_skinned_by_skeleton {
+        return None;
+    }
+
+    mesh.edit_skin_data()
+}
+
 /// Removes a bone with its descendants, folds their skin weights into the parent and renumbers every
 /// bone reference in the world; returns the number of bones removed. The caller refreshes and records.
-pub fn remove_bone_subtree(
+pub(crate) fn remove_bone_subtree(
     world: &mut World,
     assets: &mut AssetStorage,
     graphics: &mut GraphicsResources,
@@ -106,11 +117,7 @@ pub fn remove_bone_subtree(
     let removed = skeleton.remove_bone(bone_id)?;
 
     for mesh in graphics.meshes.iter_mut() {
-        if let Some(skin) = mesh
-            .skin_data
-            .as_mut()
-            .filter(|s| s.skeleton_id == skeleton_id)
-        {
+        if let Some(skin) = edit_skin_of_skeleton(mesh, skeleton_id) {
             merge_removed_bone_weights(skin, &removed.removed, removed.parent, &removed.remap);
         }
     }
@@ -119,7 +126,7 @@ pub fn remove_bone_subtree(
 }
 
 /// The state a skeleton edit can touch, or `None` when no skeleton is loaded.
-pub fn capture_skeleton_snapshot(
+pub(crate) fn capture_skeleton_snapshot(
     world: &World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
@@ -132,10 +139,7 @@ pub fn capture_skeleton_snapshot(
         .iter()
         .enumerate()
         .filter_map(|(mesh_index, mesh)| {
-            let skin = mesh
-                .skin_data
-                .as_ref()
-                .filter(|s| s.skeleton_id == skeleton_id)?;
+            let skin = mesh.skin_data().filter(|s| s.skeleton_id == skeleton_id)?;
             Some(SkinSnapshot {
                 mesh_index,
                 bone_indices: skin.bone_indices.clone(),
@@ -205,8 +209,7 @@ pub fn restore_skeleton_snapshot(
         let Some(skin) = graphics
             .meshes
             .get_mut(skin_snapshot.mesh_index)
-            .and_then(|mesh| mesh.skin_data.as_mut())
-            .filter(|s| s.skeleton_id == skeleton_id)
+            .and_then(|mesh| edit_skin_of_skeleton(mesh, skeleton_id))
         else {
             msg_error!(
                 "Skeleton snapshot names graphics mesh {} which has no skin for this skeleton",
@@ -221,7 +224,7 @@ pub fn restore_skeleton_snapshot(
     {
         let mut clips = world.resource_mut::<ClipLibrary>();
         for (id, tracks) in snapshot.clip_tracks {
-            if let Some(clip) = clips.get_mut(id) {
+            if let Some(clip) = clips.rebind_mut(id) {
                 clip.tracks = tracks;
             }
         }
@@ -256,7 +259,7 @@ fn restore_owned_components<T: Component, M: Component + Default>(
     }
 }
 
-pub fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
+pub(super) fn restore_skin_weights(skin: &mut SkinData, snapshot: &SkinSnapshot) {
     if snapshot.bone_indices.len() != skin.bone_indices.len() {
         msg_error!(
             "Skeleton snapshot has {} skinned vertices for mesh {}, the mesh has {}",
@@ -306,7 +309,7 @@ fn drop_bone_state_beyond(world: &mut World, bone_count: BoneId) {
 }
 
 /// Gives the removed subtree's weight to the parent it hung from and renumbers the surviving bones.
-pub fn merge_removed_bone_weights(
+pub(super) fn merge_removed_bone_weights(
     skin: &mut SkinData,
     removed: &[BoneId],
     parent: Option<BoneId>,
@@ -325,8 +328,8 @@ pub fn merge_removed_bone_weights(
         merge_duplicate_influences(&mut influences);
         normalize_influences(&mut influences);
 
-        *indices = Vector4::new(0, 0, 0, 0);
-        *weights = Vector4::new(0.0, 0.0, 0.0, 0.0);
+        *indices = UVec4::new(0, 0, 0, 0);
+        *weights = Vec4::new(0.0, 0.0, 0.0, 0.0);
         for (slot, (bone, weight)) in influences.into_iter().take(4).enumerate() {
             indices[slot] = bone;
             weights[slot] = weight;
@@ -369,7 +372,7 @@ fn remap_bone_references(world: &mut World, remap: &BoneRemap) {
     let mut clips = world.resource_mut::<ClipLibrary>();
     let clip_ids: Vec<SourceClipId> = clips.all_clip_ids().copied().collect();
     for id in clip_ids {
-        let Some(clip) = clips.get_mut(id) else {
+        let Some(clip) = clips.rebind_mut(id) else {
             continue;
         };
         let tracks = std::mem::take(&mut clip.tracks);
@@ -555,9 +558,9 @@ pub fn refresh_after_skeleton_edit(
         return;
     };
     let skeleton = &skeleton_asset.skeleton;
-    let rest_globals = crate::ecs::compute_pose_global_transforms(
+    let rest_globals = thyllore_anim_core::compute_pose_global_transforms(
         skeleton,
-        &crate::ecs::create_pose_from_rest(skeleton),
+        &thyllore_anim_core::create_pose_from_rest(skeleton),
     );
     if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
         bone_gizmo.cached_skeleton_id = Some(skeleton_asset.skeleton_id);
@@ -576,13 +579,6 @@ pub fn refresh_after_skeleton_edit(
 
     sync_fbx_clusters(world, assets, graphics, skeleton_asset.skeleton_id);
     rebuild_humanoid_rig(world, assets);
-}
-
-/// The humanoid rig caches the retarget context and the track-name table of the skeleton it was built
-/// from, so a structural edit rebuilds it before anything in the same frame reads it.
-fn rebuild_humanoid_rig(world: &mut World, assets: &AssetStorage) {
-    invalidate_humanoid_rig(world);
-    sync_humanoid_rig(world, assets);
 }
 
 /// A skeleton edit must leave a mapped humanoid rig intact; every issue the validation finds is logged.
@@ -610,11 +606,7 @@ fn sync_fbx_clusters(
     let mut fbx_cache = world.resource_mut::<FbxModelCache>();
 
     for (mesh_index, mesh) in graphics.meshes.iter().enumerate() {
-        let Some(skin) = mesh
-            .skin_data
-            .as_ref()
-            .filter(|s| s.skeleton_id == skeleton_id)
-        else {
+        let Some(skin) = mesh.skin_data().filter(|s| s.skeleton_id == skeleton_id) else {
             continue;
         };
         let Some(fbx_data_index) = fbx_cache.fbx_data_index(mesh_index) else {

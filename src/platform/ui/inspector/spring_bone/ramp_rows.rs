@@ -17,13 +17,13 @@ use crate::platform::ui::ui_rows::{ChoiceOption, ListRows, UiRow};
 
 /// Where a ramp item starts: a joint of the selected bone (scope widens it) or the bone above chain roots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RampOrigin {
+pub(super) enum RampOrigin {
     Joint,
     ChildChains,
 }
 
 #[derive(Clone)]
-pub struct RampFormView {
+pub(super) struct RampFormView {
     pub entity: Entity,
     pub origin: RampOrigin,
     /// The chain Load reads from
@@ -36,7 +36,7 @@ pub struct RampFormView {
 }
 
 impl RampFormView {
-    pub fn new(
+    pub(super) fn new(
         entity: Entity,
         origin: RampOrigin,
         chain_id: SpringChainId,
@@ -59,7 +59,7 @@ impl RampFormView {
     }
 
     /// The ramp with the forces the two forms currently select.
-    pub fn ramp_param(&self) -> ChainRamp {
+    pub(super) fn ramp_param(&self) -> ChainRamp {
         ChainRamp {
             root: SpringJointParam {
                 force: self.root_force.into(),
@@ -96,7 +96,7 @@ static RAMP_SCALARS: LazyLock<Vec<ScalarParam<RampFormView>>> = LazyLock::new(||
 });
 
 /// One ramp form per joint of the bone, plus one for the chains hanging under it.
-fn ramp_items(_: &crate::ecs::World, view: &BoneSpringView) -> Vec<(String, RampFormView)> {
+fn ramp_items(_: &crate::ecs::world::World, view: &BoneSpringView) -> Vec<(String, RampFormView)> {
     let form_for = |origin: RampOrigin, chain_id: SpringChainId, targets: &RampTargets| {
         RampFormView::new(
             view.entity,
@@ -127,7 +127,7 @@ fn ramp_items(_: &crate::ecs::World, view: &BoneSpringView) -> Vec<(String, Ramp
     items
 }
 
-pub fn ramp_list_row() -> UiRow<BoneSpringView> {
+pub(super) fn ramp_list_row() -> UiRow<BoneSpringView> {
     UiRow::List(Box::new(ListRows::<BoneSpringView, RampFormView> {
         title: "Ramp",
         items: ramp_items,
@@ -241,7 +241,7 @@ fn ramp_action_rows() -> Vec<UiRow<RampFormView>> {
     ]
 }
 
-pub fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
+pub(super) fn ramp_form_rows(form: &RampFormView) -> Vec<UiRow<RampFormView>> {
     let mut rows = ramp_end_rows(
         "Root",
         &form.root_force,

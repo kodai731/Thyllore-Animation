@@ -6,8 +6,7 @@ paths:
 
 # Logging
 
-- The logger and its macros are defined in `crates/thyllore-log-core/src/logger.rs`; `src/logger/` re-exports
-  them
+- The logger and its macros are defined in `crates/thyllore-log-core/src/logger.rs`
 - Logs are output to `log/log_N.txt`
 - Do NOT output to standard console; use the log files instead
 
@@ -25,7 +24,7 @@ In `src/` the macros are in scope as `crate::log!` etc.; a crate imports them wi
 ## Prohibited
 
 Do NOT use the Rust `log` crate macros (`log::debug!()`, `log::info!()`, `log::warn!()`, `log::error!()`,
-`log::trace!()`) anywhere except the Vulkan validation callback in `src/app/init/instance.rs`. That callback
+`log::trace!()`) anywhere except the Vulkan validation callback in `crates/thyllore-vulkan-core/src/core/instance.rs`. That callback
 is the single place that echoes to the console (`env_logger`, enabled with `RUST_LOG=debug`) in addition to
 the log file; every other message goes to the log file only.
 

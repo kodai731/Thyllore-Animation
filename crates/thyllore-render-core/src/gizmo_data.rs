@@ -1,4 +1,4 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 use thyllore_anim_core::AnimationType;
 use thyllore_model_core::SkeletonId;
 
@@ -16,7 +16,7 @@ pub struct BoneGizmoData {
     pub in_front: bool,
     pub distance_scaling_enabled: bool,
     pub distance_scaling_factor: f32,
-    pub cached_global_transforms: Vec<Matrix4<f32>>,
+    pub cached_global_transforms: Vec<Mat4>,
     pub cached_skeleton_id: Option<SkeletonId>,
     pub cached_animation_type: AnimationType,
     pub bone_local_offsets: Vec<[f32; 3]>,

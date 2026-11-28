@@ -1,6 +1,6 @@
 use crate::ecs::resource::{AutoRigState, AutoRigStatus};
 use crate::ecs::world::Entity;
-use crate::grpc::{GrpcRequest, GrpcThreadHandle};
+use thyllore_grpc_client::{GrpcRequest, GrpcThreadHandle};
 
 pub fn auto_rig_submit(
     state: &mut AutoRigState,
@@ -29,10 +29,12 @@ pub fn auto_rig_send_generate(state: &mut AutoRigState, handle: &GrpcThreadHandl
 
     state.status = AutoRigStatus::Rigging;
 
-    handle.send(GrpcRequest::GenerateRig(crate::grpc::RiggingRequest {
-        glb_data,
-        num_sample_points: 65536,
-    }));
+    handle.send(GrpcRequest::GenerateRig(
+        thyllore_grpc_client::RiggingRequest {
+            glb_data,
+            num_sample_points: 65536,
+        },
+    ));
 }
 
 pub fn auto_rig_cancel(state: &mut AutoRigState) {

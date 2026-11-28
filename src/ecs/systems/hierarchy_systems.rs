@@ -1,7 +1,7 @@
-use crate::animation::{BoneId, Skeleton};
 use crate::ecs::component::{EditorDisplay, EntityIcon};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Children, Entity, Name, Parent, World};
+use thyllore_anim_core::{BoneId, Skeleton};
 
 #[derive(Clone, Debug)]
 pub struct HierarchyEntry {
@@ -49,8 +49,8 @@ fn collect_hierarchy_entries(
 
     let expanded = editor_display.map(|ed| ed.expanded).unwrap_or(false);
 
-    let children = world.get_component::<Children>(entity);
-    let has_children = children.map(|c| !c.0.is_empty()).unwrap_or(false);
+    let shown_children = find_children_shown_in_hierarchy(world, entity);
+    let has_children = !shown_children.is_empty();
 
     let selected = hierarchy_is_selected(state, entity);
 
@@ -65,12 +65,29 @@ fn collect_hierarchy_entries(
     });
 
     if expanded {
-        if let Some(children) = children {
-            for &child in &children.0 {
-                collect_hierarchy_entries(world, state, child, depth + 1, entries);
-            }
+        for child in shown_children {
+            collect_hierarchy_entries(world, state, child, depth + 1, entries);
         }
     }
+}
+
+fn find_children_shown_in_hierarchy(world: &World, entity: Entity) -> Vec<Entity> {
+    let Some(children) = world.get_component::<Children>(entity) else {
+        return Vec::new();
+    };
+
+    children
+        .0
+        .iter()
+        .copied()
+        .filter(|child| !is_hidden_in_hierarchy(world, *child))
+        .collect()
+}
+
+fn is_hidden_in_hierarchy(world: &World, entity: Entity) -> bool {
+    world
+        .get_component::<EditorDisplay>(entity)
+        .is_some_and(|display| display.hidden_in_hierarchy)
 }
 
 pub fn toggle_entity_expand(world: &mut World, entity: Entity) {
@@ -168,7 +185,7 @@ pub fn hierarchy_is_bone_expanded(state: &HierarchyState, bone_id: BoneId) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::Bone;
+    use thyllore_anim_core::Bone;
 
     fn create_world_with_nested_entities() -> (World, Entity, Entity, Entity) {
         let mut world = World::new();
@@ -218,6 +235,26 @@ mod tests {
         let state = world.resource::<HierarchyState>();
         let rows = query_hierarchy_tree(&world, &state);
         assert!(rows.iter().all(|row| row.entity != leaf));
+    }
+
+    #[test]
+    fn entity_hidden_in_hierarchy_has_no_row_and_is_not_counted_as_a_child() {
+        let (mut world, root, middle, _) = create_world_with_nested_entities();
+        world.insert_component(
+            middle,
+            EditorDisplay {
+                hidden_in_hierarchy: true,
+                ..Default::default()
+            },
+        );
+        toggle_entity_expand(&mut world, root);
+
+        let state = world.resource::<HierarchyState>();
+        let rows = query_hierarchy_tree(&world, &state);
+
+        let visible: Vec<Entity> = rows.iter().map(|row| row.entity).collect();
+        assert_eq!(visible, vec![root]);
+        assert!(!rows[0].has_children);
     }
 
     fn create_chain_skeleton() -> Skeleton {

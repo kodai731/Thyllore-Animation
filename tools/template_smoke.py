@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from engine_harness import dood_wrap, engine_env, engine_path, repo_root
+from engine_harness import dood_wrap, engine_env, engine_path, render_model_scene, repo_root
 
 MODEL_PATH = "assets/models/test_humanoid/test_humanoid.fbx"
 HIPS_TY_STANDARD = 0.1
@@ -262,14 +262,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     scene_path = out_dir / "scene.ron"
-    scene_content = f"""(
-    version: 8,
-    model: (
-        path: "{root / MODEL_PATH}",
-    ),
-)
-"""
-    scene_path.write_text(scene_content)
+    scene_path.write_text(render_model_scene(root / MODEL_PATH))
 
     proc1 = run_engine_first(out_dir, scene_path, args.dood)
     last_line = proc1.stdout.strip().splitlines()[-1] if proc1.stdout.strip() else ""
@@ -287,14 +280,7 @@ def main() -> None:
         return
 
     scene_rt_path = out_dir / "scene_rt.ron"
-    scene_rt_content = f"""(
-    version: 8,
-    model: (
-        path: "{out_dir / 'exported.fbx'}",
-    ),
-)
-"""
-    scene_rt_path.write_text(scene_rt_content)
+    scene_rt_path.write_text(render_model_scene(out_dir / "exported.fbx"))
 
     proc2 = run_engine_second(out_dir, scene_rt_path, args.dood)
     last_line2 = proc2.stdout.strip().splitlines()[-1] if proc2.stdout.strip() else ""

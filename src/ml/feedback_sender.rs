@@ -2,15 +2,15 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 
-use thyllore_ml_core::copilot::v2::forecast;
 use thyllore_ml_core::degrade::{now_unix, DegradeGate};
 use thyllore_ml_core::feedback::{
     build_feedback_record, channel_for_property_type, hash_model_file, send_feedback_batch,
     FeedbackEndpoint, FeedbackRecord, FeedbackRecordInputs, FeedbackResponse,
 };
+use thyllore_ml_core::v2::forecast;
 
-use crate::animation::editable::PropertyType;
 use crate::ecs::component::scalar_channel_for_property;
+use thyllore_anim_core::editable::PropertyType;
 
 pub const FEEDBACK_ENDPOINT_ENV: &str = "THYLLORE_FEEDBACK_ENDPOINT";
 pub const INGEST_TOKEN_ENV: &str = "THYLLORE_INGEST_TOKEN";

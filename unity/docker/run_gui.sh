@@ -17,20 +17,25 @@ FACING="+z"
 
 usage() {
     cat <<USAGE
-Usage: $0 --model PATH.fbx [--fresh] [--setup-only] [--software-gl]
+Usage: $0 --model PATH.fbx|PATH.vrm [--fresh] [--setup-only] [--software-gl]
           [--capture [--facing +z|-z]]
 
-Opens the Unity Editor GUI (GameCI 2022.3.22f1 image, VRChat SDK via vrc-get)
-on the host display with a scene that already contains the model, the
-sidecar applied (Humanoid, visemes, blink, PhysBone) and an Animator whose
-controller holds every .anim the engine exported next to the model
-(<model>_unity/*.anim), so each expression preset can be scrubbed in the
-Animation window. The project persists in target/unity_gui so later runs
-only resync the model and the editor scripts.
+Opens the Unity Editor GUI (GameCI 2022.3.22f1 image, VRChat SDK via vrc-get,
+UniVRM) on the host display with a scene that already contains the model.
+For an .fbx the sidecar is applied (Humanoid, visemes, blink, PhysBone) and an
+Animator whose controller holds every .anim the engine exported next to the
+model (<model>_unity/*.anim), so each expression preset can be scrubbed in the
+Animation window. For a .vrm UniVRM imports it as is, the batch step logs
+VRMCHECK PASS/FAIL lines for the humanoid mapping, colliders and springs
+(target/unity_gui/setup.log), and the Scene view draws every spring joint
+(yellow) and collider (cyan) as a gizmo. The project persists in
+target/unity_gui so later runs only resync the model and the editor scripts.
 
   --model PATH.fbx   model edited in the engine; <stem>.* (sidecar JSON,
                      materials), <stem>_unity/ (.anim) and image files next
                      to it are copied into Assets/Avatar
+  --model PATH.vrm   VRM 1.0 exported by the engine or the Blender addon;
+                     only the .vrm is copied
   --fresh            delete the cached Unity project first (re-creates it and
                      reinstalls the VRChat SDK, several minutes)
   --setup-only       build the scene in batch mode and exit without a window
@@ -79,7 +84,19 @@ fi
 MODEL_DIR="$(dirname "$MODEL_ABS")"
 MODEL_FILE="$(basename "$MODEL_ABS")"
 MODEL_STEM="${MODEL_FILE%.*}"
+MODEL_EXT="${MODEL_FILE##*.}"
 ASSET_DIR="Assets/Avatar"
+UNIVRM_VERSION="v0.131.2"
+
+case "${MODEL_EXT,,}" in
+    fbx) MODEL_KIND=fbx ;;
+    vrm) MODEL_KIND=vrm ;;
+    *) echo "model must be .fbx or .vrm: $MODEL_FILE" >&2; exit 2 ;;
+esac
+if [[ "$CAPTURE" -eq 1 && "$MODEL_KIND" == vrm ]]; then
+    echo "--capture needs the sidecar expressions of an .fbx model" >&2
+    exit 2
+fi
 
 docker build -t "$IMAGE_TAG" "$DOCKER_DIR"
 
@@ -122,12 +139,29 @@ ensure_vrchat_sdk() {
     run_in_container "$IMAGE_TAG" vrc-get install com.vrchat.avatars --yes
 }
 
+ensure_univrm() {
+    python3 - "$PROJECT_DIR/Packages/manifest.json" "$UNIVRM_VERSION" <<'PYEOF'
+import json, sys
+path, version = sys.argv[1], sys.argv[2]
+manifest = json.load(open(path))
+packages = {
+    "com.vrmc.gltf": f"https://github.com/vrm-c/UniVRM.git?path=/Packages/UniGLTF#{version}",
+    "com.vrmc.vrm": f"https://github.com/vrm-c/UniVRM.git?path=/Packages/VRM10#{version}",
+}
+if all(manifest["dependencies"].get(name) == url for name, url in packages.items()):
+    sys.exit(0)
+manifest["dependencies"].update(packages)
+json.dump(manifest, open(path, "w"), indent=2)
+print("installing UniVRM " + version)
+PYEOF
+}
+
 sync_scripts() {
     bash "$REPO_ROOT/unity/sync_package.sh" "$WORK_DIR" >/dev/null
     local editor_dir="$PROJECT_DIR/Assets/Editor"
     rm -rf "$editor_dir" "$PROJECT_DIR/Assets/Thyllore" "$PROJECT_DIR/Assets/Thyllore.meta"
     mkdir -p "$editor_dir"
-    cp "$DOCKER_DIR/Editor/"*.cs "$editor_dir/"
+    cp "$DOCKER_DIR/Editor/"*.cs "$DOCKER_DIR/Editor/"*.asmdef "$editor_dir/"
 }
 
 sync_model() {
@@ -135,6 +169,9 @@ sync_model() {
     rm -rf "$PROJECT_DIR/$ASSET_DIR" "$PROJECT_DIR/$ASSET_DIR.meta"
     mkdir -p "$PROJECT_DIR/$ASSET_DIR"
     cp "$MODEL_ABS" "$PROJECT_DIR/$ASSET_DIR/"
+    if [[ "$MODEL_KIND" == vrm ]]; then
+        return
+    fi
     find "$MODEL_DIR" -maxdepth 1 -type f \
         \( -name "$MODEL_STEM.*" -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.tga' -o -iname '*.bmp' -o -iname '*.tif' \) \
         -exec cp {} "$PROJECT_DIR/$ASSET_DIR/" \;
@@ -164,6 +201,10 @@ PYEOF
 }
 
 build_scene() {
+    if [[ "$MODEL_KIND" == vrm ]]; then
+        build_vrm_scene
+        return
+    fi
     echo "building the avatar scene (batch)"
     run_in_container \
         -e THYLLORE_FBX_ASSET="$ASSET_DIR/$MODEL_FILE" \
@@ -173,6 +214,16 @@ build_scene() {
         unity-editor -nographics -logFile /work/setup.log \
             -projectPath /work/project -executeMethod Thyllore.Avatar.SceneSetup.Run
     grep -E "error CS|SCENESETUP" "$WORK_DIR/setup.log" | grep -v "com.vrchat.base" || true
+}
+
+build_vrm_scene() {
+    echo "building the VRM scene and checking it (batch)"
+    run_in_container \
+        -e THYLLORE_VRM_ASSET="$ASSET_DIR/$MODEL_FILE" \
+        "$IMAGE_TAG" \
+        unity-editor -nographics -logFile /work/setup.log \
+            -projectPath /work/project -executeMethod Thyllore.Avatar.VrmSceneSetup.Run
+    grep -E "error CS|VRMCHECK" "$WORK_DIR/setup.log" | grep -v "com.vrchat.base" || true
 }
 
 capture_faces() {
@@ -213,6 +264,7 @@ launch_gui() {
 
 ensure_project
 ensure_vrchat_sdk
+ensure_univrm
 sync_scripts
 sync_model
 build_scene

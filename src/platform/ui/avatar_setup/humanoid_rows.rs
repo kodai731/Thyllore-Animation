@@ -3,20 +3,20 @@ use crate::ecs::resource::AvatarSetupState;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use crate::platform::ui::ui_rows::{ChoiceOption, NamedChoice, UiRow};
-use thyllore_avatar_core::humanoid::components::mapping::UnresolvedRole;
-use thyllore_avatar_core::humanoid::components::role::{HumanoidRole, REQUIRED};
+use thyllore_avatar_core::humanoid::UnresolvedRole;
+use thyllore_avatar_core::humanoid::{HumanoidRole, REQUIRED};
 
 const NO_BONE_LABEL: &str = "(none)";
 
 #[derive(Clone)]
-pub struct HumanoidView {
+pub(super) struct HumanoidView {
     pub bones: Vec<(usize, String)>,
     pub mapping: std::collections::BTreeMap<HumanoidRole, usize>,
     pub unresolved: Vec<UnresolvedRole>,
 }
 
 impl HumanoidView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         Self {
             bones: state
                 .bones
@@ -30,7 +30,7 @@ impl HumanoidView {
     }
 }
 
-pub fn rows() -> Vec<UiRow<HumanoidView>> {
+pub(super) fn rows() -> Vec<UiRow<HumanoidView>> {
     vec![
         UiRow::Action {
             label: "Save mapping",

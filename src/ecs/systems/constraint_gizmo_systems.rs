@@ -1,13 +1,13 @@
-use crate::animation::{BoneId, ConstraintType, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::ConstraintGizmoData;
+use crate::ecs::resource::ConstraintGizmoData;
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 use crate::ecs::world::World;
 use crate::hooks::model_load::LoadedModel;
+use thyllore_anim_core::{BoneId, ConstraintType, Skeleton};
 
-use cgmath::Matrix4;
+use glam::Mat4;
 
 const COLOR_POSITION: [f32; 3] = [0.0, 0.8, 0.8];
 const COLOR_ROTATION: [f32; 3] = [0.2, 0.9, 0.2];
@@ -23,7 +23,7 @@ const ARROW_SIZE: f32 = 0.02;
 pub fn build_constraint_gizmo_mesh(
     constraint_set: &ConstraintSet,
     skeleton: &Skeleton,
-    global_transforms: &[Matrix4<f32>],
+    global_transforms: &[Mat4],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
     mesh: &mut LineMesh,

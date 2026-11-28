@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-pub const REC709_LUMA_WEIGHTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
+pub(crate) const REC709_LUMA_WEIGHTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
 const PERCENTILES: [u8; 7] = [1, 10, 40, 50, 90, 99, 100];
 
 /// Distribution of one luminance channel over an image, for comparing views or exposure settings.

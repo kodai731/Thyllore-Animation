@@ -15,7 +15,7 @@ pub use playback::{
 };
 pub use scene_record::TimelineSceneRecord;
 pub use view::{
-    clip_drag_preview_times, timeline_apply_fit_zoom, timeline_apply_selection,
-    timeline_select_clip, timeline_set_keyframe_selection, timeline_toggle_track_expanded,
-    timeline_zoom_in, timeline_zoom_out,
+    clip_drag_preview_times, timeline_apply_awaited_fit_zoom, timeline_apply_fit_zoom,
+    timeline_apply_selection, timeline_select_clip, timeline_set_keyframe_selection,
+    timeline_toggle_track_expanded, timeline_zoom_in, timeline_zoom_out,
 };

@@ -1,9 +1,10 @@
-use crate::animation::editable::{
-    compute_tween, KeyframeId, PropertyCurve, PropertyType, TweenKind,
-};
+use super::view::DrawnCurve;
 use crate::ecs::resource::{CurveEditorState, CurveSelectedKeyframe, CurveTrackRef, TweenSession};
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
 use crate::ecs::world::World;
+use thyllore_anim_core::editable::{
+    compute_tween, KeyframeId, PropertyCurve, PropertyType, TweenKind,
+};
 
 const TWEEN_BUTTONS: &[(&str, TweenKind)] = &[
     ("Blend", TweenKind::BlendToNeighbor),
@@ -41,7 +42,7 @@ pub(super) fn build_tween_controls(
     ui: &imgui::Ui,
     world: &World,
     editor_state: &mut CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     track_ref: CurveTrackRef,
 ) {
     match editor_state.tween.as_mut() {
@@ -85,14 +86,14 @@ fn build_tween_buttons(ui: &imgui::Ui, editor_state: &mut CurveEditorState) {
 pub(super) fn apply_tween(
     world: &World,
     editor_state: &mut CurveEditorState,
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    curves: &[DrawnCurve<'_>],
     track_ref: CurveTrackRef,
 ) {
     let Some(session) = editor_state.tween.take() else {
         return;
     };
 
-    for (curve, _, _) in curves {
+    for DrawnCurve { curve, .. } in curves {
         for (keyframe_id, new_value) in
             compute_curve_tween(curve, &editor_state.selected_keyframes, &session)
         {
@@ -132,7 +133,7 @@ pub(super) fn discard_tween_on_selection_change(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::EditableKeyframe;
+    use thyllore_anim_core::editable::EditableKeyframe;
 
     fn make_curve() -> PropertyCurve {
         PropertyCurve::from_keyframes(

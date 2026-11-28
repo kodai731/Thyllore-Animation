@@ -3,17 +3,17 @@ use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::ecs::world::World;
 use anyhow::{anyhow, Result};
-use thyllore_avatar_core::cloth_setup::components::chain_gen::{ChainGenRequest, ChainGenSettings};
-use thyllore_avatar_core::cloth_setup::components::hidden_mask::HiddenMaskParams;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
+use thyllore_avatar_core::cloth_setup::HiddenMaskParams;
+use thyllore_avatar_core::cloth_setup::{apply_setting_assignments, setting_names};
+use thyllore_avatar_core::cloth_setup::{
+    attachment_or_default, ChainGenRequest, ChainGenSettings, RootAttachment,
 };
-use thyllore_avatar_core::cloth_setup::systems::chain_gen;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
+use thyllore_avatar_core::humanoid::HumanoidRole;
 use thyllore_cli_core::scalar_assignment_parse;
 
 #[derive(Debug)]
-pub struct GenerateChainBones {
+pub(super) struct GenerateChainBones {
     request: ChainGenRequest,
 }
 
@@ -46,16 +46,24 @@ pub(super) fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn Ba
         )));
     };
 
-    let setting_names = chain_gen::setting_names();
-    let assignments: Vec<(String, f32)> = match parts
-        .map(|part| scalar_assignment_parse(part.trim(), &setting_names))
+    let (attachment_parts, setting_parts): (Vec<&str>, Vec<&str>) = parts
+        .map(str::trim)
+        .partition(|part| part.starts_with(ATTACHMENT_KEY));
+    let attachment = match attachment_parse(&attachment_parts) {
+        Ok(attachment) => attachment,
+        Err(e) => return Some(Err(e)),
+    };
+    let known_setting_names = setting_names();
+    let assignments: Vec<(String, f32)> = match setting_parts
+        .iter()
+        .map(|part| scalar_assignment_parse(part, &known_setting_names))
         .collect::<std::result::Result<_, String>>()
     {
         Ok(assignments) => assignments,
         Err(message) => return Some(Err(anyhow!("generate_chain_bones: {message}"))),
     };
     let mut settings = ChainGenSettings::default();
-    if let Err(e) = chain_gen::apply_setting_assignments(&mut settings, &assignments) {
+    if let Err(e) = apply_setting_assignments(&mut settings, &assignments) {
         return Some(Err(e));
     }
     if settings.joint_count == 0 {
@@ -67,13 +75,31 @@ pub(super) fn generate_chain_bones_parse(text: &str) -> Option<Result<Box<dyn Ba
     let request = ChainGenRequest {
         target,
         root,
+        attachment: attachment_or_default(Some(root), attachment),
         settings,
     };
     Some(Ok(Box::new(GenerateChainBones { request })))
 }
 
+fn attachment_parse(parts: &[&str]) -> Result<Option<RootAttachment>> {
+    let [part] = parts else {
+        return match parts {
+            [] => Ok(None),
+            _ => Err(anyhow!(
+                "generate_chain_bones: attachment given more than once"
+            )),
+        };
+    };
+    let value = &part[ATTACHMENT_KEY.len()..];
+    serde_json::from_value::<RootAttachment>(serde_json::Value::String(value.to_string()))
+        .map(Some)
+        .map_err(|_| {
+            anyhow!("generate_chain_bones: attachment must be cap or ring, got \"{value}\"")
+        })
+}
+
 #[derive(Debug)]
-pub struct SubmeshRoleAction {
+pub(super) struct SubmeshRoleAction {
     pub(super) role: SubmeshRole,
     pub(super) target: SubmeshSelector,
 }
@@ -121,7 +147,7 @@ pub(super) fn submesh_role_spec_parse(spec: &str) -> Result<SubmeshRoleAction> {
 }
 
 #[derive(Debug)]
-pub struct HideCoveredSkin {
+pub(super) struct HideCoveredSkin {
     params: HiddenMaskParams,
 }
 
@@ -176,7 +202,9 @@ pub(super) fn hide_covered_skin_parse(text: &str) -> Option<Result<Box<dyn Batch
     })
 }
 
-const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root humanoid role>[,<setting>=<value>...]";
+const ATTACHMENT_KEY: &str = "attachment=";
+
+const GENERATE_CHAIN_BONES_USAGE: &str = "generate_chain_bones expects generate_chain_bones=<mesh>[/<material>],<root humanoid role>[,attachment=cap|ring][,<setting>=<value>...]";
 
 const SUBMESH_ROLE_USAGE: &str = "submesh_role expects submesh_role=<role>:<mesh>[/<material>]";
 

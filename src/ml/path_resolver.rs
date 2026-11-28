@@ -7,10 +7,10 @@ pub fn resolve_curve_copilot_model_path() -> Option<String> {
     log_warn!(
         "v2 curve_copilot model not found. For development, set {} to your SharedData \
          directory so that {}/{} exists. HuggingFace download from {} is not yet implemented.",
-        crate::paths::SHARED_DATA_ENV_VAR,
-        crate::paths::EXPORTS_SUBDIR,
-        crate::paths::V2_CURVE_COPILOT_FILENAME,
-        crate::paths::HUGGINGFACE_CURVE_COPILOT_REPO
+        thyllore_ml_core::model_path::SHARED_DATA_ENV_VAR,
+        thyllore_ml_core::model_path::EXPORTS_SUBDIR,
+        thyllore_ml_core::model_path::V2_CURVE_COPILOT_FILENAME,
+        thyllore_ml_core::model_path::HUGGINGFACE_CURVE_COPILOT_REPO
     );
     None
 }

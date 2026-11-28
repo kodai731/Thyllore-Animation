@@ -6,7 +6,7 @@ use crate::ecs::resource::{UiPointerOwner, UiPointerOwnerId};
 use crate::ecs::world::World;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct UiPointer {
+pub(crate) struct UiPointer {
     pub pos: [f32; 2],
     pub delta: [f32; 2],
     pub wheel: f32,
@@ -25,26 +25,26 @@ const MOUSE_BUTTONS: [MouseButton; 5] = [
 ];
 
 impl UiPointer {
-    pub fn is_down(&self, button: MouseButton) -> bool {
+    pub(crate) fn is_down(&self, button: MouseButton) -> bool {
         self.down[button as usize]
     }
 
-    pub fn is_clicked(&self, button: MouseButton) -> bool {
+    pub(crate) fn is_clicked(&self, button: MouseButton) -> bool {
         self.clicked[button as usize]
     }
 
-    pub fn is_double_clicked(&self, button: MouseButton) -> bool {
+    pub(crate) fn is_double_clicked(&self, button: MouseButton) -> bool {
         self.double_clicked[button as usize]
     }
 
-    pub fn is_released(&self, button: MouseButton) -> bool {
+    pub(crate) fn is_released(&self, button: MouseButton) -> bool {
         self.released[button as usize]
     }
 }
 
 /// Where the press must land for a handler to take the pointer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PointerRegion {
+pub(crate) enum PointerRegion {
     /// The current window is the topmost one under the cursor and no widget is being dragged.
     Window,
     /// Same as `Window`, counting the window's child windows as part of it.
@@ -55,7 +55,7 @@ pub enum PointerRegion {
     Screen,
 }
 
-pub fn read_ui_pointer(ui: &imgui::Ui) -> UiPointer {
+pub(crate) fn read_ui_pointer(ui: &imgui::Ui) -> UiPointer {
     let io = ui.io();
     let mut pointer = UiPointer {
         pos: io.mouse_pos(),
@@ -74,7 +74,7 @@ pub fn read_ui_pointer(ui: &imgui::Ui) -> UiPointer {
 }
 
 /// True when `owner` already holds the pointer, or when it is free and `region` is under the cursor.
-pub fn ui_pointer_available(
+pub(crate) fn ui_pointer_available(
     ui: &imgui::Ui,
     world: &World,
     owner: UiPointerOwnerId,
@@ -86,7 +86,7 @@ pub fn ui_pointer_available(
 }
 
 /// Takes the pointer for `owner` when it is available; call it at the moment a drag or click starts.
-pub fn ui_pointer_begin(
+pub(crate) fn ui_pointer_begin(
     ui: &imgui::Ui,
     world: &World,
     owner: UiPointerOwnerId,
@@ -96,12 +96,12 @@ pub fn ui_pointer_begin(
         && world.resource_mut::<UiPointerOwner>().try_claim(owner)
 }
 
-pub fn is_last_item_double_clicked(ui: &imgui::Ui) -> bool {
+pub(crate) fn is_last_item_double_clicked(ui: &imgui::Ui) -> bool {
     ui.is_item_hovered() && ui.is_mouse_double_clicked(MouseButton::Left)
 }
 
 /// Run once per frame before the windows are built.
-pub fn release_idle_ui_pointer(ui: &imgui::Ui, world: &World) {
+pub(crate) fn release_idle_ui_pointer(ui: &imgui::Ui, world: &World) {
     let any_button_down = MOUSE_BUTTONS.iter().any(|button| ui.is_mouse_down(*button));
     world
         .resource_mut::<UiPointerOwner>()

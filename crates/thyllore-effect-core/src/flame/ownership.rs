@@ -63,7 +63,7 @@ pub fn changed_parameters(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flame::bake::texture_fit::{apply_texture_fit, FlameTextureFit, TextureFitGroups};
+    use crate::flame::{apply_texture_fit, FlameTextureFit, TextureFitGroups};
     use crate::flame::{flame_parameter_snapshot, FlameBaked, FlameEffect};
     use std::collections::HashSet;
 

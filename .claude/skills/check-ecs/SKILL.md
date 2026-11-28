@@ -86,11 +86,13 @@ mod my_component;
 pub use my_component::MyComponent;
 ```
 
-### 5. Bones are NOT Entities
+### 5. Bones are entities; the skeleton is an asset
 
-- [ ] Bones are data within `Skeleton.bones: Vec<Bone>`
-- [ ] Bones identified by `BoneId` (u32 index), not `Entity`
-- [ ] Constraints reference bones via `BoneId`
+- [ ] Bone structure (parent links, bind pose, names) stays in the `Skeleton` asset (`Skeleton.bones`)
+- [ ] `BoneId` is the persistent id (clip tracks, sidecars, constraints); it is resolved to the bone entity
+      only through `SkeletonBones` on the model entity, never by name
+- [ ] The pose is not held in two places: until #272 moves it, it lives in `Animator` and bone entities carry
+      no `Transform`
 
 ### 6. EntityBuilder Pattern
 

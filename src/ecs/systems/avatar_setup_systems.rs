@@ -1,34 +1,31 @@
-use crate::animation::spring_bone::SpringSpace;
-use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{AvatarSetupState, ModelState, NodeAssets};
 use crate::ecs::systems::avatar_sidecar_systems::apply_avatar_sidecar;
 use crate::ecs::systems::avatar_stats_systems::count_avatar_stats;
 use crate::ecs::systems::avatar_submesh_role_systems::refresh_submesh_roles;
+use crate::ecs::systems::model_load_systems::find_loaded_model_file;
 use crate::ecs::systems::spring_bone_edit_systems::handle_spring_chain_add;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Animator, Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use cgmath::Matrix4;
+use glam::Mat4;
 use std::path::Path;
-use thyllore_avatar_core::humanoid::components::avatar_rig::AvatarRig;
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
-use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
-use thyllore_avatar_core::humanoid::components::skeleton_input::BoneInput;
-use thyllore_avatar_core::humanoid::systems::geometry_checks::check_mapping_geometry;
-use thyllore_avatar_core::humanoid::systems::humanoid_frame::derive_humanoid_frame;
-use thyllore_avatar_core::humanoid::systems::mapping_io::{
-    humanoid_mapping_path, load_or_infer_rig, save_mapping,
-};
-use thyllore_avatar_core::humanoid::systems::name_match::{
-    collect_unresolved_roles, infer_mapping,
-};
-use thyllore_avatar_core::humanoid::systems::pose::detect_rest_pose;
-use thyllore_avatar_core::humanoid::systems::structural_chains::find_chains_under;
-use thyllore_avatar_core::humanoid::systems::validate::validate_mapping;
-use thyllore_avatar_core::vrchat::rank::{rank_stats, Platform};
-use thyllore_avatar_core::vrchat::rank_thresholds::default_thresholds;
+use thyllore_anim_core::spring_bone::SpringSpace;
+use thyllore_anim_core::{BoneId, Skeleton};
+use thyllore_avatar_core::humanoid::check_mapping_geometry;
+use thyllore_avatar_core::humanoid::derive_humanoid_frame;
+use thyllore_avatar_core::humanoid::detect_rest_pose;
+use thyllore_avatar_core::humanoid::find_chains_under;
+use thyllore_avatar_core::humanoid::validate_mapping;
+use thyllore_avatar_core::humanoid::AvatarRig;
+use thyllore_avatar_core::humanoid::BoneInput;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidRole;
+use thyllore_avatar_core::humanoid::{collect_unresolved_roles, infer_mapping};
+use thyllore_avatar_core::humanoid::{humanoid_mapping_path, load_or_infer_rig, save_mapping};
+use thyllore_avatar_core::vrchat::default_thresholds;
+use thyllore_avatar_core::vrchat::{rank_stats, Platform};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 pub fn animated_spring_space(world: &World) -> SpringSpace {
     world
@@ -49,19 +46,16 @@ pub fn skeleton_to_bone_inputs(skeleton: &Skeleton) -> Vec<BoneInput> {
                 name: bone.name.clone(),
                 parent: bone.parent_id.map(|parent_id| parent_id as usize),
                 rest_position: [
-                    global_transform.w.x,
-                    global_transform.w.y,
-                    global_transform.w.z,
+                    global_transform.w_axis.x,
+                    global_transform.w_axis.y,
+                    global_transform.w_axis.z,
                 ],
             }
         })
         .collect()
 }
 
-pub(crate) fn compute_bone_global_transform(
-    skeleton: &Skeleton,
-    bone_index: usize,
-) -> Matrix4<f32> {
+pub(crate) fn compute_bone_global_transform(skeleton: &Skeleton, bone_index: usize) -> Mat4 {
     let bone = &skeleton.bones[bone_index];
     let mut global_transform = bone.local_transform;
     let mut parent_id = bone.parent_id;
@@ -89,10 +83,7 @@ pub(crate) fn find_spring_bone_setup(world: &World) -> Option<&SpringBoneSetup> 
 }
 
 pub fn find_model_path(world: &World) -> Option<String> {
-    world
-        .get_resource::<ModelState>()
-        .map(|model_state| model_state.model_path.clone())
-        .filter(|model_path| !model_path.is_empty())
+    find_loaded_model_file(world).map(|model_file| model_file.to_string_lossy().into_owned())
 }
 
 pub fn sync_avatar_setup(world: &mut World, assets: &AssetStorage, graphics: &GraphicsResources) {
@@ -218,7 +209,7 @@ pub fn save_humanoid_mapping(world: &World) {
 
 /// Registers every run of non-humanoid bones under `root` as a spring chain; runs that already head
 /// a chain are kept as they are.
-pub fn add_spring_chains_under(
+pub fn use_existing_bones_as_springs(
     world: &mut World,
     assets: &AssetStorage,
     root: BoneId,
@@ -299,10 +290,9 @@ fn find_spring_bone_setup_entity(world: &World) -> Option<Entity> {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Vector3;
+    use glam::Vec3;
 
     use super::*;
-    use crate::ecs::component::{SpringChain, SpringJointParam};
 
     fn make_chain_skeleton() -> Skeleton {
         let mut skeleton = Skeleton::new("chain");
@@ -310,11 +300,11 @@ mod tests {
         let spine = skeleton.add_bone("Spine", Some(root));
         let chest = skeleton.add_bone("Chest", Some(spine));
         skeleton.bones[root as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.bones[spine as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.5, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 0.5, 0.0));
         skeleton.bones[chest as usize].local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 0.25, 0.1));
+            Mat4::from_translation(Vec3::new(0.0, 0.25, 0.1));
         skeleton
     }
 

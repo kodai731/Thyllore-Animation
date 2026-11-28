@@ -1,3 +1,4 @@
+use glam::Mat4;
 use thyllore_math_core::scale_translation;
 
 use crate::mesh::{MeshMorph, Vertex};
@@ -18,6 +19,13 @@ pub fn scale_skin(skin: &mut SkinData, factor: f32) {
     }
 }
 
+/// Conjugates each skin matrix by the uniform scale, so it poses the scaled rest positions as before.
+pub fn scale_skin_palette(palette: &mut [Mat4], factor: f32) {
+    for skin_matrix in palette {
+        *skin_matrix = scale_translation(skin_matrix, factor);
+    }
+}
+
 pub fn scale_morph(morph: &mut MeshMorph, factor: f32) {
     for channel in &mut morph.channels {
         for delta in &mut channel.position_deltas {
@@ -34,21 +42,34 @@ pub fn scale_vertex_positions(vertices: &mut [Vertex], factor: f32) {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{InnerSpace, Matrix4, Vector3};
-    use thyllore_math_core::{Vec2, Vec3, Vec4};
+    use glam::{Mat4, Vec2, Vec3, Vec4};
 
     use super::*;
     use crate::mesh::{MorphChannel, SparseDelta};
     use crate::skeleton::Bone;
 
-    fn translation(x: f32, y: f32, z: f32) -> Matrix4<f32> {
-        Matrix4::from_translation(Vector3::new(x, y, z))
+    fn translation(x: f32, y: f32, z: f32) -> Mat4 {
+        Mat4::from_translation(Vec3::new(x, y, z))
+    }
+
+    #[test]
+    fn scaled_palette_poses_scaled_rest_at_scaled_positions() {
+        let rest_position = Vec3::new(0.5, 2.0, -1.0);
+        let skin_matrix = Mat4::from_rotation_z(0.7) * translation(1.0, -2.0, 3.0);
+        let factor = 1.5;
+
+        let mut palette = [skin_matrix];
+        scale_skin_palette(&mut palette, factor);
+
+        let posed = palette[0].transform_point3(rest_position * factor);
+        let expected = skin_matrix.transform_point3(rest_position) * factor;
+        assert!((posed - expected).length() < 1e-5);
     }
 
     #[test]
     fn skeleton_scale_moves_translations_and_keeps_rotations() {
         let mut skeleton = Skeleton::new("s");
-        let rotation = Matrix4::from_angle_y(cgmath::Deg(30.0));
+        let rotation = Mat4::from_rotation_y(f32::to_radians(30.0));
         skeleton.bones.push(Bone {
             local_transform: rotation * translation(1.0, 2.0, 3.0),
             inverse_bind_pose: translation(-1.0, -2.0, -3.0),
@@ -61,21 +82,22 @@ mod tests {
         let bone = &skeleton.bones[0];
         let expected = rotation * translation(1.0, 2.0, 3.0);
         assert!(
-            (bone.local_transform.w.truncate() - expected.w.truncate() * 0.5).magnitude() < 1e-6
+            (bone.local_transform.w_axis.truncate() - expected.w_axis.truncate() * 0.5).length()
+                < 1e-6
         );
-        assert_eq!(bone.local_transform.x, expected.x);
+        assert_eq!(bone.local_transform.x_axis, expected.x_axis);
         assert_eq!(
-            bone.inverse_bind_pose.w.truncate(),
-            Vector3::new(-0.5, -1.0, -1.5)
+            bone.inverse_bind_pose.w_axis.truncate(),
+            Vec3::new(-0.5, -1.0, -1.5)
         );
-        assert_eq!(skeleton.root_transform.w.y, 5.0);
+        assert_eq!(skeleton.root_transform.w_axis.y, 5.0);
     }
 
     #[test]
     fn skin_morph_and_vertices_scale_positions_only() {
         let mut skin = SkinData {
-            base_positions: vec![Vector3::new(2.0, 4.0, 6.0)],
-            base_normals: vec![Vector3::new(0.0, 1.0, 0.0)],
+            base_positions: vec![Vec3::new(2.0, 4.0, 6.0)],
+            base_normals: vec![Vec3::new(0.0, 1.0, 0.0)],
             ..Default::default()
         };
         let mut morph = MeshMorph {
@@ -103,8 +125,8 @@ mod tests {
         scale_morph(&mut morph, 2.0);
         scale_vertex_positions(&mut vertices, 2.0);
 
-        assert_eq!(skin.base_positions[0], Vector3::new(4.0, 8.0, 12.0));
-        assert_eq!(skin.base_normals[0], Vector3::new(0.0, 1.0, 0.0));
+        assert_eq!(skin.base_positions[0], Vec3::new(4.0, 8.0, 12.0));
+        assert_eq!(skin.base_normals[0], Vec3::new(0.0, 1.0, 0.0));
         assert_eq!(morph.channels[0].position_deltas[0].delta, [2.0, 4.0, 6.0]);
         assert_eq!(morph.channels[0].normal_deltas[0].delta, [1.0, 0.0, 0.0]);
         assert_eq!(vertices[0].pos, Vec3::new(2.0, 2.0, 2.0));

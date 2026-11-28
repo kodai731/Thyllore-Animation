@@ -1,27 +1,34 @@
 use std::rc::Rc;
 
 use anyhow::Result;
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::resource::gizmo::{
-    BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
-};
+use crate::ecs::resource::BillboardData;
 use crate::ecs::resource::DebugViewState;
+use crate::ecs::resource::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
-use crate::render::{BillboardBackend, RenderBackend};
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
-use crate::vulkanr::VulkanBackend;
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use thyllore_vulkan_core::command::RRCommandPool;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::renderer::OnionSkinGpuState;
+use thyllore_vulkan_core::resource::GpuBufferRegistry;
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::RayTracingData;
+use thyllore_vulkan_core::types::Instance;
+use thyllore_vulkan_core::VulkanBackend;
 
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
+
+/// What a scene rebuild outside the frame loop (model load, mesh edit, debug delete) borrows from the app.
+pub struct GpuSceneContext<'a> {
+    pub instance: &'a Instance,
+    pub device: &'a RRDevice,
+    pub command_pool: &'a Rc<RRCommandPool>,
+    pub graphics: &'a mut GraphicsResources,
+    pub raytracing: &'a mut RayTracingData,
+    pub onion_skin: &'a mut Option<OnionSkinGpuState>,
+}
 
 pub struct FrameContext<'a> {
     pub instance: &'a Instance,
@@ -56,98 +63,98 @@ impl<'a> FrameContext<'a> {
         )
     }
 
-    pub fn camera(&self) -> ResRef<Camera> {
+    pub fn camera(&self) -> ResRef<'_, Camera> {
         self.world.resource::<Camera>()
     }
 
-    pub fn camera_mut(&self) -> ResMut<Camera> {
+    pub fn camera_mut(&self) -> ResMut<'_, Camera> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn light_state(&self) -> ResRef<LightState> {
+    pub fn light_state(&self) -> ResRef<'_, LightState> {
         self.world.resource::<LightState>()
     }
 
-    pub fn light_state_mut(&self) -> ResMut<LightState> {
+    pub fn light_state_mut(&self) -> ResMut<'_, LightState> {
         self.world.resource_mut::<LightState>()
     }
 
-    pub fn debug_view_state(&self) -> ResRef<DebugViewState> {
+    pub fn debug_view_state(&self) -> ResRef<'_, DebugViewState> {
         self.world.resource::<DebugViewState>()
     }
 
-    pub fn camera_position(&self) -> Vector3<f32> {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
+    pub fn camera_position(&self) -> Vec3 {
+        use crate::ecs::systems::compute_camera_position;
         compute_camera_position(&self.camera())
     }
 
-    pub fn camera_direction(&self) -> Vector3<f32> {
-        use crate::ecs::systems::camera_systems::compute_camera_direction;
+    pub fn camera_direction(&self) -> Vec3 {
+        use crate::ecs::systems::compute_camera_direction;
         compute_camera_direction(&self.camera())
     }
 
-    pub fn camera_up(&self) -> Vector3<f32> {
-        use crate::ecs::systems::camera_systems::compute_camera_up;
+    pub fn camera_up(&self) -> Vec3 {
+        use crate::ecs::systems::compute_camera_up;
         compute_camera_up(&self.camera())
     }
 
-    pub fn light_position(&self) -> Vector3<f32> {
+    pub fn light_position(&self) -> Vec3 {
         self.light_state().light_position
     }
 
-    pub fn grid_mesh(&self) -> ResRef<GridMeshData> {
+    pub fn grid_mesh(&self) -> ResRef<'_, GridMeshData> {
         self.world.resource::<GridMeshData>()
     }
 
-    pub fn grid_mesh_mut(&self) -> ResMut<GridMeshData> {
+    pub fn grid_mesh_mut(&self) -> ResMut<'_, GridMeshData> {
         self.world.resource_mut::<GridMeshData>()
     }
 
-    pub fn gizmo(&self) -> ResRef<GridGizmoData> {
+    pub fn gizmo(&self) -> ResRef<'_, GridGizmoData> {
         self.world.resource::<GridGizmoData>()
     }
 
-    pub fn gizmo_mut(&self) -> ResMut<GridGizmoData> {
+    pub fn gizmo_mut(&self) -> ResMut<'_, GridGizmoData> {
         self.world.resource_mut::<GridGizmoData>()
     }
 
-    pub fn light_gizmo(&self) -> ResRef<LightGizmoData> {
+    pub fn light_gizmo(&self) -> ResRef<'_, LightGizmoData> {
         self.world.resource::<LightGizmoData>()
     }
 
-    pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
+    pub fn light_gizmo_mut(&self) -> ResMut<'_, LightGizmoData> {
         self.world.resource_mut::<LightGizmoData>()
     }
 
-    pub fn bone_gizmo(&self) -> ResRef<BoneGizmoData> {
+    pub fn bone_gizmo(&self) -> ResRef<'_, BoneGizmoData> {
         self.world.resource::<BoneGizmoData>()
     }
 
-    pub fn bone_gizmo_mut(&self) -> ResMut<BoneGizmoData> {
+    pub fn bone_gizmo_mut(&self) -> ResMut<'_, BoneGizmoData> {
         self.world.resource_mut::<BoneGizmoData>()
     }
 
-    pub fn billboard(&self) -> ResRef<BillboardData> {
+    pub fn billboard(&self) -> ResRef<'_, BillboardData> {
         self.world.resource::<BillboardData>()
     }
 
-    pub fn billboard_mut(&self) -> ResMut<BillboardData> {
+    pub fn billboard_mut(&self) -> ResMut<'_, BillboardData> {
         self.world.resource_mut::<BillboardData>()
     }
 
-    pub fn transform_gizmo(&self) -> ResRef<TransformGizmoData> {
+    pub fn transform_gizmo(&self) -> ResRef<'_, TransformGizmoData> {
         self.world.resource::<TransformGizmoData>()
     }
 
-    pub fn transform_gizmo_mut(&self) -> ResMut<TransformGizmoData> {
+    pub fn transform_gizmo_mut(&self) -> ResMut<'_, TransformGizmoData> {
         self.world.resource_mut::<TransformGizmoData>()
     }
 
     pub unsafe fn update_billboard_ubo_internal(
         &mut self,
-        model: Matrix4<f32>,
-        view: Matrix4<f32>,
-        proj: Matrix4<f32>,
+        model: Mat4,
+        view: Mat4,
+        proj: Mat4,
         image_index: usize,
     ) -> Result<()> {
         let mut billboard = self.world.resource_mut::<BillboardData>();
@@ -159,6 +166,6 @@ impl<'a> FrameContext<'a> {
             self.raytracing,
             self.buffer_registry,
         );
-        backend.update_billboard_ubo(&mut billboard, model, view, proj, image_index)
+        backend.update_billboard_ubo(&mut billboard.render_state, model, view, proj, image_index)
     }
 }

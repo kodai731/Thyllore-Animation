@@ -1,10 +1,11 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 use super::ray_query_pass::collect_selected_mesh_ids;
 use crate::app::App;
-use crate::ecs::{PassContext, World};
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+use crate::ecs::world::World;
+use crate::ecs::PassContext;
+use thyllore_vulkan_core::resource::RayTracingData;
+use thyllore_vulkan_core::types::CommandBuffer;
 
 fn debug_view_mode_value(mode: crate::ecs::resource::DebugViewMode) -> i32 {
     use crate::ecs::resource::DebugViewMode;
@@ -26,8 +27,8 @@ unsafe fn prepare_composite_resources<'a>(
     raytracing: &'a RayTracingData,
     world: &World,
 ) -> Result<(
-    &'a crate::vulkanr::pipeline::RRPipeline,
-    &'a crate::vulkanr::descriptor::RRCompositeDescriptorSet,
+    &'a thyllore_vulkan_core::pipeline::RRPipeline,
+    &'a thyllore_vulkan_core::descriptor::RRCompositeDescriptorSet,
     i32,
 )> {
     let pipeline = raytracing
@@ -46,7 +47,7 @@ unsafe fn prepare_composite_resources<'a>(
 
 pub unsafe fn record_composite_pass(
     app: &mut App,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
     draw_data: &imgui::DrawData,
 ) -> Result<()> {
@@ -57,12 +58,12 @@ pub unsafe fn record_composite_pass(
     }
 
     let render_targets = app.resource::<crate::vulkanr::context::RenderTargets>();
-    let render_pass = render_targets.render.render_pass;
-    let framebuffer = render_targets.render.framebuffers[image_index];
+    let render_pass = render_targets.render.render_pass();
+    let framebuffer = render_targets.render.framebuffers()[image_index];
     let extent = app
         .resource::<crate::vulkanr::context::SwapchainState>()
         .swapchain
-        .swapchain_extent;
+        .swapchain_extent();
 
     let (pipeline, descriptor, view_mode_value) =
         prepare_composite_resources(&app.data.raytracing, &app.data.ecs_world)?;
@@ -89,14 +90,14 @@ pub unsafe fn record_composite_pass(
         .draw_all_overlays(command_buffer, true)?;
 
     app.record_imgui_rendering(command_buffer, draw_data)?;
-    app.rrdevice.device.cmd_end_render_pass(command_buffer);
+    thyllore_vulkan_core::renderer::end_render_pass(&app.rrdevice, command_buffer);
 
     Ok(())
 }
 
 pub unsafe fn record_composite_to_offscreen(
     app: &mut App,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
     let selected_mesh_ids = collect_selected_mesh_ids(&app.data.ecs_world, &app.data.ecs_assets);
@@ -112,8 +113,8 @@ pub unsafe fn record_composite_to_offscreen(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
-    let render_pass = offscreen.render_pass;
-    let framebuffer = offscreen.framebuffer;
+    let render_pass = offscreen.render_pass();
+    let framebuffer = offscreen.framebuffer();
     let extent = offscreen.extent();
 
     let (pipeline, descriptor, view_mode_value) =
@@ -146,7 +147,7 @@ pub unsafe fn record_composite_to_offscreen(
 
 pub unsafe fn record_composite_to_hdr(
     ctx: &PassContext,
-    command_buffer: vk::CommandBuffer,
+    command_buffer: CommandBuffer,
 ) -> Result<()> {
     let selected_mesh_ids = collect_selected_mesh_ids(ctx.world, ctx.assets);
 
@@ -158,8 +159,8 @@ pub unsafe fn record_composite_to_hdr(
         .hdr_buffer
         .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))?;
 
-    let render_pass = hdr_buffer.render_pass;
-    let framebuffer = hdr_buffer.framebuffer;
+    let render_pass = hdr_buffer.render_pass();
+    let framebuffer = hdr_buffer.framebuffer();
     let extent = hdr_buffer.extent();
     let (pipeline, descriptor, view_mode_value) =
         prepare_composite_resources(ctx.raytracing, ctx.world)?;

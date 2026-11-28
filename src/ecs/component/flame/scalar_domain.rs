@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
-use thyllore_effect_core::{ScalarParam, UiParam, FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
+use thyllore_effect_core::flame::{FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
+use thyllore_effect_core::{ScalarParam, UiParam};
 
 use super::effect::FlameEffect;
 use crate::ecs::component::{

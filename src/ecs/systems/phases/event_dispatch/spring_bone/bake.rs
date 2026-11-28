@@ -1,10 +1,10 @@
 use super::event::SpringBoneEvent;
-use crate::animation::spring_bone::SpringSpace;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::spring_bone_systems::spring_space_for_entity;
 use crate::ecs::world::{Entity, World};
+use thyllore_anim_core::spring_bone::SpringSpace;
 
 pub(super) fn dispatch_spring_bone_bake_events(
     events: &[SpringBoneEvent],
@@ -17,10 +17,10 @@ pub(super) fn dispatch_spring_bone_bake_events(
                 handle_spring_bone_bake(world, assets);
             }
             SpringBoneEvent::DiscardBake => {
-                handle_spring_bone_discard(world, assets);
+                handle_spring_bone_discard(world);
             }
             SpringBoneEvent::Rebake => {
-                handle_spring_bone_discard(world, assets);
+                handle_spring_bone_discard(world);
                 handle_spring_bone_bake(world, assets);
             }
             _ => {}
@@ -42,13 +42,13 @@ pub fn transition_to_baked_override_if_needed(world: &mut World) {
 pub(super) struct SpringBakeInputs {
     pub(super) entity: Entity,
     pub(super) space: SpringSpace,
-    pub(super) skeleton: crate::animation::Skeleton,
+    pub(super) skeleton: thyllore_anim_core::Skeleton,
     pub(super) setup: crate::ecs::component::SpringBoneSetup,
     pub(super) constraints: Option<crate::ecs::component::ConstraintSet>,
     pub(super) source_id: Option<u64>,
     pub(super) looping: bool,
-    pub(super) anim_clip: crate::animation::AnimationClip,
-    pub(super) source_editable: crate::animation::editable::EditableAnimationClip,
+    pub(super) anim_clip: thyllore_anim_core::AnimationClip,
+    pub(super) source_editable: thyllore_anim_core::editable::EditableAnimationClip,
 }
 
 pub(super) fn find_spring_bake_inputs(
@@ -218,10 +218,10 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
 fn register_baked_clip_and_update_schedules(
     world: &mut World,
     assets: &mut AssetStorage,
-    clip: crate::animation::editable::EditableAnimationClip,
+    clip: thyllore_anim_core::editable::EditableAnimationClip,
     source_id: Option<u64>,
 ) -> u64 {
-    use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
+    use crate::ecs::systems::clip_library_register_and_activate;
 
     let mut clip_library = world.resource_mut::<ClipLibrary>();
     let new_id = clip_library_register_and_activate(&mut clip_library, assets, clip);
@@ -259,7 +259,7 @@ fn register_baked_clip_and_update_schedules(
     new_id
 }
 
-pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) {
+pub fn handle_spring_bone_discard(world: &mut World) {
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState, TimelineState};
 
     let mut spring_state = world.resource_mut::<SpringBoneState>();
@@ -287,11 +287,7 @@ pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) 
     }
 
     if let Some(baked_id) = baked_id {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        if let Some(asset_id) = clip_library.source_to_asset_id.remove(&baked_id) {
-            assets.animation_clips.remove(&asset_id);
-        }
-        clip_library.remove(baked_id);
+        world.resource_mut::<ClipLibrary>().remove(baked_id);
     }
 
     let mut timeline_state = world.resource_mut::<TimelineState>();

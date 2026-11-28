@@ -2,13 +2,13 @@ import math
 import struct
 
 from blender_addon.common.coordinates import (
+    blender_window_to_engine_projection,
     blender_to_engine_point,
     engine_projection,
     mat4_inverse,
 )
 from blender_addon.effects.wind.draw_handler import (
     blender_view_to_engine_view,
-    blender_window_to_engine_projection,
     flip_projection_y,
 )
 from blender_addon.effects.wind.wind_shader import matrix_column_major, pack_frame_ubo

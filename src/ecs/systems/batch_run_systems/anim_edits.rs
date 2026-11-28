@@ -1,8 +1,10 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{
-    BakedHumanoidClips, BatchAnimEdit, BoneAxis, ClipLibrary, PendingBatchAnimEdits, TimelineState,
+    BatchAnimEdit, BoneAxis, ClipLibrary, PendingBatchAnimEdits, TimelineState,
 };
+use crate::ecs::systems::delete_library_clip;
+use crate::ecs::systems::model_load_systems::is_model_load_pending;
 use crate::ecs::systems::phases::event_dispatch::clip_instance::ClipInstanceEvent;
 use crate::ecs::systems::phases::event_dispatch::scalar_curve::{
     dispatch_scalar_clip_events, ScalarCurveEvent,
@@ -10,11 +12,9 @@ use crate::ecs::systems::phases::event_dispatch::scalar_curve::{
 use crate::ecs::world::World;
 
 use thyllore_anim_core::editable::PropertyType;
-use thyllore_avatar_core::motion::seed::components::motion_spec::MotionSpec;
-use thyllore_avatar_core::motion::seed::components::pose_table::{PoseTable, RotationAxis};
-use thyllore_avatar_core::motion::seed::systems::compose_motion::{
-    compose_motion, settle_requests,
-};
+use thyllore_avatar_core::motion::seed::MotionSpec;
+use thyllore_avatar_core::motion::seed::{compose_motion, settle_requests};
+use thyllore_avatar_core::motion::seed::{PoseTable, RotationAxis};
 
 fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
     match axis {
@@ -28,7 +28,7 @@ fn bone_axis_of(axis: RotationAxis) -> BoneAxis {
 fn apply_settle_requests(
     world: &mut World,
     assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+    requests: &[thyllore_avatar_core::motion::seed::SettleRequest],
 ) {
     if requests.is_empty() {
         return;
@@ -38,9 +38,7 @@ fn apply_settle_requests(
         return;
     };
     let mut session =
-        match thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
-            &model_path,
-        ) {
+        match thyllore_ml_core::v2::inference::V2CurveCopilotSession::from_onnx_path(&model_path) {
             Ok(s) => s,
             Err(e) => {
                 log_warn!("compose settle: failed to load model: {}", e);
@@ -91,7 +89,7 @@ fn apply_settle_requests(
 fn apply_settle_requests(
     _world: &mut World,
     _assets: &mut AssetStorage,
-    requests: &[thyllore_avatar_core::motion::seed::systems::compose_motion::SettleRequest],
+    requests: &[thyllore_avatar_core::motion::seed::SettleRequest],
 ) {
     if !requests.is_empty() {
         log_warn!("compose settle: ml feature is disabled, keys stay as composed");
@@ -135,7 +133,7 @@ fn insert_bone_key(
         BoneAxis::TranslationY => &mut track.translation_y,
         BoneAxis::TranslationZ => &mut track.translation_z,
     };
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
+    use thyllore_anim_core::editable::curve_add_keyframe;
     curve_add_keyframe(curve, time, value);
     if time > clip.duration {
         clip.duration = time;
@@ -144,40 +142,23 @@ fn insert_bone_key(
 }
 
 fn remove_clip_by_name(world: &mut World, assets: &mut AssetStorage, name: &str) {
-    let source_id = match world.resource::<ClipLibrary>().find_source_by_name(name) {
-        Some(id) => id,
-        None => return,
+    let Some(source_id) = world.resource::<ClipLibrary>().find_source_by_name(name) else {
+        return;
     };
-    world
-        .resource_mut::<ClipLibrary>()
-        .source_clips
-        .remove(&source_id);
-    if let Some(asset_id) = world
-        .resource_mut::<ClipLibrary>()
-        .source_to_asset_id
-        .remove(&source_id)
-    {
-        assets.animation_clips.remove(&asset_id);
-    }
-    if let Some(mut baked) = world.get_resource_mut::<BakedHumanoidClips>() {
-        let invalidated = baked.invalidate_source(source_id);
-        for asset_id in invalidated {
-            assets.animation_clips.remove(&asset_id);
-        }
-    }
+
+    delete_library_clip(world, assets, source_id);
 }
 
+/// The edits wait for the scene's model, whose skeleton and clips they may name.
 pub fn batch_apply_pending_anim_edits(world: &mut World, assets: &mut AssetStorage) {
-    use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
-    let edits = match world.remove_resource::<PendingBatchAnimEdits>() {
-        Some(resource) => resource.edits,
-        None => return,
-    };
-    if find_first_skeleton(assets).is_some() {
-        batch_apply_anim_edits(world, assets, &edits);
-    } else {
-        world.insert_resource(PendingBatchAnimEdits { edits });
+    if is_model_load_pending(world) {
+        return;
     }
+    let Some(pending) = world.remove_resource::<PendingBatchAnimEdits>() else {
+        return;
+    };
+
+    batch_apply_anim_edits(world, assets, &pending.edits);
 }
 
 pub fn batch_apply_anim_edits(
@@ -219,7 +200,7 @@ pub fn batch_apply_anim_edits(
         }
     }
 
-    crate::ecs::systems::humanoid_bake_systems::request_bake_scan(world);
+    crate::ecs::systems::request_bake_scan(world);
 }
 
 fn apply_debug_keys(world: &mut World, assets: &mut AssetStorage, seed: u64) {
@@ -291,9 +272,7 @@ fn apply_key_at_playhead(
 }
 
 fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
-    use crate::ecs::systems::scalar_clip_systems::{
-        ensure_entity_clip, resolve_selected_scalar_entity,
-    };
+    use crate::ecs::systems::{ensure_entity_clip, resolve_selected_scalar_entity};
     let Some((entity, domain)) = resolve_selected_scalar_entity(world) else {
         return;
     };
@@ -317,7 +296,7 @@ fn apply_trim_end(world: &mut World, assets: &mut AssetStorage, seconds: f32) {
 }
 
 fn apply_new_clip(world: &mut World, assets: &mut AssetStorage, name: &str) {
-    let clip = crate::ecs::systems::humanoid_bake_systems::new_empty_clip(name);
+    let clip = crate::ecs::systems::new_empty_clip(name);
     let id = crate::ecs::systems::clip_library_register_and_activate(
         &mut world.resource_mut::<ClipLibrary>(),
         assets,
@@ -335,7 +314,7 @@ fn apply_template(world: &mut World, assets: &mut AssetStorage, path: &std::path
         }
     };
     if let Some(table) = crate::ecs::systems::engine_bone_name_to_id(world, assets) {
-        thyllore_anim_core::editable::systems::clip_ops::clip_remap_bone_ids(&mut loaded, &table);
+        thyllore_anim_core::editable::clip_remap_bone_ids(&mut loaded, &table);
     }
     remove_clip_by_name(world, assets, &loaded.name);
     let id = crate::ecs::systems::clip_library_register_and_activate(
@@ -402,10 +381,8 @@ fn try_apply_copilot_extend(
     let model_path = crate::ml::resolve_curve_copilot_model_path()
         .context("curve copilot model not found, skipping")?;
     let mut session =
-        thyllore_ml_core::copilot::v2::inference::V2CurveCopilotSession::from_onnx_path(
-            &model_path,
-        )
-        .context("failed to load model")?;
+        thyllore_ml_core::v2::inference::V2CurveCopilotSession::from_onnx_path(&model_path)
+            .context("failed to load model")?;
     let table = crate::ecs::systems::engine_bone_name_to_id(world, assets)
         .context("no bone name table available, skipping")?;
     let &bone_id = table

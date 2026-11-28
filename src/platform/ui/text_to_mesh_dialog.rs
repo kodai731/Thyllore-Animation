@@ -3,13 +3,13 @@
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
-use crate::ecs::World;
-use crate::grpc::{MeshInputMode, MeshModelType, TextToImageModelType};
+use crate::ecs::world::World;
 use crate::hooks::ui_window::init_window_state;
 use crate::platform::ui::theme::{draw_raised_window_frame, push_raised_window_style};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_grpc_client::{MeshInputMode, MeshModelType, TextToImageModelType};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
-pub struct TextToMeshDialogState {
+pub(super) struct TextToMeshDialogState {
     pub open: bool,
     pub prompt_buf: String,
     pub target_faces: i32,

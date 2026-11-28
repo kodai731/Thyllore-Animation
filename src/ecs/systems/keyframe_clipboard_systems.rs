@@ -1,8 +1,8 @@
-use crate::animation::editable::{build_mirror_mapping, curve_add_keyframe, mirror_keyframes};
 use crate::ecs::resource::{
     ClipLibrary, CopiedKeyframe, CurveTrackRef, KeyframeCopyBuffer, TimelineState,
 };
 use crate::ecs::systems::phases::event_dispatch::timeline::TimelineEvent;
+use thyllore_anim_core::editable::{build_mirror_mapping, curve_add_keyframe, mirror_keyframes};
 
 pub fn process_keyframe_clipboard_events(
     events: &[TimelineEvent],
@@ -132,7 +132,7 @@ fn paste_keyframes(
 }
 
 fn paste_entry_into_clip(
-    clip: &mut crate::animation::editable::EditableAnimationClip,
+    clip: &mut thyllore_anim_core::editable::EditableAnimationClip,
     entry: &CopiedKeyframe,
     time: f32,
 ) {

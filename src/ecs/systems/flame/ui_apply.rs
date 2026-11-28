@@ -2,31 +2,19 @@ use super::ui_command::FlameUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail};
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
-use crate::ecs::systems::effect_edit::apply_effect_update;
-use crate::ecs::systems::resolve_selected_flame;
+use crate::ecs::resource::FlameUIState;
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 impl UiCommand for FlameUiCommand {
     fn apply(self: Box<Self>, world: &mut World, _: &mut AssetStorage, _: &GraphicsResources) {
         match *self {
-            FlameUiCommand::UpdateEffect { entity, effect } => {
-                apply_effect_update::<FlameEffect>(world, entity, *effect);
-            }
             FlameUiCommand::UpdateBaked(baked) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 world.insert_component(target, *baked);
-            }
-            FlameUiCommand::ApplyPreset(name) => {
-                let Some(target) = resolve_selected_flame(world) else {
-                    return;
-                };
-                crate::ecs::systems::effect_edit::apply_effect_preset::<FlameEffect>(
-                    world, target, &name,
-                );
             }
             FlameUiCommand::ApplyTextureFit {
                 path,
@@ -38,7 +26,7 @@ impl UiCommand for FlameUiCommand {
                     world,
                     &path,
                     blend,
-                    thyllore_effect_core::TextureFitGroups {
+                    thyllore_effect_core::flame::TextureFitGroups {
                         silhouette: groups[0],
                         color: groups[1],
                         turbulence: groups[2],
@@ -52,7 +40,7 @@ impl UiCommand for FlameUiCommand {
                 crate::ecs::systems::apply_flame_style_to_selected(
                     world,
                     &path,
-                    thyllore_effect_core::StyleGroups {
+                    thyllore_effect_core::flame::StyleGroups {
                         motion: groups[0],
                         texture: groups[1],
                         optics: groups[2],
@@ -67,13 +55,8 @@ impl UiCommand for FlameUiCommand {
                     }
                 }
             }
-            FlameUiCommand::UpdateRenderSettings(new_settings) => {
-                if let Some(mut settings) = world.get_resource_mut::<FlameRenderSettings>() {
-                    *settings = new_settings;
-                }
-            }
             FlameUiCommand::UpdateTrailEnabled(enabled) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {
@@ -82,7 +65,7 @@ impl UiCommand for FlameUiCommand {
                     world.insert_component(
                         target,
                         FlameTrail {
-                            state: thyllore_effect_core::FlameTrailState {
+                            state: thyllore_effect_core::flame::FlameTrailState {
                                 enabled,
                                 ..Default::default()
                             },
@@ -92,7 +75,7 @@ impl UiCommand for FlameUiCommand {
                 }
             }
             FlameUiCommand::UpdateTrailFade(fade) => {
-                let Some(target) = resolve_selected_flame(world) else {
+                let Some(target) = resolve_selected_effect::<FlameEffect>(world) else {
                     return;
                 };
                 if let Some(trail) = world.get_component_mut::<FlameTrail>(target) {
@@ -101,7 +84,7 @@ impl UiCommand for FlameUiCommand {
                     world.insert_component(
                         target,
                         FlameTrail {
-                            state: thyllore_effect_core::FlameTrailState {
+                            state: thyllore_effect_core::flame::FlameTrailState {
                                 fade_seconds: fade,
                                 ..Default::default()
                             },

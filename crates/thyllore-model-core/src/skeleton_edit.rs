@@ -1,6 +1,6 @@
 use std::fmt;
 
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::skeleton::{Bone, BoneId, Skeleton};
 
@@ -49,9 +49,9 @@ pub struct RemovedBones {
     pub remap: BoneRemap,
 }
 
-fn bind_pose(bone: &Bone) -> Result<Matrix4<f32>, SkeletonEditError> {
+fn bind_pose(bone: &Bone) -> Result<Mat4, SkeletonEditError> {
     bone.inverse_bind_pose
-        .invert()
+        .try_inverse()
         .ok_or_else(|| SkeletonEditError::SingularBindPose(bone.name.clone()))
 }
 
@@ -60,7 +60,7 @@ impl Skeleton {
         &mut self,
         parent: BoneId,
         name: &str,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     ) -> Result<BoneId, SkeletonEditError> {
         if name.is_empty() {
             return Err(SkeletonEditError::EmptyName);
@@ -73,10 +73,10 @@ impl Skeleton {
             .ok_or(SkeletonEditError::UnknownBone(parent))?;
         let parent_bind = bind_pose(parent_bone)?;
 
-        let local_transform = Matrix4::from_translation(local_offset);
+        let local_transform = Mat4::from_translation(local_offset);
         let bind = parent_bind * local_transform;
         let inverse_bind_pose = bind
-            .invert()
+            .try_inverse()
             .ok_or_else(|| SkeletonEditError::SingularBindPose(name.to_string()))?;
 
         let id = self.add_bone(name, Some(parent));
@@ -90,7 +90,7 @@ impl Skeleton {
     pub fn set_bone_local_offset(
         &mut self,
         bone_id: BoneId,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     ) -> Result<(), SkeletonEditError> {
         let bone = self
             .get_bone(bone_id)
@@ -98,11 +98,11 @@ impl Skeleton {
         let old_bind = bind_pose(bone)?;
         let old_local_inverse = bone
             .local_transform
-            .invert()
+            .try_inverse()
             .ok_or_else(|| SkeletonEditError::SingularBindPose(bone.name.clone()))?;
 
         let mut new_local = bone.local_transform;
-        new_local.w = local_offset.extend(1.0);
+        new_local.w_axis = local_offset.extend(1.0);
         let new_bind = old_bind * old_local_inverse * new_local;
         let delta = new_bind * bone.inverse_bind_pose;
 
@@ -110,7 +110,7 @@ impl Skeleton {
             let subtree_bone = self.get_bone_mut(id).expect("descendant ids are valid");
             let moved_bind = delta * bind_pose(subtree_bone)?;
             subtree_bone.inverse_bind_pose = moved_bind
-                .invert()
+                .try_inverse()
                 .ok_or_else(|| SkeletonEditError::SingularBindPose(subtree_bone.name.clone()))?;
         }
         self.get_bone_mut(bone_id)
@@ -183,30 +183,29 @@ impl Skeleton {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::InnerSpace;
 
-    fn bind_translation(skeleton: &Skeleton, id: BoneId) -> Vector3<f32> {
+    fn bind_translation(skeleton: &Skeleton, id: BoneId) -> Vec3 {
         let bind = bind_pose(skeleton.get_bone(id).unwrap()).unwrap();
-        bind.w.truncate()
+        bind.w_axis.truncate()
     }
 
     fn build_chain() -> Skeleton {
         let mut skeleton = Skeleton::new("test");
         let root = skeleton.add_bone("root", None);
         skeleton.get_bone_mut(root).unwrap().local_transform =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0));
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         skeleton.get_bone_mut(root).unwrap().inverse_bind_pose =
-            Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0))
-                .invert()
+            Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0))
+                .try_inverse()
                 .unwrap();
         let middle = skeleton
-            .add_child_bone(root, "middle", Vector3::new(0.0, 0.5, 0.0))
+            .add_child_bone(root, "middle", Vec3::new(0.0, 0.5, 0.0))
             .unwrap();
         skeleton
-            .add_child_bone(middle, "tip", Vector3::new(0.0, 0.25, 0.0))
+            .add_child_bone(middle, "tip", Vec3::new(0.0, 0.25, 0.0))
             .unwrap();
         skeleton
-            .add_child_bone(root, "side", Vector3::new(1.0, 0.0, 0.0))
+            .add_child_bone(root, "side", Vec3::new(1.0, 0.0, 0.0))
             .unwrap();
         skeleton
     }
@@ -218,8 +217,8 @@ mod tests {
         assert_eq!(skeleton.bone_name_to_id["middle"], 1);
         assert_eq!(skeleton.get_bone(1).unwrap().parent_id, Some(0));
         assert_eq!(skeleton.get_bone(0).unwrap().children, vec![1, 3]);
-        assert!((bind_translation(&skeleton, 1) - Vector3::new(0.0, 1.5, 0.0)).magnitude() < 1e-6);
-        assert!((bind_translation(&skeleton, 2) - Vector3::new(0.0, 1.75, 0.0)).magnitude() < 1e-6);
+        assert!((bind_translation(&skeleton, 1) - Vec3::new(0.0, 1.5, 0.0)).length() < 1e-6);
+        assert!((bind_translation(&skeleton, 2) - Vec3::new(0.0, 1.75, 0.0)).length() < 1e-6);
     }
 
     #[test]
@@ -227,15 +226,15 @@ mod tests {
         let mut skeleton = build_chain();
 
         assert_eq!(
-            skeleton.add_child_bone(0, "middle", Vector3::new(0.0, 0.0, 0.0)),
+            skeleton.add_child_bone(0, "middle", Vec3::new(0.0, 0.0, 0.0)),
             Err(SkeletonEditError::DuplicateName("middle".into()))
         );
         assert_eq!(
-            skeleton.add_child_bone(0, "", Vector3::new(0.0, 0.0, 0.0)),
+            skeleton.add_child_bone(0, "", Vec3::new(0.0, 0.0, 0.0)),
             Err(SkeletonEditError::EmptyName)
         );
         assert_eq!(
-            skeleton.add_child_bone(9, "x", Vector3::new(0.0, 0.0, 0.0)),
+            skeleton.add_child_bone(9, "x", Vec3::new(0.0, 0.0, 0.0)),
             Err(SkeletonEditError::UnknownBone(9))
         );
     }
@@ -245,15 +244,20 @@ mod tests {
         let mut skeleton = build_chain();
 
         skeleton
-            .set_bone_local_offset(1, Vector3::new(0.0, 0.5, 0.2))
+            .set_bone_local_offset(1, Vec3::new(0.0, 0.5, 0.2))
             .unwrap();
 
-        assert!((bind_translation(&skeleton, 1) - Vector3::new(0.0, 1.5, 0.2)).magnitude() < 1e-6);
-        assert!((bind_translation(&skeleton, 2) - Vector3::new(0.0, 1.75, 0.2)).magnitude() < 1e-6);
-        assert!((bind_translation(&skeleton, 3) - Vector3::new(1.0, 1.0, 0.0)).magnitude() < 1e-6);
+        assert!((bind_translation(&skeleton, 1) - Vec3::new(0.0, 1.5, 0.2)).length() < 1e-6);
+        assert!((bind_translation(&skeleton, 2) - Vec3::new(0.0, 1.75, 0.2)).length() < 1e-6);
+        assert!((bind_translation(&skeleton, 3) - Vec3::new(1.0, 1.0, 0.0)).length() < 1e-6);
         assert_eq!(
-            skeleton.get_bone(1).unwrap().local_transform.w.truncate(),
-            Vector3::new(0.0, 0.5, 0.2)
+            skeleton
+                .get_bone(1)
+                .unwrap()
+                .local_transform
+                .w_axis
+                .truncate(),
+            Vec3::new(0.0, 0.5, 0.2)
         );
     }
 
@@ -275,7 +279,7 @@ mod tests {
         assert_eq!(side.id, 1);
         assert_eq!(side.parent_id, Some(0));
         assert_eq!(skeleton.get_bone(0).unwrap().children, vec![1]);
-        assert!((bind_translation(&skeleton, 1) - Vector3::new(1.0, 1.0, 0.0)).magnitude() < 1e-6);
+        assert!((bind_translation(&skeleton, 1) - Vec3::new(1.0, 1.0, 0.0)).length() < 1e-6);
     }
 
     #[test]

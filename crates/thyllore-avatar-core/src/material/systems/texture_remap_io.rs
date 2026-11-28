@@ -37,8 +37,8 @@ pub fn resolve_remapped_texture(
 }
 
 pub fn make_model_relative_path(texture_path: &Path, model_path: &Path) -> anyhow::Result<String> {
-    let texture_path = std::path::absolute(texture_path)?;
-    let model_dir = std::path::absolute(find_model_dir(model_path))?;
+    let texture_path = collapse_parent_steps(&std::path::absolute(texture_path)?);
+    let model_dir = collapse_parent_steps(&std::path::absolute(find_model_dir(model_path))?);
 
     let texture_parts: Vec<Component> = texture_path.components().collect();
     let model_dir_parts: Vec<Component> = model_dir.components().collect();
@@ -53,6 +53,23 @@ pub fn make_model_relative_path(texture_path: &Path, model_path: &Path) -> anyho
         .iter()
         .map(|part| part.as_os_str().to_string_lossy().into_owned());
     Ok(climb.chain(descend).collect::<Vec<String>>().join("/"))
+}
+
+/// `a/b/../c` names the same file as `a/c`; only the second form compares component by component.
+fn collapse_parent_steps(path: &Path) -> PathBuf {
+    let mut collapsed = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                collapsed.pop();
+            }
+            Component::CurDir => {}
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                collapsed.push(component);
+            }
+        }
+    }
+    collapsed
 }
 
 fn find_model_dir(model_path: &Path) -> &Path {
@@ -113,6 +130,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(relative_path, "textures/skin.png");
+    }
+
+    #[test]
+    fn test_relative_path_ignores_parent_steps_in_the_model_path() {
+        let relative_path = make_model_relative_path(
+            Path::new("/project/models/avatar/skin.png"),
+            Path::new("/project/assets/../models/avatar/avatar.fbx"),
+        )
+        .unwrap();
+
+        assert_eq!(relative_path, "skin.png");
     }
 
     #[test]

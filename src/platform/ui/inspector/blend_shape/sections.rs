@@ -9,9 +9,9 @@ use crate::ecs::systems::{find_expression_morph_entity, find_mesh_morph};
 use crate::ecs::world::{Entity, World};
 use crate::platform::ui::form_window::{rows_section, FormSection};
 use crate::platform::ui::ui_rows::{ListRows, NamedValue, UiRow};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use thyllore_avatar_core::expression::components::grouping::{ChannelGroup, ExpressionGrouping};
-use thyllore_avatar_core::expression::systems::grouping::group_channels;
+use thyllore_avatar_core::expression::group_channels;
+use thyllore_avatar_core::expression::{ChannelGroup, ExpressionGrouping};
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone)]
 pub(super) struct BlendShapeView {
@@ -33,7 +33,7 @@ pub(super) struct ChannelGroupView {
     pub(super) collapsed: bool,
 }
 
-pub fn blend_shape_sections(
+pub(crate) fn blend_shape_sections(
     world: &World,
     entity: Entity,
     assets: &AssetStorage,

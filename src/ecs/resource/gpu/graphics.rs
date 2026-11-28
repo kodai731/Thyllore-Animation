@@ -1,8 +1,9 @@
-use thyllore_avatar_core::humanoid::components::mapping::HumanoidMapping;
+use thyllore_avatar_core::humanoid::HumanoidMapping;
 
-use crate::vulkanr::resource::graphics_resource::{
-    FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
+use thyllore_vulkan_core::descriptor::{
+    FrameDescriptorSet, MaterialId, MaterialManager, ObjectDescriptorSet,
 };
+use thyllore_vulkan_core::resource::{MeshBuffer, NodeData};
 
 #[derive(Clone, Debug, Default)]
 pub struct GpuDescriptors {
@@ -37,23 +38,10 @@ impl MaterialRegistry {
 
 pub use thyllore_anim_core::AnimationType;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ModelState {
     pub has_skinned_meshes: bool,
-    pub model_path: String,
-    pub load_status: String,
     pub imported_humanoid: Option<HumanoidMapping>,
-}
-
-impl Default for ModelState {
-    fn default() -> Self {
-        Self {
-            has_skinned_meshes: false,
-            model_path: String::new(),
-            load_status: String::from("No model loaded"),
-            imported_humanoid: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]

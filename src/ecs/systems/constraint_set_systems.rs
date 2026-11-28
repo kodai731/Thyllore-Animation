@@ -1,8 +1,8 @@
-use crate::animation::{BoneId, ConstraintId, ConstraintType};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{Constrained, ConstraintEntry, ConstraintSet};
 use crate::ecs::world::{Animator, World};
 use crate::hooks::model_load::LoadedModel;
+use thyllore_anim_core::{BoneId, ConstraintId, ConstraintType};
 
 pub fn constraint_set_add(
     set: &mut ConstraintSet,

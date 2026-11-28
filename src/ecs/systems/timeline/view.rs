@@ -1,8 +1,8 @@
-use crate::animation::editable::SourceClipId;
-use crate::animation::BoneId;
 use crate::ecs::resource::{
-    ClipDragType, ClipLibrary, SelectedKeyframe, SelectionModifier, TimelineState,
+    ClipDragType, ClipLibrary, SelectedKeyframe, SelectionModifier, TimelineState, ZoomFit,
 };
+use thyllore_anim_core::editable::SourceClipId;
+use thyllore_anim_core::BoneId;
 
 pub fn timeline_select_clip(
     timeline_state: &mut TimelineState,
@@ -34,17 +34,40 @@ pub fn timeline_select_clip(
     );
 }
 
+/// Fits the clip into the visible width; before the window measured that width the fit waits for it.
 pub fn timeline_apply_fit_zoom(timeline_state: &mut TimelineState, clip_duration: f32) {
     timeline_state.scroll_offset = 0.0;
 
     let visible_width = timeline_state.last_visible_width;
-    if visible_width < 1.0 || clip_duration <= 0.0 {
+    if visible_width < 1.0 {
+        timeline_state.zoom_fit = ZoomFit::AwaitingVisibleWidth;
+        return;
+    }
+    timeline_state.zoom_fit = ZoomFit::Settled;
+    if clip_duration <= 0.0 {
         return;
     }
 
     let fit_zoom =
-        visible_width / (clip_duration * crate::platform::ui::timeline_window::PIXELS_PER_SECOND);
+        visible_width / (clip_duration * crate::platform::ui::timeline::PIXELS_PER_SECOND);
     timeline_state.zoom_level = fit_zoom.clamp(0.01, 100.0);
+}
+
+pub fn timeline_apply_awaited_fit_zoom(
+    timeline_state: &mut TimelineState,
+    clip_library: &ClipLibrary,
+) {
+    if timeline_state.zoom_fit != ZoomFit::AwaitingVisibleWidth {
+        return;
+    }
+    let Some(clip) = timeline_state
+        .current_clip_id
+        .and_then(|clip_id| clip_library.get(clip_id))
+    else {
+        return;
+    };
+
+    timeline_apply_fit_zoom(timeline_state, clip.duration);
 }
 
 pub fn timeline_apply_selection(
@@ -149,10 +172,42 @@ pub fn clip_drag_preview_times(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{EditableAnimationClip, PropertyType, SourceClip};
     use crate::ecs::component::ClipSchedule;
-    use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
+    use crate::ecs::systems::clip_schedule_add_instance;
     use crate::ecs::systems::timeline::test_support::clip_with_three_keys;
+    use thyllore_anim_core::editable::{EditableAnimationClip, PropertyType, SourceClip};
+
+    #[test]
+    fn fit_zoom_asked_before_the_width_is_known_applies_once_it_is() {
+        let (mut state, library) = clip_with_three_keys();
+        let clip_duration = library.get(1).unwrap().duration;
+
+        timeline_apply_fit_zoom(&mut state, clip_duration);
+        assert_eq!(state.zoom_fit, ZoomFit::AwaitingVisibleWidth);
+        assert_eq!(state.zoom_level, 1.0);
+
+        timeline_apply_awaited_fit_zoom(&mut state, &library);
+        assert_eq!(state.zoom_fit, ZoomFit::AwaitingVisibleWidth);
+
+        state.last_visible_width = 500.0;
+        timeline_apply_awaited_fit_zoom(&mut state, &library);
+
+        let fitted_width =
+            clip_duration * crate::platform::ui::timeline::PIXELS_PER_SECOND * state.zoom_level;
+        assert_eq!(state.zoom_fit, ZoomFit::Settled);
+        assert!((fitted_width - 500.0).abs() < 1e-3, "{fitted_width}");
+    }
+
+    #[test]
+    fn settled_zoom_is_left_alone() {
+        let (mut state, library) = clip_with_three_keys();
+        state.last_visible_width = 500.0;
+        state.zoom_level = 3.0;
+
+        timeline_apply_awaited_fit_zoom(&mut state, &library);
+
+        assert_eq!(state.zoom_level, 3.0);
+    }
 
     #[test]
     fn set_keyframe_selection_replace() {

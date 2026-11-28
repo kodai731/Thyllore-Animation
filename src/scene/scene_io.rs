@@ -1,23 +1,41 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use thyllore_anim_core::editable::EditableAnimationClip;
 
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
-use super::file::{AnimationClipRef, ModelReference, SceneFile, SCENE_FORMAT_VERSION};
-use crate::ecs::resource::{ClipLibrary, ModelState, SceneState};
+use super::file::{
+    is_file_in_directory, AnimationClipRef, SceneFile, ANIMATIONS_DIR_NAME, SCENE_FORMAT_VERSION,
+};
+use crate::ecs::resource::{ClipLibrary, SceneState};
 use crate::ecs::world::World;
 use crate::hooks::scene::SceneValue;
 use crate::hooks::scene_resource::SceneResourceHooks;
 
+const SCENES_DIR_NAME: &str = "scenes";
+
+/// The directory a scene's relative asset paths start from: a scene file sits in `<assets>/scenes/`.
+pub fn scene_assets_dir(scene_path: &Path) -> PathBuf {
+    scene_path
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
+}
+
+/// A scene file outside a `scenes` directory has no assets tree a path could be relative to.
+pub fn is_scene_in_assets_tree(scene_path: &Path) -> bool {
+    scene_path
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|scenes_dir| scenes_dir == SCENES_DIR_NAME)
+}
+
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
-    let animations_dir = scene_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("animations");
+    let animations_dir = scene_assets_dir(scene_path).join(ANIMATIONS_DIR_NAME);
     fs::create_dir_all(&animations_dir)?;
     let animation_clips = save_animation_clips(world, &animations_dir)?;
 
@@ -36,12 +54,8 @@ fn build_scene_file(animation_clips: Vec<AnimationClipRef>, world: &World) -> Sc
         .as_ref()
         .map(|m| m.name.clone())
         .unwrap_or_else(|| "Untitled Scene".to_string());
-    let model_path = world
-        .get_resource::<ModelState>()
-        .map(|s| s.model_path.clone())
-        .unwrap_or_default();
 
-    let mut scene = SceneFile::new(&scene_name, &model_path);
+    let mut scene = SceneFile::new(&scene_name);
     scene.animation_clips = animation_clips;
     scene.resources = capture_scene_resources(world);
     scene.entities = capture_scene_entities(world);
@@ -90,31 +104,66 @@ fn save_animation_clips(
     world: &World,
     animations_dir: &Path,
 ) -> SceneResult<Vec<AnimationClipRef>> {
-    let clip_library = match world.get_resource::<ClipLibrary>() {
-        Some(cm) => cm,
-        None => return Ok(Vec::new()),
+    let Some(mut clip_library) = world.get_resource_mut::<ClipLibrary>() else {
+        return Ok(Vec::new());
     };
 
     let mut animation_clips = Vec::new();
-    let mut saved_paths = std::collections::HashSet::new();
+    let mut claimed_files = HashSet::new();
 
-    for (clip_id, clip_name) in
-        crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library)
-    {
-        if let Some(clip) = clip_library.get(clip_id) {
-            let clip_filename = sanitize_filename(&clip_name);
-            let relative_path = format!("animations/{}.anim.ron", clip_filename);
+    for clip_id in clip_library.user_clip_ids() {
+        let Some(source) = clip_library.get_source_mut(clip_id) else {
+            continue;
+        };
+        let clip = &mut source.editable_clip;
 
-            let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
-            save_animation_clip(&clip_path, clip)?;
+        let clip_file = choose_clip_file(clip, animations_dir, &claimed_files);
+        save_animation_clip(&clip_file, clip)?;
+        clip.source_path = Some(clip_file.to_string_lossy().into_owned());
 
-            if saved_paths.insert(relative_path.clone()) {
-                animation_clips.push(AnimationClipRef::new(&relative_path));
-            }
-        }
+        animation_clips.extend(AnimationClipRef::for_clip_file(&clip_file));
+        claimed_files.insert(clip_file);
     }
 
     Ok(animation_clips)
+}
+
+/// A clip keeps the file it was loaded from; a clip without one takes the first unused name.
+fn choose_clip_file(
+    clip: &EditableAnimationClip,
+    animations_dir: &Path,
+    claimed_files: &HashSet<PathBuf>,
+) -> PathBuf {
+    let owned_file = find_owned_clip_file(clip, animations_dir);
+    if let Some(owned_file) = owned_file.filter(|file| !claimed_files.contains(file)) {
+        return owned_file;
+    }
+
+    let file_stem = sanitize_filename(&clip.name);
+    let mut candidate = animations_dir.join(format!("{file_stem}.anim.ron"));
+    let mut next_suffix = 2;
+    while claimed_files.contains(&candidate) || candidate.exists() {
+        candidate = animations_dir.join(format!("{file_stem}_{next_suffix}.anim.ron"));
+        next_suffix += 1;
+    }
+    candidate
+}
+
+fn find_owned_clip_file(clip: &EditableAnimationClip, animations_dir: &Path) -> Option<PathBuf> {
+    let source_file = Path::new(clip.source_path.as_deref()?);
+    let file_name = source_file.file_name()?;
+
+    is_file_in_directory(source_file, animations_dir).then(|| animations_dir.join(file_name))
+}
+
+/// How the open scene names the file of a clip; two clips never share a name, saved or not.
+pub fn find_scene_clip_file(world: &World, clip: &EditableAnimationClip) -> Option<String> {
+    let assets_dir = match world.get_resource::<SceneState>() {
+        Some(scene_state) => scene_state.assets_dir(),
+        None => SceneState::new().assets_dir(),
+    };
+
+    AnimationClipRef::for_clip(clip, &assets_dir).map(|clip_ref| clip_ref.path)
 }
 
 fn write_scene_file(scene_path: &Path, scene: &SceneFile) -> SceneResult<()> {
@@ -150,16 +199,10 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
         });
     }
 
-    let assets_dir = scene_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .parent()
-        .unwrap_or(Path::new("."));
-
-    let model_path = resolve_model_path(assets_dir, &scene.model)?;
+    let assets_dir = scene_assets_dir(scene_path);
 
     let mut clips = Vec::new();
-    let mut loaded_paths = std::collections::HashSet::new();
+    let mut loaded_paths = HashSet::new();
     for clip_ref in &scene.animation_clips {
         if !loaded_paths.insert(clip_ref.path.clone()) {
             continue;
@@ -172,15 +215,15 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
 
     log!("Loaded scene from: {}", scene_path.display());
 
-    Ok(LoadedScene {
-        scene,
-        model_path,
-        clips,
-    })
+    Ok(LoadedScene { scene, clips })
+}
+
+pub fn default_scene_path() -> PathBuf {
+    PathBuf::from("assets/scenes/default.scene.ron")
 }
 
 pub fn find_default_scene() -> Option<PathBuf> {
-    let path = PathBuf::from("assets/scenes/default.scene.ron");
+    let path = default_scene_path();
     if path.exists() {
         Some(path)
     } else {
@@ -190,21 +233,7 @@ pub fn find_default_scene() -> Option<PathBuf> {
 
 pub struct LoadedScene {
     pub scene: SceneFile,
-    /// `None` when the scene's mesh was generated in-app and has no file to load.
-    pub model_path: Option<PathBuf>,
-    pub clips: Vec<crate::animation::editable::EditableAnimationClip>,
-}
-
-fn resolve_model_path(assets_dir: &Path, model: &ModelReference) -> SceneResult<Option<PathBuf>> {
-    if model.is_generated_mesh() {
-        return Ok(None);
-    }
-
-    let model_path = assets_dir.join(&model.path);
-    if !model_path.exists() {
-        return Err(SceneError::ModelNotFound(model_path));
-    }
-    Ok(Some(model_path))
+    pub clips: Vec<EditableAnimationClip>,
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -239,17 +268,8 @@ mod tests {
     use crate::ecs::resource::{Camera, PanelLayout, TimelineState};
     use crate::ecs::world::{Name, Transform};
     use crate::hooks::scene::{decode_scene_value, SceneOwner};
-    use cgmath::Vector3;
+    use glam::Vec3;
     use thyllore_scene_core::SceneComponent;
-
-    fn write_scene(dir: &Path, model_path: &str) -> PathBuf {
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene = SceneFile::new("test", model_path);
-        let scene_path = scenes_dir.join("test.scene.ron");
-        write_scene_file(&scene_path, &scene).unwrap();
-        scene_path
-    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("thyllore_scene_{name}"));
@@ -273,35 +293,9 @@ mod tests {
     }
 
     #[test]
-    fn generated_mesh_scene_loads_without_a_model_file() {
-        let dir = temp_dir("generated");
-        let scene_path = write_scene(&dir, ModelReference::GENERATED_MESH);
-
-        let loaded = load_scene(&scene_path).expect("generated mesh is not a file path");
-
-        assert!(loaded.model_path.is_none());
-        assert!(loaded.scene.model.is_generated_mesh());
-    }
-
-    #[test]
-    fn scene_pointing_at_a_missing_model_file_is_rejected() {
-        let dir = temp_dir("missing");
-        let scene_path = write_scene(&dir, "models/does_not_exist.glb");
-
-        assert!(matches!(
-            load_scene(&scene_path),
-            Err(SceneError::ModelNotFound(_))
-        ));
-    }
-
-    #[test]
     fn older_format_versions_are_rejected() {
         let scene_path = scene_path_in("old_version");
-        fs::write(
-            &scene_path,
-            r#"(version: 6, model: (path: "Generated Mesh"))"#,
-        )
-        .unwrap();
+        fs::write(&scene_path, r#"(version: 6)"#).unwrap();
 
         assert!(matches!(
             load_scene(&scene_path),
@@ -313,25 +307,13 @@ mod tests {
     }
 
     #[test]
-    fn scene_resolves_an_existing_model_file() {
-        let dir = temp_dir("present");
-        fs::create_dir_all(dir.join("models")).unwrap();
-        fs::write(dir.join("models/mesh.glb"), b"stub").unwrap();
-        let scene_path = write_scene(&dir, "models/mesh.glb");
-
-        let loaded = load_scene(&scene_path).expect("model file exists");
-
-        assert_eq!(loaded.model_path, Some(dir.join("models/mesh.glb")));
-    }
-
-    #[test]
     fn registered_resources_roundtrip_through_the_file() {
         let scene_path = scene_path_in("resources");
-        let mut world = world_with_resources();
+        let world = world_with_resources();
         {
             let mut camera = world.resource_mut::<Camera>();
             camera.distance = 12.5;
-            camera.pivot = Vector3::new(1.0, 2.0, 3.0);
+            camera.pivot = Vec3::new(1.0, 2.0, 3.0);
         }
         world.resource_mut::<PanelLayout>().debug_height = 123.0;
         world.resource_mut::<TimelineState>().looping = false;
@@ -349,7 +331,7 @@ mod tests {
         let camera = restored.resource::<Camera>();
         assert_eq!(camera.distance, 12.5);
         assert_eq!(camera.initial_distance, 12.5);
-        assert_eq!(camera.pivot, Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(camera.pivot, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(restored.resource::<PanelLayout>().debug_height, 123.0);
         assert!(!restored.resource::<TimelineState>().looping);
     }
@@ -400,7 +382,7 @@ mod tests {
             restored
                 .get_component::<Transform>(restored_entity)
                 .map(|t| t.translation),
-            Some(Vector3::new(4.0, 5.0, 6.0))
+            Some(Vec3::new(4.0, 5.0, 6.0))
         );
         assert_eq!(
             restored
@@ -453,6 +435,87 @@ mod tests {
             .iter_components::<crate::ecs::component::DebugPrimitiveTag>()
             .next()
             .is_none());
+    }
+
+    fn register_clip(world: &World, assets: &mut crate::asset::AssetStorage, name: &str) -> u64 {
+        crate::ecs::systems::clip_library_register_and_activate(
+            &mut world.resource_mut::<ClipLibrary>(),
+            assets,
+            EditableAnimationClip::new(0, name.to_string()),
+        )
+    }
+
+    fn list_clip_files(scene_path: &Path) -> Vec<String> {
+        let animations_dir = scene_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("animations");
+        let mut names: Vec<String> = fs::read_dir(animations_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn unedited_model_clips_are_left_to_the_model_file() {
+        let scene_path = scene_path_in("model_clips");
+        let mut world = world_with_resources();
+        world.insert_resource(ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        register_clip(&world, &mut assets, "Take 001");
+        let model_clip_id = register_clip(&world, &mut assets, "Take 001");
+        let edited_model_clip_id = register_clip(&world, &mut assets, "Walk");
+        {
+            let mut library = world.resource_mut::<ClipLibrary>();
+            library
+                .model_clip_ids
+                .extend([model_clip_id, edited_model_clip_id]);
+            library.get_mut(edited_model_clip_id).unwrap().duration = 2.0;
+        }
+
+        save_scene(&scene_path, &world).unwrap();
+
+        assert_eq!(
+            list_clip_files(&scene_path),
+            vec!["Take_001.anim.ron", "Walk.anim.ron"]
+        );
+        let loaded = load_scene(&scene_path).unwrap();
+        assert_eq!(loaded.clips.len(), 2);
+    }
+
+    #[test]
+    fn saving_never_overwrites_a_file_another_clip_owns() {
+        let scene_path = scene_path_in("clip_ownership");
+        let animations_dir = scene_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("animations");
+        fs::create_dir_all(&animations_dir).unwrap();
+        let foreign_file = animations_dir.join("Wave.anim.ron");
+        fs::write(&foreign_file, "foreign").unwrap();
+
+        let mut world = world_with_resources();
+        world.insert_resource(ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        register_clip(&world, &mut assets, "Wave");
+        register_clip(&world, &mut assets, "Wave");
+
+        save_scene(&scene_path, &world).unwrap();
+        save_scene(&scene_path, &world).unwrap();
+
+        assert_eq!(fs::read_to_string(&foreign_file).unwrap(), "foreign");
+        assert_eq!(
+            list_clip_files(&scene_path),
+            vec!["Wave.anim.ron", "Wave_2.anim.ron", "Wave_3.anim.ron"]
+        );
+        let loaded = load_scene(&scene_path).unwrap();
+        assert_eq!(loaded.scene.animation_clips.len(), 2);
     }
 
     #[test]

@@ -9,12 +9,12 @@ use crate::ecs::systems::phases::event_dispatch::avatar_setup::AvatarSetupEvent;
 use crate::platform::ui::ui_rows::UiRow;
 
 #[derive(Clone)]
-pub struct ExportView {
+pub(super) struct ExportView {
     pub body_collider_fit: CapsuleFitParams,
 }
 
 impl ExportView {
-    pub fn from_state(state: &AvatarSetupState) -> Self {
+    pub(super) fn from_state(state: &AvatarSetupState) -> Self {
         Self {
             body_collider_fit: state.body_collider_fit.clone(),
         }
@@ -69,7 +69,7 @@ fn body_collider_fit_group() -> UiRow<ExportView> {
     }
 }
 
-pub fn rows() -> Vec<UiRow<ExportView>> {
+pub(super) fn rows() -> Vec<UiRow<ExportView>> {
     vec![
         UiRow::Action {
             label: "Export for Unity",

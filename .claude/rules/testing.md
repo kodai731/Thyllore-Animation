@@ -62,13 +62,13 @@ GitHub Actions workflows.
 
 ## CI Reproduction — Run `scripts/collect_wheels.sh` Before Pushing
 
-**IMPORTANT:** Before pushing any change that touches `crates/thyllore-ml-core`,
+**IMPORTANT:** Before pushing any change that touches `crates/thyllore-ml-core`, `crates/thyllore-avatar-api`,
 `pybindings/`, the blender addon, or anything affecting wheel builds, reproduce
 the GitHub Actions wheel build locally:
 
 ```bash
-scripts/collect_wheels.sh                 # production wheel (no debug-log)
-scripts/collect_wheels.sh --debug-log     # debug wheel (addon file logging)
+scripts/collect_wheels.sh                                   # production wheels (no debug-log)
+scripts/collect_wheels.sh --crate thyllore-ml-core --debug-log    # debug wheel (addon file logging), or --crate thyllore-avatar-api
 ```
 
 This runs the same maturin invocation CI does and surfaces compile errors
@@ -77,7 +77,7 @@ directly. Local turnaround is ~30s incremental vs minutes per CI round-trip.
 ### ML path: v2 curve-copilot only
 
 The only supported ML inference path is the **v2 curve-copilot** model
-(`V2CurveCopilotSession` / `forecast`, under `copilot::v2::`,
+(`V2CurveCopilotSession` / `forecast`, under `thyllore_ml_core::v2::`,
 `curve_copilot_20260630_v2_k48opt.onnx`). v2 is reveal-none extrapolation:
 4 ONNX inputs (`context` / `context_times` / `future_times` / `context_tangent`,
 all `[batch, 64]`), no `future` / `reveal_mask`. The Rust runtime does the
@@ -109,6 +109,7 @@ same check locally with `scripts/ci_v2_curve_copilot_inference_smoke.sh`.
 | Blender addon (`blender_addon/**`) | `scripts/run_blender_debug.sh` — builds the debug wheel + addon, installs, launches the test scene; the operator smoke runs headless via `blender_addon/tests/curve_copilot_operator_smoke.py` |
 | engine ML systems (`src/ecs/systems/curve_copilot/`, `src/ml/`) | `cargo check --lib` + `cargo test --lib curve_suggestion` |
 | Animation / ECS / rendering (no ML) | `cargo test --lib` + `cargo test --test ecs_tests --no-default-features` |
+| Model loading, pose overrides, node / bone transforms | the row above + `cargo test --test bounds_validation_tests --test scale_matrix_tests --no-default-features` |
 | Avatar workflow (blend shape edit / keying, `.anim` and sidecar export, `unity/**`) | `./run.sh unity-verify` — Blender rig → engine batch run (GPU + display) → Unity batch; fails when Unity's sampled blend shape weights differ from the engine's |
 
 ONNX Runtime must be present at `vendor/onnxruntime/onnxruntime-linux-x64-*/lib/`
@@ -129,6 +130,9 @@ see `CLAUDE.md`):
 
 - `ecs_tests.rs` — ECS world, systems and scene round trips
 - `gltf_export_tests.rs`, `animation_roundtrip_tests.rs` — export / re-import parity
+- `bounds_validation_tests.rs`, `scale_matrix_tests.rs` — loaded FBX / glTF models: animated bounds against
+  Blender, bone pose override round trips, scale matrices with and without an armature. They are not part of
+  `cargo test --lib`
 - `asset_dependency_tests.rs`, `closed_form_guard.rs`, `ui_raw_pointer_reads.rs` — invariants over assets, the
   analytic core and the UI pointer accessor
 - `integration_tests.rs`, `model_loading_tests.rs`, `shader_tests.rs` — project structure, model files,

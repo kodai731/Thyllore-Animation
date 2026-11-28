@@ -1,3 +1,3 @@
 mod section;
 
-pub use section::*;
+pub(super) use section::*;

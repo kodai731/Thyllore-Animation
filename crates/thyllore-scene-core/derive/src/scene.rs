@@ -5,7 +5,7 @@ use syn::{
     Data, DeriveInput, Error, Expr, Field, Fields, Ident, LitStr, Meta, Path, Result, Token, Type,
 };
 
-pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
+pub(crate) fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     let Data::Struct(data) = &input.data else {
         return Err(Error::new_spanned(
             &input.ident,
@@ -33,14 +33,14 @@ pub fn expand_scene_fields(input: &DeriveInput) -> Result<TokenStream> {
     })
 }
 
-pub struct StructAttributes {
+pub(crate) struct StructAttributes {
     pub tag: Path,
     pub owner: Option<Ident>,
     pub group: Option<LitStr>,
     pub scene: Option<SceneNames>,
 }
 
-pub struct SceneNames {
+pub(crate) struct SceneNames {
     pub key: LitStr,
     pub tags: Ident,
     pub snapshot: Ident,
@@ -49,7 +49,7 @@ pub struct SceneNames {
     pub overwrite: Ident,
 }
 
-pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> {
+pub(crate) fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> {
     let scene_attr = input.attrs.iter().find(|a| a.path().is_ident("scene"));
     let params_attr = input.attrs.iter().find(|a| a.path().is_ident("params"));
     let (attr, is_scene) = match (scene_attr, params_attr) {
@@ -128,13 +128,13 @@ pub fn parse_struct_attributes(input: &DeriveInput) -> Result<StructAttributes> 
     })
 }
 
-pub enum FieldSpec {
+pub(crate) enum FieldSpec {
     Persist(ParamField),
     Runtime(ParamField),
     Nested(NestedField),
 }
 
-pub struct ParamField {
+pub(crate) struct ParamField {
     pub ident: Ident,
     pub field_ty: Type,
     pub value_ty: Type,
@@ -149,20 +149,20 @@ pub struct ParamField {
     pub curve: bool,
 }
 
-pub enum Conversion {
+pub(crate) enum Conversion {
     Plain,
     From,
     With(Path),
 }
 
-pub struct NestedField {
+pub(crate) struct NestedField {
     pub ident: Ident,
     pub ty: Type,
     pub persisted: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ValueKind {
+pub(crate) enum ValueKind {
     F32,
     U32,
     Bool,
@@ -171,7 +171,7 @@ pub enum ValueKind {
 }
 
 #[derive(Default)]
-pub struct UiAttributes {
+pub(crate) struct UiAttributes {
     pub primary: bool,
     pub kind: Option<Ident>,
     pub min: Option<Expr>,
@@ -179,9 +179,10 @@ pub struct UiAttributes {
     pub format: Option<LitStr>,
     pub group: Option<LitStr>,
     pub label: Option<LitStr>,
+    pub hidden_when: Option<syn::Path>,
 }
 
-pub fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
+pub(crate) fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<FieldSpec>> {
     let mut specs = Vec::new();
 
     for field in fields.iter() {
@@ -218,12 +219,6 @@ pub fn parse_fields(fields: &Fields, attrs: &StructAttributes) -> Result<Vec<Fie
             specs.push(FieldSpec::Persist(param));
         } else if let Some(attr) = runtime {
             let mut param = parse_param_field(field, attr, attrs)?;
-            if !matches!(param.conversion, Conversion::Plain) {
-                return Err(Error::new_spanned(
-                    field,
-                    "runtime fields take no `as` / `with`",
-                ));
-            }
             param.doc = doc_comment(field);
             specs.push(FieldSpec::Runtime(param));
         } else if let Some(attr) = nested {
@@ -253,7 +248,7 @@ fn parse_nested_persisted(attr: &syn::Attribute) -> Result<bool> {
     Ok(persisted)
 }
 
-pub fn parse_param_field(
+pub(crate) fn parse_param_field(
     field: &Field,
     attr: &syn::Attribute,
     attrs: &StructAttributes,
@@ -316,10 +311,27 @@ pub fn parse_param_field(
         if kind == ValueKind::Other {
             return Err(Error::new_spanned(
                 field,
-                "ui is only available for f32 / u32 / bool / [f32; N] / Vector3<f32> values",
+                "ui is only available for f32 / u32 / bool / [f32; N] / Vec3 values",
             ));
         }
-        if ui.min.is_none() || ui.max.is_none() {
+        let seed_kind = ui.kind.as_ref().is_some_and(|k| k == "Seed");
+        let switch_kind = ui.kind.as_ref().is_some_and(|k| k == "Switch");
+        let rangeless_kind = seed_kind || switch_kind;
+        let has_range = ui.min.is_some() && ui.max.is_some();
+        let has_range_bound = ui.min.is_some() || ui.max.is_some();
+        if rangeless_kind && has_range_bound {
+            return Err(Error::new_spanned(
+                field,
+                "Seed / Switch take no `min` / `max`",
+            ));
+        }
+        if seed_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Seed needs a u32 value"));
+        }
+        if switch_kind && kind != ValueKind::Bool {
+            return Err(Error::new_spanned(field, "Switch needs a bool value"));
+        }
+        if !rangeless_kind && !has_range {
             return Err(Error::new_spanned(field, "ui requires `min` and `max`"));
         }
         let color_kind = ui
@@ -331,6 +343,10 @@ pub fn parse_param_field(
                 field,
                 "Color / Absorption need a [f32; 3] value",
             ));
+        }
+        let int_kind = ui.kind.as_ref().is_some_and(|k| k == "Int");
+        if int_kind && kind != ValueKind::U32 {
+            return Err(Error::new_spanned(field, "Int needs a u32 value"));
         }
     }
     if scalars && !matches!(kind, ValueKind::Array(_)) {
@@ -396,6 +412,8 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
             ui.group = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("label") {
             ui.label = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("hidden_when") {
+            ui.hidden_when = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("primary") {
             ui.primary = true;
         } else {
@@ -409,7 +427,7 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
 
 fn value_kind(ty: &Type) -> ValueKind {
     match ty {
-        Type::Path(path) if is_f32_vector3(path) => ValueKind::Array(3),
+        Type::Path(path) if is_vec3(path) => ValueKind::Array(3),
         Type::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 => {
             match path.path.segments[0].ident.to_string().as_str() {
                 "f32" => ValueKind::F32,
@@ -436,17 +454,11 @@ fn value_kind(ty: &Type) -> ValueKind {
     }
 }
 
-fn is_f32_vector3(path: &syn::TypePath) -> bool {
+fn is_vec3(path: &syn::TypePath) -> bool {
     let Some(last) = path.path.segments.last() else {
         return false;
     };
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return false;
-    };
-    path.qself.is_none()
-        && last.ident == "Vector3"
-        && args.args.len() == 1
-        && matches!(&args.args[0], syn::GenericArgument::Type(Type::Path(p)) if p.path.is_ident("f32"))
+    path.qself.is_none() && last.ident == "Vec3" && last.arguments.is_none()
 }
 
 fn doc_comment(field: &Field) -> String {
@@ -468,7 +480,7 @@ fn doc_comment(field: &Field) -> String {
     lines.join(" ")
 }
 
-pub fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
+pub(crate) fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
     let field = &param.ident;
     let value_ty = &param.value_ty;
     match &param.conversion {
@@ -480,7 +492,7 @@ pub fn read_value(param: &ParamField, component: &TokenStream) -> TokenStream {
     }
 }
 
-pub fn write_value(
+pub(crate) fn write_value(
     param: &ParamField,
     component: &TokenStream,
     value: &TokenStream,
@@ -816,8 +828,19 @@ fn component_suffixes(param: &ParamField, len: usize) -> Vec<&'static str> {
 fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     let ui = param.ui.as_ref()?;
     let field_name = param.ident.to_string();
-    let min = ui.min.as_ref().expect("checked at parse");
-    let max = ui.max.as_ref().expect("checked at parse");
+    let min = ui
+        .min
+        .as_ref()
+        .map_or_else(|| quote!(0.0), |min| quote!(#min));
+    let rangeless_max = if ui.kind.as_ref().is_some_and(|k| k == "Switch") {
+        quote!(1.0)
+    } else {
+        quote!(u32::MAX as f32)
+    };
+    let max = ui
+        .max
+        .as_ref()
+        .map_or_else(|| rangeless_max, |max| quote!(#max));
     let default_kind = match param.kind {
         ValueKind::Array(3) => "Color",
         _ => "Scalar",
@@ -837,6 +860,10 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
     };
     let tooltip = &param.doc;
     let primary = ui.primary;
+    let hidden_when = match &ui.hidden_when {
+        Some(condition) => quote!(Some(&#condition)),
+        None => quote!(None),
+    };
 
     Some(quote! {
         out.push(::thyllore_scene_core::UiParam {
@@ -851,6 +878,7 @@ fn expand_ui(param: &ParamField, persisted: bool) -> Option<TokenStream> {
             tooltip: #tooltip,
             persisted: #persisted,
             primary: #primary,
+            hidden_when: #hidden_when,
         });
     })
 }
@@ -1164,6 +1192,87 @@ mod tests {
     }
 
     #[test]
+    fn int_kind_needs_a_u32_value() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Int"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Int, min = 0.0, max = 8.0))] pub count: f32 }}"
+        ));
+        assert!(message.contains("Int needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn seed_kind_is_a_u32_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: u32 }}"
+        ));
+        assert!(expanded.contains("UiKind :: Seed"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed, min = 0.0, max = 8.0))] pub seed: u32 }}"
+        ));
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Seed))] pub seed: f32 }}"
+        ));
+        assert!(message.contains("Seed needs a u32 value"), "{message}");
+    }
+
+    #[test]
+    fn switch_kind_is_a_bool_without_a_range() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: bool }}"
+        ));
+        assert!(expanded.contains("UiKind :: Switch"), "{expanded}");
+        assert!(expanded.contains("max : 1.0"), "{expanded}");
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch, min = 0.0, max = 1.0))] pub enabled: bool }}"
+        ));
+        assert!(
+            message.contains("Seed / Switch take no `min` / `max`"),
+            "{message}"
+        );
+
+        let message = expand_err(&format!(
+            "{TOP} struct S {{ #[persist(ui(kind = Switch))] pub enabled: u32 }}"
+        ));
+        assert!(message.contains("Switch needs a bool value"), "{message}");
+    }
+
+    #[test]
+    fn converted_runtime_field_is_a_scalar() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[runtime(as = u32, with = shader_value)] pub kind: Kind }}"
+        ));
+        assert!(expanded.contains("shader_value :: get"), "{expanded}");
+        assert!(expanded.contains("shader_value :: set"), "{expanded}");
+        assert!(
+            expanded.contains("PERSISTED_FIELDS : & 'static [& 'static str] = & []"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn hidden_when_references_the_declared_condition() {
+        let expanded = expand(&format!(
+            "{TOP} struct S {{ #[persist(ui(min = 0.0, max = 1.0, hidden_when = FOLLOWS_TARGET))] pub end: f32, #[persist(ui(min = 0.0, max = 1.0))] pub start: f32 }}"
+        ));
+        assert!(
+            expanded.contains("hidden_when : Some (& FOLLOWS_TARGET)"),
+            "{expanded}"
+        );
+        assert!(expanded.contains("hidden_when : None"), "{expanded}");
+    }
+
+    #[test]
     fn runtime_field_is_ui_only() {
         let expanded = expand(&format!(
             "{TOP} struct S {{ #[runtime(ui(min = 0.0, max = 4.0))] pub time_scale: f32 }}"
@@ -1214,7 +1323,7 @@ mod tests {
     #[test]
     fn vector3_with_ui_is_a_three_component_array() {
         let expanded = expand(&format!(
-            "{TOP} struct S {{ #[persist(ui(kind = Offset, min = -1.0, max = 1.0))] pub dir: cgmath::Vector3<f32> }}"
+            "{TOP} struct S {{ #[persist(ui(kind = Offset, min = -1.0, max = 1.0))] pub dir: Vec3 }}"
         ));
         for suffix in ["dir_x", "dir_y", "dir_z"] {
             assert!(expanded.contains(&format!("\"{suffix}\"")), "{expanded}");

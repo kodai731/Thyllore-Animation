@@ -1,16 +1,15 @@
 use anyhow::Result;
 
 use crate::asset::AssetStorage;
-use crate::ecs::World;
-use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::{
+use crate::ecs::world::World;
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::renderer::{FrameTransients, OnionSkinGpuState, TransientSlot};
+use thyllore_vulkan_core::resource::GraphicsResources;
+use thyllore_vulkan_core::resource::RayTracingData;
+use thyllore_vulkan_core::resource::{
     AutoExposureBuffers, BloomChain, DofBuffer, GpuBufferRegistry, HdrBuffer, OffscreenFramebuffer,
     PipelineStorage, RenderTargetTransient, TransientImage,
 };
-use thyllore_vulkan_core::renderer::{FrameTransients, TransientSlot};
-use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
 use thyllore_vulkan_core::FrameRenderContext;
 
 /// What a `RenderPassNode` may read while declaring targets and recording, and what `prepare`

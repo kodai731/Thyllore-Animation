@@ -1,30 +1,32 @@
-use crate::core::device::*;
-use crate::descriptor::{PassShaders, ShaderStage};
-use crate::resource::buffer::create_buffer;
-use crate::resource::gpu_resource::GpuResource;
+use crate::core::*;
+use crate::descriptor::PassShaders;
+use crate::resource::create_buffer;
+use crate::resource::GpuResource;
+use crate::types::Instance;
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
+use thyllore_spirv_reflect::ShaderStage;
 use vulkanalia::bytecode::Bytecode;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 #[derive(Clone, Debug)]
 pub struct RRRayTracingPipeline {
-    pub pipeline_layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
-    pub sbt_buffer: vk::Buffer,
-    pub sbt_memory: vk::DeviceMemory,
-    pub raygen_region: vk::StridedDeviceAddressRegionKHR,
-    pub miss_region: vk::StridedDeviceAddressRegionKHR,
-    pub hit_region: vk::StridedDeviceAddressRegionKHR,
-    pub callable_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub(crate) pipeline: vk::Pipeline,
+    pub(crate) sbt_buffer: vk::Buffer,
+    pub(crate) sbt_memory: vk::DeviceMemory,
+    pub(crate) raygen_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) miss_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) hit_region: vk::StridedDeviceAddressRegionKHR,
+    pub(crate) callable_region: vk::StridedDeviceAddressRegionKHR,
 }
 
 /// One SBT hit record: a triangle group (closest hit only) or a procedural group
 /// (intersection + closest hit). Records follow the closest hit order of the pass manifest, and an
 /// intersection stage pairs with the closest hit stage listed right after it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HitGroup {
+pub(super) enum HitGroup {
     Triangles {
         closest_hit: usize,
     },
@@ -44,14 +46,14 @@ impl HitGroup {
 }
 
 /// Stage indices of a pass in manifest order, so the SBT can be laid out without naming a shader.
-pub struct TraceStages {
+pub(super) struct TraceStages {
     pub raygen: usize,
     pub miss: usize,
     pub hit_groups: Vec<HitGroup>,
 }
 
 impl TraceStages {
-    pub fn from_pass(pass: &PassShaders) -> Result<Self> {
+    pub(super) fn from_pass(pass: &PassShaders) -> Result<Self> {
         let mut raygen = None;
         let mut miss = None;
         let mut pending_intersection = None;
@@ -125,11 +127,19 @@ impl RRRayTracingPipeline {
         instance: &Instance,
         rrdevice: &RRDevice,
         pass: &PassShaders,
-        descriptor_set_layouts: &[vk::DescriptorSetLayout],
-        push_constant_ranges: &[vk::PushConstantRange],
+        descriptor_set_layouts: &[crate::types::DescriptorSetLayout],
+        push_constant_ranges: &[crate::types::PushConstantRange],
         recursion_depth: u32,
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
+        let descriptor_set_layouts: Vec<vk::DescriptorSetLayout> = descriptor_set_layouts
+            .iter()
+            .map(|layout| layout.raw())
+            .collect();
+        let push_constant_ranges: Vec<vk::PushConstantRange> = push_constant_ranges
+            .iter()
+            .map(|range| range.raw())
+            .collect();
         let trace_stages = TraceStages::from_pass(pass)?;
 
         let mut modules = Vec::with_capacity(pass.stages.len());
@@ -151,9 +161,9 @@ impl RRRayTracingPipeline {
         let groups = shader_groups(&trace_stages);
 
         let mut layout_info =
-            vk::PipelineLayoutCreateInfo::builder().set_layouts(descriptor_set_layouts);
+            vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_set_layouts);
         if !push_constant_ranges.is_empty() {
-            layout_info = layout_info.push_constant_ranges(push_constant_ranges);
+            layout_info = layout_info.push_constant_ranges(&push_constant_ranges);
         }
         let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 
@@ -201,7 +211,7 @@ impl RRRayTracingPipeline {
         })
     }
 
-    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+    pub(crate) unsafe fn destroy(&self, device: &vulkanalia::Device) {
         device.destroy_pipeline(self.pipeline, None);
         device.destroy_pipeline_layout(self.pipeline_layout, None);
         device.destroy_buffer(self.sbt_buffer, None);
@@ -270,7 +280,9 @@ unsafe fn ray_tracing_properties(
 ) -> vk::PhysicalDeviceRayTracingPipelinePropertiesKHR {
     let mut rt_props = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
     let mut props2 = vk::PhysicalDeviceProperties2::builder().push_next(&mut rt_props);
-    instance.get_physical_device_properties2(rrdevice.physical_device, &mut props2);
+    instance
+        .raw()
+        .get_physical_device_properties2(rrdevice.physical_device, &mut props2);
     rt_props
 }
 
@@ -292,7 +304,7 @@ impl ShaderBindingTable {
         rt_props: &vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
         hit_group_count: usize,
     ) -> Result<Self> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
         let handle_size = rt_props.shader_group_handle_size as u64;
         let handle_alignment = rt_props.shader_group_handle_alignment as u64;
         let base_alignment = rt_props.shader_group_base_alignment as u64;
@@ -376,10 +388,10 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
         .code_size(bytecode.code_size())
         .code(bytecode.code());
 
-    Ok(rrdevice.device.create_shader_module(&info, None)?)
+    Ok(rrdevice.device().create_shader_module(&info, None)?)
 }
 
-pub fn align_up(v: u64, a: u64) -> u64 {
+pub(super) fn align_up(v: u64, a: u64) -> u64 {
     (v + a - 1) & !(a - 1)
 }
 
@@ -388,7 +400,7 @@ impl GpuResource for RRRayTracingPipeline {
         if self.pipeline == vk::Pipeline::null() {
             return;
         }
-        self.destroy(&rrdevice.device);
+        self.destroy(&rrdevice.device());
         self.pipeline = vk::Pipeline::null();
         self.pipeline_layout = vk::PipelineLayout::null();
         self.sbt_buffer = vk::Buffer::null();

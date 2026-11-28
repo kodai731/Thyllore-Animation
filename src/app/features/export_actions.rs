@@ -1,14 +1,14 @@
 use std::path::Path;
 
-use thyllore_avatar_core::humanoid::systems::mapping_io::humanoid_mapping_path;
+use thyllore_avatar_core::humanoid::humanoid_mapping_path;
 
-use crate::animation::editable::EditableAnimationClip;
-use crate::animation::Skeleton;
 use crate::app::App;
 use crate::ecs::resource::{
-    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, ModelState, TimelineState,
+    ClipLibrary, FbxModelCache, GltfModelCache, HumanoidRigState, TimelineState,
 };
-use crate::ecs::systems::{humanoid_bake_systems, vrm_humanoid_bones};
+use crate::ecs::systems::{bake_to_bone_clip, vrm_humanoid_bones};
+use thyllore_anim_core::editable::EditableAnimationClip;
+use thyllore_anim_core::Skeleton;
 
 pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
     let Some((clip, skeleton)) = clip_with_skeleton(app, source_id) else {
@@ -24,14 +24,14 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
 
     let result = match fbx_model {
         Some(fbx_model) => {
-            crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, Some(&clip), &skeleton, path)
+            thyllore_exporter_core::fbx::export_full_fbx(&fbx_model, Some(&clip), &skeleton, path)
         }
-        None => crate::exporter::fbx_animation::export_animation_fbx(
+        None => thyllore_exporter_core::fbx::export_animation_fbx(
             &clip,
             &skeleton,
             path,
             has_skinned_meshes,
-            crate::loader::fbx::fbx::FbxAxesInfo::default(),
+            thyllore_file_format_core::fbx::FbxAxesInfo::default(),
             24.0,
         ),
     };
@@ -46,12 +46,9 @@ pub(crate) fn export_clip_fbx(app: &App, source_id: u64, path: &Path) {
 }
 
 fn copy_humanoid_sidecar(app: &App, output_path: &Path) {
-    let model_path = app
-        .data
-        .ecs_world
-        .resource::<ModelState>()
-        .model_path
-        .clone();
+    let Some(model_path) = crate::ecs::systems::find_model_path(&app.data.ecs_world) else {
+        return;
+    };
     let sidecar_path = humanoid_mapping_path(Path::new(&model_path));
     if !sidecar_path.exists() {
         return;
@@ -102,7 +99,7 @@ pub(crate) fn export_clip_gltf(app: &App, source_id: u64, path: &Path) {
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_from_bytes(
+    match thyllore_exporter_core::gltf::export_gltf_animation_from_bytes(
         &source_bytes,
         &clip,
         &skeleton,
@@ -119,7 +116,7 @@ pub(crate) fn export_clip_gltf_animation_only(app: &App, source_id: u64, path: &
         return;
     };
 
-    match crate::exporter::gltf::export_gltf_animation_only(
+    match thyllore_exporter_core::gltf::export_gltf_animation_only(
         &clip,
         &skeleton,
         path,
@@ -153,7 +150,7 @@ pub(crate) fn export_model_fbx(app: &App, path: &Path) {
         return;
     };
 
-    match crate::exporter::fbx_exporter::export_full_fbx(&fbx_model, None, &skeleton, path) {
+    match thyllore_exporter_core::fbx::export_full_fbx(&fbx_model, None, &skeleton, path) {
         Ok(()) => {
             msg_info!("FBX exported: {:?}", path);
             copy_humanoid_sidecar(app, path);
@@ -185,7 +182,10 @@ pub(crate) fn export_model_gltf(app: &App, path: &Path) {
     }
 }
 
-pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimationClip, Skeleton)> {
+pub(crate) fn clip_with_skeleton(
+    app: &App,
+    source_id: u64,
+) -> Option<(EditableAnimationClip, Skeleton)> {
     let library = app.data.ecs_world.resource::<ClipLibrary>();
     let clip = library.get(source_id).cloned()?;
     drop(library);
@@ -210,7 +210,7 @@ pub fn clip_with_skeleton(app: &App, source_id: u64) -> Option<(EditableAnimatio
         .snap_settings
         .frame_rate
         .round() as u32;
-    match humanoid_bake_systems::bake_to_bone_clip(&clip, &skeleton, rig, fps) {
+    match bake_to_bone_clip(&clip, &skeleton, rig, fps) {
         Ok(baked) => Some((baked, skeleton)),
         Err(e) => {
             msg_error!("Role clip bake failed: {:?}", e);

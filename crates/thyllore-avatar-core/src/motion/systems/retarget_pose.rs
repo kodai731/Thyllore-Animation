@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use cgmath::{InnerSpace, Matrix, Matrix3, One, Quaternion, Rotation, Vector3, Zero};
+use glam::{Mat3, Quat, Vec3};
 
 use crate::humanoid::components::humanoid_frame::HumanoidFrame;
 use crate::humanoid::components::mapping::HumanoidMapping;
@@ -27,7 +27,7 @@ pub fn build_retarget_context(
     let left_foot_pos = skeleton.bones[left_foot_idx].world_position;
     let right_foot_pos = skeleton.bones[right_foot_idx].world_position;
 
-    let up = Vector3::from(frame.up);
+    let up = Vec3::from(frame.up);
     let lower_foot_y = left_foot_pos.dot(up).min(right_foot_pos.dot(up));
     let hips_height = hips_pos.dot(up) - lower_foot_y;
 
@@ -51,22 +51,22 @@ pub fn retarget_to_bones(ctx: &RetargetContext, pose: &SampledPose) -> Retargete
 
         let parent_rot = match ctx.skeleton.bones[bone_idx].parent {
             Some(parent_idx) => ctx.tpose_world[parent_idx],
-            None => Quaternion::one(),
+            None => Quat::IDENTITY,
         };
 
-        let t_parent_inv = parent_rot.invert();
+        let t_parent_inv = parent_rot.inverse();
         let t_i = ctx.tpose_world[bone_idx];
         let local_i = t_parent_inv * r_i * t_i;
 
         local_rotations.insert(bone_idx, local_i);
     }
 
-    let m = Matrix3::from_cols(
-        Vector3::from(ctx.frame.right),
-        Vector3::from(ctx.frame.up),
-        Vector3::from(ctx.frame.forward),
+    let m = Mat3::from_cols(
+        Vec3::from(ctx.frame.right),
+        Vec3::from(ctx.frame.up),
+        Vec3::from(ctx.frame.forward),
     );
-    let hips_translation = Vector3::new(
+    let hips_translation = Vec3::new(
         pose.hips_translation[0],
         pose.hips_translation[1],
         pose.hips_translation[2],
@@ -81,8 +81,8 @@ pub fn retarget_to_bones(ctx: &RetargetContext, pose: &SampledPose) -> Retargete
 
 pub fn retarget_from_bones(
     ctx: &RetargetContext,
-    local_rotations: &BTreeMap<usize, Quaternion<f32>>,
-    hips_offset: Vector3<f32>,
+    local_rotations: &BTreeMap<usize, Quat>,
+    hips_offset: Vec3,
 ) -> SampledPose {
     let mut rotations = BTreeMap::new();
 
@@ -90,23 +90,23 @@ pub fn retarget_from_bones(
         let local_i = local_rotations
             .get(&bone_idx)
             .copied()
-            .unwrap_or_else(Quaternion::one);
+            .unwrap_or(Quat::IDENTITY);
 
         let parent_rot = match ctx.skeleton.bones[bone_idx].parent {
             Some(parent_idx) => ctx.tpose_world[parent_idx],
-            None => Quaternion::one(),
+            None => Quat::IDENTITY,
         };
 
-        let t_i_inv = ctx.tpose_world[bone_idx].invert();
+        let t_i_inv = ctx.tpose_world[bone_idx].inverse();
         let r_i = parent_rot * local_i * t_i_inv;
 
         rotations.insert(role, thyllore_rotation_to_role(&ctx.frame, r_i));
     }
 
-    let m = Matrix3::from_cols(
-        Vector3::from(ctx.frame.right),
-        Vector3::from(ctx.frame.up),
-        Vector3::from(ctx.frame.forward),
+    let m = Mat3::from_cols(
+        Vec3::from(ctx.frame.right),
+        Vec3::from(ctx.frame.up),
+        Vec3::from(ctx.frame.forward),
     );
     let hips_translation = m.transpose() * hips_offset / ctx.hips_height;
 
@@ -117,10 +117,7 @@ pub fn retarget_from_bones(
     }
 }
 
-pub fn pose_world_positions(
-    ctx: &RetargetContext,
-    retargeted: &RetargetedPose,
-) -> Vec<Vector3<f32>> {
+pub fn pose_world_positions(ctx: &RetargetContext, retargeted: &RetargetedPose) -> Vec<Vec3> {
     let mut resolved = vec![None; ctx.skeleton.bones.len()];
     (0..resolved.len())
         .map(|bone_idx| resolve_world_transform(ctx, retargeted, bone_idx, &mut resolved).1)
@@ -131,35 +128,34 @@ fn resolve_world_transform(
     ctx: &RetargetContext,
     retargeted: &RetargetedPose,
     bone_idx: usize,
-    resolved: &mut [Option<(Quaternion<f32>, Vector3<f32>)>],
-) -> (Quaternion<f32>, Vector3<f32>) {
+    resolved: &mut [Option<(Quat, Vec3)>],
+) -> (Quat, Vec3) {
     if let Some(transform) = resolved[bone_idx] {
         return transform;
     }
 
     let bone = &ctx.skeleton.bones[bone_idx];
-    let (parent_rotation, parent_position, bind_local_rotation, local_translation) = match bone
-        .parent
-    {
-        Some(parent_idx) => {
-            let (parent_rotation, parent_position) =
-                resolve_world_transform(ctx, retargeted, parent_idx, resolved);
-            let bind_parent = &ctx.skeleton.bones[parent_idx];
-            let bind_parent_inverse = bind_parent.world_rotation.invert();
-            (
-                parent_rotation,
-                parent_position,
-                bind_parent_inverse * bone.world_rotation,
-                bind_parent_inverse.rotate_vector(bone.world_position - bind_parent.world_position),
-            )
-        }
-        None => (
-            Quaternion::one(),
-            Vector3::zero(),
-            bone.world_rotation,
-            bone.world_position,
-        ),
-    };
+    let (parent_rotation, parent_position, bind_local_rotation, local_translation) =
+        match bone.parent {
+            Some(parent_idx) => {
+                let (parent_rotation, parent_position) =
+                    resolve_world_transform(ctx, retargeted, parent_idx, resolved);
+                let bind_parent = &ctx.skeleton.bones[parent_idx];
+                let bind_parent_inverse = bind_parent.world_rotation.inverse();
+                (
+                    parent_rotation,
+                    parent_position,
+                    bind_parent_inverse * bone.world_rotation,
+                    bind_parent_inverse.mul_vec3(bone.world_position - bind_parent.world_position),
+                )
+            }
+            None => (
+                Quat::IDENTITY,
+                Vec3::ZERO,
+                bone.world_rotation,
+                bone.world_position,
+            ),
+        };
 
     let local_rotation = retargeted
         .local_rotations
@@ -167,7 +163,7 @@ fn resolve_world_transform(
         .copied()
         .unwrap_or(bind_local_rotation);
     let world_rotation = parent_rotation * local_rotation;
-    let mut world_position = parent_position + parent_rotation.rotate_vector(local_translation);
+    let mut world_position = parent_position + parent_rotation.mul_vec3(local_translation);
     if ctx.mapping.by_role.get(&HumanoidRole::Hips) == Some(&bone_idx) {
         world_position += retargeted.hips_offset;
     }
@@ -180,7 +176,7 @@ fn resolve_world_transform(
 mod tests {
     use std::collections::BTreeMap;
 
-    use cgmath::{InnerSpace, One, Quaternion, Vector3};
+    use glam::{Quat, Vec3};
 
     use crate::humanoid::components::humanoid_frame::HumanoidFrame;
     use crate::humanoid::components::mapping::HumanoidMapping;
@@ -212,8 +208,8 @@ mod tests {
     fn bone(parent: Option<usize>, x: f32, y: f32, z: f32) -> RetargetBone {
         RetargetBone {
             parent,
-            world_position: Vector3::new(x, y, z),
-            world_rotation: Quaternion::one(),
+            world_position: Vec3::new(x, y, z),
+            world_rotation: Quat::IDENTITY,
         }
     }
 
@@ -274,9 +270,9 @@ mod tests {
         let mut skeleton = build_skeleton();
         let drop_sin = (std::f32::consts::PI / 4.0).sin();
         let drop_cos = (std::f32::consts::PI / 4.0).cos();
-        skeleton.bones[RIGHT_UPPER_ARM].world_position = Vector3::new(0.2, 1.5, 0.0);
+        skeleton.bones[RIGHT_UPPER_ARM].world_position = Vec3::new(0.2, 1.5, 0.0);
         skeleton.bones[RIGHT_LOWER_ARM].world_position =
-            Vector3::new(0.2 + 0.3 * drop_cos, 1.5 - 0.3 * drop_sin, 0.0);
+            Vec3::new(0.2 + 0.3 * drop_cos, 1.5 - 0.3 * drop_sin, 0.0);
 
         let ctx = build_ctx(&skeleton, RestPose::APose);
         let pose = empty_pose();
@@ -286,8 +282,8 @@ mod tests {
         let upper_pos = positions[RIGHT_UPPER_ARM];
         let lower_pos = positions[RIGHT_LOWER_ARM];
         let diff = lower_pos - upper_pos;
-        let frame_right = Vector3::from(ctx.frame.right);
-        let arm_length = diff.magnitude();
+        let frame_right = Vec3::from(ctx.frame.right);
+        let arm_length = diff.length();
 
         assert!(
             (diff.normalize().dot(frame_right) - 1.0).abs() < 1e-4,
@@ -317,7 +313,7 @@ mod tests {
         let upper_pos = positions[RIGHT_UPPER_ARM];
         let lower_pos = positions[RIGHT_LOWER_ARM];
         let diff = lower_pos - upper_pos;
-        let frame_up = Vector3::from(ctx.frame.up);
+        let frame_up = Vec3::from(ctx.frame.up);
 
         assert!(
             (diff.normalize().dot(frame_up) - 1.0).abs() < 1e-4,
@@ -343,7 +339,7 @@ mod tests {
         let upper_pos = positions[RIGHT_UPPER_ARM];
         let lower_pos = positions[RIGHT_LOWER_ARM];
         let diff = lower_pos - upper_pos;
-        let frame_up = Vector3::from(ctx.frame.up);
+        let frame_up = Vec3::from(ctx.frame.up);
 
         assert!(
             (diff.normalize().dot(frame_up) - 1.0).abs() < 1e-4,
@@ -356,12 +352,12 @@ mod tests {
         let upper_rest_rel =
             skeleton.bones[RIGHT_UPPER_ARM].world_position - skeleton.bones[SPINE].world_position;
         assert!(
-            (upper_rel.magnitude() - upper_rest_rel.magnitude()).abs() < 1e-4,
+            (upper_rel.length() - upper_rest_rel.length()).abs() < 1e-4,
             "RightUpperArm should keep its distance from Spine: {:?}",
             upper_rel
         );
         assert!(
-            (upper_rel - upper_rest_rel).magnitude() > 0.1,
+            (upper_rel - upper_rest_rel).length() > 0.1,
             "RightUpperArm should follow Spine rotation: {:?}",
             upper_rel
         );
@@ -380,12 +376,12 @@ mod tests {
 
         let hips_rest = skeleton.bones[HIPS].world_position;
         let head_rest = skeleton.bones[HEAD].world_position;
-        let frame_up = Vector3::from(ctx.frame.up);
+        let frame_up = Vec3::from(ctx.frame.up);
 
         let hips_diff = positions[HIPS] - hips_rest;
         let expected_hips_offset = frame_up * (-0.5) * ctx.hips_height;
         assert!(
-            (hips_diff - expected_hips_offset).magnitude() < 1e-4,
+            (hips_diff - expected_hips_offset).length() < 1e-4,
             "Hips should move by frame.up * -0.5 * hips_height: diff={:?}, expected={:?}",
             hips_diff,
             expected_hips_offset
@@ -393,7 +389,7 @@ mod tests {
 
         let head_diff = positions[HEAD] - head_rest;
         assert!(
-            (head_diff - expected_hips_offset).magnitude() < 1e-4,
+            (head_diff - expected_hips_offset).length() < 1e-4,
             "Head should also move by the same offset: diff={:?}, expected={:?}",
             head_diff,
             expected_hips_offset

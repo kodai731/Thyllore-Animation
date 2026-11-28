@@ -1,32 +1,70 @@
 use crate::command::*;
-use crate::core::device::*;
+use crate::core::*;
 use crate::raytracing::GpuPrimitive;
-use crate::resource::gpu_resource::GpuResource;
+use crate::resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
+use crate::types::Instance;
 use crate::vulkan::*;
 use anyhow::Result;
-use cgmath::Matrix4;
 use thyllore_math_core::{AffineRows3x4, GpuMat4};
+use thyllore_render_core::FRAMES_IN_FLIGHT;
 use vulkanalia::vk::KhrAccelerationStructureExtension;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRBLAS {
-    pub acceleration_structure: Option<vk::AccelerationStructureKHR>,
-    pub buffer: Option<vk::Buffer>,
-    pub buffer_memory: Option<vk::DeviceMemory>,
-    pub device_address: vk::DeviceAddress,
-    pub update_scratch: Option<DeviceBuffer>,
-    pub transform: vk::TransformMatrixKHR,
+    pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
+    pub(crate) buffer: Option<vk::Buffer>,
+    pub(crate) buffer_memory: Option<vk::DeviceMemory>,
+    pub(crate) device_address: vk::DeviceAddress,
+    update_scratch: Option<DeviceBuffer>,
+    pub(crate) transform: vk::TransformMatrixKHR,
+}
+
+impl RRBLAS {
+    pub fn set_transform_rows(&mut self, rows: [[f32; 4]; 3]) {
+        self.transform = vk::TransformMatrixKHR { matrix: rows };
+    }
+
+    #[inline]
+    pub fn transform(&self) -> crate::types::TransformMatrix {
+        crate::types::TransformMatrix(self.transform)
+    }
+
+    #[inline]
+    pub fn device_address(&self) -> crate::types::DeviceAddress {
+        self.device_address
+    }
+
+    #[inline]
+    pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
+        self.acceleration_structure
+            .map(crate::types::AccelerationStructure)
+    }
+}
+
+/// The buffers of one triangle mesh that a hit shader reads through the hit shading table.
+#[derive(Clone, Copy, Debug)]
+pub struct HitMeshBuffers {
+    pub geometry_buffer: crate::types::Buffer,
+    pub attribute_buffer: crate::types::Buffer,
+    pub index_buffer: crate::types::Buffer,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRTLAS {
-    pub acceleration_structure: Option<vk::AccelerationStructureKHR>,
-    pub buffer: Option<vk::Buffer>,
-    pub buffer_memory: Option<vk::DeviceMemory>,
-    pub device_address: vk::DeviceAddress,
-    pub update_scratch: Option<DeviceBuffer>,
-    pub instances_buf: Option<DeviceBuffer>,
+    pub(crate) acceleration_structure: Option<vk::AccelerationStructureKHR>,
+    pub(crate) buffer: Option<vk::Buffer>,
+    pub(crate) buffer_memory: Option<vk::DeviceMemory>,
+    update_scratch: Option<DeviceBuffer>,
+    instances_bufs: [Option<DeviceBuffer>; FRAMES_IN_FLIGHT],
+}
+
+impl RRTLAS {
+    #[inline]
+    pub fn acceleration_structure(&self) -> Option<crate::types::AccelerationStructure> {
+        self.acceleration_structure
+            .map(crate::types::AccelerationStructure)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -58,7 +96,7 @@ unsafe fn allocate_device_buffer(
     usage: vk::BufferUsageFlags,
     memory_flags: vk::MemoryPropertyFlags,
 ) -> Result<DeviceBuffer> {
-    let device = &rrdevice.device;
+    let device = &rrdevice.device();
 
     let buffer_info = vk::BufferCreateInfo::builder().size(size).usage(usage);
     let buffer = device.create_buffer(&buffer_info, None)?;
@@ -82,8 +120,7 @@ unsafe fn allocate_device_buffer(
     let memory = device.allocate_memory(&memory_info, None)?;
     device.bind_buffer_memory(buffer, memory, 0)?;
 
-    let address =
-        device.get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(buffer));
+    let address = rrdevice.buffer_address(buffer);
 
     Ok(DeviceBuffer {
         buffer,
@@ -98,12 +135,12 @@ unsafe fn destroy_device_buffer(device: &vulkanalia::Device, buf: &DeviceBuffer)
     device.free_memory(buf.memory, None);
 }
 
-unsafe fn execute_as_build(
-    rrdevice: &RRDevice,
-    rrcommand_pool: &RRCommandPool,
+unsafe fn record_as_build(
+    device: &vulkanalia::Device,
+    command_buffer: vk::CommandBuffer,
     build_info: &vk::AccelerationStructureBuildGeometryInfoKHRBuilder,
     primitive_count: u32,
-) -> Result<()> {
+) {
     let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
         .primitive_count(primitive_count)
         .primitive_offset(0)
@@ -112,20 +149,23 @@ unsafe fn execute_as_build(
         .build();
     let build_range_infos = [build_range_info];
 
-    let command_buffer = begin_single_time_commands(rrdevice, rrcommand_pool.command_pool)?;
-
-    rrdevice.device.cmd_build_acceleration_structures_khr(
+    device.cmd_build_acceleration_structures_khr(
         command_buffer,
         std::slice::from_ref(build_info),
         &[&build_range_infos[0]],
     );
+}
 
-    end_single_time_commands(
-        rrdevice,
-        rrdevice.graphics_queue,
-        rrcommand_pool.command_pool,
-        command_buffer,
-    )
+unsafe fn execute_as_build(
+    rrdevice: &RRDevice,
+    rrcommand_pool: &RRCommandPool,
+    build_info: &vk::AccelerationStructureBuildGeometryInfoKHRBuilder,
+    primitive_count: u32,
+) -> Result<()> {
+    with_single_time_commands(rrdevice, rrcommand_pool.command_pool, |cmd| {
+        record_as_build(rrdevice.device(), cmd, build_info, primitive_count);
+        Ok(())
+    })
 }
 
 unsafe fn create_acceleration_structure_with_buffer(
@@ -149,7 +189,7 @@ unsafe fn create_acceleration_structure_with_buffer(
         .type_(as_type);
 
     let acceleration_structure = rrdevice
-        .device
+        .device()
         .create_acceleration_structure_khr(&as_create_info, None)?;
 
     Ok((acceleration_structure, as_buf.buffer, as_buf.memory))
@@ -190,7 +230,7 @@ unsafe fn fill_instances_buffer(
 ) -> Result<()> {
     let ptr =
         rrdevice
-            .device
+            .device()
             .map_memory(buf.memory, 0, instances_size, vk::MemoryMapFlags::empty())?
             as *mut vk::AccelerationStructureInstanceKHR;
 
@@ -217,7 +257,7 @@ unsafe fn fill_instances_buffer(
     }
 
     std::ptr::copy_nonoverlapping(instances.as_ptr(), ptr, instances.len());
-    rrdevice.device.unmap_memory(buf.memory);
+    rrdevice.device().unmap_memory(buf.memory);
 
     Ok(())
 }
@@ -266,20 +306,16 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        vertex_buffer: &vk::Buffer,
+        vertex_buffer: &crate::types::Buffer,
         vertex_count: u32,
         vertex_stride: u32,
-        index_buffer: &vk::Buffer,
+        index_buffer: &crate::types::Buffer,
         index_count: u32,
     ) -> Result<RRBLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
-        let vertex_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
-        );
-        let index_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*index_buffer),
-        );
+        let vertex_addr = rrdevice.buffer_address(vertex_buffer.raw());
+        let index_addr = rrdevice.buffer_address(index_buffer.raw());
 
         let geometry =
             build_triangle_geometry(vertex_addr, vertex_count, vertex_stride, index_addr);
@@ -328,10 +364,7 @@ impl RRAccelerationStructure {
         execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
         destroy_device_buffer(device, &scratch);
 
-        let device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
+        let device_address = rrdevice.acceleration_structure_address(acceleration_structure);
 
         Ok(RRBLAS {
             acceleration_structure: Some(acceleration_structure),
@@ -345,20 +378,18 @@ impl RRAccelerationStructure {
         })
     }
 
-    pub unsafe fn create_aabb_blas(
+    pub(crate) unsafe fn create_aabb_blas(
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
         aabb_buffer: &vk::Buffer,
         aabb_count: u32,
     ) -> Result<RRBLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
-        let aabb_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*aabb_buffer),
-        );
+        let aabb_addr = rrdevice.buffer_address(*aabb_buffer);
 
-        let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+        let _aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
             .data(vk::DeviceOrHostAddressConstKHR {
                 device_address: aabb_addr,
             })
@@ -421,10 +452,7 @@ impl RRAccelerationStructure {
         execute_as_build(rrdevice, rrcommand_pool, &build_info, aabb_count)?;
         destroy_device_buffer(device, &scratch);
 
-        let device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
+        let device_address = rrdevice.acceleration_structure_address(acceleration_structure);
 
         Ok(RRBLAS {
             acceleration_structure: Some(acceleration_structure),
@@ -442,9 +470,11 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-        model: &Matrix4<f32>,
-        aabb: vk::AabbPositionsKHR,
-    ) -> Result<RRBLAS> {
+        primitive: &GpuPrimitive,
+    ) -> Result<Option<RRBLAS>> {
+        let crate::raytracing::BlasGeometry::ProceduralAabb { aabb } = primitive.geometry else {
+            return Ok(None);
+        };
         let size = std::mem::size_of::<vk::AabbPositionsKHR>() as vk::DeviceSize;
         let buf = allocate_device_buffer(
             instance,
@@ -455,17 +485,17 @@ impl RRAccelerationStructure {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
         let ptr = rrdevice
-            .device
+            .device()
             .map_memory(buf.memory, 0, size, vk::MemoryMapFlags::empty())?
             as *mut vk::AabbPositionsKHR;
         ptr.write(aabb);
-        rrdevice.device.unmap_memory(buf.memory);
+        rrdevice.device().unmap_memory(buf.memory);
         let mut blas = Self::create_aabb_blas(instance, rrdevice, rrcommand_pool, &buf.buffer, 1)?;
-        destroy_device_buffer(&rrdevice.device, &buf);
+        destroy_device_buffer(&rrdevice.device(), &buf);
         blas.transform = vk::TransformMatrixKHR {
-            matrix: AffineRows3x4::from_mat4(*model).rows,
+            matrix: AffineRows3x4::from_mat4(primitive.model).rows,
         };
-        Ok(blas)
+        Ok(Some(blas))
     }
 
     pub unsafe fn create_tlas(
@@ -475,9 +505,9 @@ impl RRAccelerationStructure {
         blas_list: &[RRBLAS],
         procedural_blas: &[RRBLAS],
     ) -> Result<RRTLAS> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
-        let instances_buf = if blas_list.is_empty() && procedural_blas.is_empty() {
+        let instances_buffer = if blas_list.is_empty() && procedural_blas.is_empty() {
             // Empty case: allocate buffer with 1 zero-initialized instance (mask=0, accelerationStructureReference=0)
             // This is an "inactive instance" per spec — the TLAS has 1 primitive but no hits.
             let instances_size =
@@ -493,14 +523,14 @@ impl RRAccelerationStructure {
             )?;
 
             // Zero-initialize: write a single zeroed instance
-            let ptr = rrdevice.device.map_memory(
+            let ptr = rrdevice.device().map_memory(
                 buf.memory,
                 0,
                 instances_size,
                 vk::MemoryMapFlags::empty(),
             )? as *mut vk::AccelerationStructureInstanceKHR;
             std::ptr::write(ptr, vk::AccelerationStructureInstanceKHR::default());
-            rrdevice.device.unmap_memory(buf.memory);
+            rrdevice.device().unmap_memory(buf.memory);
 
             buf
         } else {
@@ -510,7 +540,7 @@ impl RRAccelerationStructure {
         let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
             .array_of_pointers(false)
             .data(vk::DeviceOrHostAddressConstKHR {
-                device_address: instances_buf.address,
+                device_address: instances_buffer.address,
             });
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
@@ -569,42 +599,32 @@ impl RRAccelerationStructure {
         execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
 
         destroy_device_buffer(device, &scratch);
-        destroy_device_buffer(device, &instances_buf);
-
-        let device_address = device.get_acceleration_structure_device_address_khr(
-            &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                .acceleration_structure(acceleration_structure),
-        );
+        destroy_device_buffer(device, &instances_buffer);
 
         Ok(RRTLAS {
             acceleration_structure: Some(acceleration_structure),
             buffer: Some(as_buffer),
             buffer_memory: Some(as_buffer_memory),
-            device_address,
-            instances_buf: None,
+            instances_bufs: Default::default(),
             update_scratch: None,
         })
     }
 
-    pub unsafe fn update_blas(
+    pub(crate) unsafe fn record_blas_update(
         instance: &Instance,
         rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
         blas: &mut RRBLAS,
         vertex_buffer: &vk::Buffer,
         vertex_count: u32,
         vertex_stride: u32,
         index_buffer: &vk::Buffer,
         index_count: u32,
+        command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let device = &rrdevice.device;
+        let device = &rrdevice.device();
 
-        let vertex_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*vertex_buffer),
-        );
-        let index_addr = device.get_buffer_device_address(
-            &vk::BufferDeviceAddressInfo::builder().buffer(*index_buffer),
-        );
+        let vertex_addr = rrdevice.buffer_address(*vertex_buffer);
+        let index_addr = rrdevice.buffer_address(*index_buffer);
 
         let geometry =
             build_triangle_geometry(vertex_addr, vertex_count, vertex_stride, index_addr);
@@ -667,50 +687,47 @@ impl RRAccelerationStructure {
                 device_address: scratch.address,
             });
 
-        execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
+        record_as_build(device, command_buffer, &build_info, primitive_count);
 
         Ok(())
     }
 
-    pub unsafe fn update_tlas(
+    pub(crate) unsafe fn record_tlas_update(
         instance: &Instance,
         rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
         tlas: &mut RRTLAS,
         blas_list: &[RRBLAS],
         procedural_blas: &[RRBLAS],
+        frame_slot: usize,
+        command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
-        let device = &rrdevice.device;
-
-        if blas_list.is_empty() && procedural_blas.is_empty() {
-            return Ok(());
-        }
+        let device = &rrdevice.device();
 
         let total = blas_list.len() + procedural_blas.len();
         let instances_size =
             (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * total) as vk::DeviceSize;
 
-        let instances_buf = if let Some(ref existing) = tlas.instances_buf {
+        let instances_buffer = if let Some(ref existing) = tlas.instances_bufs[frame_slot] {
             if instances_size > existing.buffer_size() {
                 destroy_device_buffer(device, &existing);
                 let new = upload_instances_buffer(instance, rrdevice, blas_list, procedural_blas)?;
-                tlas.instances_buf = Some(new.clone());
+                tlas.instances_bufs[frame_slot] = Some(new.clone());
                 new
             } else {
-                let buf = tlas.instances_buf.clone().unwrap();
+                let buf = tlas.instances_bufs[frame_slot].clone().unwrap();
                 fill_instances_buffer(rrdevice, &buf, instances_size, blas_list, procedural_blas)?;
                 buf
             }
         } else {
             let buf = upload_instances_buffer(instance, rrdevice, blas_list, procedural_blas)?;
-            tlas.instances_buf = Some(buf.clone());
+            tlas.instances_bufs[frame_slot] = Some(buf.clone());
             buf
         };
 
         let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
             .array_of_pointers(false)
             .data(vk::DeviceOrHostAddressConstKHR {
-                device_address: instances_buf.address,
+                device_address: instances_buffer.address,
             });
 
         let geometry = vk::AccelerationStructureGeometryKHR::builder()
@@ -779,12 +796,13 @@ impl RRAccelerationStructure {
                 device_address: scratch.address,
             });
 
-        execute_as_build(rrdevice, rrcommand_pool, &build_info, primitive_count)?;
+        record_as_build(device, command_buffer, &build_info, primitive_count);
 
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device();
         if let Some(tlas_as) = self.tlas.acceleration_structure {
             device.destroy_acceleration_structure_khr(tlas_as, None);
         }
@@ -797,7 +815,7 @@ impl RRAccelerationStructure {
         if let Some(ref scratch) = self.tlas.update_scratch {
             destroy_device_buffer(device, scratch);
         }
-        if let Some(ref instances) = self.tlas.instances_buf {
+        for instances in self.tlas.instances_bufs.iter().flatten() {
             destroy_device_buffer(device, instances);
         }
 
@@ -840,68 +858,22 @@ impl RRAccelerationStructure {
         self.procedural_blas.clear();
     }
 
-    pub unsafe fn update_all(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrcommand_pool: &RRCommandPool,
-        vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
-    ) -> Result<()> {
-        for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in
-            vertex_buffers.iter().enumerate()
-        {
-            if i < self.blas_list.len() {
-                Self::update_blas(
-                    instance,
-                    rrdevice,
-                    rrcommand_pool,
-                    &mut self.blas_list[i],
-                    vertex_buffer,
-                    *vertex_count,
-                    *vertex_stride,
-                    index_buffer,
-                    *index_count,
-                )?;
-            }
-        }
-
-        Self::update_tlas(
-            instance,
-            rrdevice,
-            rrcommand_pool,
-            &mut self.tlas,
-            &self.blas_list,
-            &self.procedural_blas,
-        )?;
-
-        self.fill_hit_shading_table(instance, rrdevice, vertex_buffers, &[])?;
-
-        Ok(())
-    }
-
     pub unsafe fn fill_hit_shading_table(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
+        meshes: &[HitMeshBuffers],
         procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =
-            Vec::with_capacity(vertex_buffers.len() + procedurals.len());
+            Vec::with_capacity(meshes.len() + procedurals.len());
 
-        for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
-            let vertex_address = rrdevice.device.get_buffer_device_address(
-                &vk::BufferDeviceAddressInfo::builder().buffer(**vertex_buffer),
-            );
-            let index_address = rrdevice.device.get_buffer_device_address(
-                &vk::BufferDeviceAddressInfo::builder().buffer(**index_buffer),
-            );
-
+        for mesh in meshes {
             records.push(HitShadingRecord {
-                vertex_address,
-                index_address,
+                geometry_address: rrdevice.buffer_address(mesh.geometry_buffer.raw()),
+                index_address: rrdevice.buffer_address(mesh.index_buffer.raw()),
                 effect_data_address: 0,
-                reserved: 0,
+                attribute_address: rrdevice.buffer_address(mesh.attribute_buffer.raw()),
                 model: GpuMat4::IDENTITY,
                 normal_matrix: GpuMat4::IDENTITY,
                 base_color: [1.0, 1.0, 1.0, 1.0],
@@ -911,10 +883,10 @@ impl RRAccelerationStructure {
 
         for primitive in procedurals {
             records.push(HitShadingRecord {
-                vertex_address: 0,
+                geometry_address: 0,
                 index_address: 0,
                 effect_data_address: primitive.effect_data_address,
-                reserved: 0,
+                attribute_address: 0,
                 model: GpuMat4::from_mat4(primitive.model),
                 normal_matrix: GpuMat4::normal_matrix_of(primitive.model),
                 base_color: primitive.base_color,
@@ -946,7 +918,7 @@ impl RRAccelerationStructure {
 
 impl GpuResource for RRAccelerationStructure {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
     }
 
     fn is_destroyed(&self) -> bool {

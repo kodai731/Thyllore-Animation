@@ -1,5 +1,5 @@
 use crate::ecs::resource::TimelineState;
-use crate::ecs::systems::humanoid_bake_systems::request_bake_scan;
+use crate::ecs::systems::request_bake_scan;
 use crate::ecs::systems::timeline::clip_instance::{
     add_clip_instance, modify_clip_instance, remove_clip_instance, select_clip_instance,
 };
@@ -99,19 +99,19 @@ fn apply_clip_instance_event(event: &ClipInstanceEvent, world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::{
-        ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
-    };
     use crate::ecs::component::ClipSchedule;
     use crate::ecs::resource::{ClipLibrary, HumanoidRigState};
     use crate::ecs::systems::avatar_setup_systems::find_first_skeleton;
-    use crate::ecs::systems::humanoid_bake_systems::unresolved_clip_roles;
     use crate::ecs::systems::humanoid_rig_systems::{
         build_humanoid_rig, copy_test_humanoid_fixture, test_humanoid_world,
     };
+    use crate::ecs::systems::unresolved_clip_roles;
     use crate::ecs::world::Entity;
-    use thyllore_anim_core::editable::systems::curve_ops::curve_add_keyframe;
-    use thyllore_avatar_core::humanoid::components::role::HumanoidRole;
+    use thyllore_anim_core::editable::curve_add_keyframe;
+    use thyllore_anim_core::editable::{
+        ClipInstance, EditableAnimationClip, SourceClip, SourceClipId,
+    };
+    use thyllore_avatar_core::humanoid::HumanoidRole;
 
     fn spawn_zero_length_clip_instance(world: &mut World) -> Entity {
         let entity = world.spawn();

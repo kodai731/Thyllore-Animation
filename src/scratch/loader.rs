@@ -5,27 +5,29 @@ use serde_json::{json, Value};
 
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::ecs::world::World;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use super::job::{ScratchContext, ScratchEntryFn, ScratchJob, ScratchStep, SCRATCH_ENTRY_SYMBOL};
 
 #[derive(Debug)]
-pub struct RunningJob {
+pub(super) struct RunningJob {
     pub job: Box<dyn ScratchJob>,
     pub reply: Sender<Value>,
 }
 
 #[derive(Debug, Default)]
-pub struct ScratchHost {
+pub(super) struct ScratchHost {
     // `running` before `libraries`: Rust drops in declaration order, so jobs (which may call
     // into their library code) must drop before the libraries are dlclose'd.
     pub running: Vec<RunningJob>,
     pub libraries: Vec<libloading::Library>,
 }
 
+crate::startup_resource!(ScratchHost, Editor);
+
 impl ScratchHost {
-    pub fn load_job(
+    pub(super) fn load_job(
         &mut self,
         library_path: &Path,
         job: &str,
@@ -51,7 +53,7 @@ impl ScratchHost {
         }
     }
 
-    pub fn step_running_jobs(&mut self, ctx: &mut ScratchContext) {
+    pub(super) fn step_running_jobs(&mut self, ctx: &mut ScratchContext) {
         let mut i = 0;
         while i < self.running.len() {
             match self.running[i].job.step(ctx) {

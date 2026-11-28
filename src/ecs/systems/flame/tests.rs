@@ -2,6 +2,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{AppliedFlameStyle, FlameEffect};
 use crate::ecs::events::UiCommandQueue;
 use crate::ecs::resource::{BatchRun, ClipLibrary, FlameWallProbeCapture, HierarchyState};
+use crate::ecs::systems::effect_edit::resolve_selected_effect;
 use crate::ecs::systems::resolve_engine_cli_overrides;
 use crate::ecs::world::{Transform, World};
 
@@ -11,9 +12,9 @@ use super::test_support::{
 };
 use super::*;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::systems::object_picking_systems::resolve_closest_pick;
+use crate::ecs::systems::resolve_closest_pick;
 use crate::ecs::world::{GlobalTransform, Name};
-use cgmath::Vector3;
+use glam::{Quat, Vec3};
 
 #[test]
 fn spawned_flame_carries_the_components_the_editor_queries() {
@@ -42,13 +43,13 @@ fn spawned_flame_appears_as_a_hierarchy_root() {
 fn spawn_mirrors_the_effect_position_onto_the_transform() {
     let mut world = World::new();
     let effect = FlameEffect {
-        position: cgmath::Vector3::new(1.5, 2.5, -3.5),
+        position: Vec3::new(1.5, 2.5, -3.5),
         ..FlameEffect::default()
     };
     let entity = spawn_flame(&mut world, "Flame 2", effect);
 
     let transform = world.get_component::<Transform>(entity).unwrap();
-    assert_eq!(transform.translation, cgmath::Vector3::new(1.5, 2.5, -3.5));
+    assert_eq!(transform.translation, Vec3::new(1.5, 2.5, -3.5));
 }
 
 #[test]
@@ -58,7 +59,7 @@ fn selection_falls_back_to_the_first_flame_when_nothing_is_selected() {
     let first = spawn_default_flame(&mut world, "Flame 1");
     spawn_default_flame(&mut world, "Flame 2");
 
-    assert_eq!(resolve_selected_flame(&world), Some(first));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(first));
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn selection_follows_the_hierarchy_when_a_flame_is_selected() {
         .unwrap()
         .selected_entity = Some(second);
 
-    assert_eq!(resolve_selected_flame(&world), Some(second));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(second));
 }
 
 #[test]
@@ -88,17 +89,17 @@ fn selecting_a_non_flame_entity_keeps_editing_the_first_flame() {
         .unwrap()
         .selected_entity = Some(other);
 
-    assert_eq!(resolve_selected_flame(&world), Some(first));
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), Some(first));
 }
 
 #[test]
 fn apply_effect_update_moves_the_flame_transform() {
     let mut world = World::new();
     let entity = spawn_default_flame(&mut world, DEFAULT_FLAME_NAME);
-    let translation = cgmath::Vector3::new(4.0, 0.0, 2.0);
+    let translation = Vec3::new(4.0, 0.0, 2.0);
     let effect = FlameEffect {
         position: translation,
-        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+        rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
         ..FlameEffect::default()
     };
 
@@ -113,7 +114,7 @@ fn resolve_returns_none_without_any_flame() {
     let mut world = World::new();
     world.insert_resource(HierarchyState::default());
 
-    assert_eq!(resolve_selected_flame(&world), None);
+    assert_eq!(resolve_selected_effect::<FlameEffect>(&world), None);
 }
 
 #[test]
@@ -142,11 +143,7 @@ fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
 
     let mut world = crate::scene::world_with_scene_hooks();
     let mut assets = AssetStorage::new();
-    crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
-        &mut world,
-        &mut assets,
-        clips,
-    );
+    crate::ecs::systems::clip_library_register_loaded(&mut world, &mut assets, clips);
     crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
 
     let flames = world.entities_with::<FlameEffect>();
@@ -263,7 +260,7 @@ fn a_ray_beside_the_flame_finds_nothing() {
 fn the_nearest_flame_wins_when_two_overlap() {
     let (mut world, far_flame) = world_with_flame_at(0.0);
     let near_effect = FlameEffect {
-        position: Vector3::new(0.0, 0.0, -5.0),
+        position: Vec3::new(0.0, 0.0, -5.0),
         ..FlameEffect::default()
     };
     let near_flame = spawn_flame(&mut world, "Flame 2", near_effect);

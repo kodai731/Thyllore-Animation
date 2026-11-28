@@ -1,20 +1,21 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use glam::Vec2;
+use glam::{Mat4, UVec4, Vec3, Vec4};
 use std::collections::HashMap;
 use thyllore_anim_core::{
     AnimationClip, AnimationSystem, Keyframe, Skeleton, SkinData, TransformChannel,
 };
-use thyllore_math_core::{Vec2, Vec3, Vec4};
-use thyllore_model_core::mesh::{Vertex, VertexData};
+use thyllore_model_core::{Vertex, VertexData};
 
-use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
+use super::fbx::load_fbx_with_ufbx;
+use thyllore_file_format_core::fbx::{FbxModel, LoadedConstraint};
 
 #[derive(Clone, Debug)]
 pub struct FbxNodeInfo {
     pub index: usize,
     pub name: String,
     pub parent_index: Option<usize>,
-    pub local_transform: Matrix4<f32>,
+    pub local_transform: Mat4,
 }
 
 impl Default for FbxNodeInfo {
@@ -23,7 +24,7 @@ impl Default for FbxNodeInfo {
             index: 0,
             name: String::new(),
             parent_index: None,
-            local_transform: Matrix4::identity(),
+            local_transform: Mat4::IDENTITY,
         }
     }
 }
@@ -112,7 +113,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLo
 }
 
 fn convert_bone_nodes_to_node_info(
-    bone_nodes: &HashMap<String, super::fbx::BoneNode>,
+    bone_nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
 ) -> Vec<FbxNodeInfo> {
     let mut nodes = Vec::new();
     let mut name_to_index: HashMap<String, usize> = HashMap::new();
@@ -181,7 +182,9 @@ fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
     }
 }
 
-fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> Skeleton {
+fn convert_nodes_to_skeleton(
+    nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
+) -> Skeleton {
     let mut skeleton = Skeleton::new("fbx_skeleton");
 
     let mut name_to_id: HashMap<String, u32> = HashMap::new();
@@ -210,7 +213,7 @@ fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> S
 fn add_bone_recursive(
     skeleton: &mut Skeleton,
     name: &str,
-    nodes: &HashMap<String, super::fbx::BoneNode>,
+    nodes: &HashMap<String, thyllore_file_format_core::fbx::BoneNode>,
     name_to_id: &mut HashMap<String, u32>,
 ) -> u32 {
     if let Some(&id) = name_to_id.get(name) {
@@ -258,7 +261,7 @@ fn add_bone_recursive(
 }
 
 fn convert_fbx_animation_to_clip(
-    fbx_anim: &super::fbx::FbxAnimation,
+    fbx_anim: &thyllore_file_format_core::fbx::FbxAnimation,
     animation_system: &AnimationSystem,
     skeleton_id: Option<u32>,
 ) -> AnimationClip {
@@ -280,7 +283,7 @@ fn convert_fbx_animation_to_clip(
             for key in &bone_anim.translation_keys {
                 channel.translation.push(Keyframe::new(
                     key.time,
-                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                    Vec3::new(key.value[0], key.value[1], key.value[2]),
                 ));
             }
 
@@ -291,7 +294,7 @@ fn convert_fbx_animation_to_clip(
             for key in &bone_anim.scale_keys {
                 channel.scale.push(Keyframe::new(
                     key.time,
-                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                    Vec3::new(key.value[0], key.value[1], key.value[2]),
                 ));
             }
 
@@ -303,7 +306,7 @@ fn convert_fbx_animation_to_clip(
 }
 
 fn convert_fbx_data_to_mesh(
-    fbx_data: &super::fbx::FbxData,
+    fbx_data: &thyllore_file_format_core::fbx::FbxData,
     skeleton_id: Option<u32>,
     animation_system: &AnimationSystem,
     nodes: &[FbxNodeInfo],
@@ -318,19 +321,19 @@ fn convert_fbx_data_to_mesh(
             .normals
             .get(i)
             .cloned()
-            .unwrap_or(Vector3::new(0.0, 1.0, 0.0));
+            .unwrap_or(Vec3::new(0.0, 1.0, 0.0));
         let tex_coord = fbx_data.tex_coords.get(i).cloned().unwrap_or([0.5, 0.5]);
 
         vertices.push(Vertex {
             pos: Vec3::new(pos.x, pos.y, pos.z),
-            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            color: [1.0, 1.0, 1.0, 1.0],
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal.x, normal.y, normal.z),
         });
 
         local_vertices.push(Vertex {
             pos: Vec3::new(local_pos.x, local_pos.y, local_pos.z),
-            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            color: [1.0, 1.0, 1.0, 1.0],
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal.x, normal.y, normal.z),
         });
@@ -375,14 +378,14 @@ fn convert_fbx_data_to_mesh(
 }
 
 fn convert_clusters_to_skin_data(
-    fbx_data: &super::fbx::FbxData,
+    fbx_data: &thyllore_file_format_core::fbx::FbxData,
     skeleton_id: u32,
     skeleton: Option<&Skeleton>,
 ) -> SkinData {
     let vertex_count = fbx_data.positions.len();
 
-    let mut bone_indices: Vec<Vector4<u32>> = vec![Vector4::new(0, 0, 0, 0); vertex_count];
-    let mut bone_weights: Vec<Vector4<f32>> = vec![Vector4::new(0.0, 0.0, 0.0, 0.0); vertex_count];
+    let mut bone_indices: Vec<UVec4> = vec![UVec4::ZERO; vertex_count];
+    let mut bone_weights: Vec<Vec4> = vec![Vec4::new(0.0, 0.0, 0.0, 0.0); vertex_count];
 
     let mut vertex_bone_data: Vec<Vec<(u32, f32)>> = vec![Vec::new(); vertex_count];
 
@@ -426,17 +429,17 @@ fn convert_clusters_to_skin_data(
             }
         }
 
-        bone_indices[vert_idx] = Vector4::new(indices[0], indices[1], indices[2], indices[3]);
-        bone_weights[vert_idx] = Vector4::new(weights[0], weights[1], weights[2], weights[3]);
+        bone_indices[vert_idx] = UVec4::new(indices[0], indices[1], indices[2], indices[3]);
+        bone_weights[vert_idx] = Vec4::new(weights[0], weights[1], weights[2], weights[3]);
     }
 
-    let base_positions: Vec<Vector3<f32>> = if !fbx_data.local_positions.is_empty() {
+    let base_positions: Vec<Vec3> = if !fbx_data.local_positions.is_empty() {
         fbx_data.local_positions.clone()
     } else {
         fbx_data.positions.clone()
     };
 
-    let base_normals: Vec<Vector3<f32>> = if !fbx_data.local_normals.is_empty() {
+    let base_normals: Vec<Vec3> = if !fbx_data.local_normals.is_empty() {
         fbx_data.local_normals.clone()
     } else {
         fbx_data.normals.clone()

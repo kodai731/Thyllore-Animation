@@ -1,5 +1,5 @@
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::{BonePoseOverride, ClipLibrary, HumanoidRigState, TimelineState};
 use crate::ecs::systems::process_bone_set_key;
 use crate::ecs::world::World;

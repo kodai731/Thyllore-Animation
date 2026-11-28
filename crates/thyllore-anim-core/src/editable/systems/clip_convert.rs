@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use cgmath::Vector3;
+use glam::Vec3;
 
-use crate::editable::components::clip::EditableAnimationClip;
-use crate::editable::components::curve::PropertyCurve;
-use crate::editable::components::keyframe::{InterpolationType, SourceClipId};
-use crate::editable::systems::bake::collect_bake_times;
-use crate::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
+use super::bake::collect_bake_times;
+use crate::editable::EditableAnimationClip;
+use crate::editable::PropertyCurve;
+use crate::editable::{curve_add_keyframe, curve_sample};
+use crate::editable::{InterpolationType, SourceClipId};
 use crate::{AnimationClip, BoneId, Interpolation, Keyframe, MorphWeightChannel, TransformChannel};
 use thyllore_math_core::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
@@ -97,7 +97,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let z = curve_sample(&track.translation_z, time).unwrap_or(0.0);
             channel
                 .translation
-                .push(Keyframe::new(time, Vector3::new(x, y, z)));
+                .push(Keyframe::new(time, Vec3::new(x, y, z)));
         }
 
         let rotation_curves = [&track.rotation_x, &track.rotation_y, &track.rotation_z];
@@ -105,7 +105,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let ex = curve_sample(&track.rotation_x, time).unwrap_or(0.0);
             let ey = curve_sample(&track.rotation_y, time).unwrap_or(0.0);
             let ez = curve_sample(&track.rotation_z, time).unwrap_or(0.0);
-            let q = euler_degrees_to_quaternion(&Vector3::new(ex, ey, ez));
+            let q = euler_degrees_to_quaternion(&Vec3::new(ex, ey, ez));
             channel.rotation.push(Keyframe::new(time, q));
         }
 
@@ -114,9 +114,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let x = curve_sample(&track.scale_x, time).unwrap_or(1.0);
             let y = curve_sample(&track.scale_y, time).unwrap_or(1.0);
             let z = curve_sample(&track.scale_z, time).unwrap_or(1.0);
-            channel
-                .scale
-                .push(Keyframe::new(time, Vector3::new(x, y, z)));
+            channel.scale.push(Keyframe::new(time, Vec3::new(x, y, z)));
         }
 
         if !channel.translation.is_empty()
@@ -171,10 +169,7 @@ fn import_scalar_keyframes(keyframes: &[Keyframe<f32>], curve: &mut PropertyCurv
     }
 }
 
-fn import_vec3_keyframes(
-    keyframes: &[Keyframe<Vector3<f32>>],
-    curves: &mut [&mut PropertyCurve; 3],
-) {
+fn import_vec3_keyframes(keyframes: &[Keyframe<Vec3>], curves: &mut [&mut PropertyCurve; 3]) {
     for (idx, kf) in keyframes.iter().enumerate() {
         let values = [kf.value.x, kf.value.y, kf.value.z];
         let is_cubic = kf.interpolation == Interpolation::CubicSpline;
@@ -200,7 +195,7 @@ fn import_vec3_keyframes(
 }
 
 fn set_cubic_bezier_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tangent_value: f32) {
-    use crate::editable::components::keyframe::BezierHandle;
+    use crate::editable::BezierHandle;
 
     if let Some(kf) = curve.get_keyframe_mut(kf_id) {
         kf.interpolation = InterpolationType::Bezier;
@@ -211,7 +206,7 @@ fn set_cubic_bezier_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tang
 }
 
 fn set_cubic_bezier_in_handles(curve: &mut PropertyCurve, kf_id: u64, dt: f32, tangent_value: f32) {
-    use crate::editable::components::keyframe::BezierHandle;
+    use crate::editable::BezierHandle;
 
     if let Some(kf) = curve.get_keyframe_mut(kf_id) {
         let handle_time = dt / 3.0;

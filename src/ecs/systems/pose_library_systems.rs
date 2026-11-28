@@ -1,8 +1,8 @@
-use crate::animation::editable::{
+use crate::ecs::resource::ClipLibrary;
+use thyllore_anim_core::editable::{
     clip_recalculate_duration, curve_add_keyframe, curve_sample, EditableAnimationClip,
     PropertyType, SourceClipId,
 };
-use crate::ecs::resource::ClipLibrary;
 
 const ALL_PROPERTIES: [PropertyType; 9] = [
     PropertyType::TranslationX,
@@ -152,7 +152,7 @@ mod tests {
         let mut registered = clip;
         registered.id = id;
 
-        let source = crate::animation::editable::SourceClip::new(id, registered);
+        let source = thyllore_anim_core::editable::SourceClip::new(id, registered);
         clip_library.source_clips.insert(id, source);
         id
     }

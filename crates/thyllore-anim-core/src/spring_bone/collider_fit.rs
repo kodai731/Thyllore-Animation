@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use cgmath::{EuclideanSpace, InnerSpace, Point3, SquareMatrix, Transform, Vector3};
+use glam::Vec3;
 
 use thyllore_math_core::{distance_between_segments, fit_principal_axis, PrincipalAxis};
 use thyllore_model_core::{Bone, BoneId, Skeleton, SkinData};
@@ -57,8 +57,8 @@ pub static CAPSULE_FIT_SCALAR_PARAMS: LazyLock<Vec<ScalarParam<CapsuleFitParams>
 #[derive(Clone, Debug)]
 pub struct FittedCapsule {
     pub bone_id: BoneId,
-    pub head: Vector3<f32>,
-    pub tail: Vector3<f32>,
+    pub head: Vec3,
+    pub tail: Vec3,
     pub radius: f32,
 }
 
@@ -207,13 +207,13 @@ pub fn fit_bone_capsules(
 }
 
 /// Whether the capsule's axis comes within its radius of the segment `head`-`tail`.
-pub fn lies_along_segment(capsule: &FittedCapsule, head: Vector3<f32>, tail: Vector3<f32>) -> bool {
+pub fn lies_along_segment(capsule: &FittedCapsule, head: Vec3, tail: Vec3) -> bool {
     distance_between_segments(capsule.head, capsule.tail, head, tail) <= capsule.radius
 }
 
 /// The bone from its head to its first child's head in the bone's bind space; a leaf bone is its head alone.
-pub fn bone_segment_local(skeleton: &Skeleton, bone_id: BoneId) -> (Vector3<f32>, Vector3<f32>) {
-    let head = Vector3::new(0.0, 0.0, 0.0);
+pub fn bone_segment_local(skeleton: &Skeleton, bone_id: BoneId) -> (Vec3, Vec3) {
+    let head = Vec3::new(0.0, 0.0, 0.0);
     let Some(bone) = skeleton.get_bone(bone_id) else {
         return (head, head);
     };
@@ -221,11 +221,10 @@ pub fn bone_segment_local(skeleton: &Skeleton, bone_id: BoneId) -> (Vector3<f32>
         .children
         .first()
         .and_then(|&child| skeleton.get_bone(child))
-        .and_then(|child| child.inverse_bind_pose.invert())
+        .and_then(|child| child.inverse_bind_pose.try_inverse())
         .map(|child_bind| {
             bone.inverse_bind_pose
-                .transform_point(Point3::from_vec(child_bind.w.truncate()))
-                .to_vec()
+                .transform_point3(child_bind.w_axis.truncate())
         })
         .unwrap_or(head);
     (head, tail)
@@ -245,7 +244,7 @@ pub fn fit_bone_capsule(
 /// direction); points too short along it for two end caps give a sphere at their middle.
 pub fn fit_capsule_along(
     bone_id: BoneId,
-    points: &[Vector3<f32>],
+    points: &[Vec3],
     axis: PrincipalAxis,
     params: &CapsuleFitParams,
 ) -> Option<FittedCapsule> {
@@ -270,18 +269,10 @@ pub fn fit_capsule_along(
 }
 
 /// The skin positions the bone drives, in the bone's bind space; empty below `min_vertex_count`.
-pub fn bone_local_points(
-    skins: &[&SkinData],
-    bone: &Bone,
-    params: &CapsuleFitParams,
-) -> Vec<Vector3<f32>> {
-    let local_points: Vec<Vector3<f32>> = weighted_positions(skins, bone.id, params.min_weight)
+pub fn bone_local_points(skins: &[&SkinData], bone: &Bone, params: &CapsuleFitParams) -> Vec<Vec3> {
+    let local_points: Vec<Vec3> = weighted_positions(skins, bone.id, params.min_weight)
         .into_iter()
-        .map(|position| {
-            bone.inverse_bind_pose
-                .transform_point(Point3::from_vec(position))
-                .to_vec()
-        })
+        .map(|position| bone.inverse_bind_pose.transform_point3(position))
         .collect();
     if local_points.len() < params.min_vertex_count as usize {
         return Vec::new();
@@ -290,11 +281,7 @@ pub fn bone_local_points(
 }
 
 /// The skin positions (model space) the bone drives with at least `min_weight`.
-pub fn weighted_positions(
-    skins: &[&SkinData],
-    bone_id: BoneId,
-    min_weight: f32,
-) -> Vec<Vector3<f32>> {
+pub fn weighted_positions(skins: &[&SkinData], bone_id: BoneId, min_weight: f32) -> Vec<Vec3> {
     let mut points = Vec::new();
 
     for skin in skins {
@@ -321,7 +308,7 @@ pub fn weighted_positions(
     points
 }
 
-fn project_to_axis(points: &[Vector3<f32>], pa: &PrincipalAxis) -> (f32, f32) {
+fn project_to_axis(points: &[Vec3], pa: &PrincipalAxis) -> (f32, f32) {
     let mut t_min = f32::MAX;
     let mut t_max = f32::MIN;
 
@@ -341,9 +328,9 @@ fn project_to_axis(points: &[Vector3<f32>], pa: &PrincipalAxis) -> (f32, f32) {
 /// The capsule radius the params pick from the distances of the points to the line through
 /// `origin` along the unit `direction`; None without points.
 pub fn radius_around_axis(
-    points: &[Vector3<f32>],
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    points: &[Vec3],
+    origin: Vec3,
+    direction: Vec3,
     params: &CapsuleFitParams,
 ) -> Option<f32> {
     let mut distances: Vec<f32> = points
@@ -351,7 +338,7 @@ pub fn radius_around_axis(
         .map(|p| {
             let diff = *p - origin;
             let projection = origin + direction * diff.dot(direction);
-            (p - projection).magnitude()
+            (p - projection).length()
         })
         .collect();
     if distances.is_empty() {

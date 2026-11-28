@@ -1,14 +1,11 @@
-use crate::ecs::component::CapsuleFitParams;
 use crate::ecs::component::MorphWeights;
 use crate::ecs::systems::batch_run_systems::BatchAction;
 use crate::ecs::systems::phases::event_dispatch::morph::MorphEvent;
 use crate::ecs::world::World;
-use thyllore_avatar_core::cloth_setup::components::submesh_role::{
-    SubmeshKey, SubmeshRole, SubmeshSelector,
-};
+use thyllore_avatar_core::cloth_setup::{SubmeshKey, SubmeshRole, SubmeshSelector};
 
 use super::chain_gen::*;
-use super::model::*;
+use super::material_texture::*;
 use super::morph::*;
 use super::spring::*;
 
@@ -82,16 +79,18 @@ fn test_named_actions_reject_empty_values() {
     assert!(capture_expression_parse("capture_expression=")
         .expect("prefix matches")
         .is_err());
-    assert!(add_spring_chains_under_parse("add_spring_chains_under= ")
-        .expect("prefix matches")
-        .is_err());
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=0")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs= ")
             .expect("prefix matches")
             .is_err()
     );
     assert!(
-        add_spring_chains_under_parse("add_spring_chains_under=Head,min_joints=3")
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=0")
+            .expect("prefix matches")
+            .is_err()
+    );
+    assert!(
+        use_existing_bones_as_springs_parse("use_existing_bones_as_springs=Head,min_joints=3")
             .expect("prefix matches")
             .is_ok()
     );
@@ -239,6 +238,28 @@ fn test_generate_chain_bones_parses_submesh_root_and_settings() {
 }
 
 #[test]
+fn test_generate_chain_bones_takes_the_attachment_among_the_settings() {
+    let ring_on_head = generate_chain_bones_parse(
+        "generate_chain_bones=hair/strands,Head,joint_count=3,attachment=ring",
+    )
+    .expect("prefix matches")
+    .expect("spec is valid");
+    assert_eq!(ring_on_head.name(), "generate_chain_bones");
+
+    for spec in [
+        "generate_chain_bones=hair/strands,Head,attachment=hat",
+        "generate_chain_bones=hair/strands,Head,attachment=cap,attachment=ring",
+    ] {
+        assert!(
+            generate_chain_bones_parse(spec)
+                .expect("prefix matches")
+                .is_err(),
+            "{spec}"
+        );
+    }
+}
+
+#[test]
 fn test_generate_chain_bones_rejects_malformed_specs() {
     for spec in [
         "generate_chain_bones=garment/cloth,,joint_count=3",
@@ -286,4 +307,22 @@ fn test_dump_skinned_vertices_rejects_malformed_specs() {
             .expect("prefix matches")
             .is_err()
     );
+}
+
+#[test]
+fn test_assign_material_texture_splits_material_and_file() {
+    let action = assign_material_texture_spec_parse("skin: Textures/skin.png").expect("valid spec");
+
+    assert_eq!(
+        format!("{:?}", action),
+        "AssignMaterialTexture { material: \"skin\", texture_file: \"Textures/skin.png\" }"
+    );
+}
+
+#[test]
+fn test_assign_material_texture_rejects_malformed_specs() {
+    assert!(assign_material_texture_parse("save_material_textures").is_none());
+    for spec in ["skin", ":skin.png", "skin:"] {
+        assert!(assign_material_texture_spec_parse(spec).is_err(), "{spec}");
+    }
 }

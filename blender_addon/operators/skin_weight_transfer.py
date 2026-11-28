@@ -4,12 +4,12 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 
-    _TML_AVAILABLE = True
+    _AVATAR_API_AVAILABLE = True
 except ImportError:
-    tml = None  # type: ignore
-    _TML_AVAILABLE = False
+    avatar_api = None  # type: ignore
+    _AVATAR_API_AVAILABLE = False
 
 from ..common.mesh_data import vertex_group_weight_rows, world_surface
 
@@ -62,7 +62,7 @@ class THYLLORE_OT_TransferSkinWeights(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        if not _TML_AVAILABLE or obj is None or obj.type != "MESH":
+        if not _AVATAR_API_AVAILABLE or obj is None or obj.type != "MESH":
             return False
         if not obj.vertex_groups:
             return False
@@ -81,14 +81,14 @@ class THYLLORE_OT_TransferSkinWeights(bpy.types.Operator):
             if target_obj == source_obj or target_obj.type != "MESH":
                 continue
             try:
-                weights = tml.transfer_skin_weights(
-                    source,
-                    world_surface(target_obj),
-                    max_distance,
-                    self.max_angle_deg,
-                    self.max_iterations,
-                    self.tolerance,
-                )
+                weights = avatar_api.transfer_skin_weights({
+                    "source": source,
+                    "target": world_surface(target_obj),
+                    "max_distance": max_distance,
+                    "max_angle_deg": self.max_angle_deg,
+                    "max_iterations": self.max_iterations,
+                    "tolerance": self.tolerance,
+                })
             except ValueError as e:
                 self.report({"ERROR"}, f"transfer_skin_weights failed: {e}")
                 return {"CANCELLED"}

@@ -8,10 +8,7 @@ src/
 │   ├── events/          # Event definitions
 │   ├── world.rs         # World container
 │   └── query.rs         # Entity query functions
-├── animation/           # Animation system
-│   └── editable/        # Editable animation (components/ + systems/)
 ├── app/                 # Application initialization and main loop
-├── loader/              # Asset loading (glTF, FBX)
 ├── renderer/            # Rendering pipeline
 ├── platform/            # Platform layer (windowing, UI)
 ├── vulkanr/             # Vulkan resource management

@@ -3,13 +3,13 @@
 
 use std::sync::OnceLock;
 
-use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::flame::{
     build_flame_inverse_model_matrix, build_flame_model_matrix, effective_sigma_t,
-    flame_bounding_radius, FlameEffect,
+    flame_bounding_radius, FlameEffect, FlameEmitterKind,
 };
-use crate::flame_radial::{
+use crate::flame::{
     build_height_series, evaluate_ring_smooth_density, ring_support_span, FlameRadialTaper,
 };
 
@@ -86,12 +86,12 @@ pub struct WallProbeReport {
     pub mean_tau: f32,
 }
 
-fn transform_point(matrix: &Matrix4<f32>, point: Vector3<f32>) -> Vector3<f32> {
-    (matrix * Vector4::new(point.x, point.y, point.z, 1.0)).truncate()
+fn transform_point(matrix: &Mat4, point: Vec3) -> Vec3 {
+    (matrix * Vec4::new(point.x, point.y, point.z, 1.0)).truncate()
 }
 
-fn transform_vector(matrix: &Matrix4<f32>, vector: Vector3<f32>) -> Vector3<f32> {
-    (matrix * Vector4::new(vector.x, vector.y, vector.z, 0.0)).truncate()
+fn transform_vector(matrix: &Mat4, vector: Vec3) -> Vec3 {
+    (matrix * Vec4::new(vector.x, vector.y, vector.z, 0.0)).truncate()
 }
 
 fn slab_interval(origin_y: f32, direction_y: f32, t_max: f32) -> Option<(f32, f32)> {
@@ -122,13 +122,13 @@ pub fn probe_flame_wall(
     let model = build_flame_model_matrix(effect);
     let height_series = build_height_series(&effect.coefficients.height);
     let taper = FlameRadialTaper::from_effect(effect, baked);
-    let ring_major = if effect.emitter.kind == 1 {
+    let ring_major = if effect.emitter.kind == FlameEmitterKind::Ring {
         effect.emitter.ring_major_radius / flame_bounding_radius(effect).max(1e-3)
     } else {
         0.0
     };
     let wiggle_trim = 1.0 + effect.contour.wiggle_amp;
-    let density_at = |p: Vector3<f32>| {
+    let density_at = |p: Vec3| {
         evaluate_ring_smooth_density(
             [p.x, p.y, p.z],
             &height_series,
@@ -140,16 +140,16 @@ pub fn probe_flame_wall(
         )
     };
 
-    let camera_world = Vector3::from(view.position);
+    let camera_world = Vec3::from(view.position);
     let camera_local = transform_point(&inverse_model, camera_world);
     let camera_density = density_at(camera_local);
 
     let tan_half = (view.fov_y_radians * 0.5).tan();
     let aspect = (view.viewport_size_px[0] / view.viewport_size_px[1].max(1.0)).max(1e-3);
-    let forward = Vector3::from(view.forward);
-    let right = Vector3::from(view.right);
-    let up = Vector3::from(view.up);
-    let t_max = camera_local.magnitude() + 4.0;
+    let forward = Vec3::from(view.forward);
+    let right = Vec3::from(view.right);
+    let up = Vec3::from(view.up);
+    let t_max = camera_local.length() + 4.0;
 
     let cols = wall_probe_grid_cols();
     let rows = wall_probe_grid_rows();
@@ -185,7 +185,7 @@ pub fn probe_flame_wall(
             );
             if let Some((t_enter, t_exit)) = span {
                 let chord = t_exit - t_enter;
-                let world_step = transform_vector(&model, direction_local).magnitude();
+                let world_step = transform_vector(&model, direction_local).length();
                 let dt = chord / DENSITY_SAMPLES as f32;
                 let mut density_sum = 0.0;
                 let mut density_max = 0.0f32;
@@ -205,8 +205,8 @@ pub fn probe_flame_wall(
                 } else {
                     camera_local + direction_local * t_exit
                 };
-                let radial = Vector3::new(boundary_point.x, 0.0, boundary_point.z);
-                let grazing_deg = if radial.magnitude() < 1e-4 {
+                let radial = Vec3::new(boundary_point.x, 0.0, boundary_point.z);
+                let grazing_deg = if radial.length() < 1e-4 {
                     90.0
                 } else {
                     direction_local
@@ -221,33 +221,32 @@ pub fn probe_flame_wall(
                     &model,
                     camera_local + direction_local * (0.5 * (t_enter + t_exit)),
                 );
-                let mid_distance = (mid_world - camera_world).magnitude().max(1e-3);
+                let mid_distance = (mid_world - camera_world).length().max(1e-3);
                 let pixels_per_world =
                     view.viewport_size_px[1] / (2.0 * mid_distance * tan_half.max(1e-4));
                 let cell_world = flame_bounding_radius(effect) / effect.noise.frequency.max(1e-3);
 
                 // Compute new diagnostic fields
-                let segment_dt = chord / crate::flame_wave::FLAME_WAVE_SEGMENTS as f32;
+                let segment_dt = chord / crate::flame::FLAME_WAVE_SEGMENTS as f32;
 
-                // Noise coordinate direction vector: dW = anisoCompress(dir, noise_aniso_y) * noise_frequency
                 // anisoCompress is a diagonal transform scaling y by noise_aniso_y
-                let dir_scaled = Vector3::new(
+                let dir_scaled = Vec3::new(
                     direction_local.x,
                     direction_local.y * effect.noise.aniso_y,
                     direction_local.z,
                 );
-                let dW = dir_scaled * effect.noise.frequency;
-                let dW_magnitude = dW.magnitude();
-                let cells_per_segment = segment_dt * dW_magnitude / (2.0 * std::f32::consts::PI);
+                let noise_coordinate_rate = dir_scaled * effect.noise.frequency;
+                let noise_coordinate_speed = noise_coordinate_rate.length();
+                let cells_per_segment =
+                    segment_dt * noise_coordinate_speed / (2.0 * std::f32::consts::PI);
 
                 // unresolved_fraction: wave_ray_attenuation sigma / WAVE_NOISE_STD
-                let mut modes = crate::flame_wave::generate_wave_modes();
-                crate::flame_wave::apply_wave_envelope(&mut modes, crate::flame_wave::WAVE_ENV_MU);
-                let rates: [[f32; 3]; 3] =
-                    [[dW.x, dW.y, dW.z], [dW.x, dW.y, dW.z], [dW.x, dW.y, dW.z]];
+                let mut modes = crate::flame::generate_wave_modes();
+                crate::flame::apply_wave_envelope(&mut modes, crate::flame::WAVE_ENV_MU);
+                let rates: [[f32; 3]; 3] = [noise_coordinate_rate.to_array(); 3];
                 let (_weights, sigma) =
-                    crate::flame_wave::wave_ray_attenuation(&modes, &rates, segment_dt);
-                let unresolved_fraction = sigma / crate::flame_wave::WAVE_NOISE_STD;
+                    crate::flame::wave_ray_attenuation(&modes, &rates, segment_dt);
+                let unresolved_fraction = sigma / crate::flame::WAVE_NOISE_STD;
 
                 // support_intervals and support_gap: sample density at 512 points along the ray
                 let sample_count = 512;
@@ -325,7 +324,7 @@ pub fn probe_flame_wall(
         camera_local: [camera_local.x, camera_local.y, camera_local.z],
         camera_density,
         camera_inside_support: camera_density > 0.0,
-        emitter_approximated: effect.emitter.kind != 1,
+        emitter_approximated: effect.emitter.kind != FlameEmitterKind::Ring,
         hit_fraction: hits.len() as f32 / rays.len() as f32,
         tangential_hit_fraction: tangential / hit_count,
         saturated_hit_fraction: saturated / hit_count,
@@ -344,7 +343,7 @@ mod tests {
     fn ring_effect() -> FlameEffect {
         FlameEffect {
             emitter: FlameEmitter {
-                kind: 1,
+                kind: FlameEmitterKind::Ring,
                 ring_major_radius: 1.5,
                 ..FlameEmitter::default()
             },
@@ -359,8 +358,8 @@ mod tests {
     }
 
     fn view_at(position: [f32; 3], forward: [f32; 3]) -> WallProbeView {
-        let forward = Vector3::from(forward).normalize();
-        let world_up = Vector3::new(0.0, 1.0, 0.0);
+        let forward = Vec3::from(forward).normalize();
+        let world_up = Vec3::new(0.0, 1.0, 0.0);
         let right = forward.cross(world_up).normalize();
         let up = right.cross(forward).normalize();
         WallProbeView {

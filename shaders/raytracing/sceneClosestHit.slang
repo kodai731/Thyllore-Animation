@@ -4,31 +4,18 @@ import "include/hit_shading_record.slang";
 
 [[vk::binding(3, 0)]] StructuredBuffer<HitShadingRecord> hitTable;
 
-int3 vertexBaseIndices(HitShadingRecord rec, uint primitiveIndex) {
-    if (rec.indexAddress != 0) {
-        uint* indices = (uint*)rec.indexAddress;
-        uint i0 = indices[primitiveIndex * 3];
-        uint i1 = indices[primitiveIndex * 3 + 1];
-        uint i2 = indices[primitiveIndex * 3 + 2];
-        return int3(int(i0) * 3, int(i1) * 3, int(i2) * 3);
-    }
-    int vi0 = int(primitiveIndex) * 9;
-    return int3(vi0, vi0 + 3, vi0 + 6);
-}
-
 [shader("closesthit")]
 void main(inout TracePayload payload, in BuiltInTriangleIntersectionAttributes attribs) {
     HitShadingRecord rec = hitTable[InstanceID()];
-    if (rec.vertexAddress == 0) {
+    if (rec.geometryAddress == 0) {
         payload.color = float4(0.0);
         payload.hit = float4(0.0, 0.0, 0.0, TRACE_HIT_NONE);
         return;
     }
-    float4* vb = (float4*)rec.vertexAddress;
-    int3 vi = vertexBaseIndices(rec, PrimitiveIndex());
-    float3 p0 = vb[vi.x].xyz;    float3 c0 = vb[vi.x + 1].rgb; float3 n0 = vb[vi.x + 2].xyz;
-    float3 p1 = vb[vi.y].xyz;    float3 c1 = vb[vi.y + 1].rgb; float3 n1 = vb[vi.y + 2].xyz;
-    float3 p2 = vb[vi.z].xyz;    float3 c2 = vb[vi.z + 1].rgb; float3 n2 = vb[vi.z + 2].xyz;
+    uint3 vi = hitTriangleVertices(rec, PrimitiveIndex());
+    float3 p0 = hitVertexPosition(rec, vi.x); float3 c0 = hitVertexColor(rec, vi.x); float3 n0 = hitVertexNormal(rec, vi.x);
+    float3 p1 = hitVertexPosition(rec, vi.y); float3 c1 = hitVertexColor(rec, vi.y); float3 n1 = hitVertexNormal(rec, vi.y);
+    float3 p2 = hitVertexPosition(rec, vi.z); float3 c2 = hitVertexColor(rec, vi.z); float3 n2 = hitVertexNormal(rec, vi.z);
     float u = attribs.barycentrics.x;
     float v = attribs.barycentrics.y;
     float w = 1.0 - u - v;

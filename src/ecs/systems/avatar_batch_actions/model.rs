@@ -10,7 +10,7 @@ use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 
 #[derive(Debug)]
-pub struct ApplyModelScale {
+pub(super) struct ApplyModelScale {
     factor: f32,
 }
 
@@ -41,7 +41,7 @@ pub(super) fn apply_model_scale_parse(text: &str) -> Option<Result<Box<dyn Batch
 }
 
 #[derive(Debug, Default)]
-pub struct ExportUnityAvatar;
+pub(super) struct ExportUnityAvatar;
 
 impl BatchAction for ExportUnityAvatar {
     fn name(&self) -> &'static str {
@@ -53,7 +53,7 @@ impl BatchAction for ExportUnityAvatar {
 }
 
 #[derive(Debug, Default)]
-pub struct DumpMorphTrackSamples;
+pub(super) struct DumpMorphTrackSamples;
 
 impl BatchAction for DumpMorphTrackSamples {
     fn name(&self) -> &'static str {
@@ -65,7 +65,7 @@ impl BatchAction for DumpMorphTrackSamples {
 }
 
 #[derive(Debug)]
-pub struct ExportModelFbx {
+pub(super) struct ExportModelFbx {
     path: PathBuf,
 }
 

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::project_point_to_segment;
 use thyllore_model_core::INFLUENCES_PER_VERTEX;
 
@@ -20,10 +20,10 @@ impl ChainArc {
         let mut arc = vec![0.0];
         let mut current = chain.joints[0].head;
         for joint in &chain.joints[1..] {
-            arc.push(arc.last().copied().unwrap() + (joint.head - current).magnitude());
+            arc.push(arc.last().copied().unwrap() + (joint.head - current).length());
             current = joint.head;
         }
-        let total_length = arc.last().copied().unwrap() + (chain.tail - current).magnitude();
+        let total_length = arc.last().copied().unwrap() + (chain.tail - current).length();
         Self { arc, total_length }
     }
 
@@ -40,7 +40,7 @@ struct PolylineHit {
     arc_position: f32,
 }
 
-fn project_to_polyline(point: Vector3<f32>, chain: &GeneratedChain, arc: &ChainArc) -> PolylineHit {
+fn project_to_polyline(point: Vec3, chain: &GeneratedChain, arc: &ChainArc) -> PolylineHit {
     let nearest = chain
         .joints
         .iter()
@@ -52,7 +52,7 @@ fn project_to_polyline(point: Vector3<f32>, chain: &GeneratedChain, arc: &ChainA
             };
             let (t, projected) = project_point_to_segment(point, joint.head, next_pos);
             PolylineHit {
-                distance_squared: (point - projected).magnitude2(),
+                distance_squared: (point - projected).length_squared(),
                 arc_position: arc.arc[i] + t * (next_arc - arc.arc[i]),
             }
         })
@@ -114,7 +114,7 @@ fn chain_influences(
 }
 
 fn find_nearest_other_chain(
-    point: Vector3<f32>,
+    point: Vec3,
     own_chain: usize,
     chains: &[GeneratedChain],
     arcs: &[ChainArc],

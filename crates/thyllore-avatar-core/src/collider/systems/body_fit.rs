@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_anim_core::spring_bone::{
     bone_local_points, bone_segment_local, fit_bone_capsule, fit_bone_capsules, fit_capsule_along,
     radius_around_axis, weighted_positions, CapsuleFitParams, FittedCapsule,
@@ -32,13 +32,13 @@ pub fn fit_body_capsules(
         .collect();
     fitted.extend(head_bone.and_then(|bone| fit_head_capsule(skins, skeleton, bone, params)));
 
-    let own_radius = |bone: BoneId, head: Vector3<f32>, tail: Vector3<f32>| {
+    let own_radius = |bone: BoneId, head: Vec3, tail: Vec3| {
         let points = weighted_positions(skins, bone, params.min_weight);
         if points.len() < params.min_vertex_count as usize {
             return None;
         }
         let axis = tail - head;
-        if axis.magnitude2() <= f32::EPSILON {
+        if axis.length_squared() <= f32::EPSILON {
             return None;
         }
         radius_around_axis(&points, head, axis.normalize(), params)
@@ -64,7 +64,7 @@ fn fit_head_capsule(
     let bone = skeleton.get_bone(bone_id)?;
     let (head, tail) = bone_segment_local(skeleton, bone_id);
     let axis = tail - head;
-    if axis.magnitude2() <= f32::EPSILON {
+    if axis.length_squared() <= f32::EPSILON {
         return fit_bone_capsule(skins, bone, params);
     }
 
@@ -85,34 +85,34 @@ fn fit_head_capsule(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
+    use glam::{Mat4, UVec4, Vec3, Vec4};
     use thyllore_model_core::Bone;
 
-    fn bone_at(id: u32, head: Vector3<f32>) -> Bone {
+    fn bone_at(id: u32, head: Vec3) -> Bone {
         Bone {
             id,
             name: format!("bone{id}"),
-            inverse_bind_pose: Matrix4::from_translation(head).invert().unwrap(),
+            inverse_bind_pose: Mat4::from_translation(head).try_inverse().unwrap(),
             ..Bone::default()
         }
     }
 
-    fn ring_around(skin: &mut SkinData, bone: u32, head: Vector3<f32>, radius: f32) {
+    fn ring_around(skin: &mut SkinData, bone: u32, head: Vec3, radius: f32) {
         for step in 0..16 {
             let angle = step as f32 * std::f32::consts::TAU / 16.0;
             let height = (step % 4) as f32 * 0.1;
             skin.base_positions
-                .push(head + Vector3::new(radius * angle.cos(), -height, radius * angle.sin()));
-            skin.bone_indices.push(Vector4::new(bone, 0, 0, 0));
-            skin.bone_weights.push(Vector4::new(1.0, 0.0, 0.0, 0.0));
+                .push(head + Vec3::new(radius * angle.cos(), -height, radius * angle.sin()));
+            skin.bone_indices.push(UVec4::new(bone, 0, 0, 0));
+            skin.bone_weights.push(Vec4::new(1.0, 0.0, 0.0, 0.0));
         }
     }
 
     #[test]
     fn a_neck_known_only_by_a_throat_patch_becomes_a_capsule_on_its_axis() {
-        let chest = Vector3::new(0.0, 1.3, 0.0);
-        let neck = Vector3::new(0.0, 1.5, 0.0);
-        let head = Vector3::new(0.0, 1.6, 0.0);
+        let chest = Vec3::new(0.0, 1.3, 0.0);
+        let neck = Vec3::new(0.0, 1.5, 0.0);
+        let head = Vec3::new(0.0, 1.6, 0.0);
         let mut skeleton = Skeleton::default();
         for (id, position) in [(0, chest), (1, neck), (2, head)] {
             skeleton.bones.push(bone_at(id, position));
@@ -124,29 +124,29 @@ mod tests {
         mapping.by_role.insert(HumanoidRole::Head, 2);
         let mut skin = SkinData::default();
         for step in 0..16 {
-            let patch = Vector3::new(
+            let patch = Vec3::new(
                 -0.03 + 0.01 * (step % 4) as f32,
                 1.5 + 0.02 * (step / 4) as f32,
                 0.07,
             );
             skin.base_positions.push(patch);
-            skin.bone_indices.push(Vector4::new(1, 0, 0, 0));
-            skin.bone_weights.push(Vector4::new(1.0, 0.0, 0.0, 0.0));
+            skin.bone_indices.push(UVec4::new(1, 0, 0, 0));
+            skin.bone_weights.push(Vec4::new(1.0, 0.0, 0.0, 0.0));
         }
 
         let fitted = fit_body_capsules(&[&skin], &skeleton, &mapping, &CapsuleFitParams::default());
 
         let neck_capsule = fitted.iter().find(|capsule| capsule.bone_id == 1).unwrap();
-        assert!(neck_capsule.head.magnitude() < 1e-5);
-        assert!((neck_capsule.tail - Vector3::new(0.0, 0.1, 0.0)).magnitude() < 1e-5);
+        assert!(neck_capsule.head.length() < 1e-5);
+        assert!((neck_capsule.tail - Vec3::new(0.0, 0.1, 0.0)).length() < 1e-5);
         assert!(neck_capsule.radius > 0.05 && neck_capsule.radius < 0.08);
     }
 
     #[test]
     fn the_head_capsule_runs_along_its_bone_from_the_chin_to_the_crown() {
-        let neck = Vector3::new(0.0, 1.5, 0.0);
-        let head = Vector3::new(0.0, 1.6, 0.0);
-        let crown = Vector3::new(0.0, 1.8, 0.0);
+        let neck = Vec3::new(0.0, 1.5, 0.0);
+        let head = Vec3::new(0.0, 1.6, 0.0);
+        let crown = Vec3::new(0.0, 1.8, 0.0);
         let mut skeleton = Skeleton::default();
         for (id, position) in [(0, neck), (1, head), (2, crown)] {
             skeleton.bones.push(bone_at(id, position));
@@ -163,13 +163,13 @@ mod tests {
                 let on_the_face = angle.sin() < 0.0;
                 let copies = if on_the_face { 4 } else { 1 };
                 for _ in 0..copies {
-                    skin.base_positions.push(Vector3::new(
+                    skin.base_positions.push(Vec3::new(
                         0.07 * angle.cos(),
                         height,
                         0.07 * angle.sin(),
                     ));
-                    skin.bone_indices.push(Vector4::new(1, 0, 0, 0));
-                    skin.bone_weights.push(Vector4::new(1.0, 0.0, 0.0, 0.0));
+                    skin.bone_indices.push(UVec4::new(1, 0, 0, 0));
+                    skin.bone_weights.push(Vec4::new(1.0, 0.0, 0.0, 0.0));
                 }
             }
         }
@@ -186,10 +186,10 @@ mod tests {
 
     #[test]
     fn body_roles_keep_their_fit_and_the_torso_fallback_completes_them() {
-        let hips = Vector3::new(0.0, 1.0, 0.0);
-        let left_leg = Vector3::new(0.1, 0.95, 0.0);
-        let right_leg = Vector3::new(-0.1, 0.95, 0.0);
-        let thumb = Vector3::new(0.5, 1.2, 0.0);
+        let hips = Vec3::new(0.0, 1.0, 0.0);
+        let left_leg = Vec3::new(0.1, 0.95, 0.0);
+        let right_leg = Vec3::new(-0.1, 0.95, 0.0);
+        let thumb = Vec3::new(0.5, 1.2, 0.0);
         let mut skeleton = Skeleton::default();
         for (id, head) in [(0, hips), (1, left_leg), (2, right_leg), (3, thumb)] {
             skeleton.bones.push(bone_at(id, head));

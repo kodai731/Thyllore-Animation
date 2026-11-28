@@ -1,18 +1,26 @@
 use super::SubmeshSelector;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::VariantArray,
+)]
 #[serde(rename_all = "snake_case")]
-pub enum ChainRole {
-    Hair,
-    #[serde(alias = "skirt")]
-    Garment,
+pub enum RootAttachment {
+    Cap,
+    Ring,
 }
 
-impl ChainRole {
-    pub fn bone_prefix(self) -> &'static str {
+impl RootAttachment {
+    pub fn label(self) -> &'static str {
         match self {
-            ChainRole::Hair => "hair",
-            ChainRole::Garment => "garment",
+            RootAttachment::Cap => "Cap",
+            RootAttachment::Ring => "Ring",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            RootAttachment::Cap => "Root on the top of a closed surface, such as the head",
+            RootAttachment::Ring => "Root ring at the mesh top edge, such as a skirt or sleeve",
         }
     }
 }
@@ -24,7 +32,7 @@ pub enum ChainOrigin {
     Authored,
     Generated {
         target: SubmeshSelector,
-        role: ChainRole,
+        attachment: RootAttachment,
     },
 }
 

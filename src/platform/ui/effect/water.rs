@@ -1,93 +1,27 @@
 use std::rc::Rc;
 
-use thyllore_effect_core::WaterSecondaryRays;
+use thyllore_effect_core::water::WaterSecondaryRays;
+use thyllore_scene_core::{ScalarParam, UiParam};
 
-use crate::ecs::component::{AppliedWaterPreset, WaterTorusEffect, WATER_DOMAIN};
+use crate::ecs::component::{
+    AppliedWaterPreset, ScalarChannelDomain, WaterTorusEffect, WATER_DOMAIN,
+};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
-use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
-use crate::ecs::systems::water::WaterUiCommand;
-use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
-use crate::ecs::{Entity, World};
-use crate::platform::ui::effect::rows::{effect_instances, instance_options, preset_options};
-use crate::platform::ui::form_window::{FormSection, RowsSection};
-use crate::platform::ui::param_widgets::rows_from_params;
-use crate::platform::ui::ui_rows::{ChoiceOption, FieldRows, UiRow};
+use crate::ecs::systems::WATER_SPAWN_HOOK;
+use crate::platform::ui::effect::sections::{build_effect_section, EffectPanel, EffectSectionView};
+use crate::platform::ui::ui_rows::UiRow;
 
-#[derive(Clone)]
-struct WaterSectionView {
-    instances: Vec<String>,
-    instance_index: usize,
-    preset: Option<String>,
-    selected: Option<Entity>,
-    effect: WaterTorusEffect,
-    render: WaterRenderSettings,
-}
-
-fn water_head_rows(view: &WaterSectionView) -> Vec<UiRow<WaterSectionView>> {
-    let mut rows = vec![UiRow::Action {
-        label: "Add Water",
-        enabled: |_, _| true,
-        on_click: |_| Box::new(ScalarCurveEvent::AddEffect(WATER_SPAWN_HOOK.key)),
-    }];
-
-    if view.instances.len() > 1 {
-        rows.push(UiRow::Choice {
-            label: "Instance",
-            options: |_, view: &WaterSectionView| {
-                instance_options(&view.instances, view.instance_index)
-            },
-            pick: |view, index| view.instance_index = index,
-        });
-    }
-
-    rows.push(UiRow::Choice {
-        label: "Preset",
-        options: |_, view: &WaterSectionView| {
-            preset_options(
-                thyllore_effect_core::WATER_PRESET_NAMES,
-                view.preset.as_deref(),
-            )
-        },
-        pick: |view, index| {
-            view.preset = Some(thyllore_effect_core::WATER_PRESET_NAMES[index].to_string());
-        },
-    });
-
-    rows
-}
-
-fn water_tail_rows() -> Vec<UiRow<WaterSectionView>> {
-    vec![
-        UiRow::Action {
-            label: "Curves",
-            enabled: |_, _| true,
-            on_click: |_| Box::new(ScalarCurveEvent::OpenScalarCurveEditor),
-        },
-        UiRow::Group {
-            title: "Water Debug".into(),
-            initially_open: false,
-            rows: water_debug_rows(),
-        },
-    ]
-}
+type WaterSectionView = EffectSectionView<WaterTorusEffect, WaterRenderSettings>;
 
 fn water_debug_rows() -> Vec<UiRow<WaterSectionView>> {
     vec![
-        UiRow::Choice {
-            label: "Secondary Rays",
-            options: |_, view: &WaterSectionView| {
-                WaterSecondaryRays::ALL
-                    .iter()
-                    .map(|&mode| ChoiceOption {
-                        label: mode.label().to_string(),
-                        selected: mode == view.render.secondary_rays,
-                    })
-                    .collect()
-            },
-            pick: |view, index| view.render.secondary_rays = WaterSecondaryRays::ALL[index],
-        },
+        crate::variant_choice_row!(
+            "Secondary Rays",
+            WaterSectionView,
+            WaterSecondaryRays,
+            render.secondary_rays
+        ),
         UiRow::Toggle {
             label: "Debug View",
             get: |view| view.render.debug_view != 0,
@@ -109,114 +43,51 @@ fn water_debug_rows() -> Vec<UiRow<WaterSectionView>> {
     ]
 }
 
-fn read_water_section_view(
-    ecs_world: &World,
-    waters: &[Entity],
-    selected_water_entity: Option<Entity>,
-) -> WaterSectionView {
-    let instance_index = selected_water_entity
-        .and_then(|entity| waters.iter().position(|&e| e == entity))
-        .unwrap_or(0);
-    let (instances, _) = effect_instances(ecs_world, waters, instance_index, "Water");
-    let preset = selected_water_entity.and_then(|entity| {
-        ecs_world
-            .get_component::<AppliedWaterPreset>(entity)
-            .map(|preset| preset.name.clone())
-    });
-    let render = ecs_world
-        .get_resource::<WaterRenderSettings>()
-        .map(|settings| *settings)
-        .unwrap_or_default();
-    let effect = selected_water_entity
-        .and_then(|entity| ecs_world.get_component::<WaterTorusEffect>(entity))
-        .cloned()
-        .unwrap_or_default();
+struct WaterPanel;
 
-    WaterSectionView {
-        instances,
-        instance_index,
-        preset,
-        selected: selected_water_entity,
-        effect,
-        render,
-    }
-}
+impl EffectPanel for WaterPanel {
+    type Component = WaterTorusEffect;
+    type RenderSettings = WaterRenderSettings;
+    type Extra = ();
 
-fn water_section(world: &World) -> Option<Box<dyn FormSection>> {
-    let waters = world.entities_with::<WaterTorusEffect>();
-    let selected_water_entity = resolve_selected_water(world);
-    let view = read_water_section_view(world, &waters, selected_water_entity);
+    const NAME: &'static str = "Water";
+    const ADD_LABEL: &'static str = "Add Water";
+    const SPAWN_HOOK_KEY: &'static str = WATER_SPAWN_HOOK.key;
+    const PRESET_NAMES: &'static [&'static str] = thyllore_effect_core::water::WATER_PRESET_NAMES;
 
-    let mut rows = water_head_rows(&view);
-    if view.selected.is_some() {
-        rows.push(UiRow::Field(Box::new(FieldRows {
-            scope: "effect",
-            field: |view: &mut WaterSectionView| &mut view.effect,
-            rows: rows_from_params(
-                &thyllore_effect_core::WATER_UI_PARAMS,
-                &thyllore_effect_core::WATER_SCALAR_PARAMS,
-                &[],
-            ),
-        })));
-        rows.extend(water_tail_rows());
+    fn ui_params() -> &'static [UiParam] {
+        &thyllore_effect_core::water::WATER_UI_PARAMS
     }
 
-    let group = UiRow::Group {
-        title: "Water".into(),
-        initially_open: false,
-        rows,
-    };
-
-    Some(Box::new(RowsSection {
-        rows: vec![group],
-        view,
-        commit: commit_water_view,
-        keys: Some(&WATER_DOMAIN),
-    }))
-}
-
-fn commit_water_view(world: &World, shown: &WaterSectionView, view: &WaterSectionView) {
-    if view.instance_index != shown.instance_index {
-        world.send_command(OverlayEvent::SelectEffectInstance {
-            key: WATER_SPAWN_HOOK.key,
-            index: view.instance_index,
-        });
+    fn scalar_params() -> &'static [ScalarParam<WaterTorusEffect>] {
+        &thyllore_effect_core::water::WATER_SCALAR_PARAMS
     }
 
-    let mut effect_applied_this_frame = false;
-    if let (Some(chosen), Some(_)) = (&view.preset, view.selected) {
-        if view.preset != shown.preset {
-            world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            world.send_command(WaterUiCommand::ApplyPreset(chosen.clone()));
-            effect_applied_this_frame = true;
-        }
+    fn domain() -> &'static ScalarChannelDomain {
+        &WATER_DOMAIN
     }
 
-    let Some(entity) = view.selected else {
-        return;
-    };
-    if !effect_applied_this_frame && view.effect != shown.effect {
-        world.send_command(WaterUiCommand::UpdateEffect {
-            entity,
-            effect: Box::new(view.effect.clone()),
-        });
+    fn applied_preset_name(applied: &AppliedWaterPreset) -> String {
+        applied.name.clone()
     }
 
-    if view.render != shown.render {
-        world.send_command(WaterUiCommand::UpdateRenderSettings(view.render));
+    fn debug_rows(_view: &WaterSectionView) -> Vec<UiRow<WaterSectionView>> {
+        water_debug_rows()
     }
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect::sections::EffectSectionHook {
     key: "water",
     order: 1,
-    section: water_section,
+    section: build_effect_section::<WaterPanel>,
 });
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::events::ui_command::UiCommandQueue;
+    use crate::ecs::events::UiCommandQueue;
+    use crate::ecs::world::World;
+    use crate::platform::ui::effect::sections::{commit_effect_view, effect_head_rows};
     use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
 
     fn view_with_instances(count: usize) -> WaterSectionView {
@@ -227,13 +98,14 @@ mod tests {
             selected: None,
             effect: WaterTorusEffect::default(),
             render: WaterRenderSettings::default(),
+            extra: (),
         }
     }
 
     fn committed_command_names(shown: &WaterSectionView, view: &WaterSectionView) -> Vec<String> {
         let mut world = World::new();
         world.insert_resource(UiCommandQueue::default());
-        commit_water_view(&world, shown, view);
+        commit_effect_view::<WaterPanel>(&world, shown, view);
 
         let names = world
             .resource_mut::<UiCommandQueue>()
@@ -252,14 +124,14 @@ mod tests {
 
     #[test]
     fn head_rows_with_two_instances_show_instance_choice() {
-        let rows = water_head_rows(&view_with_instances(2));
+        let rows = effect_head_rows::<WaterPanel>(&view_with_instances(2));
         assert_eq!(visible_labels(&rows), ["Add Water", "Instance", "Preset"]);
         assert!(find_duplicate_labels(&rows).is_empty());
     }
 
     #[test]
     fn head_rows_with_one_instance_hide_instance_choice() {
-        let rows = water_head_rows(&view_with_instances(1));
+        let rows = effect_head_rows::<WaterPanel>(&view_with_instances(1));
         assert_eq!(visible_labels(&rows), ["Add Water", "Preset"]);
     }
 
@@ -312,7 +184,7 @@ mod tests {
     fn commit_preset_change_clears_keys_and_applies_preset_without_update() {
         let shown = selected_view();
         let view = WaterSectionView {
-            preset: Some(thyllore_effect_core::WATER_PRESET_NAMES[0].to_string()),
+            preset: Some(thyllore_effect_core::water::WATER_PRESET_NAMES[0].to_string()),
             ..shown.clone()
         };
 

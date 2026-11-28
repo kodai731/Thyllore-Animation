@@ -8,5 +8,19 @@
       "Bash(tail secrets/*)",
       "Bash(grep * secrets/*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop_module_facade.sh\"",
+            "timeout": 300,
+            "statusMessage": "Checking module facade rules"
+          }
+        ]
+      }
+    ]
   }
 }

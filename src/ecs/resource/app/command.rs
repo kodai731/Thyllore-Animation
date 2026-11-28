@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use cgmath::Vector3;
+use glam::Vec3;
 
-use thyllore_avatar_core::cloth_setup::components::chain_gen::ChainGenRequest;
+use thyllore_avatar_core::cloth_setup::ChainGenRequest;
 
 use crate::ecs::resource::SkeletonSnapshot;
 use crate::ecs::world::Entity;
@@ -37,6 +37,11 @@ pub type SceneLoadQueue = CommandQueue<SceneLoadCommand>;
 pub type AssetEditQueue = CommandQueue<AssetEditCommand>;
 pub type OutputQueue = CommandQueue<OutputCommand>;
 
+crate::startup_resource!(EntityRemovalQueue, Editor);
+crate::startup_resource!(SceneLoadQueue, Editor);
+crate::startup_resource!(AssetEditQueue, Editor);
+crate::startup_resource!(OutputQueue, Editor);
+
 /// Applied first: the entity ids were collected from the scene as it was before any load.
 #[derive(Clone, Debug)]
 pub enum EntityRemovalCommand {
@@ -46,10 +51,7 @@ pub enum EntityRemovalCommand {
 #[derive(Clone, Debug)]
 pub enum SceneLoadCommand {
     LoadModel {
-        path: String,
-    },
-    LoadModelAdditive {
-        path: String,
+        entity: crate::ecs::world::Entity,
     },
     #[cfg(feature = "auto-rig")]
     LoadModelFromMemory {
@@ -74,14 +76,14 @@ pub enum AssetEditCommand {
     AddBone {
         parent: String,
         name: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
     RemoveBone {
         bone: String,
     },
     SetBoneOffset {
         bone: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
     RestoreSkeletonSnapshot {
         snapshot: Box<SkeletonSnapshot>,
@@ -97,9 +99,7 @@ pub enum AssetEditCommand {
 pub enum ScaleHistory {
     Record,
     Replay,
-    Revert {
-        root_scales: Vec<(Entity, Vector3<f32>)>,
-    },
+    Revert { root_scales: Vec<(Entity, Vec3)> },
 }
 
 /// Applied last: these only read the scene the earlier stages produced.

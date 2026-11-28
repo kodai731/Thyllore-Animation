@@ -3,7 +3,7 @@ use imgui::NumericFormat;
 
 const FALLBACK_FORMAT: &str = "%.3f";
 
-pub fn numeric_format<T: DataTypeKind>(format: &str) -> NumericFormat<'_, T> {
+pub(super) fn numeric_format<T: DataTypeKind>(format: &str) -> NumericFormat<'_, T> {
     match NumericFormat::new(format) {
         Ok(numeric_format) => numeric_format,
         Err(error) => {

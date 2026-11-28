@@ -1,15 +1,16 @@
-use cgmath::Matrix4;
+use glam::Mat4;
 use serde_json::{json, Value};
 
 use crate::ecs::resource::{
     Camera, DebugViewState, LightState, ModelState, ProjectionData, SceneState, TimelineState,
 };
-use crate::ecs::systems::camera_systems::{
+use crate::ecs::systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
+    find_model_path,
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_spawn::{EffectSpawnHook, EffectSpawnHooks};
-use thyllore_effect_core::inverse_view_proj_f64;
+use thyllore_effect_core::water::inverse_view_proj_f64;
 
 pub fn build_scene_json(world: &World) -> Value {
     let scene_path = world
@@ -18,8 +19,7 @@ pub fn build_scene_json(world: &World) -> Value {
         .map(|p| p.to_string_lossy().to_string());
     let model = world.get_resource::<ModelState>().map(|m| {
         json!({
-            "path": m.model_path,
-            "load_status": m.load_status,
+            "path": find_model_path(world),
             "has_skinned_meshes": m.has_skinned_meshes,
         })
     });
@@ -80,7 +80,7 @@ pub fn build_camera_json(world: &World) -> Value {
         "yaw_degrees": camera.yaw.to_degrees(),
         "pitch_degrees": camera.pitch.to_degrees(),
         "distance": camera.distance,
-        "fov_y_degrees": camera.fov_y.0,
+        "fov_y_degrees": camera.fov_y.to_degrees(),
         "near_plane": camera.near_plane,
         "position": [position.x, position.y, position.z],
         "forward": [forward.x, forward.y, forward.z],
@@ -114,8 +114,8 @@ pub fn build_light_json(world: &World) -> Value {
     })
 }
 
-pub fn matrix_json(matrix: &Matrix4<f32>) -> Value {
-    let columns: [[f32; 4]; 4] = (*matrix).into();
+pub fn matrix_json(matrix: &Mat4) -> Value {
+    let columns: [[f32; 4]; 4] = (*matrix).to_cols_array_2d();
     json!(columns)
 }
 

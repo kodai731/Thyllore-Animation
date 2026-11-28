@@ -1,38 +1,38 @@
 use crate::volume::RayKnots;
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 use thyllore_math_core::mix;
 
 // One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
 // length comes from the active length (active pieces) so the budget is spent on density.
-pub const MODULATION_CELLS: usize = 64;
-pub const ACTIVE_CELLS_MIN: usize = 16;
+pub(crate) const MODULATION_CELLS: usize = 64;
+pub(crate) const ACTIVE_CELLS_MIN: usize = 16;
 const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
 pub(crate) const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
 /// Cell length along the ray: a fraction of the finest modulation feature (world units, the active
 /// span when none), bounded so the active length holds between ACTIVE_CELLS_MIN and MODULATION_CELLS cells.
-pub fn modulation_step(
-    direction: Vector3<f32>,
+pub(crate) fn modulation_step(
+    direction: Vec3,
     active_length: f32,
     finest_feature: Option<f32>,
 ) -> f32 {
     let span = active_length.max(EMPTY_INTERVAL_EPSILON);
-    let active_span = span * direction.magnitude();
+    let active_span = span * direction.length();
     let feature = finest_feature.map_or(active_span, |feature| feature.min(active_span));
-    (MODULATION_SAMPLE_FRACTION * feature / direction.magnitude()).clamp(
+    (MODULATION_SAMPLE_FRACTION * feature / direction.length()).clamp(
         span / MODULATION_CELLS as f32,
         span / ACTIVE_CELLS_MIN as f32,
     )
 }
 
 /// A medium integrated piece by piece in closed form under a cell-sampled linear modulation.
-pub trait RayMedium {
+pub(crate) trait RayMedium {
     type Ray;
 
     fn ray_pieces(
         &self,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         t_far: f32,
     ) -> (RayKnots, Self::Ray);
@@ -40,21 +40,21 @@ pub trait RayMedium {
     fn piece_is_active(
         &self,
         ray: &Self::Ray,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         s0: f32,
         s1: f32,
     ) -> bool;
 
-    fn modulation_at(&self, point: Vector3<f32>, step_ahead: Vector3<f32>) -> f32;
+    fn modulation_at(&self, point: Vec3, step_ahead: Vec3) -> f32;
 
-    fn modulation_step(&self, direction: Vector3<f32>, active_length: f32) -> f32;
+    fn modulation_step(&self, direction: Vec3, active_length: f32) -> f32;
 
     fn piece_optical_depth(
         &self,
         ray: &Self::Ray,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         s0: f32,
         s1: f32,
         modulation: (f32, f32),
@@ -67,8 +67,8 @@ fn measure_active_length<M: RayMedium>(
     medium: &M,
     ray: &M::Ray,
     knots: &RayKnots,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
 ) -> f32 {
     knots
         .pieces()
@@ -97,8 +97,8 @@ impl CellModulation {
     fn advance<M: RayMedium>(
         self,
         medium: &M,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
+        origin: Vec3,
+        direction: Vec3,
         t_near: f32,
         step: f32,
         cell: i64,
@@ -122,10 +122,10 @@ impl CellModulation {
 }
 
 /// Pieces are walked in ray order and each is cut by the cells of the ray-wide grid it overlaps.
-pub fn cell_modulated_optical_depth<M: RayMedium>(
+pub(crate) fn cell_modulated_optical_depth<M: RayMedium>(
     medium: &M,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
+    origin: Vec3,
+    direction: Vec3,
     t_near: f32,
     t_far: f32,
 ) -> f32 {

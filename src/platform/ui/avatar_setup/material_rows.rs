@@ -8,13 +8,13 @@ const UNRESOLVED_COLOR: [f32; 4] = [1.0, 0.6, 0.2, 1.0];
 const FAILURE_COLOR: [f32; 4] = [1.0, 0.3, 0.3, 1.0];
 
 #[derive(Clone)]
-pub struct MaterialView {
+pub(super) struct MaterialView {
     pub slots: Vec<(String, Option<String>)>,
     pub save_state: MaterialTextureSaveState,
 }
 
 impl MaterialView {
-    pub fn from_state(state: &MaterialTextureState) -> Self {
+    pub(super) fn from_state(state: &MaterialTextureState) -> Self {
         Self {
             slots: state
                 .slots
@@ -26,7 +26,7 @@ impl MaterialView {
     }
 }
 
-pub fn rows() -> Vec<UiRow<MaterialView>> {
+pub(super) fn rows() -> Vec<UiRow<MaterialView>> {
     vec![
         UiRow::Action {
             label: "Save and Reload Model",

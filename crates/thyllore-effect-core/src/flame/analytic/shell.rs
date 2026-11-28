@@ -1,3 +1,5 @@
+use crate::flame::FlameEmitterKind;
+
 // Analytic shell envelope of the flame proxy (cone x y-slab). The resolve pass
 // derives the ray interval from it in closed form (clampToShellCone in
 // shaders/flame/resolveFragment.slang + shaders/flame/include/shell_profile.slang);
@@ -15,11 +17,11 @@ pub const FLAME_SHELL_SUPPORT_HEADROOM: f32 = 1.5;
 /// 0.75, and a proxy that stops there slices the torus flat. Mirrors
 /// shaders/flame/include/shell_support.slang.
 pub fn flame_shell_support_scale(
-    emitter_kind: u32,
+    emitter_kind: FlameEmitterKind,
     ring_major_norm: f32,
     support_margin: f32,
 ) -> f32 {
-    if emitter_kind == 1 {
+    if emitter_kind == FlameEmitterKind::Ring {
         let rm = ring_major_norm;
         ((rm + FLAME_SHELL_SUPPORT_HEADROOM * support_margin * (1.0 - rm))
             / (FLAME_SHELL_BASE_RADIUS * FLAME_SHELL_SUPPORT_HEADROOM * support_margin))

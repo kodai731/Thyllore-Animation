@@ -1,6 +1,4 @@
 use super::bake::dispatch_spring_bone_bake_events;
-use crate::animation::spring_bone::{JointForce, SpringForceModel};
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ColliderShape;
 use crate::ecs::component::SpringBoneSetup;
@@ -12,9 +10,11 @@ use crate::ecs::component::SpringColliderGroupId;
 use crate::ecs::component::SpringColliderId;
 use crate::ecs::component::SpringJointParam;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::{SpringBoneGizmoData, SpringChainGizmoMode};
+use crate::ecs::resource::{SpringBoneGizmoData, SpringChainGizmoMode};
 use crate::ecs::world::{Entity, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::spring_bone::{JointForce, SpringForceModel};
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum SpringBoneEvent {
@@ -196,7 +196,7 @@ impl UiCommand for SetSpringForceModel {
             msg_warn!("Spring force model: no animated model entity");
             return;
         };
-        if let Some(mut setup) = world.get_component_mut::<SpringBoneSetup>(entity) {
+        if let Some(setup) = world.get_component_mut::<SpringBoneSetup>(entity) {
             setup.new_joint_force_model = self.force_model;
             for joint in setup.chains.iter_mut().flat_map(|chain| &mut chain.joints) {
                 if joint.force.model() != self.force_model {

@@ -1,9 +1,9 @@
-use cgmath::{Matrix4, Quaternion, Vector3};
+use glam::{Mat4, Quat, Vec3};
 
-use crate::wind::ownership::WindParameterOwner;
+use crate::wind::WindParameterOwner;
 
 #[derive(Clone, Debug, PartialEq, crate::UboPack, thyllore_scene_core::SceneFields)]
-#[ubo(target = crate::WindUBO)]
+#[ubo(target = crate::wind::WindUBO)]
 #[scene(key = "wind_tornado", tag = WindParameterOwner, owner = Frame, tags = WIND_PARAMETER_OWNERSHIP, snapshot = wind_parameter_snapshot, scalars = WIND_SCALAR_PARAMS, ui = WIND_UI_PARAMS, overwrite = overwrite_wind_persisted_fields)]
 pub struct WindTornadoEffect {
     #[ubo("optics.z")]
@@ -14,9 +14,9 @@ pub struct WindTornadoEffect {
     #[runtime(ui(min = -100.0, max = 100.0))]
     pub time_offset: f32,
     #[persist(as = [f32; 3])]
-    pub position: Vector3<f32>,
+    pub position: Vec3,
     #[persist(as = [f32; 4], with = crate::scene_convert::quaternion_wxyz)]
-    pub rotation: Quaternion<f32>,
+    pub rotation: Quat,
     #[persist(curve, debug_range = (0.5, 10.0), ui(primary, min = 0.1, max = 20.0, group = "shape"))]
     pub column_height: f32,
     #[persist(curve, debug_range = (0.05, 5.0), ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
@@ -99,10 +99,10 @@ pub struct WindTornadoEffect {
     #[persist(curve, ui(min = 0.0, max = 0.95, group = "eddy"))]
     pub eddy_erosion: f32,
     /// Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)
-    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 16.0, group = "eddy"))]
     pub puff_count_theta: u32,
     /// Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)
-    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f", group = "eddy"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 16.0, group = "eddy"))]
     pub puff_count_height: u32,
     /// Radius of each puff clump in world units
     #[persist(curve, ui(min = 0.01, max = 1.0, group = "eddy"))]
@@ -140,8 +140,8 @@ pub struct WindTornadoEffect {
 impl Default for WindTornadoEffect {
     fn default() -> Self {
         Self {
-            position: Vector3::new(0.0, 0.0, 0.0),
-            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            position: Vec3::new(0.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
             time: 0.0,
             time_scale: 1.0,
             time_offset: 0.0,
@@ -187,22 +187,22 @@ impl Default for WindTornadoEffect {
     }
 }
 
-pub fn build_wind_model_matrix(effect: &WindTornadoEffect) -> Matrix4<f32> {
-    Matrix4::from_translation(effect.position) * Matrix4::from(effect.rotation)
+pub fn build_wind_model_matrix(effect: &WindTornadoEffect) -> Mat4 {
+    Mat4::from_translation(effect.position) * Mat4::from_quat(effect.rotation)
 }
 
 impl crate::EffectPresets for WindTornadoEffect {
-    const PRESET_NAMES: &'static [&'static str] = crate::WIND_PRESET_NAMES;
+    const PRESET_NAMES: &'static [&'static str] = crate::wind::WIND_PRESET_NAMES;
 
     fn apply_preset(&mut self, name: &str) -> bool {
-        crate::apply_wind_preset(self, name)
+        crate::wind::apply_wind_preset(self, name)
     }
 }
 
 impl crate::Placement for WindTornadoEffect {
     fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
         self.time = time;
-        self.position = Vector3::from(position);
+        self.position = Vec3::from(position);
         crate::scene_convert::quaternion_wxyz::set(&mut self.rotation, rotation);
     }
 }

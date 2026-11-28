@@ -2,7 +2,7 @@
 //! contributions, flow_warp_with_rate is the anisoCompress/Expand warp from
 //! noise_field.slang.
 
-use thyllore_effect_core::flame_wave::*;
+use thyllore_effect_core::flame::*;
 
 /// Per-mode contribution and weight from [`sample_wave_field`].
 #[derive(Clone, Debug)]

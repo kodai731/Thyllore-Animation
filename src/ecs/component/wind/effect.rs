@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
-pub use thyllore_effect_core::WindTornadoEffect;
+pub use thyllore_effect_core::wind::WindTornadoEffect;
 
 crate::scene_owner!(WindTornadoEffect {
-    icon: crate::ecs::component::EntityIcon::Effect('T'),
+    icon: crate::ecs::component::EntityIcon::Effect(crate::ecs::component::Icon::Wind),
     placement: |e| (e.position, e.rotation),
 });
 

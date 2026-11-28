@@ -1,10 +1,10 @@
-use crate::animation::{BoneId, ConstraintType, IkConstraintData};
+use thyllore_anim_core::{BoneId, ConstraintType, IkConstraintData};
 
 use super::fields::{common_rows, constraint_params, remove_row, scalar_row, ConstraintView};
 use crate::platform::ui::bone_choice::bone_options;
 use crate::platform::ui::ui_rows::{ChoiceOption, UiRow};
 
-pub fn ik_rows() -> Vec<UiRow<ConstraintView>> {
+pub(crate) fn ik_rows() -> Vec<UiRow<ConstraintView>> {
     let params = constraint_params();
     let mut rows = common_rows();
 

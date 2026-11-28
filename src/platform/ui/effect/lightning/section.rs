@@ -1,162 +1,114 @@
+use thyllore_effect_core::lightning::END_FOLLOWS_TARGET;
+use thyllore_scene_core::{ScalarParam, UiCondition, UiParam};
+
 use crate::ecs::component::{
-    AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, LIGHTNING_DOMAIN,
+    AppliedLightningPreset, LightningEffect, LightningPath, LightningTarget, ScalarChannelDomain,
+    LIGHTNING_DOMAIN,
 };
 use crate::ecs::resource::LightningRenderSettings;
-use crate::ecs::systems::lightning::{resolve_selected_lightning, LightningUiCommand};
-use crate::ecs::systems::phases::event_dispatch::overlay::OverlayEvent;
-use crate::ecs::systems::phases::event_dispatch::scalar_curve::ScalarCurveEvent;
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
-use crate::ecs::world::Entity;
-use crate::ecs::World;
+use crate::ecs::world::{Entity, World};
 
-use super::rows::{lightning_head_rows, lightning_tail_rows, LightningSectionView};
-use crate::platform::ui::effect::rows::effect_instances;
-use crate::platform::ui::form_window::{FormSection, RowsSection};
-use crate::platform::ui::param_widgets::rows_from_params;
-use crate::platform::ui::ui_rows::{FieldRows, UiRow};
+use super::rows::{
+    lightning_debug_rows, lightning_extra_head_rows, LightningExtra, LightningSectionView,
+};
+use crate::platform::ui::effect::sections::{build_effect_section, EffectPanel};
+use crate::platform::ui::ui_rows::UiRow;
 
-fn read_lightning_section_view(
-    ecs_world: &World,
-    lightnings: &[Entity],
-    selected_entity: Option<Entity>,
-) -> LightningSectionView {
-    let instance_index = selected_entity
-        .and_then(|entity| lightnings.iter().position(|&e| e == entity))
-        .unwrap_or(0);
-    let (instances, _) = effect_instances(ecs_world, lightnings, instance_index, "Lightning");
-    let preset = selected_entity.and_then(|entity| {
-        ecs_world
-            .get_component::<AppliedLightningPreset>(entity)
-            .map(|preset| preset.name.clone())
-    });
-    let target_name = selected_entity.and_then(|entity| {
-        ecs_world
-            .get_component::<LightningTarget>(entity)
-            .map(|target| target.entity_name.clone())
-    });
-    let waypoints = selected_entity
-        .and_then(|entity| {
-            ecs_world
-                .get_component::<LightningPath>(entity)
-                .map(|path| path.waypoints.clone())
-        })
-        .unwrap_or_default();
-    let render = ecs_world
-        .get_resource::<LightningRenderSettings>()
-        .map(|settings| *settings)
-        .unwrap_or_default();
-    let effect = selected_entity
-        .and_then(|entity| ecs_world.get_component::<LightningEffect>(entity))
-        .cloned()
-        .unwrap_or_default();
+struct LightningPanel;
 
-    LightningSectionView {
-        instances,
-        instance_index,
-        preset,
-        target_name,
-        waypoints,
-        selected: selected_entity,
-        effect,
-        render,
-    }
-}
+impl EffectPanel for LightningPanel {
+    type Component = LightningEffect;
+    type RenderSettings = LightningRenderSettings;
+    type Extra = LightningExtra;
 
-fn effect_rows(view: &LightningSectionView) -> UiRow<LightningSectionView> {
-    let hidden: &[&str] = if view.target_name.is_some() {
-        &["shape_end_offset"]
-    } else {
-        &[]
-    };
-    UiRow::Field(Box::new(FieldRows {
-        scope: "effect",
-        field: |view: &mut LightningSectionView| &mut view.effect,
-        rows: rows_from_params(
-            &thyllore_effect_core::LIGHTNING_UI_PARAMS,
-            &thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
-            hidden,
-        ),
-    }))
-}
+    const NAME: &'static str = "Lightning";
+    const ADD_LABEL: &'static str = "Add Lightning";
+    const SPAWN_HOOK_KEY: &'static str = LIGHTNING_SPAWN_HOOK.key;
+    const PRESET_NAMES: &'static [&'static str] =
+        thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES;
 
-fn lightning_section(world: &World) -> Option<Box<dyn FormSection>> {
-    let lightnings = world.entities_with::<LightningEffect>();
-    let selected_entity = resolve_selected_lightning(world);
-    let view = read_lightning_section_view(world, &lightnings, selected_entity);
-
-    let mut rows = lightning_head_rows(&view);
-    if view.selected.is_some() {
-        rows.push(effect_rows(&view));
-        rows.extend(lightning_tail_rows());
+    fn ui_params() -> &'static [UiParam] {
+        &thyllore_effect_core::lightning::LIGHTNING_UI_PARAMS
     }
 
-    let group = UiRow::Group {
-        title: "Lightning".into(),
-        initially_open: false,
-        rows,
-    };
+    fn scalar_params() -> &'static [ScalarParam<LightningEffect>] {
+        &thyllore_effect_core::lightning::LIGHTNING_SCALAR_PARAMS
+    }
 
-    Some(Box::new(RowsSection {
-        rows: vec![group],
-        view,
-        commit: commit_lightning_view,
-        keys: Some(&LIGHTNING_DOMAIN),
-    }))
-}
+    fn domain() -> &'static ScalarChannelDomain {
+        &LIGHTNING_DOMAIN
+    }
 
-fn commit_lightning_view(world: &World, shown: &LightningSectionView, view: &LightningSectionView) {
-    if view.instance_index != shown.instance_index {
-        world.send_command(OverlayEvent::SelectEffectInstance {
-            key: LIGHTNING_SPAWN_HOOK.key,
-            index: view.instance_index,
+    fn applied_preset_name(applied: &AppliedLightningPreset) -> String {
+        applied.name.clone()
+    }
+
+    fn debug_rows(_view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
+        lightning_debug_rows()
+    }
+
+    fn read_extra(world: &World, selected: Option<Entity>) -> LightningExtra {
+        let target_name = selected.and_then(|entity| {
+            world
+                .get_component::<LightningTarget>(entity)
+                .map(|target| target.entity_name.clone())
         });
-    }
+        let waypoints = selected
+            .and_then(|entity| {
+                world
+                    .get_component::<LightningPath>(entity)
+                    .map(|path| path.waypoints.clone())
+            })
+            .unwrap_or_default();
 
-    let mut effect_applied_this_frame = false;
-    if let (Some(chosen), Some(_)) = (&view.preset, view.selected) {
-        if view.preset != shown.preset {
-            world.send_command(ScalarCurveEvent::ClearScalarKeys);
-            world.send_command(LightningUiCommand::ApplyPreset(chosen.clone()));
-            effect_applied_this_frame = true;
+        LightningExtra {
+            target_name,
+            waypoints,
         }
     }
 
-    let Some(entity) = view.selected else {
-        return;
-    };
-    if !effect_applied_this_frame && view.effect != shown.effect {
-        world.send_command(LightningUiCommand::UpdateEffect {
-            entity,
-            effect: Box::new(view.effect.clone()),
-        });
+    fn extra_head_rows(view: &LightningSectionView) -> Vec<UiRow<LightningSectionView>> {
+        lightning_extra_head_rows(view)
     }
 
-    if view.render != shown.render {
-        world.send_command(LightningUiCommand::UpdateRenderSettings(view.render));
+    fn active_conditions(view: &LightningSectionView) -> Vec<&'static UiCondition> {
+        match view.extra.target_name {
+            Some(_) => vec![&END_FOLLOWS_TARGET],
+            None => Vec::new(),
+        }
     }
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect::sections::EffectSectionHook {
     key: "lightning",
     order: 3,
-    section: lightning_section,
+    section: build_effect_section::<LightningPanel>,
 });
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ecs::events::UiCommandQueue;
+    use crate::platform::ui::effect::sections::{commit_effect_view, effect_head_rows};
+    use crate::platform::ui::ui_rows::{find_duplicate_labels, visible_labels};
+
+    fn view_with_instances(count: usize) -> LightningSectionView {
+        LightningSectionView {
+            instances: (1..=count).map(|i| format!("Lightning {i}")).collect(),
+            instance_index: 0,
+            preset: None,
+            selected: None,
+            effect: LightningEffect::default(),
+            render: LightningRenderSettings::default(),
+            extra: LightningExtra::default(),
+        }
+    }
 
     fn selected_view() -> LightningSectionView {
         LightningSectionView {
-            instances: vec!["Lightning 1".to_string()],
-            instance_index: 0,
-            preset: None,
-            target_name: None,
-            waypoints: Vec::new(),
             selected: Some(0),
-            effect: LightningEffect::default(),
-            render: LightningRenderSettings::default(),
+            ..view_with_instances(1)
         }
     }
 
@@ -166,7 +118,7 @@ mod tests {
     ) -> Vec<String> {
         let mut world = World::new();
         world.insert_resource(UiCommandQueue::default());
-        commit_lightning_view(&world, shown, view);
+        commit_effect_view::<LightningPanel>(&world, shown, view);
 
         let names = world
             .resource_mut::<UiCommandQueue>()
@@ -174,6 +126,33 @@ mod tests {
             .map(|command| format!("{:?}", command))
             .collect();
         names
+    }
+
+    #[test]
+    fn head_rows_with_two_instances_show_instance_choice() {
+        let rows = effect_head_rows::<LightningPanel>(&view_with_instances(2));
+        assert_eq!(
+            visible_labels(&rows),
+            ["Add Lightning", "Instance", "Preset"]
+        );
+        assert!(find_duplicate_labels(&rows).is_empty());
+    }
+
+    #[test]
+    fn head_rows_with_one_instance_hide_instance_choice() {
+        let rows = effect_head_rows::<LightningPanel>(&view_with_instances(1));
+        assert_eq!(visible_labels(&rows), ["Add Lightning", "Preset"]);
+    }
+
+    #[test]
+    fn end_follows_target_only_while_a_target_is_linked() {
+        let mut view = selected_view();
+        assert!(LightningPanel::active_conditions(&view).is_empty());
+
+        view.extra.target_name = Some("Target Locator".to_string());
+        let active = LightningPanel::active_conditions(&view);
+        assert_eq!(active.len(), 1);
+        assert!(std::ptr::eq(active[0], &END_FOLLOWS_TARGET));
     }
 
     #[test]
@@ -186,7 +165,7 @@ mod tests {
     fn commit_preset_change_clears_keys_and_applies_preset_without_update() {
         let shown = selected_view();
         let view = LightningSectionView {
-            preset: Some(thyllore_effect_core::LIGHTNING_PRESET_NAMES[0].to_string()),
+            preset: Some(thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[0].to_string()),
             ..shown.clone()
         };
 

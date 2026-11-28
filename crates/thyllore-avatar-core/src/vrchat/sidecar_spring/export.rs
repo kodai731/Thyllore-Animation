@@ -222,10 +222,10 @@ fn build_tail_joint(
 fn sidecar_chain_origin(origin: &ChainOrigin) -> Option<SidecarChainOrigin> {
     match origin {
         ChainOrigin::Authored => None,
-        ChainOrigin::Generated { target, role } => Some(SidecarChainOrigin {
+        ChainOrigin::Generated { target, attachment } => Some(SidecarChainOrigin {
             mesh: target.mesh().to_string(),
             material: target.material().map(str::to_string),
-            role: *role,
+            attachment: *attachment,
         }),
     }
 }

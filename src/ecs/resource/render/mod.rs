@@ -1,4 +1,4 @@
-pub mod billboard;
+mod billboard;
 
 mod auto_exposure;
 mod bloom;

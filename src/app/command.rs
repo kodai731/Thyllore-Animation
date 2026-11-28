@@ -5,8 +5,12 @@ use crate::ecs::resource::{
 };
 use crate::ecs::systems::generate_and_apply_chain_bones;
 #[cfg(feature = "auto-rig")]
+use crate::ecs::systems::model_load_systems::load_generated_mesh;
+use crate::ecs::systems::model_load_systems::{
+    confirm_model_load_request, load_model_keeping_scene,
+};
+#[cfg(feature = "auto-rig")]
 use crate::ecs::systems::phases::event_dispatch::ml::auto_rig::AutoRigEvent;
-use vulkanalia::prelude::v1_0::*;
 
 pub(crate) unsafe fn apply_queued_commands(app: &mut App) {
     for command in take_queued_commands::<EntityRemovalCommand>(app) {
@@ -42,22 +46,27 @@ unsafe fn apply_entity_removal_command(app: &mut App, command: EntityRemovalComm
 
 unsafe fn apply_scene_load_command(app: &mut App, command: SceneLoadCommand) {
     match command {
-        SceneLoadCommand::LoadModel { path } => {
-            if let Err(e) = app.load_model(&path) {
-                log_error!("Failed to load model: {:?}", e);
+        SceneLoadCommand::LoadModel { entity } => {
+            if !confirm_model_load_request(&app.data.ecs_world, entity) {
+                return;
             }
-        }
 
-        SceneLoadCommand::LoadModelAdditive { path } => {
-            if let Err(e) = app.load_model_additive(&path) {
-                log_error!("Failed to add model: {:?}", e);
+            let loaded = app.rebuild_scene(|gpu, swapchain, world, assets| {
+                load_model_keeping_scene(entity, gpu, swapchain, world, assets)
+            });
+            if let Err(e) = loaded {
+                msg_error!("Failed to load model: {:?}", e);
             }
         }
 
         #[cfg(feature = "auto-rig")]
         SceneLoadCommand::LoadModelFromMemory { glb_data, source } => {
-            match app.load_model_from_glb(&glb_data) {
+            let loaded = app.rebuild_scene(|gpu, swapchain, world, assets| {
+                load_generated_mesh(&glb_data, gpu, swapchain, world, assets)
+            });
+            match loaded {
                 Ok(()) => {
+                    msg_info!("Generated mesh loaded successfully");
                     log!(
                         "SceneLoadCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
                         source
@@ -95,7 +104,7 @@ unsafe fn apply_asset_edit_command(app: &mut App, command: AssetEditCommand) {
             );
 
             let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-            match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+            match crate::ecs::systems::clip_library_load_from_file(
                 &mut clip_library,
                 &mut app.data.ecs_assets,
                 &path,
@@ -170,7 +179,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
     match command {
         OutputCommand::TakeScreenshot => {
             log!("Taking screenshot...");
-            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+            let image_index = app.frame % crate::ecs::MAX_FRAMES_IN_FLIGHT;
             match app.save_screenshot(image_index) {
                 Ok(path) => msg_info!("Screenshot saved: {}", path),
                 Err(e) => log_error!("Screenshot failed: {:?}", e),
@@ -212,7 +221,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveClipToFile { source_id, path } => {
-            use crate::ecs::systems::clip_library_systems::{
+            use crate::ecs::systems::{
                 clip_library_save_to_file, clip_library_update_save_metadata,
             };
 
@@ -232,7 +241,7 @@ unsafe fn apply_output_command(app: &mut App, command: OutputCommand) {
         }
 
         OutputCommand::SaveSpringBoneBake { baked_id, path } => {
-            use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+            use crate::ecs::systems::clip_library_save_to_file;
 
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             match clip_library_save_to_file(&clip_library, baked_id, &path) {
@@ -307,9 +316,9 @@ unsafe fn apply_model_scale_command(
     factor: f32,
     history: ScaleHistory,
 ) -> anyhow::Result<()> {
-    app.rrdevice.device.device_wait_idle()?;
+    app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 
@@ -328,12 +337,8 @@ unsafe fn apply_model_scale_command(
             mesh_index,
         )?;
     }
-    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
-        &app.instance,
-        &app.rrdevice,
-        &mut app.data,
-        &pool,
-    )?;
+    let (mut gpu, world, assets) = app.data.scene_parts(&app.instance, &app.rrdevice, &pool);
+    crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
     match history {
         ScaleHistory::Record => app
@@ -354,11 +359,11 @@ unsafe fn apply_hidden_triangles(
     app: &mut App,
     meshes: Vec<(usize, Vec<u32>)>,
 ) -> anyhow::Result<()> {
-    use thyllore_avatar_core::cloth_setup::systems::hidden_mask::order_visible_triangles_first;
+    use thyllore_avatar_core::cloth_setup::order_visible_triangles_first;
 
-    app.rrdevice.device.device_wait_idle()?;
+    app.rrdevice.wait_idle()?;
     let pool = app
-        .resource::<crate::vulkanr::context::CommandState>()
+        .resource::<thyllore_vulkan_core::core::CommandState>()
         .pool
         .clone();
 
@@ -377,12 +382,8 @@ unsafe fn apply_hidden_triangles(
         )?;
     }
 
-    crate::app::raytracing::scene_build::rebuild_acceleration_structures_from_data(
-        &app.instance,
-        &app.rrdevice,
-        &mut app.data,
-        &pool,
-    )?;
+    let (mut gpu, world, assets) = app.data.scene_parts(&app.instance, &app.rrdevice, &pool);
+    crate::ecs::systems::rebuild_scene_acceleration(&mut gpu, world, assets)?;
 
     msg_info!(
         "Applied hidden triangles to {} meshes ({} triangles hidden)",

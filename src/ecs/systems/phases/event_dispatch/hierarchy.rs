@@ -1,27 +1,27 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode};
-use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::resource::{
     AssetEditCommand, AssetEditQueue, ClipLibrary, EntityRemovalCommand, EntityRemovalQueue,
     HierarchyState, TimelineState,
 };
+use crate::ecs::resource::{BoneDisplayStyle, BoneDrawMode};
+use crate::ecs::resource::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::systems::{
     collapse_entity, expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_reveal_bone, hierarchy_select,
     hierarchy_select_bone, hierarchy_toggle_selection, navigate_hierarchy, rename_entity,
-    resolve_mesh_bone_id, resolve_transform_entity, uniform_scale_factor, update_entity_scale,
-    update_entity_translation, update_entity_visible, TreeNavigation, TreeSelection,
+    resolve_mesh_bone_id, resolve_transform_entity, update_entity_scale, update_entity_translation,
+    update_entity_visible, TreeNavigation, TreeSelection,
 };
 use crate::ecs::world::Visibility;
 use crate::ecs::world::{Children, Entity, Transform, World};
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use cgmath::Quaternion;
+use glam::Quat;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum HierarchyEvent {
@@ -40,9 +40,9 @@ pub enum HierarchyEvent {
     ExpandBone(BoneId),
     CollapseBone(BoneId),
     SetEntityVisible(Entity, Visibility),
-    SetEntityTranslation(Entity, Vector3<f32>),
-    SetEntityRotation(Entity, Quaternion<f32>),
-    SetEntityScale(Entity, Vector3<f32>),
+    SetEntityTranslation(Entity, Vec3),
+    SetEntityRotation(Entity, Quat),
+    SetEntityScale(Entity, Vec3),
     RenameEntity(Entity, String),
     NavigateTree {
         navigation: TreeNavigation,
@@ -57,9 +57,9 @@ pub enum HierarchyEvent {
     AddChildBone {
         parent: BoneId,
         name: String,
-        local_offset: Vector3<f32>,
+        local_offset: Vec3,
     },
-    SetBoneOffset(BoneId, Vector3<f32>),
+    SetBoneOffset(BoneId, Vec3),
     DeleteBone(BoneId),
 }
 

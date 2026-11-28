@@ -1,4 +1,6 @@
 #[cfg(feature = "ml")]
+mod actor_spawn;
+#[cfg(feature = "ml")]
 mod batch_apply;
 mod mode_systems;
 mod suggestion_systems;

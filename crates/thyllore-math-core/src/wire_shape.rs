@@ -1,6 +1,6 @@
 use std::f32::consts::TAU;
 
-use cgmath::{InnerSpace, Vector3};
+use glam::Vec3;
 
 /// A line of a wireframe, from one point to the other.
 pub type WireSegment = ([f32; 3], [f32; 3]);
@@ -54,8 +54,8 @@ pub fn wire_capsule_segments(
     radius: f32,
     segments: u32,
 ) -> Vec<WireSegment> {
-    let axis = Vector3::from(tail) - Vector3::from(head);
-    if axis.magnitude() < DEGENERATE_AXIS_LENGTH {
+    let axis = Vec3::from(tail) - Vec3::from(head);
+    if axis.length() < DEGENERATE_AXIS_LENGTH {
         return wire_sphere_segments(head, radius, segments);
     }
 
@@ -66,18 +66,18 @@ pub fn wire_capsule_segments(
     for offset in [right, -right, up, -up] {
         let shift = offset * radius;
         lines.push((
-            (Vector3::from(head) + shift).into(),
-            (Vector3::from(tail) + shift).into(),
+            (Vec3::from(head) + shift).into(),
+            (Vec3::from(tail) + shift).into(),
         ));
     }
     lines
 }
 
-fn perpendicular_axes(direction: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
+fn perpendicular_axes(direction: Vec3) -> (Vec3, Vec3) {
     let up_hint = if direction.y.abs() < 0.99 {
-        Vector3::unit_y()
+        Vec3::Y
     } else {
-        Vector3::unit_x()
+        Vec3::X
     };
     let right = direction.cross(up_hint).normalize();
     let up = direction.cross(right).normalize();
@@ -89,7 +89,7 @@ mod tests {
     use super::*;
 
     fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
-        (Vector3::from(a) - Vector3::from(b)).magnitude()
+        (Vec3::from(a) - Vec3::from(b)).length()
     }
 
     #[test]

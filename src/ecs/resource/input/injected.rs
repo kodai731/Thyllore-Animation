@@ -1,4 +1,4 @@
-use imgui::Key;
+use imgui::{Key, MouseButton};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct KeyChordModifiers {
@@ -32,6 +32,13 @@ impl InjectedKeyPress {
     }
 }
 
+/// One mouse click a headless run makes at a window-space pixel position.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InjectedClick {
+    pub position: [f32; 2],
+    pub button: MouseButton,
+}
+
 /// Keyboard, mouse and focus input queued by batch actions; the platform layer feeds it to imgui.
 #[derive(Clone, Debug, Default)]
 pub struct InjectedInput {
@@ -39,6 +46,8 @@ pub struct InjectedInput {
     pub held_presses: Vec<InjectedKeyPress>,
     pub pending_window_focus: Option<String>,
     pub pending_mouse_move: Option<[f32; 2]>,
-    pub pending_click: Option<[f32; 2]>,
-    pub click_held: bool,
+    pub pending_click: Option<InjectedClick>,
+    pub held_click_button: Option<MouseButton>,
 }
+
+crate::startup_resource!(InjectedInput, Editor);

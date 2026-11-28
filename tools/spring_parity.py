@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from engine_harness import dood_wrap, engine_env, engine_path, repo_root
+from engine_harness import dood_wrap, engine_env, engine_path, render_model_scene, repo_root
 
 DEFAULT_WORK_DIR = "target/spring_parity"
 UNITY_IMAGE_TAG = "thyllore-unity-gui"
@@ -53,9 +53,7 @@ def build_rig(work_dir: Path) -> Path:
 def run_engine(work_dir: Path, fbx_path: Path, dood: bool) -> None:
     """Run engine to add spring chains, export avatar sidecar, and dump spring tails."""
     scene = work_dir / "synthetic_avatar.scene.ron"
-    scene.write_text(
-        f'(\n    version: 8,\n    model: (\n        path: "{fbx_path}",\n    ),\n)\n'
-    )
+    scene.write_text(render_model_scene(fbx_path))
 
     engine = engine_path()
     avatar_json = work_dir / "synthetic_avatar.avatar.json"
@@ -67,7 +65,7 @@ def run_engine(work_dir: Path, fbx_path: Path, dood: bool) -> None:
         "--batch-screenshot", str(work_dir / "engine.png"),
         "--batch-frames", "20",
         "--batch-debug-action-at", "9:spring_force_model=vrm",
-        "--batch-debug-action-at", "10:add_spring_chains_under=Head,min_joints=2",
+        "--batch-debug-action-at", "10:use_existing_bones_as_springs=Head,min_joints=2",
         "--batch-debug-action-at", "12:export_unity_avatar",
         "--batch-debug-action-at", f"14:dump_spring_tails={work_dir / 'engine_tails.csv'},30",
     ]

@@ -1,22 +1,28 @@
-use thyllore_scene_core::{find_ui_param, ScalarParam, UiParam};
+use thyllore_scene_core::{find_ui_param, ScalarParam, UiCondition, UiParam};
 
 use crate::platform::ui::ui_rows::UiRow;
 
 /// `(group heading, names)`; `None` holds the ungrouped names and always comes last.
-pub type ParamGroup = (Option<&'static str>, Vec<&'static str>);
+pub(super) type ParamGroup = (Option<&'static str>, Vec<&'static str>);
 
-pub fn determine_primary_order(ui_params: &[UiParam], hidden: &[&str]) -> Vec<&'static str> {
+pub(super) fn determine_primary_order(
+    ui_params: &[UiParam],
+    active_conditions: &[&'static UiCondition],
+) -> Vec<&'static str> {
     ui_params
         .iter()
-        .filter(|param| param.primary && !hidden.contains(&param.name))
+        .filter(|param| param.primary && !param.is_hidden_in(active_conditions))
         .map(|param| param.name)
         .collect()
 }
 
-pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<ParamGroup> {
+pub(super) fn group_remaining_params(
+    ui_params: &[UiParam],
+    active_conditions: &[&'static UiCondition],
+) -> Vec<ParamGroup> {
     let remaining: Vec<&UiParam> = ui_params
         .iter()
-        .filter(|param| !param.primary && !hidden.contains(&param.name))
+        .filter(|param| !param.primary && !param.is_hidden_in(active_conditions))
         .collect();
 
     let mut groups: Vec<ParamGroup> = Vec::new();
@@ -42,19 +48,19 @@ pub fn group_remaining_params(ui_params: &[UiParam], hidden: &[&str]) -> Vec<Par
     groups
 }
 
-pub fn rows_from_params<C>(
+pub(super) fn rows_from_params<C>(
     ui_params: &'static [UiParam],
     scalars: &'static [ScalarParam<C>],
-    hidden: &[&str],
+    active_conditions: &[&'static UiCondition],
 ) -> Vec<UiRow<C>> {
-    let primary_names = determine_primary_order(ui_params, hidden);
+    let primary_names = determine_primary_order(ui_params, active_conditions);
     let mut rows: Vec<UiRow<C>> = primary_names
         .iter()
         .filter_map(|name| find_ui_param(ui_params, name))
         .map(|param| UiRow::Scalar { param, scalars })
         .collect();
 
-    let remaining_groups = group_remaining_params(ui_params, hidden);
+    let remaining_groups = group_remaining_params(ui_params, active_conditions);
     if remaining_groups.is_empty() {
         return rows;
     }
@@ -96,7 +102,19 @@ mod tests {
             tooltip: "",
             persisted: true,
             primary,
+            hidden_when: None,
         }
+    }
+
+    static FOLLOWS_TARGET: UiCondition = UiCondition {
+        description: "a target drives the value",
+    };
+
+    fn mixed_params_hidden_while_following(names: &[&str]) -> [UiParam; 6] {
+        mixed_params().map(|param| UiParam {
+            hidden_when: names.contains(&param.name).then_some(&FOLLOWS_TARGET),
+            ..param
+        })
     }
 
     fn mixed_params() -> [UiParam; 6] {
@@ -117,7 +135,9 @@ mod tests {
 
     #[test]
     fn primary_order_skips_hidden() {
-        assert_eq!(determine_primary_order(&mixed_params(), &["a"]), ["f"]);
+        let params = mixed_params_hidden_while_following(&["a"]);
+        assert_eq!(determine_primary_order(&params, &[&FOLLOWS_TARGET]), ["f"]);
+        assert_eq!(determine_primary_order(&params, &[]), ["a", "f"]);
     }
 
     #[test]
@@ -135,7 +155,10 @@ mod tests {
     #[test]
     fn remaining_groups_drop_a_group_whose_names_are_all_hidden() {
         assert_eq!(
-            group_remaining_params(&mixed_params(), &["d", "c"]),
+            group_remaining_params(
+                &mixed_params_hidden_while_following(&["d", "c"]),
+                &[&FOLLOWS_TARGET]
+            ),
             [(Some("g1"), vec!["b", "e"])]
         );
     }
@@ -201,9 +224,10 @@ mod tests {
 
     #[test]
     fn rows_from_params_hidden_excluded() {
-        let params: &'static [UiParam] = Box::leak(mixed_params().into());
+        let params: &'static [UiParam] =
+            Box::leak(mixed_params_hidden_while_following(&["a", "c"]).into());
         let scalars: &'static [ScalarParam<()>] = &[];
-        let rows = rows_from_params::<()>(params, scalars, &["a", "c"]);
+        let rows = rows_from_params::<()>(params, scalars, &[&FOLLOWS_TARGET]);
         let described = describe_rows(&rows);
         assert_eq!(
             described,

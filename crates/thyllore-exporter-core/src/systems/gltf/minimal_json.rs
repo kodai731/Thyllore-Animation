@@ -1,7 +1,7 @@
+use glam::Mat4;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use cgmath::SquareMatrix;
 use gltf::json::{self, Index};
 
 use thyllore_anim_core::BoneId;
@@ -29,8 +29,8 @@ pub(crate) fn build_minimal_gltf_json(
             .collect();
 
         let mut matrix: Option<[f32; 16]> = None;
-        if bone.local_transform != cgmath::Matrix4::identity() {
-            let cols: [[f32; 4]; 4] = bone.local_transform.into();
+        if bone.local_transform != Mat4::IDENTITY {
+            let cols: [[f32; 4]; 4] = bone.local_transform.to_cols_array_2d();
             let flat: [f32; 16] = [
                 cols[0][0], cols[0][1], cols[0][2], cols[0][3], cols[1][0], cols[1][1], cols[1][2],
                 cols[1][3], cols[2][0], cols[2][1], cols[2][2], cols[2][3], cols[3][0], cols[3][1],
@@ -65,13 +65,13 @@ pub(crate) fn build_minimal_gltf_json(
     // A non-identity root_transform is preserved as a parent node above the root
     // bones so importers can reconstruct Skeleton::root_transform.
     let scene_nodes: Vec<Index<json::Node>> =
-        if skeleton.root_transform != cgmath::Matrix4::identity() && !root_bone_nodes.is_empty() {
+        if skeleton.root_transform != Mat4::IDENTITY && !root_bone_nodes.is_empty() {
             let mut name = String::from("Armature");
             while skeleton.bones.iter().any(|b| b.name == name) {
                 name.push('_');
             }
 
-            let cols: [[f32; 4]; 4] = skeleton.root_transform.into();
+            let cols: [[f32; 4]; 4] = skeleton.root_transform.to_cols_array_2d();
             let flat: [f32; 16] = [
                 cols[0][0], cols[0][1], cols[0][2], cols[0][3], cols[1][0], cols[1][1], cols[1][2],
                 cols[1][3], cols[2][0], cols[2][1], cols[2][2], cols[2][3], cols[3][0], cols[3][1],

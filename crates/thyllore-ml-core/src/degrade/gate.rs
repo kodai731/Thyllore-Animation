@@ -1,7 +1,7 @@
 use ed25519_dalek::VerifyingKey;
 
 use super::token::{parse_public_key_base64, verify_token};
-use crate::copilot::v2::inference::CONTEXT_LENGTH;
+use crate::v2::inference::CONTEXT_LENGTH;
 
 pub const DEGRADED_CONTEXT_LENGTH: usize = 32;
 

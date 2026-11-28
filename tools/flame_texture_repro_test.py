@@ -42,7 +42,7 @@ def luminance(c: np.ndarray) -> np.ndarray:
 
 
 def srgb_to_linear(v: np.ndarray) -> np.ndarray:
-    """Mirror of the engine's decode (flame_fit::srgb_to_linear): the fit operates
+    """Mirror of the engine's decode (thyllore_texture_fit_core::srgb_to_linear): the fit operates
     on linear-light pixels, so this extractor must too."""
     return np.where(v <= 0.04045, v / 12.92, np.power((v + 0.055) / 1.055, 2.4))
 

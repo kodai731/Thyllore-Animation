@@ -28,9 +28,9 @@ from . import _bootstrap  # noqa: E402
 _bootstrap.insert_wheels_to_sys_path()
 
 
-# Expected ABI marker -- must match crates/thyllore-ml-api/src/lib.rs::ABI_MARKER.
+# Expected ABI marker -- must match crates/thyllore-ml-api/src/abi_marker.rs::ABI_MARKER.
 # Bump in lockstep with that constant when the L2 trait has breaking changes.
-EXPECTED_ABI_MARKER: int = 5
+EXPECTED_ABI_MARKER: int = 7
 
 
 # Skip importing bpy-dependent modules during pure-package consumption (e.g.,
@@ -46,6 +46,7 @@ except ImportError:
 
 
 if _BPY_AVAILABLE:
+    import importlib  # noqa: E402
     import os  # noqa: E402
 
     from . import _debuglog  # noqa: E402
@@ -108,24 +109,24 @@ if _BPY_AVAILABLE:
         )
 
     def _check_wheel_abi() -> tuple[bool, str]:
-        """Verify the thyllore_ml_core wheel's ``__abi_marker__``.
+        """Verify the ABI marker of both ``thyllore_ml_core`` and ``thyllore_avatar_api`` wheels.
 
-        Wheel absence is NOT treated as ABI failure -- the curve_copilot
-        operator will simply gray-out via tml.capabilities().
+        Wheel absence is NOT treated as ABI failure -- an absent wheel simply means its features
+        are unavailable (curve_copilot grays out via tml.capabilities(), avatar setup is skipped).
         """
-        try:
-            import thyllore_ml_core as tml  # type: ignore
-        except ImportError:
-            return True, ""
-
-        actual = getattr(tml, "__abi_marker__", 0)
-        if actual != EXPECTED_ABI_MARKER:
-            return (
-                False,
-                f"thyllore_ml_core ABI mismatch: addon expects "
-                f"{EXPECTED_ABI_MARKER}, wheel provides {actual}. "
-                f"Please update the addon.",
-            )
+        for module_name in ("thyllore_ml_core", "thyllore_avatar_api"):
+            try:
+                mod = importlib.import_module(module_name)
+            except ImportError:
+                continue
+            actual = getattr(mod, "__abi_marker__", 0)
+            if actual != EXPECTED_ABI_MARKER:
+                return (
+                    False,
+                    f"{module_name} ABI mismatch: addon expects "
+                    f"{EXPECTED_ABI_MARKER}, wheel provides {actual}. "
+                    f"Please update the addon.",
+                )
         return True, ""
 
     def register() -> None:
@@ -148,10 +149,12 @@ if _BPY_AVAILABLE:
             feedback_message.register()
         if _TELEMETRY_AVAILABLE:
             telemetry.register()
-        if _debuglog.is_debug_enabled():
+        if _debuglog.is_debug_build():
             from . import debug_rpc  # noqa: E402
+            from .common import viewport_recording  # noqa: E402
 
             debug_rpc.register()
+            viewport_recording.register()
         _apply_mock_server_pin_if_requested()
         _REGISTERED_ABI_FAILURE = False
         print("[Thyllore] Addon registered successfully")
@@ -163,9 +166,11 @@ if _BPY_AVAILABLE:
             telemetry.unregister()
         if _FEEDBACK_MESSAGE_AVAILABLE and not _REGISTERED_ABI_FAILURE:
             feedback_message.unregister()
-        if _debuglog.is_debug_enabled() and not _REGISTERED_ABI_FAILURE:
+        if _debuglog.is_debug_build() and not _REGISTERED_ABI_FAILURE:
             from . import debug_rpc  # noqa: E402
+            from .common import viewport_recording  # noqa: E402
 
+            viewport_recording.unregister()
             debug_rpc.unregister()
         panels.unregister()
         if not _REGISTERED_ABI_FAILURE:

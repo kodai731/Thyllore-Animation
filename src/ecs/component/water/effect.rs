@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
-pub use thyllore_effect_core::{WaterTemporalAccum, WaterTorusEffect};
+pub use thyllore_effect_core::water::{WaterTemporalAccum, WaterTorusEffect};
 
 crate::scene_owner!(WaterTorusEffect {
-    icon: crate::ecs::component::EntityIcon::Effect('W'),
+    icon: crate::ecs::component::EntityIcon::Effect(crate::ecs::component::Icon::Waves),
     placement: |e| (e.position, e.rotation),
 });
 

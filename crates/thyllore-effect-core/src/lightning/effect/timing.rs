@@ -4,7 +4,7 @@ use crate::lightning::LightningParameterOwner;
 #[params(tag = LightningParameterOwner, owner = Frame, group = "timing")]
 pub struct LightningTiming {
     /// Seed of the deterministic hash that shapes the channel and the burst jitter
-    #[persist(ui(min = 0.0, max = 9999.0, format = "%.0f"))]
+    #[persist(ui(kind = Seed))]
     pub seed: u32,
     #[persist(curve, ui(min = 0.0, max = 10.0))]
     pub burst_start: f32,
@@ -14,7 +14,7 @@ pub struct LightningTiming {
     #[persist(curve, ui(min = 0.0, max = 1.0))]
     pub burst_jitter: f32,
     /// Number of bursts to play; 0 repeats forever
-    #[persist(curve, ui(min = 0.0, max = 16.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 16.0))]
     pub burst_count: u32,
     #[persist(curve, ui(min = 0.0, max = 1.0, format = "%.3f"))]
     pub attack_time: f32,
@@ -23,7 +23,7 @@ pub struct LightningTiming {
     #[persist(curve, ui(min = 0.0, max = 2.0, format = "%.3f"))]
     pub release_time: f32,
     /// Return strokes per burst, played stroke_interval apart
-    #[persist(curve, ui(min = 1.0, max = 8.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 1.0, max = 8.0))]
     pub stroke_count: u32,
     #[persist(curve, ui(min = 0.001, max = 1.0, format = "%.3f"))]
     pub stroke_interval: f32,
@@ -35,7 +35,7 @@ pub struct LightningTiming {
     #[persist(curve, ui(min = 0.001, max = 1.0, format = "%.3f"))]
     pub flicker_period: f32,
     /// Subdivision level above which the channel is reshaped every reseed_period
-    #[persist(curve, ui(min = 0.0, max = 8.0, format = "%.0f"))]
+    #[persist(curve, ui(kind = Int, min = 0.0, max = 8.0))]
     pub reseed_level: u32,
     #[persist(curve, ui(min = 0.01, max = 10.0))]
     pub reseed_period: f32,

@@ -40,3 +40,6 @@ impl Default for AutoRigState {
         }
     }
 }
+
+#[cfg(feature = "auto-rig")]
+crate::startup_resource!(AutoRigState, CoreResources);

@@ -5,19 +5,24 @@ from __future__ import annotations
 import bpy
 
 try:
-    import thyllore_ml_core as tml  # type: ignore
+    import thyllore_avatar_api as avatar_api  # type: ignore
 except ImportError:
-    tml = None  # type: ignore
+    avatar_api = None  # type: ignore
 
 from ..common import coordinates
-from ..common.chain_bones import COVERED_GROUP, given_chains_from_groups, group_vertices, joints_from_bones, vertex_tex_coords
+from ..common.chain_bones import VertexGroupNames, given_chains_from_groups, group_vertices, joints_from_bones, vertex_tex_coords
 from ..common.skin_input import collider_inputs
 from ..common.spring_properties import humanoid_overrides_to_dict, spring_settings_to_edit
 from ..common.submesh_mask import material_triangles
-from .operators import bound_meshes
+from ..common.rig_snapshot import bound_meshes
 
-GENERATABLE_ROLES = ("hair", "garment")
-DEFAULT_ROOT_BY_ROLE = {"hair": "Head", "garment": "Hips"}
+VERTEX_GROUP_NAMES = VertexGroupNames(avatar_api) if avatar_api is not None else None
+
+
+CHAIN_ROOT_ROLES: dict[str, str] = (
+    {entry["role"]: entry["default_root"] for entry in avatar_api.chain_roles()} if avatar_api is not None else {}
+)
+GENERATABLE_ROLES: frozenset[str] = frozenset(CHAIN_ROOT_ROLES)
 
 
 def generatable_submeshes(arm) -> list[tuple[object, object]]:
@@ -38,7 +43,8 @@ def _material_slot_index(obj, material_name: str) -> int | None:
 
 
 def resolve_submesh(arm, mesh_name: str, material: str):
-    """The mesh object, its chain role and its material slot for a hair or garment submesh of the rig."""
+    """The mesh object, its submesh row (role and attachment) and its material slot for a hair or garment
+    submesh of the rig."""
     obj = bpy.data.objects.get(mesh_name)
     if obj is None or obj.type != "MESH" or obj not in bound_meshes(arm):
         raise ValueError(f"{mesh_name!r} is not a mesh bound to {arm.name!r}")
@@ -48,7 +54,7 @@ def resolve_submesh(arm, mesh_name: str, material: str):
     material_index = _material_slot_index(obj, material)
     if material_index is None:
         raise ValueError(f"{obj.name!r} has no material slot {material!r}")
-    return obj, role_item.role, material_index
+    return obj, role_item, material_index
 
 
 def engine_point(obj, local_point, scale_length: float) -> list[float]:
@@ -80,9 +86,9 @@ def submesh_tex_coords(mesh) -> list[tuple[float, float]]:
     return vertex_tex_coords(loop_vertices, loop_uvs, len(mesh.vertices))
 
 
-def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
+def humanoid_bone_indices(arm, settings, bones) -> dict[str, int]:
     """Unity role name to armature bone index, the inferred mapping with the user's overrides on top."""
-    roles = dict(tml.infer_humanoid_mapping(fit_bones).get("mapping", {}))
+    roles = dict(avatar_api.infer_humanoid_mapping({"bones": bones}).get("mapping", {}))
     roles.update(humanoid_overrides_to_dict(settings))
     indices = {}
     for role, bone_name in roles.items():
@@ -92,8 +98,8 @@ def humanoid_bone_indices(arm, settings, fit_bones) -> dict[str, int]:
     return indices
 
 
-def body_collider_inputs(arm, settings, fit_bones) -> list[dict]:
-    model_spring = tml.spring_colliders_to_model(spring_settings_to_edit(settings), fit_bones)
+def body_collider_inputs(arm, settings, bones) -> list[dict]:
+    model_spring = avatar_api.spring_colliders_to_model({"spring": spring_settings_to_edit(settings), "bones": bones})
     bone_index = {bone.name: index for index, bone in enumerate(arm.data.bones)}
     return collider_inputs(model_spring["colliders"], bone_index)
 
@@ -104,7 +110,7 @@ def vertex_group_weights(obj):
 
 def marked_covered_vertices(obj) -> list[int]:
     """The vertices of the covered group, or none when the group does not exist (the coverage is then measured)."""
-    group = obj.vertex_groups.get(COVERED_GROUP)
+    group = obj.vertex_groups.get(VERTEX_GROUP_NAMES.covered)
     if group is None:
         return []
     return group_vertices(vertex_group_weights(obj), group.index)
@@ -122,7 +128,7 @@ def given_chains(obj, arm, registered: dict[str, list[str]], scale_length: float
     """The chains whose vertices the user assigned in membership groups, with the joints of the chains whose
     bones exist on the armature; none when the split is computed."""
     groups = [(vg.name, vg.index) for vg in obj.vertex_groups]
-    given = given_chains_from_groups(vertex_group_weights(obj), groups)
+    given = given_chains_from_groups(vertex_group_weights(obj), groups, VERTEX_GROUP_NAMES)
     for chain in given:
         bones = _chain_bones(arm, registered, chain["name"])
         if bones:

@@ -6,10 +6,12 @@ use super::{chains_under_bone, setup::SpringChain, SpringBoneSetup, SpringChainI
 
 pub const COLOR_CHAIN: [f32; 3] = [0.95, 0.75, 0.2];
 pub const COLOR_COLLIDER: [f32; 3] = [0.2, 0.8, 0.2];
+pub const COLOR_INACTIVE_ALPHA: f32 = 0.35;
 pub const CIRCLE_SEGMENTS: u32 = 16;
 pub const CHAIN_RADIUS_SEGMENTS: u32 = 8;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SpringChainGizmoMode {
     #[default]
     Selected,

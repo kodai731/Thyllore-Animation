@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::descriptor::RRRayQueryDescriptorSet;
-use crate::frame_context::FrameRenderContext;
 use crate::pipeline::RRPipeline;
 use crate::resource::RRGBuffer;
+use crate::FrameRenderContext;
 
 pub unsafe fn record_ray_query_pass(
     ctx: &FrameRenderContext,
@@ -12,9 +12,10 @@ pub unsafe fn record_ray_query_pass(
     pipeline: &RRPipeline,
     descriptor: &RRRayQueryDescriptorSet,
     normal_offset: f32,
-    cmd: vk::CommandBuffer,
+    cmd: crate::types::CommandBuffer,
 ) -> Result<()> {
-    let device = &ctx.device.device;
+    let cmd = cmd.raw();
+    let device = &ctx.device.device();
 
     insert_pre_compute_barriers(device, gbuffer, cmd);
     dispatch_compute(device, gbuffer, pipeline, descriptor, normal_offset, cmd);

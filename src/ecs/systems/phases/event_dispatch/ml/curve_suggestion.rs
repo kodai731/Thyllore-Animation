@@ -1,11 +1,11 @@
 #![cfg(feature = "ml")]
 
-use crate::animation::editable::PropertyType;
-use crate::animation::BoneId;
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
 use crate::ecs::world::World;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_anim_core::BoneId;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum CurveSuggestionEvent {
@@ -35,7 +35,7 @@ fn dispatch_curve_suggestion_events(
         curve_suggestion_apply, curve_suggestion_dismiss, curve_suggestion_submit,
         CurveSuggestionInputs,
     };
-    use crate::ml::{CurveCopilotMode, CURVE_COPILOT_ACTOR_ID};
+    use thyllore_ml_core::{CurveCopilotMode, CURVE_COPILOT_ACTOR_ID};
 
     for event in events {
         match event {
@@ -110,8 +110,6 @@ fn dispatch_curve_suggestion_events(
                 let mut state = world.resource_mut::<CurveSuggestionState>();
                 curve_suggestion_dismiss(&mut state);
             }
-
-            _ => {}
         }
     }
 }

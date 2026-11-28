@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use thyllore_model_core::{MorphChannel, SparseDelta};
 
-use super::fbx::{ControlPointVertexMap, FbxModel, MeshSplitInfo};
+use super::fbx::{ControlPointVertexMap, MeshSplitInfo};
+use thyllore_file_format_core::fbx::FbxModel;
 
 fn remap_shape_offsets(
     offset_vertices: &[u32],

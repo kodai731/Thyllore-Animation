@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, Vector3};
+use glam::{Mat4, Vec3};
 
 use crate::StaticMesh;
 
@@ -13,6 +13,6 @@ pub type BillboardMesh = StaticMesh<BillboardVertex>;
 
 #[derive(Clone, Debug)]
 pub struct BillboardTransform {
-    pub position: Vector3<f32>,
-    pub model_matrix: Matrix4<f32>,
+    pub position: Vec3,
+    pub model_matrix: Mat4,
 }

@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::UiCommand;
-use crate::ecs::resource::gizmo::BoneGizmoData;
+use crate::ecs::resource::BoneGizmoData;
 use crate::ecs::resource::CoordinateSpace;
 use crate::ecs::resource::TransformGizmoMode;
 use crate::ecs::resource::{
@@ -9,7 +9,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum OverlayEvent {

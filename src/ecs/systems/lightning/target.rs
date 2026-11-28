@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use super::path::adopt_lightning_child;
 use crate::ecs::component::{LightningEffect, LightningTarget, Locator};
@@ -29,7 +29,7 @@ pub fn spawn_lightning_target(world: &mut World, lightning: Entity) -> Option<En
         .unwrap_or_else(|| "Lightning".to_string());
 
     let target_name = format!("{lightning_name} Target");
-    let target = spawn_scene_owner(world, &target_name, Locator::at(Vector3::from(end_offset)));
+    let target = spawn_scene_owner(world, &target_name, Locator::at(Vec3::from(end_offset)));
     adopt_lightning_child(world, lightning, target);
     world.insert_component(
         lightning,

@@ -3,7 +3,8 @@ use imgui::{Condition, Key};
 
 use super::key_modifier::{current_key_modifier, KeyModifier};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneDrawMode, BoneGizmoData};
+use crate::ecs::component::Icon;
+use crate::ecs::resource::{BoneDisplayStyle, BoneDrawMode, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::phases::event_dispatch::camera::CameraEvent;
 use crate::ecs::systems::phases::event_dispatch::hierarchy::HierarchyEvent;
@@ -12,9 +13,9 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 use crate::platform::ui::theme::{
-    entity_icon, search_field, tree_row, Icon, TreeRowResponse, TreeRowSpec,
+    entity_icon, search_field, tree_row, TreeRowResponse, TreeRowSpec,
 };
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use thyllore_vulkan_core::resource::GraphicsResources;
 
 use crate::ecs::resource::LayoutSnapshot;
 

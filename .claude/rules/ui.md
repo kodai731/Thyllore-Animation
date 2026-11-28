@@ -44,6 +44,38 @@ pub probability: f32,
 pub probability: f32,
 ```
 
+## Widget kind follows the declaration
+
+`ui(kind = ..)` picks the widget: `Scalar` (float slider, the default), `Int` (whole-number slider,
+`u32` fields only), `Seed` (typed-in whole number without `min` / `max`, `u32` fields only),
+`Switch` (on / off toggle without `min` / `max`, `bool` fields only),
+`Color` / `Absorption` (`[f32; 3]` pickers) and `Offset` (three-component drag).
+A hand-written `UiRow::IntSlider` or `UiRow::Slider` for a value that is a field of the effect struct
+is a defect; declare `ui(..)` on the field. Hand-written rows remain only for knobs that are not
+fields (a macro that writes several parameters, a remapped view of one parameter).
+
+## Conditional parameters
+
+A parameter that has no meaning in some situation declares `ui(hidden_when = CONDITION)`, where
+`CONDITION` is a `static UiCondition` declared next to the struct in `thyllore-effect-core`.
+Whoever shows the parameters reports the conditions that hold and `rows_from_params` drops the
+parameters that name one of them. Conditions are compared by identity, never by name.
+
+- A condition that depends on the effect's own fields is evaluated by one function in
+  `thyllore-effect-core` (`emitter_ui_conditions`), so every consumer shares the rule.
+- A condition that depends on another component is reported by the panel that reads that
+  component (`LightningPanel::active_conditions` reports `END_FOLLOWS_TARGET` while a
+  `LightningTarget` is attached).
+
+```rust
+// Good: the declaration says which situation hides the parameter
+#[runtime(ui(min = 0.2, max = 5.0, hidden_when = EMITTER_IS_NOT_RING))]
+pub ring_major_radius: f32,
+
+// Bad: UI code that knows a parameter by name
+let hidden: &[&str] = if has_target { &["shape_end_offset"] } else { &[] };
+```
+
 ## Names
 
 - The public name of a parameter is its underscore-joined path (`branch.depth` → `branch_depth`); it is
@@ -63,12 +95,14 @@ a declaration carries the label, the range and which `View` field or `UiCommand`
 
 - A form window registers with `ui_window!(name, panel, order, form = builder)`; the builder returns
   a `FormWindow` of `FormSection`s (`src/platform/ui/form_window.rs`) and never receives
-  `&imgui::Ui`. Effect sections register with `effect_section_hook!` and return a `RowsSection`.
+  `&imgui::Ui`. Effect sections register
+  `build_effect_section::<P>` with `effect_section_hook!` (see "Effect sections are `EffectPanel` impls").
 - A `RowsSection` reads a `View` snapshot in the builder, lets the rows edit a copy during drawing,
   and sends commands from `commit(world, shown, view)` only for the fields that changed. Reading
   resources, scanning directories and validating paths happen in the builder, not in a row.
 - Generated parameter tables are attached with `rows_from_params` inside a `UiRow::Field` that
-  projects the view onto the effect struct; the hidden-parameter list is computed in the builder.
+  projects the view onto the effect struct; the builder passes the conditions that hold this frame
+  (see "Conditional parameters"), never a list of parameter names.
   A section that can key its scalars declares `keys: Some(&<EFFECT>_DOMAIN)`; the renderer
   reserves the key button's width before the widget and sends `InsertScalarKey` itself. Never
   append a widget after a row from a callback.
@@ -82,3 +116,27 @@ a declaration carries the label, the range and which `View` field or `UiCommand`
 
 Do not add a `FormSection` that wraps an imgui closure; that reintroduces hand-written builds behind
 the form API. Extend `UiRow` or the renderer instead.
+
+## Effect sections are `EffectPanel` impls
+
+Every effect section is `build_effect_section::<P>` over an `EffectPanel` impl
+(`src/platform/ui/effect/sections.rs`). The shared builder owns the skeleton and its commit:
+Add, Instance, Preset, the declared parameters, Curves and the `<Name> Debug` group; selecting an
+instance, applying a preset (which clears the scalar keys and replaces that frame's effect update),
+`EffectEdit::UpdateEffect` and `EffectEdit::UpdateRenderSettings`. An effect file never repeats
+these rows or commands.
+
+An impl states the component, the render settings, the generated tables and the debug rows, and
+overrides a defaulted extension point only for what is specific to the effect:
+
+| Extension point | Use |
+|---|---|
+| `type Extra` + `read_extra` | view state outside the component and the render settings (a target name, a UI state resource) |
+| `extra_head_rows` | rows shown below Preset whether or not an instance is selected |
+| `active_conditions` | the `UiCondition`s that hold for this view |
+| `param_rows` | rows around the declared parameters (`declared_param_rows`) that edit the component |
+| `edited_effect` | which component value an edit writes, or `None` when another command of the same frame replaces it |
+| `commit_extra` | commands for the fields of `Extra` that changed |
+
+When an effect needs a variation no extension point covers, add a defaulted one to the trait; do
+not copy the skeleton into an effect file, and do not write a `RowsSection` by hand for an effect.

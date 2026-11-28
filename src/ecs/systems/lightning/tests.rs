@@ -2,18 +2,18 @@ use super::passes::compute_lightning_scissor;
 use super::test_support::{lightning_inside_first_burst, orthographic_projection};
 use super::*;
 use crate::ecs::component::{
-    EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
+    EditorDisplay, EntityIcon, Icon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
-use crate::ecs::systems::effect_edit::apply_effect_preset;
+use crate::ecs::systems::effect_edit::{apply_effect_preset, resolve_selected_effect};
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
-use cgmath::{Matrix4, SquareMatrix, Vector3};
-use thyllore_effect_core::{
+use glam::{Mat4, Vec3};
+use thyllore_effect_core::lightning::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
     LightningShape,
 };
-use vulkanalia::prelude::v1_0::*;
+use thyllore_vulkan_core::types::Extent2D;
 
 #[test]
 fn spawned_lightning_carries_the_components_the_editor_queries() {
@@ -32,7 +32,7 @@ fn spawned_lightning_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<LightningEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Effect('Z'));
+    assert_eq!(display.icon, EntityIcon::Effect(Icon::Zap));
 }
 
 #[test]
@@ -40,12 +40,18 @@ fn selected_lightning_wins_over_the_first_lightning() {
     let mut world = World::new();
     let first = spawn_lightning(&mut world, "Lightning 1", LightningEffect::default());
     let second = spawn_lightning(&mut world, "Lightning 2", LightningEffect::default());
-    assert_eq!(resolve_selected_lightning(&world), Some(first));
+    assert_eq!(
+        resolve_selected_effect::<LightningEffect>(&world),
+        Some(first)
+    );
 
     let mut hierarchy = HierarchyState::default();
     hierarchy.selected_entity = Some(second);
     world.insert_resource(hierarchy);
-    assert_eq!(resolve_selected_lightning(&world), Some(second));
+    assert_eq!(
+        resolve_selected_effect::<LightningEffect>(&world),
+        Some(second)
+    );
 }
 
 #[test]
@@ -54,8 +60,8 @@ fn pick_ray_hits_the_strike_sphere_and_misses_beside_it() {
     let entity = spawn_lightning(&mut world, "Lightning", LightningEffect::default());
 
     let hit = PickRay {
-        origin: Vector3::new(-10.0, -4.0, 0.0),
-        direction: Vector3::new(1.0, 0.0, 0.0),
+        origin: Vec3::new(-10.0, -4.0, 0.0),
+        direction: Vec3::new(1.0, 0.0, 0.0),
     };
     let (picked, distance) =
         find_lightning_by_pick_ray(&world, &hit).expect("ray enters the bounding sphere");
@@ -63,8 +69,8 @@ fn pick_ray_hits_the_strike_sphere_and_misses_beside_it() {
     assert!(distance > 0.0 && distance < 10.0, "distance {distance}");
 
     let miss = PickRay {
-        origin: Vector3::new(-10.0, 30.0, 0.0),
-        direction: Vector3::new(1.0, 0.0, 0.0),
+        origin: Vec3::new(-10.0, 30.0, 0.0),
+        direction: Vec3::new(1.0, 0.0, 0.0),
     };
     assert!(find_lightning_by_pick_ray(&world, &miss).is_none());
 }
@@ -79,7 +85,7 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         .shape
         .core_radius = 0.9;
 
-    if let Some(target) = resolve_selected_lightning(&world) {
+    if let Some(target) = resolve_selected_effect::<LightningEffect>(&world) {
         apply_effect_preset::<LightningEffect>(&mut world, target, "no_such_preset");
     }
     assert_eq!(
@@ -89,14 +95,14 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         Some(0.9)
     );
 
-    let preset_name = thyllore_effect_core::LIGHTNING_PRESET_NAMES[0];
+    let preset_name = thyllore_effect_core::lightning::LIGHTNING_PRESET_NAMES[0];
     let mut expected = LightningEffect::default();
-    assert!(thyllore_effect_core::apply_lightning_preset(
+    assert!(thyllore_effect_core::lightning::apply_lightning_preset(
         &mut expected,
         preset_name
     ));
 
-    if let Some(target) = resolve_selected_lightning(&world) {
+    if let Some(target) = resolve_selected_effect::<LightningEffect>(&world) {
         apply_effect_preset::<LightningEffect>(&mut world, target, preset_name);
     }
     assert_eq!(
@@ -137,8 +143,8 @@ fn lightning_effect_hook_is_subscribed_after_wind() {
 #[test]
 fn scissor_covers_the_projected_segment_aabb() {
     let effect = lightning_inside_first_burst();
-    let (ubo, _) = build_lightning_ubo(&effect, Matrix4::identity());
-    let extent = vk::Extent2D {
+    let (ubo, _) = build_lightning_ubo(&effect, Mat4::IDENTITY);
+    let extent = Extent2D {
         width: 200,
         height: 200,
     };
@@ -198,8 +204,8 @@ fn scissor_covers_the_projected_segment_aabb() {
 fn coverage_debug_view_scissor_spans_the_full_extent() {
     let mut effect = LightningEffect::default();
     effect.time = burst_start_time(&effect, 0) - 1.0;
-    let (ubo, _) = build_lightning_ubo(&effect, Matrix4::identity());
-    let extent = vk::Extent2D {
+    let (ubo, _) = build_lightning_ubo(&effect, Mat4::IDENTITY);
+    let extent = Extent2D {
         width: 320,
         height: 180,
     };
@@ -233,7 +239,7 @@ fn coverage_debug_view_scissor_spans_the_full_extent() {
 fn spawned_target_is_a_child_at_the_end_offset_and_links_by_name() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(0.0, 8.0, 0.0),
+        position: Vec3::new(0.0, 8.0, 0.0),
         shape: LightningShape {
             end_offset: [0.0, -8.5, 0.0],
             ..LightningShape::default()
@@ -256,7 +262,7 @@ fn spawned_target_is_a_child_at_the_end_offset_and_links_by_name() {
         Some(vec![target])
     );
     let placement = world.get_component::<Transform>(target).unwrap();
-    assert_eq!(placement.translation, Vector3::new(0.0, -8.5, 0.0));
+    assert_eq!(placement.translation, Vec3::new(0.0, -8.5, 0.0));
     assert_eq!(
         world.get_component::<Name>(target).map(|n| n.0.clone()),
         Some(format!("{DEFAULT_LIGHTNING_NAME} Target"))
@@ -267,7 +273,7 @@ fn spawned_target_is_a_child_at_the_end_offset_and_links_by_name() {
 fn linked_bolt_takes_the_target_local_translation_as_end_offset() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(1.0, 8.0, 0.0),
+        position: Vec3::new(1.0, 8.0, 0.0),
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
@@ -275,7 +281,7 @@ fn linked_bolt_takes_the_target_local_translation_as_end_offset() {
     world
         .get_component_mut::<Transform>(target)
         .unwrap()
-        .translation = Vector3::new(4.0, 0.0, 2.0);
+        .translation = Vec3::new(4.0, 0.0, 2.0);
 
     follow_lightning_targets(&mut world);
 
@@ -302,7 +308,7 @@ fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
     let target = spawn_scene_owner(
         &mut world,
         "Lightning Target",
-        Locator::at(Vector3::new(1.0, -6.0, 0.0)),
+        Locator::at(Vec3::new(1.0, -6.0, 0.0)),
     );
     world.insert_component(
         lightning,
@@ -336,7 +342,7 @@ fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
 fn spawning_two_waypoints_fills_effect_waypoints() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(0.0, 8.0, 0.0),
+        position: Vec3::new(0.0, 8.0, 0.0),
         shape: LightningShape {
             end_offset: [0.0, -8.0, 0.0],
             ..LightningShape::default()
@@ -368,7 +374,7 @@ fn spawning_two_waypoints_fills_effect_waypoints() {
 fn moving_a_waypoint_locator_is_followed_in_effect() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(0.0, 8.0, 0.0),
+        position: Vec3::new(0.0, 8.0, 0.0),
         shape: LightningShape {
             end_offset: [0.0, -8.0, 0.0],
             ..LightningShape::default()
@@ -382,7 +388,7 @@ fn moving_a_waypoint_locator_is_followed_in_effect() {
     world
         .get_component_mut::<Transform>(wp1)
         .unwrap()
-        .translation = Vector3::new(5.0, -4.0, 3.0);
+        .translation = Vec3::new(5.0, -4.0, 3.0);
 
     follow_lightning_path(&mut world);
 
@@ -395,7 +401,7 @@ fn moving_a_waypoint_locator_is_followed_in_effect() {
 fn removing_waypoint_clears_it_from_effect() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(0.0, 8.0, 0.0),
+        position: Vec3::new(0.0, 8.0, 0.0),
         shape: LightningShape {
             end_offset: [0.0, -8.0, 0.0],
             ..LightningShape::default()
@@ -436,7 +442,7 @@ fn removing_waypoint_clears_it_from_effect() {
 fn spawn_waypoint_returns_none_at_cap() {
     let mut world = World::new();
     let effect = LightningEffect {
-        position: Vector3::new(0.0, 8.0, 0.0),
+        position: Vec3::new(0.0, 8.0, 0.0),
         shape: LightningShape {
             end_offset: [0.0, -8.0, 0.0],
             ..LightningShape::default()
@@ -445,7 +451,7 @@ fn spawn_waypoint_returns_none_at_cap() {
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
 
-    use thyllore_effect_core::LIGHTNING_MAX_WAYPOINTS;
+    use thyllore_effect_core::lightning::LIGHTNING_MAX_WAYPOINTS;
 
     for _ in 0..LIGHTNING_MAX_WAYPOINTS {
         assert!(spawn_lightning_waypoint(&mut world, lightning).is_some());

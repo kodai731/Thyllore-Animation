@@ -1,4 +1,4 @@
-use crate::animation::editable::{ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId};
+use thyllore_anim_core::editable::{ClipGroup, ClipGroupId, ClipInstance, ClipInstanceId};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ClipSchedule {

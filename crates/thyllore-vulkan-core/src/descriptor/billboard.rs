@@ -1,10 +1,9 @@
-use crate::core::device::*;
-use crate::core::swapchain::*;
+use crate::core::*;
 use crate::data::*;
-use crate::descriptor::pass_manifest::BILLBOARD;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::billboard;
-use crate::resource::gpu_resource::GpuResource;
+use crate::descriptor::BILLBOARD;
+use crate::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
 
 #[must_use]
@@ -12,7 +11,7 @@ use crate::vulkan::*;
 pub struct RRBillboardDescriptorSet {
     pub layout: ReflectedSetLayout,
     #[gpu_resource(skip)]
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub(crate) descriptor_sets: Vec<crate::types::DescriptorSet>,
     pub rrdata: Vec<RRData>,
 }
 
@@ -37,7 +36,12 @@ impl RRBillboardDescriptorSet {
         rrswapchain: &RRSwapchain,
     ) -> Result<()> {
         let count = self.rrdata.len() * rrswapchain.swapchain_images.len();
-        self.descriptor_sets = self.layout.allocate_sets(rrdevice, count)?;
+        self.descriptor_sets = self
+            .layout
+            .allocate_sets(rrdevice, count)?
+            .into_iter()
+            .map(crate::types::DescriptorSet)
+            .collect();
         Ok(())
     }
 
@@ -53,7 +57,7 @@ impl RRBillboardDescriptorSet {
                 let descriptor_set =
                     self.descriptor_sets[billboard_index * swapchain_images_len + image_index];
                 self.layout
-                    .writer(descriptor_set)
+                    .writer(descriptor_set.raw())
                     .buffer(
                         billboard::UBO,
                         rrdata.rruniform_buffers[image_index].buffer,
@@ -71,23 +75,28 @@ impl RRBillboardDescriptorSet {
         &self,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
+        position_image_view: crate::types::ImageView,
+        position_sampler: crate::types::Sampler,
     ) -> Result<()> {
         let set_count = self.rrdata.len() * rrswapchain.swapchain_images.len();
 
         for descriptor_set in self.descriptor_sets.iter().take(set_count) {
             self.layout
-                .writer(*descriptor_set)
+                .writer(descriptor_set.raw())
                 .image(
                     billboard::POSITION_SAMPLER,
-                    position_image_view,
-                    position_sampler,
+                    position_image_view.raw(),
+                    position_sampler.raw(),
                     vk::ImageLayout::GENERAL,
                 )?
                 .apply(rrdevice);
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn descriptor_sets(&self) -> &[crate::types::DescriptorSet] {
+        &self.descriptor_sets
     }
 }

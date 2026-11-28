@@ -1,4 +1,5 @@
-pub mod sdf;
-pub mod texture_fit;
+mod sdf;
+mod texture_fit;
 
+pub use sdf::*;
 pub use texture_fit::*;

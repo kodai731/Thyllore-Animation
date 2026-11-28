@@ -15,4 +15,4 @@ pub use format::{
     SidecarSpringChain, SidecarSpringJoint,
 };
 pub use frame::{rest_frames_from_globals, BoneRestFrame};
-pub use import::spring_setup_from_sidecar;
+pub use import::{spring_setup_from_sidecar, spring_setup_with_collider_ids};

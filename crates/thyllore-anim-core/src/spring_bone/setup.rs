@@ -1,12 +1,13 @@
 use std::sync::LazyLock;
 
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_math_core::world_y_down;
 
 use thyllore_scene_core::{RootPath, ScalarParam, SceneFields, UiParam};
 
 use super::chain_origin::ChainOrigin;
 use super::force::{JointForce, SpringForceModel};
+use super::rest_clearance::RestClearance;
 use crate::BoneId;
 
 pub type SpringChainId = u32;
@@ -21,7 +22,7 @@ pub struct SpringJointParam {
     #[persist(ui(min = 0.0, max = 1.0))]
     pub drag_force: f32,
     #[persist(ui(kind = Offset, min = -1.0, max = 1.0))]
-    pub gravity_dir: Vector3<f32>,
+    pub gravity_dir: Vec3,
     #[persist(ui(min = 0.0, max = 0.5, format = "%.3f"))]
     pub hit_radius: f32,
 }
@@ -89,6 +90,7 @@ pub struct SpringChain {
     pub tail_bone_id: Option<BoneId>,
     pub enabled: bool,
     pub origin: ChainOrigin,
+    pub rest_clearance: RestClearance,
 }
 
 impl Default for SpringChain {
@@ -102,6 +104,7 @@ impl Default for SpringChain {
             tail_bone_id: None,
             enabled: true,
             origin: ChainOrigin::Authored,
+            rest_clearance: RestClearance::Tolerated,
         }
     }
 }
@@ -109,7 +112,7 @@ impl Default for SpringChain {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ColliderShape {
     Sphere { radius: f32 },
-    Capsule { radius: f32, tail: Vector3<f32> },
+    Capsule { radius: f32, tail: Vec3 },
 }
 
 impl ColliderShape {
@@ -120,7 +123,7 @@ impl ColliderShape {
     pub fn default_capsule() -> Self {
         ColliderShape::Capsule {
             radius: 0.1,
-            tail: Vector3::new(0.0, 0.1, 0.0),
+            tail: Vec3::new(0.0, 0.1, 0.0),
         }
     }
 }
@@ -129,7 +132,7 @@ impl ColliderShape {
 pub struct SpringColliderDef {
     pub id: SpringColliderId,
     pub bone_id: BoneId,
-    pub offset: Vector3<f32>,
+    pub offset: Vec3,
     pub shape: ColliderShape,
 }
 

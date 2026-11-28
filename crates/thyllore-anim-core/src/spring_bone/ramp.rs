@@ -154,7 +154,8 @@ fn ramp_position(i: usize, n: usize, rigid_fraction: f32) -> f32 {
     ((t - rigid) / (1.0 - rigid)).clamp(0.0, 1.0)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RampScope {
     #[default]
     ThisChain,

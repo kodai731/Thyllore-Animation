@@ -5,11 +5,11 @@ use crate::ecs::resource::LightState;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
-use cgmath::Vector3;
+use glam::Vec3;
 use thyllore_anim_core::editable::PropertyType;
 
 impl TimedEffect for FlameEffect {
-    type WorldInputs = Option<Vector3<f32>>;
+    type WorldInputs = Option<Vec3>;
 
     fn entities(world: &World) -> Vec<Entity> {
         world.entities_with::<FlameEffect>()
@@ -19,7 +19,7 @@ impl TimedEffect for FlameEffect {
         EffectTimeSources::collect(world, delta_time, None, false)
     }
 
-    fn collect_world_inputs(world: &World) -> Option<Vector3<f32>> {
+    fn collect_world_inputs(world: &World) -> Option<Vec3> {
         world
             .get_resource::<LightState>()
             .map(|light| light.light_position)
@@ -41,7 +41,7 @@ impl TimedEffect for FlameEffect {
         self.time_offset
     }
 
-    fn apply_world_inputs(&mut self, light_position: Option<Vector3<f32>>) {
+    fn apply_world_inputs(&mut self, light_position: Option<Vec3>) {
         if let Some(light_position) = light_position {
             self.light_position_world = light_position;
         }

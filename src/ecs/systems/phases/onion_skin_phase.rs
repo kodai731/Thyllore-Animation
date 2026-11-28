@@ -70,11 +70,11 @@ fn extract_skin_data(
     ctx: &FrameContext,
     mesh_index: usize,
 ) -> Option<(
-    crate::animation::SkinData,
-    Vec<crate::vulkanr::data::Vertex>,
+    thyllore_anim_core::SkinData,
+    Vec<thyllore_vulkan_core::data::Vertex>,
 )> {
     let mesh = &ctx.graphics.meshes[mesh_index];
-    let skin_data = mesh.skin_data.as_ref()?;
+    let skin_data = mesh.skin_data()?;
     let base_vertices = &mesh.base_vertices;
 
     if base_vertices.len() != skin_data.base_positions.len() {
@@ -123,7 +123,7 @@ unsafe fn upload_ghost_meshes(
     )?;
 
     let mesh = &ctx.graphics.meshes[mesh_index];
-    gpu.source_index_buffer = mesh.index_buffer.buffer;
+    gpu.set_source_index_buffer(mesh.index_buffer.buffer());
     gpu.source_index_count = mesh.index_buffer.indices;
     gpu.source_mesh_index = Some(mesh_index);
 

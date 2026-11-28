@@ -126,17 +126,19 @@ $UnshippedRelPaths = @(
 )
 $CurveCopilotOnlyRelPaths = @(
     "operators/curve_copilot.py",
-    "operators/skin_weight_transfer.py",
     "_ghost_overlay.py",
     "modal"
 )
 $AvatarSetupOnlyRelPaths = @(
-    "avatar_setup"
+    "avatar_setup",
+    "operators/skin_weight_transfer.py"
 )
+$IncludeOnnxRuntime = $true
 switch ($Product) {
     "avatar-setup" {
         $UnshippedRelPaths += $CurveCopilotOnlyRelPaths
         $IncludeOnnxModel = $false
+        $IncludeOnnxRuntime = $false
     }
     "curve-copilot" {
         $UnshippedRelPaths += $AvatarSetupOnlyRelPaths
@@ -196,7 +198,10 @@ if (-not (Test-Path $WheelsDir)) {
     throw "Stage directory has no wheels/. Run scripts/collect_wheels.ps1 first."
 }
 
-$AllowedWheelPrefixes = @("thyllore_ml_core")
+$AllowedWheelPrefixes = switch ($Product) {
+    "curve-copilot"  { @("thyllore_ml_core") }
+    "avatar-setup"   { @("thyllore_avatar_api") }
+}
 
 $AllWheels = Get-ChildItem -Path $WheelsDir -Filter "*.whl"
 $KeptWheels = New-Object System.Collections.Generic.List[string]
@@ -284,9 +289,9 @@ if ($ExpectedAbi -eq "MISSING") {
     throw "EXPECTED_ABI_MARKER not found in blender_addon/__init__.py"
 }
 
-$ApiMarker = & python -c "import re, pathlib; m = re.search(r'pub const ABI_MARKER:\s*u32\s*=\s*(\d+)', pathlib.Path(r'$RepoRoot/crates/thyllore-ml-api/src/lib.rs').read_text(encoding='utf-8')); print(m.group(1) if m else 'MISSING')"
+$ApiMarker = & python -c "import re, pathlib; m = re.search(r'pub const ABI_MARKER:\s*u32\s*=\s*(\d+)', pathlib.Path(r'$RepoRoot/crates/thyllore-ml-api/src/abi_marker.rs').read_text(encoding='utf-8')); print(m.group(1) if m else 'MISSING')"
 if ($ApiMarker -eq "MISSING") {
-    throw "ABI_MARKER not found in crates/thyllore-ml-api/src/lib.rs"
+    throw "ABI_MARKER not found in crates/thyllore-ml-api/src/abi_marker.rs"
 }
 
 if ($ExpectedAbi.Trim() -ne $ApiMarker.Trim()) {
@@ -316,7 +321,9 @@ if ($IncludeOnnxModel) {
 if (-not $OnnxruntimeLib) {
     $OnnxruntimeLib = $PlatformConfig.OrtLibDefault
 }
-if ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
+if (-not $IncludeOnnxRuntime) {
+    Write-Host "[build_blender_addon] ONNX Runtime not bundled: $Product has no in-process inference" -ForegroundColor Cyan
+} elseif ($OnnxruntimeLib -and (Test-Path $OnnxruntimeLib)) {
     $LibDir = Join-Path $StageDir "lib"
     New-Item -ItemType Directory -Path $LibDir -Force | Out-Null
     $OrtItem = Get-Item $OnnxruntimeLib

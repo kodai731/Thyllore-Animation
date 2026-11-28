@@ -40,6 +40,8 @@ impl Default for PanelLayout {
     }
 }
 
+crate::startup_resource!(PanelLayout, Editor);
+
 impl PanelLayout {
     pub fn main_height(&self, display_h: f32) -> f32 {
         display_h - self.timeline_height - self.debug_height

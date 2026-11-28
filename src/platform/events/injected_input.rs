@@ -1,9 +1,7 @@
 use std::ffi::CStr;
 
-use imgui::MouseButton;
-
 use crate::ecs::resource::{InjectedInput, UiFocusState};
-use crate::ecs::World;
+use crate::ecs::world::World;
 
 /// Releases last frame's injected chords and presses the queued ones before imgui starts the frame.
 pub(super) fn feed_injected_keys(io: &mut imgui::Io, world: &World) {
@@ -26,20 +24,18 @@ pub(super) fn feed_injected_keys(io: &mut imgui::Io, world: &World) {
     feed_injected_mouse(io, &mut injected);
 }
 
-/// A click presses the left button at its position; the release follows on the next frame so
-/// imgui sees a full press, the same way `feed_injected_keys` holds its chords.
+/// A click presses its button at its position and releases it on the next frame, so imgui sees a full press.
 fn feed_injected_mouse(io: &mut imgui::Io, injected: &mut InjectedInput) {
-    if injected.click_held {
-        io.add_mouse_button_event(MouseButton::Left, false);
-        injected.click_held = false;
+    if let Some(button) = injected.held_click_button.take() {
+        io.add_mouse_button_event(button, false);
     }
     if let Some(position) = injected.pending_mouse_move.take() {
         io.add_mouse_pos_event(position);
     }
-    if let Some(position) = injected.pending_click.take() {
-        io.add_mouse_pos_event(position);
-        io.add_mouse_button_event(MouseButton::Left, true);
-        injected.click_held = true;
+    if let Some(click) = injected.pending_click.take() {
+        io.add_mouse_pos_event(click.position);
+        io.add_mouse_button_event(click.button, true);
+        injected.held_click_button = Some(click.button);
     }
 }
 

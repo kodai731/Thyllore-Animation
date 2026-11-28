@@ -1,4 +1,4 @@
-use crate::animation::editable::{
+use thyllore_anim_core::editable::{
     align_opposite_handle, apply_tangent_by_type, initialize_weighted_handle_lengths, BezierHandle,
     InterpolationType, KeyframeId, PropertyCurve, TangentContinuity, TangentType,
     TangentWeightMode,

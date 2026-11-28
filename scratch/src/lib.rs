@@ -1,3 +1,5 @@
+#![allow(unreachable_pub)]
+
 mod examples;
 
 include!(concat!(env!("OUT_DIR"), "/local_jobs.rs"));
